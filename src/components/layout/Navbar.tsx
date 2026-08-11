@@ -59,24 +59,24 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200">
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3">
+      <div className="flex items-center justify-between px-2.5 sm:px-6 py-2 sm:py-3">
         {/* Left Section: Mobile Menu + Branding */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-1.5 sm:space-x-3 min-w-0">
           <button
             onClick={onToggleSidebar}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors lg:hidden"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors lg:hidden shrink-0"
             title="Toggle Navigation Menu"
           >
             <Menu className="w-5 h-5" />
           </button>
 
           {/* Logo & Dynamic Unit Name */}
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center">
+          <div className="flex items-center space-x-1.5 sm:space-x-3 min-w-0">
+            <div className="flex items-center shrink-0">
               <img
                 src={APP_LOGO_URL}
                 alt="Logo"
-                className="w-10 h-10 object-contain shrink-0"
+                className="w-8 h-8 sm:w-10 sm:h-10 object-contain shrink-0"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   if (!target.dataset.failed) {
@@ -87,26 +87,26 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               />
             </div>
 
-            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
             {/* Dynamic Unit Name Header Tag */}
-            <div className="flex items-center space-x-2 px-3 py-1 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold text-sky-900 dark:text-sky-300 truncate max-w-xs">
+            <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-full min-w-0">
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-[11px] sm:text-xs font-bold text-sky-900 dark:text-sky-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs">
                 {settings.namaUnitLayanan}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Right Section: Spreadsheet Connection Badge, Role Switcher, Dark Mode, Notifications */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
+        {/* Right Section: Spreadsheet Connection Badge, Dark Mode, Notifications, User */}
+        <div className="flex items-center space-x-1 sm:space-x-2.5 shrink-0">
           {/* SPREADSHEET DATABASE CONNECTION & OFFLINE SYNC BADGE */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowGasPopover(!showGasPopover)}
-              className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-2xs ${
+              className={`inline-flex items-center space-x-1 sm:space-x-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all border shadow-2xs ${
                 !isOnline
                   ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300 hover:bg-rose-100'
                   : pendingCount > 0
@@ -117,7 +117,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               }`}
               title="Status Koneksi & Offline Sync"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span className="relative flex h-2 w-2 shrink-0">
                 <span
                   className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
@@ -151,10 +151,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                   ? 'Spreadsheet: Terhubung'
                   : 'Spreadsheet: Standby'}
               </span>
-              <span className="md:hidden font-display">
-                {!isOnline ? `Offline (${pendingCount})` : pendingCount > 0 ? `Sync (${pendingCount})` : isGasConnected ? 'Online' : 'Standby'}
+              <span className="md:hidden font-display text-[10px]">
+                {!isOnline ? `Offline` : pendingCount > 0 ? `Sync(${pendingCount})` : isGasConnected ? 'Online' : 'Standby'}
               </span>
-              <ChevronDown className="w-3 h-3 opacity-60" />
+              <ChevronDown className="w-3 h-3 opacity-60 hidden sm:block" />
             </button>
 
             {/* Connection Status Popover Dropdown */}
@@ -259,58 +259,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
             )}
           </div>
 
-          {/* Quick Role Switcher Button */}
-          <div className="relative">
-            <button
-              onClick={() => setShowRoleMenu(!showRoleMenu)}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all border border-slate-200 dark:border-slate-700"
-            >
-              <Shield className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-              <span className="hidden sm:inline">Role:</span>
-              <span className="text-sky-600 dark:text-sky-400 font-bold">
-                {currentUser?.role || 'Guest'}
-              </span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-
-            {showRoleMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50 animate-in fade-in zoom-in duration-150">
-                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Switch Access Role
-                  </p>
-                </div>
-                {(['SuperAdmin', 'Admin', 'User'] as UserRole[]).map((role, idx) => (
-                  <button
-                    key={`${role}-${idx}`}
-                    onClick={() => {
-                      loginAsRole(role);
-                      setShowRoleMenu(false);
-                    }}
-                    className={`w-full text-left px-3.5 py-2 text-xs font-medium flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${
-                      currentUser?.role === role
-                        ? 'text-sky-600 dark:text-sky-400 font-bold bg-sky-50/50 dark:bg-sky-900/20'
-                        : 'text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <span>{role === 'User' ? 'Petugas (User)' : role}</span>
-                    {currentUser?.role === role && <UserCheck className="w-4 h-4 text-sky-500" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Dark / Light Mode Toggle */}
           <button
             onClick={toggleDarkMode}
-            className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           >
             {isDarkMode ? (
-              <Sun className="w-5 h-5 text-amber-400" />
+              <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
             ) : (
-              <Moon className="w-5 h-5 text-slate-600" />
+              <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
             )}
           </button>
 

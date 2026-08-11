@@ -145,12 +145,8 @@ export const LoginPage: React.FC = () => {
   const handleSelectUser = (u: any) => {
     const userid = u.nip || u.userName || u.id || u.name;
     setUsername(userid);
-    if (u.role === 'SuperAdmin' || u.role === 'Admin') {
-      setPassword('admin123');
-    } else {
-      setPassword('user123');
-    }
-    showToast(`User dipilih: ${u.name || u.nip || u.userName}`, 'info');
+    setPassword(''); // Password harus dimasukkan secara manual demi keamanan
+    showToast(`User dipilih: ${u.name || userid}. Silakan masukkan kata sandi Anda.`, 'info');
   };
 
   return (
@@ -298,7 +294,7 @@ export const LoginPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="Ketik kata sandi Anda..."
                   required
                   className="w-full pl-12 pr-12 py-3 rounded-2xl bg-slate-900/80 border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/50 transition-all placeholder:text-slate-600 shadow-inner"
                 />
@@ -414,10 +410,10 @@ export const LoginPage: React.FC = () => {
           <div className="flex items-center justify-between pt-1 text-[9px] text-slate-500">
              <button 
                type="button"
-               onClick={() => { setUsername('superadmin'); setPassword('admin123'); }}
+               onClick={() => { setUsername('superadmin'); setPassword(''); showToast('UserID superadmin dimasukkan. Silakan ketik kata sandi Anda.', 'info'); }}
                className="font-bold text-slate-500 hover:text-sky-400 transition-colors uppercase tracking-widest cursor-pointer"
              >
-               Quick Admin Access
+               Isi UserID Admin
              </button>
              <button
                type="button"
