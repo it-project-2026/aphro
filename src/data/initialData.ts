@@ -1,0 +1,282 @@
+import {
+  User,
+  ULP,
+  Penyulang,
+  ReguROW,
+  Petugas,
+  WorkOrder,
+  Realisasi,
+  AppSettings,
+  AuditLog,
+  NotificationItem,
+  Absensi,
+} from '../types';
+import { createPlaceholderPhoto } from '../utils/watermark';
+import { getActiveGasConfig } from '../config/gasConfig';
+
+export const APP_LOGO_URL = 'https://lh3.googleusercontent.com/d/1V2zz3q_3umHCaTqeJN6u7kbhGdLrK4NE';
+
+export const INITIAL_ABSENSI: Absensi[] = [];
+
+export const INITIAL_USERS: User[] = [
+  {
+    id: 'usr-1',
+    nip: '198503152010121001',
+    name: 'Budi Santoso',
+    email: 'superadmin@pln.co.id',
+    role: 'SuperAdmin',
+    phone: '081234567890',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
+  },
+  {
+    id: 'usr-2',
+    nip: '199008202014021003',
+    name: 'Siti Rahmawati',
+    email: 'admin.padang@pln.co.id',
+    role: 'Admin',
+    ulpId: 'ulp-1',
+    ulpName: 'ULP Padang Barat',
+    phone: '081398765432',
+    avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=250&q=80',
+  },
+  {
+    id: 'usr-3',
+    nip: '199511042018011005',
+    name: 'Rahmat Hidayat',
+    email: 'petugas.row1@pln.co.id',
+    role: 'User',
+    reguId: 'regu-1',
+    reguName: 'Regu ROW Alpha (Tim Utama)',
+    ulpId: 'ulp-1',
+    ulpName: 'ULP Padang Barat',
+    phone: '081567890123',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80',
+  },
+  {
+    id: 'usr-4',
+    nip: '199602122019021008',
+    name: 'Andi Wijaya',
+    email: 'petugas.row2@pln.co.id',
+    role: 'User',
+    reguId: 'regu-2',
+    reguName: 'Regu ROW Bravo (Tim Indarung)',
+    ulpId: 'ulp-2',
+    ulpName: 'ULP Indarung',
+    phone: '081812345678',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=250&q=80',
+  },
+];
+
+export const INITIAL_ULP: ULP[] = [
+  {
+    id: 'ulp-1',
+    kodeULP: 'ULP-PGB',
+    namaULP: 'ULP Padang Barat',
+    manajer: 'Dedy Kurniawan, ST',
+    kontak: '0751-32456',
+    alamat: 'Jl. Pemuda No. 12, Padang Barat, Kota Padang',
+    status: 'Aktif',
+  },
+  {
+    id: 'ulp-2',
+    kodeULP: 'ULP-IDR',
+    namaULP: 'ULP Indarung',
+    manajer: 'Ahmad Fauzi, MT',
+    kontak: '0751-78901',
+    alamat: 'Jl. Raya Indarung No. 45, Padang',
+    status: 'Aktif',
+  },
+  {
+    id: 'ulp-3',
+    kodeULP: 'ULP-KRN',
+    namaULP: 'ULP Kuranji',
+    manajer: 'Maya Anggraini, ST',
+    kontak: '0751-54321',
+    alamat: 'Jl. Raya Ampang No. 88, Kuranji',
+    status: 'Aktif',
+  },
+  {
+    id: 'ulp-4',
+    kodeULP: 'ULP-TBG',
+    namaULP: 'ULP Tabing',
+    manajer: 'Rizky Pratama, ST',
+    kontak: '0751-67890',
+    alamat: 'Jl. Prof. Dr. Hamka No. 102, Tabing',
+    status: 'Aktif',
+  },
+];
+
+export const INITIAL_PENYULANG: Penyulang[] = [
+  {
+    id: 'peny-1',
+    kodePenyulang: 'PAUH-01',
+    namaPenyulang: 'Penyulang Pauh Utama',
+    ulpId: 'ulp-1',
+    ulpName: 'ULP Padang Barat',
+    panjangKms: 38.5,
+    jumlahTrafo: 142,
+    status: 'Rawan Hazard',
+  },
+  {
+    id: 'peny-2',
+    kodePenyulang: 'TBG-03',
+    namaPenyulang: 'Penyulang Tabing Express',
+    ulpId: 'ulp-4',
+    ulpName: 'ULP Tabing',
+    panjangKms: 29.2,
+    jumlahTrafo: 98,
+    status: 'Normal',
+  },
+  {
+    id: 'peny-3',
+    kodePenyulang: 'IDR-05',
+    namaPenyulang: 'Penyulang Semen Indarung',
+    ulpId: 'ulp-2',
+    ulpName: 'ULP Indarung',
+    panjangKms: 45.0,
+    jumlahTrafo: 180,
+    status: 'Maintenance',
+  },
+  {
+    id: 'peny-4',
+    kodePenyulang: 'KRN-02',
+    namaPenyulang: 'Penyulang Kuranji ByPass',
+    ulpId: 'ulp-3',
+    ulpName: 'ULP Kuranji',
+    panjangKms: 32.8,
+    jumlahTrafo: 115,
+    status: 'Rawan Hazard',
+  },
+  {
+    id: 'peny-5',
+    kodePenyulang: 'PGB-04',
+    namaPenyulang: 'Penyulang Muara Padang',
+    ulpId: 'ulp-1',
+    ulpName: 'ULP Padang Barat',
+    panjangKms: 22.1,
+    jumlahTrafo: 85,
+    status: 'Normal',
+  },
+];
+
+export const INITIAL_REGU: ReguROW[] = [
+  {
+    id: 'regu-1',
+    kodeRegu: 'ROW-A1',
+    namaRegu: 'Regu ROW Alpha (Tim Utama)',
+    penanggungJawab: 'Rahmat Hidayat',
+    jumlahAnggota: 6,
+    kontak: '081567890123',
+    status: 'Aktif',
+    ulpId: 'ulp-3',
+    ulpName: 'ULP Kuranji',
+  },
+  {
+    id: 'regu-2',
+    kodeRegu: 'ROW-B2',
+    namaRegu: 'Regu ROW Bravo (Tim Indarung)',
+    penanggungJawab: 'Andi Wijaya',
+    jumlahAnggota: 5,
+    kontak: '081812345678',
+    status: 'Aktif',
+    ulpId: 'ulp-2',
+    ulpName: 'ULP Indarung',
+  },
+  {
+    id: 'regu-3',
+    kodeRegu: 'ROW-C3',
+    namaRegu: 'Regu ROW Charlie (Tim Rapid Response)',
+    penanggungJawab: 'Doni Firmansyah',
+    jumlahAnggota: 7,
+    kontak: '081987654321',
+    status: 'Aktif',
+    ulpId: 'ulp-1',
+    ulpName: 'ULP Padang Barat',
+  },
+  {
+    id: 'regu-4',
+    kodeRegu: 'ROW-D4',
+    namaRegu: 'Regu ROW Delta (Tim Tabing)',
+    penanggungJawab: 'Budi Santoso',
+    jumlahAnggota: 5,
+    kontak: '081234567890',
+    status: 'Aktif',
+    ulpId: 'ulp-4',
+    ulpName: 'ULP Tabing',
+  },
+];
+
+export const INITIAL_PETUGAS: Petugas[] = [
+  {
+    id: 'ptg-1',
+    nip: '199511042018011005',
+    nama: 'Rahmat Hidayat',
+    reguId: 'regu-1',
+    reguName: 'Regu ROW Alpha (Tim Utama)',
+    ulpId: 'ulp-1',
+    ulpName: 'ULP Padang Barat',
+    noHp: '081567890123',
+    role: 'User',
+    status: 'Aktif',
+  },
+  {
+    id: 'ptg-2',
+    nip: '199602122019021008',
+    nama: 'Andi Wijaya',
+    reguId: 'regu-2',
+    reguName: 'Regu ROW Bravo (Tim Indarung)',
+    ulpId: 'ulp-2',
+    ulpName: 'ULP Indarung',
+    noHp: '081812345678',
+    role: 'User',
+    status: 'Aktif',
+  },
+  {
+    id: 'ptg-3',
+    nip: '199705182020011002',
+    nama: 'Doni Firmansyah',
+    reguId: 'regu-3',
+    reguName: 'Regu ROW Charlie (Tim Rapid Response)',
+    ulpId: 'ulp-3',
+    ulpName: 'ULP Kuranji',
+    noHp: '081987654321',
+    role: 'User',
+    status: 'Aktif',
+  },
+  {
+    id: 'ptg-4',
+    nip: '199808222021031004',
+    nama: 'Hendri Saputra',
+    reguId: 'regu-1',
+    reguName: 'Regu ROW Alpha (Tim Utama)',
+    ulpId: 'ulp-1',
+    ulpName: 'ULP Padang Barat',
+    noHp: '081233445566',
+    role: 'User',
+    status: 'Aktif',
+  },
+];
+
+export const INITIAL_WORK_ORDERS: WorkOrder[] = [];
+
+export const INITIAL_REALISASI: Realisasi[] = [];
+
+export const INITIAL_SETTINGS: AppSettings = {
+  namaUnitLayanan: 'PLN Electricity Services UP3 Padang',
+  logoAplikasiUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&q=80',
+  logoInstansiUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/97/Logo_PLN.png',
+  loginBgUrl: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1600&q=80',
+  themeColor: 'PLN Blue',
+  footerText: '© 2026 APHRO - Asset Protection & Hazard Response Operations. PT PLN (Persero). All Rights Reserved.',
+  versiAplikasi: 'v2.4.0 Enterprise',
+  gasWebAppUrl: getActiveGasConfig().gasWebAppUrl,
+  kontakAdmin: {
+    whatsapp: '6281234567890',
+    email: 'helpdesk.aphro@pln.co.id',
+    alamat: 'Gedung Utama PLN UP3 Padang, Jl. Jend. A. Yani No. 19, Padang',
+  },
+};
+
+export const INITIAL_LOGS: AuditLog[] = [];
+
+export const INITIAL_NOTIFICATIONS: NotificationItem[] = [];

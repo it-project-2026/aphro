@@ -1,0 +1,212 @@
+export type UserRole = 'SuperAdmin' | 'Admin' | 'User';
+
+export interface User {
+  id: string;
+  nip: string;
+  name: string;
+  userName?: string;
+  email: string;
+  role: UserRole;
+  reguId?: string;
+  reguName?: string;
+  ulpId?: string;
+  ulpName?: string;
+  avatarUrl?: string;
+  phone?: string;
+}
+
+export type WOStatus = 'Belum Dikerjakan' | 'Sedang Dikerjakan' | 'Selesai' | 'BELUM SELESAI' | 'SELESAI';
+export type WOPriority = 'Tinggi' | 'Sedang' | 'Rendah';
+export type WOType = 
+  | 'Pemangkasan Pohon (ROW)'
+  | 'Pembersihan Jalur Feeder'
+  | 'Inspeksi Potensi Hazard'
+  | 'Penanganan Pohon Rawan Rubuh'
+  | 'Pemasangan Guard / Penghalang Hewan'
+  | 'Perbaikan Konstruksi Asset';
+
+export interface WorkOrder {
+  id: string;
+  pekerjaan?: 'NORMAL' | 'GOROW';
+  nomorWO: string;
+  tanggal: string; // YYYY-MM-DD
+  ulpId: string;
+  ulpName: string;
+  penyulangId: string;
+  penyulangName: string;
+  lokasi?: string;
+  alamat?: string;
+  latitude?: number;
+  longitude?: number;
+  jenisPekerjaan?: WOType;
+  prioritas?: WOPriority;
+  deadline?: string;
+  reguId: string;
+  reguName: string;
+  petugasId?: string;
+  petugasName?: string;
+  volumePekerjaan?: number;
+  satuan?: 'KMS' | 'GAWANG';
+  woKms?: number;
+  woBatang?: number;
+  deskripsi?: string;
+  status: WOStatus;
+  progressPercent: number;
+  lampiranUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface WatermarkedPhoto {
+  id: string;
+  type: 'sebelum' | 'sesudah';
+  slotIndex: 1 | 2 | 3;
+  dataUrl: string; // base64 image with watermark burned in
+  fileUrl?: string; // Google Drive direct link
+  originalName: string;
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+  userName: string;
+  ulpName: string;
+}
+
+export interface AbsensiPetugas {
+  nama: string;
+  keterangan: 'HADIR' | 'TIDAK HADIR' | 'SAKIT' | 'IZIN';
+}
+
+export interface Absensi {
+  id: string;
+  tanggal: string; // YYYY-MM-DD
+  reguName: string;
+  penyulangName?: string;
+  userName?: string;
+  namaPetugas?: string;
+  nip?: string;
+  ulpName: string;
+  petugasList: AbsensiPetugas[];
+  fotoMasuk?: string;
+  timestampMasuk?: string;
+  fotoKeluar?: string;
+  timestampKeluar?: string;
+  createdAt: string;
+}
+
+export interface Realisasi {
+  id: string;
+  workOrderId: string;
+  nomorWO: string;
+  ulpName?: string;
+  reguName?: string;
+  penyulangName?: string;
+  noTiang?: string;
+  tanggalRealisasi: string;
+  petugasId: string;
+  petugasName: string;
+  jenisTanaman?: string;
+  pertumbuhanTanaman?: string;
+  kendala?: string;
+  latitude: number;
+  longitude: number;
+  keterangan: string;
+  progressPercent: number;
+  status: WOStatus;
+  photosSebelum: WatermarkedPhoto[];
+  photosSesudah: WatermarkedPhoto[];
+  fotoSebelumUrl?: string;
+  fotoSesudahUrl?: string;
+  createdAt: string;
+}
+
+export interface ULP {
+  id: string;
+  kodeULP: string;
+  namaULP: string;
+  manajer: string;
+  kontak: string;
+  alamat: string;
+  status: 'Aktif' | 'Non-Aktif';
+}
+
+export interface Penyulang {
+  id: string;
+  kodePenyulang: string;
+  namaPenyulang: string;
+  ulpId: string;
+  ulpName: string;
+  panjangKms: number;
+  jumlahTrafo: number;
+  status: 'Normal' | 'Rawan Hazard' | 'Maintenance';
+}
+
+export interface ReguROW {
+  id: string;
+  kodeRegu: string;
+  namaRegu: string;
+  penanggungJawab: string;
+  jumlahAnggota: number;
+  kontak: string;
+  status: 'Aktif' | 'Non-Aktif';
+  ulpId?: string;
+  ulpName?: string;
+}
+
+export interface Petugas {
+  id: string;
+  nip: string;
+  nama: string;
+  reguId: string;
+  reguName: string;
+  ulpId: string;
+  ulpName: string;
+  noHp: string;
+  role: UserRole;
+  status: 'Aktif' | 'Non-Aktif';
+}
+
+export interface AppSettings {
+  namaUnitLayanan: string;
+  logoAplikasiUrl: string;
+  logoInstansiUrl: string;
+  loginBgUrl: string;
+  themeColor: 'PLN Blue' | 'Cyan' | 'Emerald' | 'Royal Indigo';
+  footerText: string;
+  versiAplikasi: string;
+  gasWebAppUrl?: string;
+  spreadsheetId?: string;
+  driveFolderId?: string;
+  photoFolderId?: string;
+  absensiFolderId?: string;
+  syncInterval?: number;
+  offlineMode?: boolean;
+  theme?: 'light' | 'dark';
+  fontSize?: 'small' | 'medium' | 'large';
+  highContrast?: boolean;
+  autoSyncOnStart?: boolean;
+  kontakAdmin: {
+    whatsapp: string;
+    email: string;
+    alamat: string;
+  };
+}
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  actorName?: string;
+  actorRole?: UserRole;
+  userId?: string;
+  action: string;
+  details: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read?: boolean;
+  isRead?: boolean;
+  type: 'info' | 'success' | 'warning' | 'danger';
+}

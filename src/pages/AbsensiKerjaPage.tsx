@@ -1,0 +1,579 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useMasterData } from '../context/MasterDataContext';
+import { useAbsensi } from '../context/AbsensiContext';
+import { useUI } from '../context/UIContext';
+import { useToast } from '../hooks/useToast';
+import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
+import { 
+  UserCheck, 
+  Calendar, 
+  Users, 
+  Camera, 
+  CheckCircle2, 
+  Trash2,
+  Building2,
+  LogOut,
+  ExternalLink,
+  Clock,
+  Sparkles,
+  Info
+} from 'lucide-react';
+import { AbsensiPetugas } from '../types';
+
+interface AbsensiKerjaPageProps {
+  onSuccess: () => void;
+}
+
+export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess }) => {
+  const { user: currentUser, logout } = useAuth();
+  const { petugasList } = useMasterData();
+  const { absensiList, addAbsensi } = useAbsensi();
+  const { setActiveTab } = useUI();
+  const { showToast } = useToast();
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const reguName = currentUser?.reguName || 'Regu ROW Alpha (Tim Utama)';
+  const ulpName = currentUser?.ulpName || 'ULP Kuranji';
+
+  // Helper to normalize strings for comparison
+  const cleanStr = (s?: string | null) => {
+    if (!s) return '';
+    return String(s)
+      .toLowerCase()
+      .trim()
+      .replace(/^(regu|tim|petugas)\s+/gi, '')
+      .replace(/[^a-z0-9]/gi, '');
+  };
+
+  const userReguClean = cleanStr(reguName);
+
+  // Find today's existing Absensi record for this Regu
+  const todayAbsensi = absensiList.find((a) => {
+    if (!a) return false;
+    const isToday = String(a.tanggal || '').slice(0, 10) === todayStr;
+    const matchRegu = cleanStr(a.reguName) === userReguClean;
+    const matchUser = cleanStr(a.userName) === cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id) || cleanStr(a.namaPetugas) === cleanStr(currentUser?.name);
+    return isToday && (matchRegu || matchUser);
+  });
+
+  // Check if Absensi Masuk has already been done today
+  const hasDoneAbsensiMasuk = Boolean(
+    todayAbsensi && (todayAbsensi.fotoMasuk || (todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0))
+  );
+
+  // Find petugas matching reguName
+  const reguPetugas = petugasList.filter(
+    (p) => (p.reguName || '').toLowerCase() === (reguName || '').toLowerCase() || (p.ulpName || '').toLowerCase() === (ulpName || '').toLowerCase()
+  );
+
+  // Initialize 5 petugas slots
+  const defaultPetugasNames = [
+    reguPetugas[0]?.nama || currentUser?.name || '',
+    reguPetugas[1]?.nama || '',
+    reguPetugas[2]?.nama || '',
+    reguPetugas[3]?.nama || '',
+    reguPetugas[4]?.nama || '',
+  ];
+
+  const [petugasRows, setPetugasRows] = useState<AbsensiPetugas[]>(
+    defaultPetugasNames.slice(0, 5).map((nama) => ({
+      nama,
+      keterangan: 'HADIR' as const,
+    }))
+  );
+
+  useEffect(() => {
+    if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
+      // Pre-fill with existing petugas list if available
+      const merged = defaultPetugasNames.map((defName, idx) => {
+        const existingP = todayAbsensi.petugasList[idx];
+        if (existingP && existingP.nama) {
+          return {
+            nama: existingP.nama,
+            keterangan: existingP.keterangan || 'HADIR',
+          };
+        }
+        return {
+          nama: defName,
+          keterangan: 'HADIR' as const,
+        };
+      });
+      setPetugasRows(merged);
+    }
+  }, [todayAbsensi]);
+
+  const [fotoMasuk, setFotoMasuk] = useState<string>('');
+  const [fotoKeluar, setFotoKeluar] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handlePetugasNameChange = (index: number, val: string) => {
+    const updated = [...petugasRows];
+    updated[index].nama = val;
+    setPetugasRows(updated);
+  };
+
+  const handlePetugasStatusChange = (index: number, status: 'HADIR' | 'TIDAK HADIR' | 'SAKIT' | 'IZIN') => {
+    const updated = [...petugasRows];
+    updated[index].keterangan = status;
+    setPetugasRows(updated);
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'masuk' | 'keluar') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const base64 = uploadEvent.target?.result as string;
+      if (type === 'masuk') {
+        setFotoMasuk(base64);
+        showToast('Foto Masuk berhasil diambil!', 'success');
+      } else {
+        setFotoKeluar(base64);
+        showToast('Foto Keluar berhasil diambil!', 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!hasDoneAbsensiMasuk && !fotoMasuk) {
+      showToast('Mohon lampirkan Foto Masuk (Kamera / File) terlebih dahulu!', 'warning');
+      return;
+    }
+
+    if (hasDoneAbsensiMasuk && !fotoKeluar && !todayAbsensi?.fotoKeluar) {
+      showToast('Mohon lampirkan Foto Keluar (Kamera / File) untuk absensi pulang!', 'warning');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await addAbsensi({
+        tanggal: todayStr,
+        reguName: todayAbsensi?.reguName || reguName,
+        penyulangName: todayAbsensi?.penyulangName || (currentUser as any)?.penyulangName || 'Penyulang Pauh Utama',
+        ulpName: todayAbsensi?.ulpName || ulpName,
+        userName: currentUser?.userName || currentUser?.nip || currentUser?.id,
+        namaPetugas: currentUser?.name,
+        nip: currentUser?.nip,
+        petugasList: petugasRows,
+        fotoMasuk: fotoMasuk || todayAbsensi?.fotoMasuk || '',
+        fotoKeluar: fotoKeluar || todayAbsensi?.fotoKeluar || '',
+      });
+
+      showToast(
+        !hasDoneAbsensiMasuk 
+          ? 'Absensi Masuk berhasil disimpan!' 
+          : 'Absensi Keluar berhasil disimpan!', 
+        'success'
+      );
+
+      setActiveTab('input_realisasi');
+      onSuccess();
+    } catch (err: any) {
+      showToast(`Gagal menyimpan absensi: ${err.message}`, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300 py-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xl space-y-6">
+        {/* Header */}
+        <div className="border-b border-slate-100 dark:border-slate-800 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center space-x-3 text-cyan-600 dark:text-cyan-400">
+              <UserCheck className="w-7 h-7" />
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-display">
+                {!hasDoneAbsensiMasuk ? 'Form Absensi Masuk Regu Kerja' : 'Form Absensi Keluar (Jam Pulang)'}
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {!hasDoneAbsensiMasuk
+                ? 'Regu belum melakukan Absensi Masuk hari ini. Mohon lengkapi daftar hadir dan unggah Foto Masuk.'
+                : 'Absensi Masuk untuk hari ini sudah selesai. Gunakan form ini untuk mencatat Foto Keluar (Jam Pulang).'}
+            </p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 bg-cyan-50 dark:bg-cyan-950/50 px-3.5 py-2 rounded-2xl border border-cyan-200 dark:border-cyan-800 text-xs font-bold text-cyan-700 dark:text-cyan-300">
+              <Calendar className="w-4 h-4" />
+              <span>Tanggal: {todayStr}</span>
+            </div>
+            <button
+              onClick={() => logout()}
+              type="button"
+              className="p-2 sm:px-3.5 sm:py-2 flex items-center space-x-2 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl border border-rose-200 dark:border-rose-500/30 transition-all"
+              title="Kembali ke Menu Login"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs font-bold">Logout</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Existing Absensi Masuk Status Banner if already checked in */}
+        {hasDoneAbsensiMasuk && todayAbsensi && (
+          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start space-x-3">
+              <div className="p-2 rounded-xl bg-emerald-500 text-white shrink-0 mt-0.5">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-200">
+                  Absensi Masuk Hari Ini Sudah Tercatat
+                </h4>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                  Waktu Masuk: {todayAbsensi.timestampMasuk || todayAbsensi.createdAt}
+                </p>
+              </div>
+            </div>
+
+            {todayAbsensi.fotoMasuk && (
+              <div className="flex items-center space-x-3 self-end sm:self-center shrink-0">
+                <div className="w-12 h-12 rounded-xl overflow-hidden border border-emerald-300 dark:border-emerald-700 bg-black">
+                  <img src={formatDriveImageUrl(todayAbsensi.fotoMasuk)} alt="Foto Masuk" className="w-full h-full object-cover" />
+                </div>
+                <a
+                  href={formatDriveViewUrl(todayAbsensi.fotoMasuk)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Buka Link Foto Masuk</span>
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Automatic Meta Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Nama Regu (Otomatis)</span>
+              <div className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
+                <Users className="w-4 h-4 text-cyan-500" />
+                <span>{reguName}</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Unit Layanan Pelanggan (ULP)</span>
+              <div className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
+                <Building2 className="w-4 h-4 text-blue-500" />
+                <span>{ulpName}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Petugas 1 - 5 Attendance Table */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                Daftar Kehadiran Anggota Regu (Petugas 1 s.d. 5)
+              </h3>
+              <span className="text-[11px] text-slate-400">Status akan tercatat di kolom KET_1..5</span>
+            </div>
+
+            <div className="space-y-3">
+              {petugasRows.map((petugas, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-center space-x-3 flex-1">
+                    <span className="w-7 h-7 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-black text-xs shrink-0">
+                      #{idx + 1}
+                    </span>
+                    <input
+                      type="text"
+                      value={petugas.nama}
+                      onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
+                      placeholder={`Nama Petugas ${idx + 1}`}
+                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold"
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {(['HADIR', 'SAKIT', 'IZIN', 'TIDAK HADIR'] as const).map((status) => {
+                      const isSelected = petugas.keterangan === status;
+                      let activeStyle = 'bg-emerald-500 text-white border-emerald-600 shadow-sm';
+                      if (status === 'SAKIT') activeStyle = 'bg-amber-500 text-white border-amber-600 shadow-sm';
+                      if (status === 'IZIN') activeStyle = 'bg-blue-500 text-white border-blue-600 shadow-sm';
+                      if (status === 'TIDAK HADIR') activeStyle = 'bg-rose-500 text-white border-rose-600 shadow-sm';
+
+                      return (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => handlePetugasStatusChange(idx, status)}
+                          className={`px-3 py-1.5 text-[11px] font-bold rounded-xl border transition-all ${
+                            isSelected
+                              ? activeStyle
+                              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
+                          }`}
+                        >
+                          {status}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Conditional Photo Input Section */}
+          <div className="space-y-4 pt-2">
+            {!hasDoneAbsensiMasuk ? (
+              /* FOTO MASUK ONLY (When Absensi Masuk has not been completed) */
+              <div className="p-5 rounded-3xl bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
+                      <Camera className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                      <span>Input Foto Masuk *</span>
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Unggah/Ambil Foto Absensi Masuk regu kerja saat mulai bertugas.
+                    </p>
+                  </div>
+                  {fotoMasuk && (
+                    <button
+                      type="button"
+                      onClick={() => setFotoMasuk('')}
+                      className="text-rose-500 hover:text-rose-700 p-1"
+                      title="Hapus Foto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {fotoMasuk ? (
+                  <div className="space-y-3">
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video bg-black max-w-md mx-auto">
+                      <img src={formatDriveImageUrl(fotoMasuk)} alt="Foto Masuk" className="w-full h-full object-cover" />
+                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-emerald-600/90 text-white text-[10px] font-bold">
+                        Terunggah (Foto Masuk)
+                      </div>
+                    </div>
+                    {fotoMasuk.startsWith('http') && (
+                      <div className="flex justify-center">
+                        <a
+                          href={formatDriveViewUrl(fotoMasuk)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-100 dark:bg-cyan-900/60 text-cyan-800 dark:text-cyan-200 font-bold text-xs"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Link URL Foto Masuk</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <label className="border-2 border-dashed border-cyan-300 dark:border-cyan-700 hover:border-cyan-500 dark:hover:border-cyan-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
+                    <div className="p-3.5 rounded-2xl bg-cyan-100 dark:bg-cyan-950/80 text-cyan-600 dark:text-cyan-400 group-hover:scale-110 transition-transform mb-2">
+                      <Camera className="w-7 h-7" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Buka Kamera / Pilih Foto Masuk
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-1">
+                      Wajib diisi untuk Absensi Masuk (Format JPG/PNG)
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => handlePhotoUpload(e, 'masuk')}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+            ) : (
+              /* FOTO KELUAR ONLY (When Absensi Masuk has already been completed) */
+              <div className="p-5 rounded-3xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
+                      <Camera className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span>Input Foto Keluar (Absensi Pulang) *</span>
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Unggah/Ambil Foto Absensi Keluar saat jam kerja/shift regu berakhir.
+                    </p>
+                  </div>
+                  {(fotoKeluar || todayAbsensi?.fotoKeluar) && (
+                    <button
+                      type="button"
+                      onClick={() => setFotoKeluar('')}
+                      className="text-rose-500 hover:text-rose-700 p-1"
+                      title="Hapus Foto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {fotoKeluar || todayAbsensi?.fotoKeluar ? (
+                  <div className="space-y-3">
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video max-w-md mx-auto bg-black">
+                      <img
+                        src={fotoKeluar || todayAbsensi?.fotoKeluar}
+                        alt="Foto Keluar"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-indigo-600/90 text-white text-[10px] font-bold flex items-center space-x-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Foto Keluar Terunggah</span>
+                      </div>
+                    </div>
+
+                    {(fotoKeluar || todayAbsensi?.fotoKeluar)?.startsWith('http') && (
+                      <div className="flex justify-center">
+                        <a
+                          href={fotoKeluar || todayAbsensi?.fotoKeluar}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200 font-bold text-xs shadow-xs"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Link URL Foto Keluar</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <label className="border-2 border-dashed border-indigo-300 dark:border-indigo-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
+                    <div className="p-3.5 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform mb-2">
+                      <Camera className="w-7 h-7" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Buka Kamera / Pilih Foto Keluar
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-1">
+                      Absensi Pulang Selesai Bertugas (Format JPG/PNG)
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => handlePhotoUpload(e, 'keluar')}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Submit Action Button */}
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white font-extrabold text-sm shadow-xl shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center space-x-3 disabled:opacity-50 cursor-pointer"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              <span>
+                {isSubmitting
+                  ? 'Menyimpan & Menyinkronkan...'
+                  : !hasDoneAbsensiMasuk
+                  ? 'Kirim Absensi Masuk & Masuk Aplikasi'
+                  : 'Kirim Absensi Keluar & Simpan'}
+              </span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* History Table displaying Foto Links */}
+      {absensiList.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-md space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
+              <Clock className="w-4 h-4 text-cyan-500" />
+              <span>Riwayat Absensi Regu ({absensiList.length})</span>
+            </h3>
+            <span className="text-xs text-slate-400">Termasuk Link Foto Masuk & Keluar</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                  <th className="p-3 font-bold">Tanggal</th>
+                  <th className="p-3 font-bold">Regu</th>
+                  <th className="p-3 font-bold">ULP</th>
+                  <th className="p-3 font-bold">Petugas (Hadir)</th>
+                  <th className="p-3 font-bold">Foto Masuk</th>
+                  <th className="p-3 font-bold">Foto Keluar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {absensiList.slice(0, 10).map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                    <td className="p-3 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                      {item.tanggal}
+                    </td>
+                    <td className="p-3 font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      {item.reguName}
+                    </td>
+                    <td className="p-3 text-slate-500 whitespace-nowrap">{item.ulpName}</td>
+                    <td className="p-3 text-slate-600 dark:text-slate-400">
+                      {item.petugasList?.map((p, i) => (
+                        <span key={i} className="inline-block mr-2 text-[11px]">
+                          <strong className="text-slate-800 dark:text-slate-200">{p.nama}</strong> ({p.keterangan})
+                        </span>
+                      ))}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      {item.fotoMasuk ? (
+                        <a
+                          href={formatDriveViewUrl(item.fotoMasuk)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-cyan-50 dark:bg-cyan-950 text-cyan-600 dark:text-cyan-400 font-bold text-[11px] hover:underline border border-cyan-200 dark:border-cyan-800"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Link Foto Masuk</span>
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">-</span>
+                      )}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      {item.fotoKeluar ? (
+                        <a
+                          href={formatDriveViewUrl(item.fotoKeluar)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] hover:underline border border-indigo-200 dark:border-indigo-800"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Link Foto Keluar</span>
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

@@ -1,0 +1,423 @@
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useWorkOrders } from '../context/WorkOrderContext';
+import { useRealisasi } from '../context/RealisasiContext';
+import { useMasterData } from '../context/MasterDataContext';
+import { useUI } from '../context/UIContext';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { WorkOrder, Realisasi } from '../types';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import {
+  MapPin,
+  Filter,
+  Search,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Scissors,
+  TreeDeciduous,
+  Table as TableIcon,
+  Map as MapIcon,
+  Eye,
+  FileSpreadsheet,
+} from 'lucide-react';
+
+// Custom Marker Icon Generator using SVG
+function createCustomMarkerIcon(status: string) {
+  let color = '#f43f5e'; // Red Belum
+  if (status === 'Selesai') color = '#10b981'; // Green Selesai
+  else if (status === 'Sedang Dikerjakan') color = '#f59e0b'; // Yellow Progress
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="28" height="42">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
+      <circle cx="12" cy="12" r="5" fill="#ffffff" />
+    </svg>
+  `;
+
+  return L.divIcon({
+    className: 'custom-leaflet-marker',
+    html: svg,
+    iconSize: [28, 42],
+    iconAnchor: [14, 42],
+    popupAnchor: [0, -38],
+  });
+}
+
+export const MonitoringPage: React.FC = () => {
+  const { user: currentUser } = useAuth();
+  const { workOrders } = useWorkOrders();
+  const { realisasiList } = useRealisasi();
+  const { ulpList, penyulangList } = useMasterData();
+  const { setActiveTab } = useUI();
+
+  const isUserRole = currentUser?.role === 'User';
+
+  const [activeViewMode, setActiveViewMode] = useState<'table' | 'map'>(
+    isUserRole ? 'table' : 'table'
+  );
+
+  const [filterUlp, setFilterUlp] = useState('ALL');
+  const [filterPenyulang, setFilterPenyulang] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filtered WOs
+  const filteredWOs = workOrders.filter((wo) => {
+    const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
+    const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
+    const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
+    
+    const query = searchQuery.toLowerCase().trim();
+    const matchesSearch =
+      !query ||
+      (wo.nomorWO || '').toLowerCase().includes(query) ||
+      (wo.ulpName || '').toLowerCase().includes(query) ||
+      (wo.penyulangName || '').toLowerCase().includes(query) ||
+      (wo.jenisPekerjaan || '').toLowerCase().includes(query);
+
+    return matchesUlp && matchesPenyulang && matchesStatus && matchesSearch;
+  });
+
+  // Calculate totals across filtered WOs
+  const woMonitoringRows = filteredWOs.map((wo) => {
+    const relList = realisasiList.filter(
+      (r) => r.workOrderId === wo.id || (r.nomorWO && r.nomorWO === wo.nomorWO)
+    );
+
+    const totalTebang = relList.filter((r) => {
+      const ket = (r.keterangan || '').toUpperCase();
+      return ket.includes('TEBANG');
+    }).length;
+
+    const totalPotong = relList.filter((r) => {
+      const ket = (r.keterangan || '').toUpperCase();
+      return ket.includes('POTONG') || ket.includes('PANGKAS');
+    }).length;
+
+    // TOTAL REALISASI adalah Jumlah TOTAL TEBANG + TOTAL POTONG
+    const totalRealisasiCount = totalTebang + totalPotong;
+
+    return {
+      workOrder: wo,
+      nomorWO: wo.nomorWO,
+      tanggal: wo.tanggal,
+      ulpName: wo.ulpName || '-',
+      penyulangName: wo.penyulangName || '-',
+      totalRealisasiCount,
+      totalTebang,
+      totalPotong,
+    };
+  });
+
+  const grandTotalRealisasi = woMonitoringRows.reduce((acc, row) => acc + row.totalRealisasiCount, 0);
+  const grandTotalTebang = woMonitoringRows.reduce((acc, row) => acc + row.totalTebang, 0);
+  const grandTotalPotong = woMonitoringRows.reduce((acc, row) => acc + row.totalPotong, 0);
+
+  // Map Center (Padang, West Sumatra default)
+  const mapCenter: [number, number] = [-0.92, 100.4];
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Top Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm">
+        <div>
+          <div className="flex items-center space-x-2 text-sky-600 dark:text-sky-400">
+            <TableIcon className="w-6 h-6" />
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white font-display">
+              Monitoring Realisasi Work Order
+            </h1>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Ringkasan & Tabel Isi Realisasi per Work Order (Total Realisasi, Tebang, dan Pangkas).
+          </p>
+        </div>
+
+        {/* View Mode Toggle (Table / Map) */}
+        <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => setActiveViewMode('table')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+              activeViewMode === 'table'
+                ? 'bg-sky-600 text-white shadow-md'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <TableIcon className="w-4 h-4" />
+            <span>Tabel Realisasi</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveViewMode('map')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+              activeViewMode === 'map'
+                ? 'bg-sky-600 text-white shadow-md'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <MapIcon className="w-4 h-4" />
+            <span>Peta GIS Field</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Overview Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Work Order</span>
+          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-display">
+            {woMonitoringRows.length} <span className="text-xs font-bold text-slate-400">WO</span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider">Total Realisasi</span>
+          <div className="text-xl sm:text-2xl font-black text-sky-900 dark:text-sky-200 font-display">
+            {grandTotalRealisasi} <span className="text-xs font-bold text-sky-600 dark:text-sky-400">Titik</span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center space-x-1">
+            <TreeDeciduous className="w-3.5 h-3.5" />
+            <span>Total Tebang</span>
+          </span>
+          <div className="text-xl sm:text-2xl font-black text-emerald-900 dark:text-emerald-200 font-display">
+            {grandTotalTebang} <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Pohon</span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center space-x-1">
+            <Scissors className="w-3.5 h-3.5" />
+            <span>Total Pangkas</span>
+          </span>
+          <div className="text-xl sm:text-2xl font-black text-amber-900 dark:text-amber-200 font-display">
+            {grandTotalPotong} <span className="text-xs font-bold text-amber-600 dark:text-amber-400">Titik/Pohon</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Cari Work Order / ULP</label>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Nomor WO, ULP, Penyulang..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Filter ULP</label>
+            <select
+              value={filterUlp}
+              onChange={(e) => setFilterUlp(e.target.value)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+            >
+              <option value="ALL">Semua ULP</option>
+              {ulpList.map((u, idx) => (
+                <option key={`${u.id}-${idx}`} value={u.namaULP || u.id}>
+                  {u.namaULP}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Filter Penyulang</label>
+            <select
+              value={filterPenyulang}
+              onChange={(e) => setFilterPenyulang(e.target.value)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+            >
+              <option value="ALL">Semua Penyulang</option>
+              {penyulangList.map((p, idx) => (
+                <option key={`${p.id}-${idx}`} value={p.namaPenyulang || p.id}>
+                  {p.namaPenyulang}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Filter Status WO</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+            >
+              <option value="ALL">Semua Status WO</option>
+              <option value="Selesai">Selesai</option>
+              <option value="Sedang Dikerjakan">Sedang Dikerjakan</option>
+              <option value="Belum Dikerjakan">Belum Dikerjakan</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      {activeViewMode === 'table' ? (
+        /* TABLE REALISASI PER WORK ORDER */
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <TableIcon className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+              <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                Tabel Realisasi per Work Order ({woMonitoringRows.length})
+              </h3>
+            </div>
+            <span className="text-xs font-bold text-slate-400">
+              Sinkron dengan Data Google Spreadsheet
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 font-extrabold uppercase tracking-wider">
+                  <th className="py-3.5 px-4">Nama Work Order</th>
+                  <th className="py-3.5 px-4">Tanggal</th>
+                  <th className="py-3.5 px-4">ULP</th>
+                  <th className="py-3.5 px-4">Penyulang</th>
+                  <th className="py-3.5 px-4 text-center">Total Realisasi</th>
+                  <th className="py-3.5 px-4 text-center">Total Tebang</th>
+                  <th className="py-3.5 px-4 text-center">Total Pangkas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                {woMonitoringRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                      Tidak ada data Work Order yang sesuai filter
+                    </td>
+                  </tr>
+                ) : (
+                  woMonitoringRows.map((row, idx) => (
+                    <tr
+                      key={`${row.workOrder.id}-${idx}`}
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors"
+                    >
+                      <td className="py-3.5 px-4 font-bold text-sky-700 dark:text-sky-400">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black">{row.nomorWO}</span>
+                          <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                            {row.workOrder.jenisPekerjaan || 'Pemangkasan Pohon (ROW)'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap text-slate-700 dark:text-slate-300">
+                        {row.tanggal}
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap text-slate-800 dark:text-slate-200 font-semibold">
+                        {row.ulpName}
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap text-slate-700 dark:text-slate-300">
+                        {row.penyulangName}
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-sky-100 dark:bg-sky-950/80 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                          {row.totalRealisasiCount} Titik
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          {row.totalTebang} Pohon
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                          {row.totalPotong} Titik/Pohon
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {woMonitoringRows.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold border-t-2 border-slate-200 dark:border-slate-700">
+                    <td colSpan={4} className="py-3.5 px-4 text-right uppercase tracking-wider text-xs">
+                      Total Keseluruhan :
+                    </td>
+                    <td className="py-3.5 px-4 text-center text-sky-600 dark:text-sky-400">
+                      {grandTotalRealisasi} Titik
+                    </td>
+                    <td className="py-3.5 px-4 text-center text-emerald-600 dark:text-emerald-400">
+                      {grandTotalTebang} Pohon
+                    </td>
+                    <td className="py-3.5 px-4 text-center text-amber-600 dark:text-amber-400">
+                      {grandTotalPotong} Titik/Pohon
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* MAP GIS VIEW */
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden p-2">
+            <div className="h-[520px] w-full rounded-2xl overflow-hidden relative">
+              <MapContainer
+                center={mapCenter}
+                zoom={11}
+                scrollWheelZoom={true}
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+
+                {filteredWOs.map((wo, idx) => {
+                  const rel = realisasiList.find((r) => r.workOrderId === wo.id);
+                  const customIcon = createCustomMarkerIcon(wo.status);
+
+                  return (
+                    <Marker
+                      key={`${wo.id}-${idx}`}
+                      position={[wo.latitude || -0.92, wo.longitude || 100.4]}
+                      icon={customIcon}
+                    >
+                      <Popup>
+                        <div className="p-1 space-y-2 max-w-xs font-sans">
+                          <div className="border-b border-slate-200 pb-1 flex items-center justify-between">
+                            <span className="font-extrabold text-sky-700 text-xs">
+                              {wo.nomorWO}
+                            </span>
+                            <StatusBadge status={wo.status} size="sm" />
+                          </div>
+
+                          <div className="space-y-1 text-xs">
+                            <p className="font-bold text-slate-900 leading-tight">
+                              {wo.penyulangName} - {wo.ulpName}
+                            </p>
+                            <p className="text-slate-600 text-[11px]">📍 {wo.lokasi || 'Lokasi Field'}</p>
+                            <p className="text-slate-500 text-[10px]">
+                              👤 Regu: {wo.reguName}
+                            </p>
+                          </div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+              </MapContainer>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

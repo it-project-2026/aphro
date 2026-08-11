@@ -1,0 +1,6 @@
+{
+  "name": "APHRO - Asset Protection & Hazard Response Operations",
+  "description": "Enterprise Web Application for Work Order, Realization Tracking, Monitoring, Dashboards, and Reports for Asset Protection & ROW Operations",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
