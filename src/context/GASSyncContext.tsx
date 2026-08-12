@@ -102,17 +102,17 @@ export function GASSyncProvider({ children }: { children: ReactNode }) {
 
       if (data.masterData) {
         setMasterData({
-          ulp: data.masterData.ulp && data.masterData.ulp.length > 0 ? data.masterData.ulp : undefined,
-          penyulang: data.masterData.penyulang && data.masterData.penyulang.length > 0 ? data.masterData.penyulang : undefined,
-          regu: data.masterData.regu && data.masterData.regu.length > 0 ? data.masterData.regu : undefined,
-          petugas: data.masterData.petugas && data.masterData.petugas.length > 0 ? data.masterData.petugas : undefined,
-          users: data.masterData.users && data.masterData.users.length > 0 ? data.masterData.users : undefined,
+          ulp: Array.isArray(data.masterData.ulp) ? data.masterData.ulp : undefined,
+          penyulang: Array.isArray(data.masterData.penyulang) ? data.masterData.penyulang : undefined,
+          regu: Array.isArray(data.masterData.regu) ? data.masterData.regu : undefined,
+          petugas: Array.isArray(data.masterData.petugas) ? data.masterData.petugas : undefined,
+          users: Array.isArray(data.masterData.users) ? data.masterData.users : undefined,
         });
       }
 
-      if (data.workOrders && data.workOrders.length > 0) setWorkOrders(data.workOrders);
-      if (data.realisasi && data.realisasi.length > 0) setRealisasiList(data.realisasi);
-      if (data.absensi && data.absensi.length > 0) setAbsensiList(data.absensi);
+      if (Array.isArray(data.workOrders)) setWorkOrders(data.workOrders);
+      if (Array.isArray(data.realisasi)) setRealisasiList(data.realisasi);
+      if (Array.isArray(data.absensi)) setAbsensiList(data.absensi);
 
       setIsGasConnected(true);
 

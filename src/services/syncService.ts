@@ -17,6 +17,7 @@ export function normalizeUser(u: any): User {
   const nip = String(u.nip || u.NIP || u.Username || u.username || u.UserID || u.id || id);
   const name = String(u.name || u.Nama || u.Name || u.Username || u.username || u.NIP || u.nip || id);
   const userName = String(u.userName || u.Username || u.username || name);
+  const password = String(u.password || u.Password || u.PASSWORD || u.pass || u.Pass || u.KataSandi || u.kataSandi || u.KATA_SANDI || '');
   const email = String(u.email || u.Email || `${userName.toLowerCase().replace(/[^a-z0-9]/g, '')}@pln.co.id`);
   
   const rawRole = String(u.role || u.Role || 'User').trim();
@@ -37,6 +38,7 @@ export function normalizeUser(u: any): User {
     nip,
     name,
     userName,
+    password,
     email,
     role,
     reguName,

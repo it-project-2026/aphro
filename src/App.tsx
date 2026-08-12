@@ -40,11 +40,23 @@ const AppContent: React.FC = () => {
   const [showAbsensiForm, setShowAbsensiForm] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
+  const isAdmbktUser = user && (
+    (user.userName || '').toLowerCase() === 'admbkt' ||
+    (user.nip || '').toLowerCase() === 'admbkt' ||
+    (user.id || '').toLowerCase() === 'admbkt'
+  );
+
   useEffect(() => {
     // Just handle splash screen timing
     const timer = setTimeout(() => setIsInitialLoading(false), 1500);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (isAdmbktUser && activeTab !== 'cetak_laporan') {
+      setActiveTab('cetak_laporan');
+    }
+  }, [isAdmbktUser, activeTab, setActiveTab]);
 
   if (isInitialLoading) {
     return (
@@ -94,7 +106,7 @@ const AppContent: React.FC = () => {
   }
 
   const isUserRole = (user.role || '').toUpperCase() === 'USER';
-  if (isUserRole && !hasCheckedInToday) {
+  if (isUserRole && !isAdmbktUser && !hasCheckedInToday) {
     return (
       <>
         {showAbsensiForm ? (
@@ -111,6 +123,10 @@ const AppContent: React.FC = () => {
   }
 
   const renderActivePage = () => {
+    if (isAdmbktUser) {
+      return <CetakLaporanPage />;
+    }
+
     switch (activeTab) {
       case 'dashboard': return <DashboardPage />;
       case 'work_orders': return <WorkOrderPage />;

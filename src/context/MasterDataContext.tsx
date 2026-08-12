@@ -39,6 +39,10 @@ interface MasterDataContextType {
   addPetugas: (ptg: Omit<Petugas, 'id'>) => void;
   updatePetugas: (id: string, ptg: Partial<Petugas>) => void;
   deletePetugas: (id: string) => void;
+
+  addUser: (user: Omit<User, 'id'>) => void;
+  updateUser: (id: string, user: Partial<User>) => void;
+  deleteUser: (id: string) => void;
 }
 
 const MasterDataContext = createContext<MasterDataContextType | undefined>(undefined);
@@ -113,6 +117,18 @@ export function MasterDataProvider({ children }: { children: ReactNode }) {
     setPetugasList(prev => prev.filter(item => item.id !== id));
   }, [setPetugasList]);
 
+  const addUser = useCallback((data: Omit<User, 'id'>) => {
+    setUsers(prev => [...prev, { ...data, id: 'usr-' + Date.now() }]);
+  }, [setUsers]);
+
+  const updateUser = useCallback((id: string, data: Partial<User>) => {
+    setUsers(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
+  }, [setUsers]);
+
+  const deleteUser = useCallback((id: string) => {
+    setUsers(prev => prev.filter(item => item.id !== id));
+  }, [setUsers]);
+
   return (
     <MasterDataContext.Provider value={{
       ulpList, penyulangList, reguList, petugasList, users,
@@ -120,7 +136,8 @@ export function MasterDataProvider({ children }: { children: ReactNode }) {
       addULP, updateULP, deleteULP,
       addPenyulang, updatePenyulang, deletePenyulang,
       addRegu, updateRegu, deleteRegu,
-      addPetugas, updatePetugas, deletePetugas
+      addPetugas, updatePetugas, deletePetugas,
+      addUser, updateUser, deleteUser
     }}>
       {children}
     </MasterDataContext.Provider>

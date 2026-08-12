@@ -5,6 +5,7 @@ export interface User {
   nip: string;
   name: string;
   userName?: string;
+  password?: string;
   email: string;
   role: UserRole;
   reguId?: string;
@@ -13,6 +14,9 @@ export interface User {
   ulpName?: string;
   avatarUrl?: string;
   phone?: string;
+  status?: 'Aktif' | 'Non-Aktif';
+  lastLogin?: string;
+  createdAt?: string;
 }
 
 export type WOStatus = 'Belum Dikerjakan' | 'Sedang Dikerjakan' | 'Selesai' | 'BELUM SELESAI' | 'SELESAI';

@@ -52,6 +52,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
 
   const role = currentUser?.role || 'User';
 
+  const isAdmbktUser = currentUser && (
+    (currentUser.userName || '').toLowerCase() === 'admbkt' ||
+    (currentUser.nip || '').toLowerCase() === 'admbkt' ||
+    (currentUser.id || '').toLowerCase() === 'admbkt'
+  );
+
   const navItems = [
     {
       id: 'dashboard',
@@ -121,7 +127,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
     },
   ];
 
-  const allowedItems = navItems.filter((item) => item.roles.includes(role));
+  const allowedItems = isAdmbktUser
+    ? navItems.filter((item) => item.id === 'cetak_laporan')
+    : navItems.filter((item) => item.roles.includes(role));
 
   return (
     <>

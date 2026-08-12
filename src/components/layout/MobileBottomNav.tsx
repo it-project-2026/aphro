@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Clock,
   PlusCircle,
+  Printer,
 } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
@@ -22,35 +23,50 @@ export const MobileBottomNav: React.FC = () => {
 
   const role = user.role || 'User';
 
+  const isAdmbktUser = user && (
+    (user.userName || '').toLowerCase() === 'admbkt' ||
+    (user.nip || '').toLowerCase() === 'admbkt' ||
+    (user.id || '').toLowerCase() === 'admbkt'
+  );
+
   // Navigation tabs optimized for mobile HP usage
-  const mobileTabs = [
-    {
-      id: 'dashboard',
-      label: 'Beranda',
-      icon: LayoutDashboard,
-    },
-    {
-      id: 'work_orders',
-      label: 'WO Saya',
-      icon: ClipboardList,
-    },
-    {
-      id: 'input_realisasi',
-      label: 'Realisasi',
-      icon: Camera,
-      highlight: true, // Special center action button for mobile
-    },
-    {
-      id: 'absensi_pulang',
-      label: 'Absensi',
-      icon: LogOut,
-    },
-    {
-      id: 'monitoring',
-      label: 'Peta',
-      icon: MapPin,
-    },
-  ];
+  const mobileTabs = isAdmbktUser
+    ? [
+        {
+          id: 'cetak_laporan',
+          label: 'Cetak Laporan',
+          icon: Printer,
+          highlight: true,
+        },
+      ]
+    : [
+        {
+          id: 'dashboard',
+          label: 'Beranda',
+          icon: LayoutDashboard,
+        },
+        {
+          id: 'work_orders',
+          label: 'WO Saya',
+          icon: ClipboardList,
+        },
+        {
+          id: 'input_realisasi',
+          label: 'Realisasi',
+          icon: Camera,
+          highlight: true, // Special center action button for mobile
+        },
+        {
+          id: 'absensi_pulang',
+          label: 'Absensi',
+          icon: LogOut,
+        },
+        {
+          id: 'monitoring',
+          label: 'Peta',
+          icon: MapPin,
+        },
+      ];
 
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-lg pb-safe">

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useMasterData } from '../context/MasterDataContext';
-import { ULP, Penyulang, ReguROW, Petugas, UserRole } from '../types';
+import { useSettings } from '../context/SettingsContext';
+import { useToast } from '../hooks/useToast';
+import { GASApiService } from '../services/gasApiService';
+import { ULP, Penyulang, ReguROW, Petugas, User, UserRole } from '../types';
 import {
   Database,
   Plus,
@@ -13,6 +16,12 @@ import {
   ShieldAlert,
   X,
   Check,
+  Key,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  UserPlus,
+  Lock,
 } from 'lucide-react';
 
 export const MasterDataPage: React.FC = () => {
@@ -33,9 +42,16 @@ export const MasterDataPage: React.FC = () => {
     addPetugas,
     updatePetugas,
     deletePetugas,
+    users,
+    addUser,
+    updateUser,
+    deleteUser,
   } = useMasterData();
 
-  const [activeTab, setActiveTab] = useState<'regu' | 'petugas' | 'ulp' | 'penyulang'>('regu');
+  const { settings } = useSettings();
+  const { showToast } = useToast();
+
+  const [activeTab, setActiveTab] = useState<'regu' | 'petugas' | 'ulp' | 'penyulang' | 'users'>('regu');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modals state
@@ -50,6 +66,12 @@ export const MasterDataPage: React.FC = () => {
 
   const [showPenyulangModal, setShowPenyulangModal] = useState(false);
   const [editingPenyulang, setEditingPenyulang] = useState<Penyulang | null>(null);
+
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [showPasswordInForm, setShowPasswordInForm] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState<{ [id: string]: boolean }>({});
 
   // Form states for REGU
   const [reguName, setReguName] = useState('');
@@ -79,6 +101,18 @@ export const MasterDataPage: React.FC = () => {
   const [penyUlpId, setPenyUlpId] = useState(ulpList[0]?.id || '');
   const [penyPanjang, setPenyPanjang] = useState(30);
   const [penyTrafo, setPenyTrafo] = useState(100);
+
+  // Form states for USER & PASSWORD (sesuai kolom Spreadsheet Sheet USERS)
+  const [usrNip, setUsrNip] = useState('');
+  const [usrUserName, setUsrUserName] = useState('');
+  const [usrNama, setUsrNama] = useState('');
+  const [usrPassword, setUsrPassword] = useState('');
+  const [usrRole, setUsrRole] = useState<UserRole>('User');
+  const [usrEmail, setUsrEmail] = useState('');
+  const [usrPhone, setUsrPhone] = useState('');
+  const [usrStatus, setUsrStatus] = useState<'Aktif' | 'Non-Aktif'>('Aktif');
+  const [usrUlpId, setUsrUlpId] = useState(ulpList[0]?.id || '');
+  const [usrReguId, setUsrReguId] = useState(reguList[0]?.id || '');
 
   // Submit Regu
   const handleSaveRegu = (e: React.FormEvent) => {
@@ -189,6 +223,90 @@ export const MasterDataPage: React.FC = () => {
     setShowPenyulangModal(false);
   };
 
+  // Submit User & Password (Sesuai Kolom Sheet USERS Spreadsheet)
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const selUlp = ulpList.find((u) => u.id === usrUlpId);
+    const selRegu = reguList.find((r) => r.id === usrReguId);
+
+    const userPayload: Omit<User, 'id'> = {
+      nip: usrNip || `USR-${Date.now().toString().slice(-4)}`,
+      userName: usrUserName || usrNip,
+      name: usrNama,
+      password: usrPassword || 'user123',
+      role: usrRole,
+      email: usrEmail || `${(usrUserName || usrNip).toLowerCase()}@pln.co.id`,
+      phone: usrPhone || '081234567890',
+      ulpId: usrUlpId,
+      ulpName: selUlp?.namaULP || 'PLN UP3 Padang',
+      reguId: usrReguId,
+      reguName: selRegu?.namaRegu || '-',
+      status: usrStatus,
+    };
+
+    let targetId = '';
+    if (editingUser) {
+      targetId = editingUser.id;
+      updateUser(editingUser.id, userPayload);
+      showToast(`Data User & Password "${usrNama}" berhasil diperbarui!`, 'success');
+    } else {
+      targetId = 'usr-' + Date.now();
+      addUser(userPayload);
+      showToast(`User & Password "${usrNama}" berhasil ditambahkan!`, 'success');
+    }
+
+    // Direct GAS Spreadsheet Sync (Save row to Sheet USERS)
+    if (settings.gasWebAppUrl) {
+      try {
+        await GASApiService.saveMasterData(settings.gasWebAppUrl, 'USERS', {
+          id: targetId,
+          UserID: userPayload.nip,
+          Username: userPayload.userName,
+          Password: userPayload.password,
+          NamaRegu: userPayload.reguName,
+          Role: userPayload.role,
+          ULP: userPayload.ulpName,
+          Status: userPayload.status,
+          nip: userPayload.nip,
+          name: userPayload.name,
+          email: userPayload.email,
+          phone: userPayload.phone,
+        });
+      } catch (err) {
+        console.warn('Sync user to GAS spreadsheet failed:', err);
+      }
+    }
+
+    setShowUserModal(false);
+  };
+
+  // Confirm and handle Delete User
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    const deletedId = userToDelete.id;
+    const deletedName = userToDelete.name || userToDelete.nip;
+
+    deleteUser(deletedId);
+
+    if (settings.gasWebAppUrl) {
+      try {
+        await GASApiService.deleteMasterData(settings.gasWebAppUrl, 'USERS', deletedId);
+      } catch (err) {
+        console.warn('Sync delete user to GAS spreadsheet failed:', err);
+      }
+    }
+
+    showToast(`User & Password "${deletedName}" telah berhasil dihapus!`, 'info');
+    setUserToDelete(null);
+  };
+
+  const togglePasswordVisibility = (id: string) => {
+    setVisiblePasswords((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Banner */}
@@ -263,6 +381,27 @@ export const MasterDataPage: React.FC = () => {
               <span>Tambah Penyulang</span>
             </button>
           )}
+
+          {activeTab === 'users' && (
+            <button
+              onClick={() => {
+                setEditingUser(null);
+                setUsrNip('');
+                setUsrUserName('');
+                setUsrNama('');
+                setUsrPassword('');
+                setUsrRole('User');
+                setUsrEmail('');
+                setUsrPhone('');
+                setShowPasswordInForm(false);
+                setShowUserModal(true);
+              }}
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Tambah User & Password</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -314,7 +453,19 @@ export const MasterDataPage: React.FC = () => {
             }`}
           >
             <Zap className="w-4 h-4" />
-            <span>4. Penyulang / Feeder ({penyulangList.length})</span>
+            <span>4. Penyulang ({penyulangList.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'users'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Key className="w-4 h-4 text-amber-300" />
+            <span>5. User & Password ({users.length})</span>
           </button>
         </div>
 
@@ -595,6 +746,124 @@ export const MasterDataPage: React.FC = () => {
         </div>
       )}
 
+      {/* Tab 5: USER & PASSWORD Table */}
+      {activeTab === 'users' && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          <table className="w-full text-left text-xs sm:text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700">
+              <tr>
+                <th className="p-3.5 pl-5">USERID / Username</th>
+                <th className="p-3.5">Nama & Email</th>
+                <th className="p-3.5">Role Akses</th>
+                <th className="p-3.5">Kata Sandi (Password)</th>
+                <th className="p-3.5">Unit / Regu</th>
+                <th className="p-3.5">No HP</th>
+                <th className="p-3.5 pr-5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+              {users
+                .filter((u) => {
+                  const q = searchTerm.toLowerCase();
+                  return (
+                    (u.name || '').toLowerCase().includes(q) ||
+                    (u.nip || '').toLowerCase().includes(q) ||
+                    (u.userName || '').toLowerCase().includes(q) ||
+                    (u.email || '').toLowerCase().includes(q) ||
+                    (u.role || '').toLowerCase().includes(q) ||
+                    (u.ulpName || '').toLowerCase().includes(q)
+                  );
+                })
+                .map((u, idx) => {
+                  const isVisible = !!visiblePasswords[u.id];
+                  const displayPassword = u.password || 'user123';
+                  return (
+                    <tr key={`${u.id}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
+                      <td className="p-3.5 pl-5 font-bold text-sky-600">
+                        <div>{u.nip || u.id}</div>
+                        {u.userName && u.userName !== u.nip && (
+                          <div className="text-[11px] text-slate-400 font-normal">@{u.userName}</div>
+                        )}
+                      </td>
+                      <td className="p-3.5">
+                        <div className="font-bold text-slate-900 dark:text-white">{u.name}</div>
+                        <div className="text-[11px] text-slate-500">{u.email}</div>
+                      </td>
+                      <td className="p-3.5">
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center space-x-1 ${
+                            u.role === 'SuperAdmin'
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                              : u.role === 'Admin'
+                              ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
+                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                          }`}
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+                          <span>{u.role}</span>
+                        </span>
+                      </td>
+                      <td className="p-3.5">
+                        <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900/80 px-2.5 py-1 rounded-lg w-fit border border-slate-200 dark:border-slate-700">
+                          <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
+                            {isVisible ? displayPassword : '••••••••'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => togglePasswordVisibility(u.id)}
+                            className="p-1 hover:text-sky-600 text-slate-400 rounded transition-colors"
+                            title={isVisible ? 'Sembunyikan Kata Sandi' : 'Tampilkan Kata Sandi'}
+                          >
+                            {isVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="p-3.5 text-slate-600 dark:text-slate-300">
+                        <div className="font-semibold">{u.ulpName || '-'}</div>
+                        <div className="text-[11px] text-slate-400">{u.reguName || '-'}</div>
+                      </td>
+                      <td className="p-3.5 text-slate-500 font-mono text-xs">{u.phone || '-'}</td>
+                      <td className="p-3.5 pr-5 text-right">
+                        <div className="flex items-center justify-end space-x-1">
+                          <button
+                            onClick={() => {
+                              setEditingUser(u);
+                              setUsrNip(u.nip || u.id || '');
+                              setUsrUserName(u.userName || u.nip || '');
+                              setUsrNama(u.name || '');
+                              setUsrPassword(u.password || 'user123');
+                              setUsrRole(u.role || 'User');
+                              setUsrEmail(u.email || '');
+                              setUsrPhone(u.phone || '');
+                              setUsrStatus(u.status || 'Aktif');
+                              setUsrUlpId(u.ulpId || ulpList.find((ulp) => ulp.namaULP === u.ulpName)?.id || ulpList[0]?.id || '');
+                              setUsrReguId(u.reguId || reguList.find((r) => r.namaRegu === u.reguName)?.id || reguList[0]?.id || '');
+                              setShowPasswordInForm(false);
+                              setShowUserModal(true);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-sky-600 rounded-lg hover:bg-sky-50 dark:hover:bg-slate-700 transition-colors"
+                            title="Edit User & Password"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setUserToDelete(u)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-slate-700 transition-colors"
+                            title="Hapus User"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Regu ROW Modal */}
       {showReguModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
@@ -782,6 +1051,225 @@ export const MasterDataPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* User Modal */}
+      {showUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4 my-8">
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-3">
+              <div className="flex items-center space-x-2">
+                <Key className="w-5 h-5 text-amber-500" />
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                  {editingUser ? 'Edit User & Password' : 'Tambah User & Password Baru'}
+                </h3>
+              </div>
+              <button onClick={() => setShowUserModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUser} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    USERID / NIP <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: 19950101..."
+                    value={usrNip}
+                    onChange={(e) => setUsrNip(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-mono text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Username Login</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: superadmin"
+                    value={usrUserName}
+                    onChange={(e) => setUsrUserName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Nama Lengkap <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Budi Santoso"
+                  value={usrNama}
+                  onChange={(e) => setUsrNama(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Kata Sandi (Password) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasswordInForm ? 'text' : 'password'}
+                    required
+                    placeholder="Masukkan kata sandi..."
+                    value={usrPassword}
+                    onChange={(e) => setUsrPassword(e.target.value)}
+                    className="w-full pl-3 pr-10 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-mono text-slate-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordInForm(!showPasswordInForm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showPasswordInForm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Role Akses System</label>
+                <select
+                  value={usrRole}
+                  onChange={(e) => setUsrRole(e.target.value as UserRole)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-bold"
+                >
+                  <option value="SuperAdmin">SuperAdmin (Akses Penuh Seluruh Sistem)</option>
+                  <option value="Admin">Admin (Akses Manajemen & Work Order)</option>
+                  <option value="User">User / Petugas Lapangan (Input Realisasi & Absensi)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Email PLN</label>
+                  <input
+                    type="email"
+                    placeholder="nama@pln.co.id"
+                    value={usrEmail}
+                    onChange={(e) => setUsrEmail(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">No HP / WhatsApp</label>
+                  <input
+                    type="text"
+                    placeholder="08123456789"
+                    value={usrPhone}
+                    onChange={(e) => setUsrPhone(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unit ULP Base (ULP)</label>
+                  <select
+                    value={usrUlpId}
+                    onChange={(e) => setUsrUlpId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                  >
+                    <option value="">-- Pilih ULP --</option>
+                    {ulpList.map((ulp) => (
+                      <option key={ulp.id} value={ulp.id}>
+                        {ulp.namaULP}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Regu ROW Assigned (NamaRegu)</label>
+                  <select
+                    value={usrReguId}
+                    onChange={(e) => setUsrReguId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                  >
+                    <option value="">-- Pilih Regu --</option>
+                    {reguList.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.namaRegu}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Status Akun (Status)</label>
+                <select
+                  value={usrStatus}
+                  onChange={(e) => setUsrStatus(e.target.value as 'Aktif' | 'Non-Aktif')}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold"
+                >
+                  <option value="Aktif">Aktif (User dapat Login & Input Data)</option>
+                  <option value="Non-Aktif">Non-Aktif (Akses Terkunci)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setShowUserModal(false)}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-200"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-md transition-all flex items-center space-x-1"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Simpan Data User</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirm Delete User */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <div className="p-3 bg-rose-100 dark:bg-rose-900/40 rounded-2xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Hapus User & Password</h3>
+                <p className="text-xs text-slate-500">Tindakan ini tidak dapat dibatalkan</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Apakah Anda yakin ingin menghapus akun user <span className="font-bold text-slate-900 dark:text-white">{userToDelete.name || userToDelete.nip}</span> (@{userToDelete.userName || userToDelete.nip})? Akses login dan password untuk akun ini akan dihapus dari sistem.
+            </p>
+            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+              <button
+                onClick={() => setUserToDelete(null)}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-200"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConfirmDeleteUser}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-md transition-all flex items-center space-x-1"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Ya, Hapus User</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

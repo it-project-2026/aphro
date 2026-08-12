@@ -7,6 +7,8 @@ import { useGASSync } from '../hooks/useGASSync';
 import { useToast } from '../hooks/useToast';
 import { APP_LOGO_URL } from '../data/initialData';
 import { saveAndEmbedGasConfig } from '../config/gasConfig';
+import { GASApiService } from '../services/gasApiService';
+import { normalizeUser } from '../services/syncService';
 import {
   Zap,
   ShieldCheck,
@@ -56,30 +58,65 @@ export const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username) {
-      showToast('Harap masukkan USERID', 'warning');
+      showToast('Harap masukkan USERID / Username', 'warning');
       return;
     }
     setIsSubmitting(true);
     
-    // Find user in master data
     const safeUsername = (username || '').trim().toLowerCase();
+
+    // 1. Try Direct GAS Login Endpoint if GAS URL is configured and online
+    if (settings.gasWebAppUrl && navigator.onLine) {
+      try {
+        const gasRes = await GASApiService.login(settings.gasWebAppUrl, username, password);
+        if (gasRes && gasRes.status === 'success' && (gasRes.user || gasRes.data)) {
+          const rawUserObj = gasRes.user || gasRes.data;
+          const authenticatedUser = normalizeUser(rawUserObj);
+          
+          login(authenticatedUser);
+          const isAdmbkt = (authenticatedUser.userName || authenticatedUser.nip || authenticatedUser.id || '').toLowerCase() === 'admbkt';
+          if (isAdmbkt) {
+            setActiveTab('cetak_laporan');
+          } else if ((authenticatedUser.role || '').toUpperCase() === 'USER') {
+            setActiveTab('input_realisasi');
+          } else {
+            setActiveTab('dashboard');
+          }
+          showToast(`Selamat datang, ${authenticatedUser.name}! (Terotentikasi via Sheet USERS)`, 'success');
+          setIsSubmitting(false);
+          return;
+        } else if (gasRes && gasRes.status === 'error' && gasRes.message) {
+          // If GAS specifically answered user not found or password invalid
+          if (gasRes.message.toLowerCase().includes('password') || gasRes.message.toLowerCase().includes('sandi') || gasRes.message.toLowerCase().includes('user')) {
+            showToast(gasRes.message, 'error');
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Direct GAS login call error, falling back to synced local users:', err);
+      }
+    }
+
+    // 2. Fallback / Offline search in Master Data (synced from Sheet USERS)
     let foundUser = users.find(u => 
       (u.nip || '').toLowerCase() === safeUsername || 
       (u.id || '').toLowerCase() === safeUsername ||
       (u.userName || '').toLowerCase() === safeUsername ||
-      (u.name || '').toLowerCase() === safeUsername
+      (u.name || '').toLowerCase() === safeUsername ||
+      (u.email || '').toLowerCase() === safeUsername
     );
 
-    // If not found locally and GAS Web App URL is configured, try syncing live from Spreadsheet
-    if (!foundUser && settings.gasWebAppUrl) {
+    // If not found locally and GAS Web App URL is configured, try syncing live from Spreadsheet once
+    if (!foundUser && settings.gasWebAppUrl && navigator.onLine) {
       try {
         await syncWithGAS();
-        // Check users again after sync
         foundUser = users.find(u => 
           (u.nip || '').toLowerCase() === safeUsername || 
           (u.id || '').toLowerCase() === safeUsername ||
           (u.userName || '').toLowerCase() === safeUsername ||
-          (u.name || '').toLowerCase() === safeUsername
+          (u.name || '').toLowerCase() === safeUsername ||
+          (u.email || '').toLowerCase() === safeUsername
         );
       } catch (err) {
         console.warn('Live sync during login failed:', err);
@@ -87,27 +124,45 @@ export const LoginPage: React.FC = () => {
     }
 
     if (foundUser) {
+      // Validate password if user has a password configured in sheet USERS
+      if (foundUser.password) {
+        if (!password || password.trim() !== foundUser.password.trim()) {
+          showToast('Kata sandi tidak sesuai! Harap periksa kembali.', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       login(foundUser);
-      if ((foundUser.role || '').toUpperCase() === 'USER') {
+      const isAdmbkt = (foundUser.userName || foundUser.nip || foundUser.id || '').toLowerCase() === 'admbkt';
+      if (isAdmbkt) {
+        setActiveTab('cetak_laporan');
+      } else if ((foundUser.role || '').toUpperCase() === 'USER') {
         setActiveTab('input_realisasi');
       } else {
         setActiveTab('dashboard');
       }
       showToast(`Selamat datang, ${foundUser.name}!`, 'success');
     } else {
-      // Fallback for hardcoded admin if users list is empty or doesn't contain it
+      // Fallback for superadmin / admin if not present in users list
       if (safeUsername === 'superadmin' || safeUsername === 'admin') {
-         login({
-           id: 'hardcoded-admin',
-           nip: username.toUpperCase(),
-           name: 'System Admin',
-           role: 'SuperAdmin',
-           email: 'admin@pln.co.id'
-         });
-         setActiveTab('dashboard');
-         showToast('Selamat datang, Admin!', 'success');
+        const expectedRole = safeUsername === 'superadmin' ? 'SuperAdmin' : 'Admin';
+        if (password && password.trim() === 'admin123') {
+          login({
+            id: `hardcoded-${safeUsername}`,
+            nip: username.toUpperCase(),
+            userName: safeUsername,
+            name: safeUsername === 'superadmin' ? 'SuperAdmin Utama' : 'System Admin',
+            role: expectedRole as any,
+            email: `${safeUsername}@pln.co.id`
+          });
+          setActiveTab('dashboard');
+          showToast(`Selamat datang, ${expectedRole}!`, 'success');
+        } else {
+          showToast('Kata sandi salah! Gunakan "admin123" atau daftarkan akun di Sheet USERS Master Data.', 'error');
+        }
       } else {
-        showToast('USERID tidak ditemukan di Sheet USERS Spreadsheet. Silakan tekan tombol Refresh USERS.', 'error');
+        showToast(`USERID "${username}" tidak ditemukan di sheet USERS Spreadsheet. Silakan hubungi Admin atau tekan Refresh USERS.`, 'error');
       }
     }
     
@@ -319,102 +374,103 @@ export const LoginPage: React.FC = () => {
           </form>
 
           {/* Synced Users Quick Select List */}
-          <div className="pt-4 border-t border-slate-700/50 space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <Users className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Pilih User Spreadsheet ({users.length})</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleSyncGAS}
-                disabled={isSyncing}
-                className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50"
-                title="Refresh Sheet USERS dari Spreadsheet"
-              >
-                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-cyan-400' : ''}`} />
-                <span>{isSyncing ? 'Memuat...' : 'Refresh USERS'}</span>
-              </button>
-            </div>
+          {(() => {
+            const selectableUsers = users.filter(u => {
+              const role = (u.role || '').toLowerCase();
+              const uname = (u.userName || u.nip || u.id || u.name || '').toLowerCase();
+              return role !== 'superadmin' && uname !== 'superadmin';
+            });
 
-            {users.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
-                {users.map((u, i) => {
-                  const targetUser = (username || '').trim().toLowerCase();
-                  const isSelected = targetUser && (
-                    targetUser === (u.nip || '').trim().toLowerCase() || 
-                    targetUser === (u.id || '').trim().toLowerCase() ||
-                    targetUser === (u.userName || '').trim().toLowerCase() ||
-                    targetUser === (u.name || '').trim().toLowerCase()
-                  );
+            return (
+              <div className="pt-4 border-t border-slate-700/50 space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <Users className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Pilih User Spreadsheet ({selectableUsers.length})</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSyncGAS}
+                    disabled={isSyncing}
+                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                    title="Refresh Sheet USERS dari Spreadsheet"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-cyan-400' : ''}`} />
+                    <span>{isSyncing ? 'Memuat...' : 'Refresh USERS'}</span>
+                  </button>
+                </div>
 
-                  return (
+                {selectableUsers.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+                    {selectableUsers.map((u, i) => {
+                      const targetUser = (username || '').trim().toLowerCase();
+                      const isSelected = targetUser && (
+                        targetUser === (u.nip || '').trim().toLowerCase() || 
+                        targetUser === (u.id || '').trim().toLowerCase() ||
+                        targetUser === (u.userName || '').trim().toLowerCase() ||
+                        targetUser === (u.name || '').trim().toLowerCase()
+                      );
+
+                      return (
+                        <button
+                          key={`${u.id || 'user'}-${i}`}
+                          type="button"
+                          onClick={() => handleSelectUser(u)}
+                          className={`p-3 rounded-2xl text-left border transition-all flex items-center justify-between group ${
+                            isSelected
+                              ? 'bg-sky-500/15 border-sky-500 text-white shadow-lg shadow-sky-500/10'
+                              : 'bg-slate-900/40 hover:bg-slate-900/80 border-slate-700/50 text-slate-400 hover:border-slate-600'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 pr-2">
+                            <p className={`text-xs font-bold truncate ${
+                              isSelected ? 'text-sky-400' : 'text-slate-200 group-hover:text-white'
+                            }`}>
+                              {u.name || u.userName || u.nip || 'Unnamed User'}
+                            </p>
+                            <p className="text-[9px] text-slate-500 font-mono mt-0.5 truncate uppercase flex items-center space-x-1">
+                              <span>ID:</span>
+                              <span className="text-cyan-400 font-bold">{u.nip || u.userName || u.id || '-'}</span>
+                            </p>
+                            {(u.ulpName || u.reguName) && (
+                              <p className="text-[8px] text-slate-400 truncate mt-0.5 font-medium">
+                                {u.ulpName} {u.reguName ? `• ${u.reguName}` : ''}
+                              </p>
+                            )}
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded-lg text-[8px] font-black shrink-0 border uppercase tracking-tighter ${
+                              u.role === 'Admin'
+                                ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            }`}
+                          >
+                            {u.role || 'USER'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center rounded-2xl bg-slate-900/40 border border-slate-700/50 border-dashed space-y-2">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Belum ada data user dari Sheet USERS</p>
                     <button
-                      key={`${u.id || 'user'}-${i}`}
                       type="button"
-                      onClick={() => handleSelectUser(u)}
-                      className={`p-3 rounded-2xl text-left border transition-all flex items-center justify-between group ${
-                        isSelected
-                          ? 'bg-sky-500/15 border-sky-500 text-white shadow-lg shadow-sky-500/10'
-                          : 'bg-slate-900/40 hover:bg-slate-900/80 border-slate-700/50 text-slate-400 hover:border-slate-600'
-                      }`}
+                      onClick={handleSyncGAS}
+                      disabled={isSyncing}
+                      className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30 text-xs font-bold transition-all inline-flex items-center space-x-2"
                     >
-                      <div className="min-w-0 flex-1 pr-2">
-                        <p className={`text-xs font-bold truncate ${
-                          isSelected ? 'text-sky-400' : 'text-slate-200 group-hover:text-white'
-                        }`}>
-                          {u.name || u.userName || u.nip || 'Unnamed User'}
-                        </p>
-                        <p className="text-[9px] text-slate-500 font-mono mt-0.5 truncate uppercase flex items-center space-x-1">
-                          <span>ID:</span>
-                          <span className="text-cyan-400 font-bold">{u.nip || u.userName || u.id || '-'}</span>
-                        </p>
-                        {(u.ulpName || u.reguName) && (
-                          <p className="text-[8px] text-slate-400 truncate mt-0.5 font-medium">
-                            {u.ulpName} {u.reguName ? `• ${u.reguName}` : ''}
-                          </p>
-                        )}
-                      </div>
-                      <span
-                        className={`px-2 py-0.5 rounded-lg text-[8px] font-black shrink-0 border uppercase tracking-tighter ${
-                          u.role === 'SuperAdmin'
-                            ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                            : u.role === 'Admin'
-                            ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        }`}
-                      >
-                        {u.role || 'USER'}
-                      </span>
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Sedang Memuat Data...' : 'Ambil User Dari Spreadsheet'}</span>
                     </button>
-                  );
-                })}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="p-6 text-center rounded-2xl bg-slate-900/40 border border-slate-700/50 border-dashed space-y-2">
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Belum ada data user dari Sheet USERS</p>
-                <button
-                  type="button"
-                  onClick={handleSyncGAS}
-                  disabled={isSyncing}
-                  className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30 text-xs font-bold transition-all inline-flex items-center space-x-2"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Sedang Memuat Data...' : 'Ambil User Dari Spreadsheet'}</span>
-                </button>
-              </div>
-            )}
-          </div>
+            );
+          })()}
 
-          {/* Quick Admin Access & GAS URL Config link */}
-          <div className="flex items-center justify-between pt-1 text-[9px] text-slate-500">
-             <button 
-               type="button"
-               onClick={() => { setUsername('superadmin'); setPassword(''); showToast('UserID superadmin dimasukkan. Silakan ketik kata sandi Anda.', 'info'); }}
-               className="font-bold text-slate-500 hover:text-sky-400 transition-colors uppercase tracking-widest cursor-pointer"
-             >
-               Isi UserID Admin
-             </button>
+          {/* Config link */}
+          <div className="flex items-center justify-end pt-1 text-[9px] text-slate-500">
              <button
                type="button"
                onClick={() => {

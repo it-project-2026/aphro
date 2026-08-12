@@ -22,7 +22,9 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr-1',
     nip: '198503152010121001',
-    name: 'Budi Santoso',
+    userName: 'superadmin',
+    password: 'admin123',
+    name: 'Budi Santoso (SuperAdmin)',
     email: 'superadmin@pln.co.id',
     role: 'SuperAdmin',
     phone: '081234567890',
@@ -31,7 +33,9 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr-2',
     nip: '199008202014021003',
-    name: 'Siti Rahmawati',
+    userName: 'admin',
+    password: 'admin123',
+    name: 'Siti Rahmawati (Admin)',
     email: 'admin.padang@pln.co.id',
     role: 'Admin',
     ulpId: 'ulp-1',
@@ -42,7 +46,9 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr-3',
     nip: '199511042018011005',
-    name: 'Rahmat Hidayat',
+    userName: 'user1',
+    password: 'user123',
+    name: 'Rahmat Hidayat (Petugas ROW)',
     email: 'petugas.row1@pln.co.id',
     role: 'User',
     reguId: 'regu-1',
@@ -55,7 +61,9 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr-4',
     nip: '199602122019021008',
-    name: 'Andi Wijaya',
+    userName: 'user2',
+    password: 'user123',
+    name: 'Andi Wijaya (Petugas ROW)',
     email: 'petugas.row2@pln.co.id',
     role: 'User',
     reguId: 'regu-2',
