@@ -6,7 +6,7 @@ import { useMasterData } from '../context/MasterDataContext';
 import { useUI } from '../context/UIContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { WorkOrder, Realisasi } from '../types';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import {
   MapPin,
@@ -117,6 +117,10 @@ export const MonitoringPage: React.FC = () => {
 
   // Map Center (Padang, West Sumatra default)
   const mapCenter: [number, number] = [-0.92, 100.4];
+
+  const mapPolylinePositions: [number, number][] = filteredWOs
+    .filter((wo) => wo.latitude && wo.longitude)
+    .map((wo) => [wo.latitude as number, wo.longitude as number]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -369,6 +373,17 @@ export const MonitoringPage: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden p-2">
             <div className="h-[520px] w-full rounded-2xl overflow-hidden relative">
+              {/* Floating Overlay Badge */}
+              <div className="absolute top-3 right-3 z-[400] bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-3 rounded-xl border border-slate-300 dark:border-slate-700 shadow-md text-[11px] space-y-1 font-sans text-slate-800 dark:text-slate-200">
+                <p className="font-extrabold flex items-center space-x-1">
+                  <span>⚡ JARINGAN TR & PETA GIS</span>
+                </p>
+                <p className="text-slate-600 dark:text-slate-400">Total Lokasi: <span className="font-extrabold text-sky-600">{filteredWOs.length} Titik</span></p>
+                <p className="text-amber-600 dark:text-amber-400 font-extrabold pt-1 border-t border-slate-200 dark:border-slate-700">
+                  ⚡ Jaringan Listrik TR (Tegangan Rendah) PLN
+                </p>
+              </div>
+
               <MapContainer
                 center={mapCenter}
                 zoom={11}
@@ -379,6 +394,26 @@ export const MonitoringPage: React.FC = () => {
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
+
+                {mapPolylinePositions.length > 1 && (
+                  <>
+                    {/* Dark Casing Outer Line */}
+                    <Polyline
+                      positions={mapPolylinePositions}
+                      color="#0f172a"
+                      weight={6}
+                      opacity={0.85}
+                    />
+                    {/* Orange-Yellow Jaringan TR PLN Line */}
+                    <Polyline
+                      positions={mapPolylinePositions}
+                      color="#f59e0b"
+                      weight={3.5}
+                      opacity={1}
+                      dashArray="8, 6"
+                    />
+                  </>
+                )}
 
                 {filteredWOs.map((wo, idx) => {
                   const rel = realisasiList.find((r) => r.workOrderId === wo.id);

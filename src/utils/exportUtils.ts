@@ -546,39 +546,40 @@ export function generateLaporanPetaPDF(
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(51, 65, 85);
 
-  doc.text('•  - TIANG BESI', 12, 164);
-  doc.text('o  - TIANG BETON', 12, 169);
-  doc.text('x  - TIANG BESI VS BESI', 12, 174);
-  doc.text('^  - GARDU DISTRIBUSI (GD) 1 TIANG BESI', 12, 179);
-  doc.text('#  - GARDU DISTRIBUSI (GD) 2 TIANG BESI', 12, 184);
-  doc.text('X  - TOWER', 12, 189);
+  doc.text('• = TIANG BESI', 12, 164);
+  doc.text('⊙ = TIANG BETON', 12, 169);
+  doc.text('⊗ = TIANG BESI VS BESI', 12, 174);
+  doc.text('▲ = GARDU DISTRIBUSI (GD) 1 TIANG BESI', 12, 179);
+  doc.text('◼ = GARDU DISTRIBUSI (GD) 2 TIANG BESI', 12, 184);
+  doc.text('✖ = TOWER', 12, 189);
 
   // Column 2: Line Legend & Action Color Boxes
-  doc.text('────── JARINGAN TEGANGAN MENENGAH (JTM)', 105, 164);
-  doc.text('- - - - - KABEL TANAH (SKTM)', 105, 169);
-  doc.text('── ── TRECK SCHOOR / DRUCK SCHOOR', 105, 174);
+  doc.text('────── = JARINGAN TEGANGAN RENDAH (TR) PLN', 105, 162);
+  doc.text('------- = JARINGAN TEGANGAN MENENGAH (JTM)', 105, 167);
+  doc.text('────── = KABEL TANAH (SKTM)', 105, 172);
+  doc.text('───► = TRECK SCHOOR / DRUCK SCHOOR', 105, 177);
 
   // Colored action boxes
   // 1. PANGKAS (Yellow)
   doc.setFillColor(250, 204, 21);
-  doc.rect(105, 181, 4, 4, 'FD');
+  doc.rect(105, 182, 4, 4, 'FD');
   doc.setFont('helvetica', 'bold');
-  doc.text('= PANGKAS', 111, 184);
+  doc.text('= PANGKAS', 111, 185);
 
   // 2. POTONG (Green)
   doc.setFillColor(74, 222, 128);
-  doc.rect(138, 181, 4, 4, 'FD');
-  doc.text('= POTONG', 144, 184);
+  doc.rect(138, 182, 4, 4, 'FD');
+  doc.text('= POTONG', 144, 185);
 
   // 3. TEBANG (Red)
   doc.setFillColor(248, 113, 113);
-  doc.rect(168, 181, 4, 4, 'FD');
-  doc.text('= TEBANG', 174, 184);
+  doc.rect(168, 182, 4, 4, 'FD');
+  doc.text('= TEBANG', 174, 185);
 
   // 4. TIDAK DIRAMPAL (White)
   doc.setFillColor(255, 255, 255);
-  doc.rect(198, 181, 4, 4, 'FD');
-  doc.text('= TIDAK DIRAMPAL', 204, 184);
+  doc.rect(198, 182, 4, 4, 'FD');
+  doc.text('= TIDAK DIRAMPAL', 204, 185);
 
   // Column 3: Date
   const formattedDate = new Date().toLocaleDateString('id-ID', {

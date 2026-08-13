@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import html2canvas from 'html2canvas';
 import { useAuth } from '../context/AuthContext';
 import { useRealisasi } from '../context/RealisasiContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
@@ -27,10 +26,10 @@ function RecenterMap({ positions }: { positions: [number, number][] }) {
   useEffect(() => {
     map.invalidateSize();
     if (positions.length === 1) {
-      map.setView(positions[0], 15);
+      map.setView(positions[0], 17);
     } else if (positions.length > 1) {
       const bounds = L.latLngBounds(positions);
-      map.fitBounds(bounds, { padding: [100, 140], maxZoom: 14 });
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
     }
   }, [positions, map]);
   return null;
@@ -148,8 +147,6 @@ export const CetakLaporanPage: React.FC = () => {
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [latestMapImage, setLatestMapImage] = useState<string | null>(null);
-  const [showMapPreviewModal, setShowMapPreviewModal] = useState<boolean>(false);
-  const [previewMapImage, setPreviewMapImage] = useState<string | null>(null);
   const mapCaptureRef = useRef<MapReportCaptureRef>(null);
 
   const isAdmbktUser = useMemo(() => {
@@ -397,35 +394,43 @@ export const CetakLaporanPage: React.FC = () => {
         if (!mapImageDataUrl) {
           mapImageDataUrl = latestMapImage || null;
         }
-        setPreviewMapImage(mapImageDataUrl);
-        setShowMapPreviewModal(true);
+
+        const safeUlp = (selectedUlpName || 'BASO').replace(/[^a-zA-Z0-9]/g, '_');
+        const safeFeeder = (selectedPenyulangName || 'F_MATUR').replace(/[^a-zA-Z0-9]/g, '_');
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const customFilename = `Peta_Pohon_ROW_${safeUlp}_${safeFeeder}_${dateStr}.pdf`;
+
+        generateLaporanPetaPDF(
+          filteredWOs,
+          settings,
+          selectedUlpName,
+          selectedPenyulangName,
+          filteredRealisasi,
+          mapImageDataUrl || latestMapImage || undefined,
+          nonOverlappingMapPoints,
+          customFilename
+        );
       } catch (error) {
-        console.error('Failed to capture map for PDF preview:', error);
-        setPreviewMapImage(latestMapImage || null);
-        setShowMapPreviewModal(true);
+        console.error('Failed to capture map for PDF download:', error);
+        const safeUlp = (selectedUlpName || 'BASO').replace(/[^a-zA-Z0-9]/g, '_');
+        const safeFeeder = (selectedPenyulangName || 'F_MATUR').replace(/[^a-zA-Z0-9]/g, '_');
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const customFilename = `Peta_Pohon_ROW_${safeUlp}_${safeFeeder}_${dateStr}.pdf`;
+
+        generateLaporanPetaPDF(
+          filteredWOs,
+          settings,
+          selectedUlpName,
+          selectedPenyulangName,
+          filteredRealisasi,
+          latestMapImage || undefined,
+          nonOverlappingMapPoints,
+          customFilename
+        );
       } finally {
         setIsGeneratingPDF(false);
       }
     }
-  };
-
-  const handleConfirmDownloadPDF = () => {
-    const safeUlp = (selectedUlpName || 'BASO').replace(/[^a-zA-Z0-9]/g, '_');
-    const safeFeeder = (selectedPenyulangName || 'F_MATUR').replace(/[^a-zA-Z0-9]/g, '_');
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const customFilename = `Peta_Pohon_ROW_${safeUlp}_${safeFeeder}_${dateStr}.pdf`;
-
-    generateLaporanPetaPDF(
-      filteredWOs,
-      settings,
-      selectedUlpName,
-      selectedPenyulangName,
-      filteredRealisasi,
-      previewMapImage || latestMapImage || undefined,
-      nonOverlappingMapPoints,
-      customFilename
-    );
-    setShowMapPreviewModal(false);
   };
 
   const handleExportExcel = () => {
@@ -757,8 +762,12 @@ export const CetakLaporanPage: React.FC = () => {
                 className="border-2 border-slate-900 rounded-xl overflow-hidden bg-slate-100 shadow-inner relative"
                 onCapture={setLatestMapImage}
                 triggerKey={nonOverlappingMapPoints.length}
+                points={nonOverlappingMapPoints}
+                polylinePositions={activePolylinePositions}
+                feederName={selectedPenyulangName}
+                ulpName={selectedUlpName}
               >
-                <div className="h-[480px] w-full relative z-0">
+                <div className="h-[600px] w-full relative z-0">
                   <MapContainer
                     center={mapCenter}
                     zoom={13}
@@ -766,8 +775,8 @@ export const CetakLaporanPage: React.FC = () => {
                     style={{ height: '100%', width: '100%' }}
                   >
                     <TileLayer
-                      attribution='&copy; <a href="https://www.carto.com/">CARTO</a>'
-                      url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                       crossOrigin="anonymous"
                     />
 
@@ -849,13 +858,13 @@ export const CetakLaporanPage: React.FC = () => {
                 {/* Floating Overlay Badge */}
                 <div className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm p-3 rounded-xl border border-slate-300 shadow-md text-[10px] space-y-1 font-sans">
                   <p className="font-extrabold text-slate-900 flex items-center space-x-1">
-                    <span>📍 PETA GIS REALISASI KOORDINAT</span>
+                    <span>⚡ JARINGAN TR & PETA GIS ROW</span>
                   </p>
                   <p className="text-slate-600">Total Titik: <span className="font-extrabold text-sky-700">{nonOverlappingMapPoints.length} Lokasi</span></p>
                   <p className="text-slate-600">Feeder / Penyulang: <span className="font-bold text-slate-800">{selectedPenyulangName}</span></p>
                   <p className="text-slate-600">ULP: <span className="font-bold text-slate-800">{selectedUlpName}</span></p>
                   <p className="text-amber-700 font-extrabold pt-1 border-t border-slate-200 flex items-center justify-between gap-1">
-                    <span>⚡ Feeder Line (Jalan): Realisasi 1 ➔ {nonOverlappingMapPoints.length}</span>
+                    <span>⚡ Jaringan Listrik TR PLN</span>
                     {isRoutingLoading && <span className="animate-spin text-amber-600">⏳</span>}
                   </p>
                 </div>
@@ -881,6 +890,7 @@ export const CetakLaporanPage: React.FC = () => {
                   {/* Column 2: Line Types & Action Color Boxes */}
                   <div className="space-y-2 font-medium text-slate-700 sm:pl-3 pt-2 sm:pt-0">
                     <div className="space-y-0.5 text-[9px]">
+                      <p className="font-extrabold text-amber-800">────── = JARINGAN TEGANGAN RENDAH (TR) PLN</p>
                       <p>------- = JARINGAN TEGANGAN MENENGAH (JTM)</p>
                       <p>────── = KABEL TANAH (SKTM)</p>
                       <p>───► = TRECK SCHOOR / DRUCK SCHOOR</p>
@@ -968,15 +978,6 @@ export const CetakLaporanPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <MapPreviewModal
-        isOpen={showMapPreviewModal}
-        mapImage={previewMapImage}
-        ulpName={selectedUlpName}
-        penyulangName={selectedPenyulangName}
-        onClose={() => setShowMapPreviewModal(false)}
-        onConfirm={handleConfirmDownloadPDF}
-      />
     </div>
   );
 };
