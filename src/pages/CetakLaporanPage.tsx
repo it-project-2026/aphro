@@ -8,6 +8,7 @@ import { useGASSync } from '../context/GASSyncContext';
 import { useToast } from '../hooks/useToast';
 import { MapReportCapture, MapReportCaptureRef } from '../components/MapReportCapture';
 import { MapPreviewModal } from '../components/MapPreviewModal';
+import { formatDateTime, formatDateOnly, formatExecutionDateTime } from '../utils/dateFormatter';
 import {
   generateLaporanPetaPDF,
   exportWorkOrdersToExcel,
@@ -47,11 +48,17 @@ import {
 } from 'lucide-react';
 
 // Custom Plant Marker Icon with Sequence Number, No. Tiang, Jenis Tanaman, Coordinate Dot, and Leader Line
-function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: number, status?: string) {
+function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: number, status?: string, keterangan?: string) {
   const name = (jenisTanaman || 'TANAMAN').toUpperCase();
-  let badgeColor = '#047857'; // Emerald green
-  if (name.includes('TEBANG')) badgeColor = '#b91c1c'; // Red
-  else if (name.includes('BAMBU') || name.includes('PISANG') || name.includes('CEMARA') || name.includes('JAMBU')) badgeColor = '#b45309'; // Amber
+  const checkStr = ((keterangan || '') + ' ' + name).toUpperCase();
+  let badgeColor = '#facc15'; // Yellow for Pangkas
+  if (checkStr.includes('TEBANG')) {
+    badgeColor = '#ef4444'; // Red
+  } else if (checkStr.includes('POTONG')) {
+    badgeColor = '#22c55e'; // Green
+  } else if (checkStr.includes('PANGKAS')) {
+    badgeColor = '#facc15'; // Yellow
+  }
 
   const html = `
     <div style="
@@ -72,7 +79,7 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
         top: 32px;
         width: 8px;
         height: 8px;
-        background: #f59e0b;
+        background: ${badgeColor};
         border: 1.5px solid #0f172a;
         border-radius: 50%;
         box-shadow: 0 1px 3px rgba(0,0,0,0.3);
@@ -98,7 +105,7 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
         z-index: 3;
       ">
         <div style="
-          background: #f59e0b;
+          background: ${badgeColor};
           color: #0f172a;
           font-weight: 900;
           font-size: 8px;
@@ -117,7 +124,7 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
           <span style="color: #0f172a; font-weight: 800; font-size: 8px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis;">
             📌 ${noTiang || `T#${seqNo}`}
           </span>
-          <span style="color: ${badgeColor}; font-weight: 800; font-size: 7.5px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis;">
+          <span style="color: #0f172a; font-weight: 800; font-size: 7.5px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis;">
             🌳 ${name}
           </span>
         </div>
@@ -146,7 +153,9 @@ export const CetakLaporanPage: React.FC = () => {
   const [activeReportTab, setActiveReportTab] = useState<'foto' | 'peta'>('foto');
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
+  const [filterNoWo, setFilterNoWo] = useState('ALL');
   const [latestMapImage, setLatestMapImage] = useState<string | null>(null);
+  const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
   const mapCaptureRef = useRef<MapReportCaptureRef>(null);
 
   const isAdmbktUser = useMemo(() => {
@@ -168,6 +177,56 @@ export const CetakLaporanPage: React.FC = () => {
       return acc;
     }, {} as Record<string, typeof workOrders[0]>);
   }, [workOrders]);
+
+  // Filter available Penyulang by selected ULP
+  const availablePenyulangList = useMemo(() => {
+    if (filterUlp === 'ALL') return penyulangList;
+    const selectedUlpObj = ulpList.find((u) => u.id === filterUlp || u.namaULP === filterUlp);
+    const targetUlpName = selectedUlpObj ? selectedUlpObj.namaULP : filterUlp;
+
+    return penyulangList.filter((p) => {
+      if (p.ulpId === filterUlp || p.ulpName === filterUlp) return true;
+      if (selectedUlpObj && (p.ulpId === selectedUlpObj.id || p.ulpName === selectedUlpObj.namaULP)) return true;
+      if (p.ulpName && targetUlpName && p.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim()) return true;
+      return false;
+    });
+  }, [penyulangList, filterUlp, ulpList]);
+
+  // Filter available NO WO by selected ULP
+  const availableWONumbers = useMemo(() => {
+    const selectedUlpObj = ulpList.find((u) => u.id === filterUlp || u.namaULP === filterUlp);
+    const targetUlpName = selectedUlpObj ? selectedUlpObj.namaULP : filterUlp;
+
+    const woSet = new Set<string>();
+
+    workOrders.forEach((wo) => {
+      const matchesUlp =
+        filterUlp === 'ALL' ||
+        wo.ulpId === filterUlp ||
+        wo.ulpName === filterUlp ||
+        (wo.ulpName && targetUlpName && wo.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim());
+      if (matchesUlp && wo.nomorWO) {
+        woSet.add(wo.nomorWO);
+      }
+    });
+
+    realisasiList.forEach((rel) => {
+      const wo = workOrdersMap[rel.workOrderId];
+      const matchesUlp =
+        filterUlp === 'ALL' ||
+        rel.ulpName === filterUlp ||
+        wo?.ulpName === filterUlp ||
+        wo?.ulpId === filterUlp ||
+        (rel.ulpName && targetUlpName && rel.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim()) ||
+        (wo?.ulpName && targetUlpName && wo.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim());
+      if (matchesUlp) {
+        if (rel.nomorWO) woSet.add(rel.nomorWO);
+        if (wo?.nomorWO) woSet.add(wo.nomorWO);
+      }
+    });
+
+    return Array.from(woSet).filter(Boolean).sort();
+  }, [workOrders, realisasiList, workOrdersMap, filterUlp, ulpList]);
 
   const filteredRealisasi = useMemo(() => {
     return realisasiList.filter((rel) => {
@@ -204,9 +263,15 @@ export const CetakLaporanPage: React.FC = () => {
         (rel.penyulangName && targetPenyulangName && rel.penyulangName.toLowerCase().trim() === targetPenyulangName.toLowerCase().trim()) ||
         (wo?.penyulangName && targetPenyulangName && wo.penyulangName.toLowerCase().trim() === targetPenyulangName.toLowerCase().trim());
 
-      return matchesUlp && matchesPenyulang;
+      const matchesNoWo =
+        filterNoWo === 'ALL' ||
+        rel.nomorWO === filterNoWo ||
+        wo?.nomorWO === filterNoWo ||
+        rel.workOrderId === filterNoWo;
+
+      return matchesUlp && matchesPenyulang && matchesNoWo;
     });
-  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, isAdmbktUser, ulpList, penyulangList]);
+  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterNoWo, isAdmbktUser, ulpList, penyulangList]);
 
   const filteredWOs = useMemo(() => {
     return workOrders.filter((wo) => {
@@ -236,9 +301,14 @@ export const CetakLaporanPage: React.FC = () => {
         wo.penyulangName === filterPenyulang ||
         (wo.penyulangName && targetPenyulangName && wo.penyulangName.toLowerCase().trim() === targetPenyulangName.toLowerCase().trim());
 
-      return matchesUlp && matchesPenyulang;
+      const matchesNoWo =
+        filterNoWo === 'ALL' ||
+        wo.nomorWO === filterNoWo ||
+        wo.id === filterNoWo;
+
+      return matchesUlp && matchesPenyulang && matchesNoWo;
     });
-  }, [workOrders, filterUlp, filterPenyulang, isAdmbktUser, currentUser, ulpList, penyulangList]);
+  }, [workOrders, filterUlp, filterPenyulang, filterNoWo, isAdmbktUser, currentUser, ulpList, penyulangList]);
 
   const selectedUlpObj = ulpList.find((u) => u.id === filterUlp || u.namaULP === filterUlp);
   const selectedUlpName = selectedUlpObj
@@ -433,11 +503,21 @@ export const CetakLaporanPage: React.FC = () => {
     }
   };
 
-  const handleExportExcel = () => {
-    if (activeReportTab === 'foto') {
-      exportCetakPhotoToExcel(filteredRealisasi, workOrdersMap, settings, selectedUlpName, filteredWOs);
-    } else {
-      exportCetakPetaToExcel(nonOverlappingMapPoints, settings, selectedUlpName, selectedPenyulangName);
+  const handleExportExcel = async () => {
+    setIsGeneratingExcel(true);
+    try {
+      if (activeReportTab === 'foto') {
+        await exportCetakPhotoToExcel(filteredRealisasi, workOrdersMap, settings, selectedUlpName, filteredWOs);
+        showToast('File Excel Eviden Foto Berhasil Diunduh', 'success');
+      } else {
+        await exportCetakPetaToExcel(nonOverlappingMapPoints, settings, selectedUlpName, selectedPenyulangName);
+        showToast('File Excel Peta Pohon Berhasil Diunduh', 'success');
+      }
+    } catch (err) {
+      console.error('Export Excel error:', err);
+      showToast('Gagal mengunduh file Excel: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    } finally {
+      setIsGeneratingExcel(false);
     }
   };
 
@@ -502,11 +582,12 @@ export const CetakLaporanPage: React.FC = () => {
 
             <button
               onClick={handleExportExcel}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+              disabled={isGeneratingExcel}
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
               title="Download File Spreadsheet Excel (.xlsx)"
             >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Download Excel</span>
+              <FileSpreadsheet className={`w-4 h-4 ${isGeneratingExcel ? 'animate-spin' : ''}`} />
+              <span>{isGeneratingExcel ? 'Proses Excel...' : 'Download Excel'}</span>
             </button>
 
             <button
@@ -548,14 +629,18 @@ export const CetakLaporanPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <div className="flex items-center space-x-1 text-slate-400 text-xs">
               <Filter className="w-3.5 h-3.5" />
               <span>Filter:</span>
             </div>
             <select
               value={filterUlp}
-              onChange={(e) => setFilterUlp(e.target.value)}
+              onChange={(e) => {
+                setFilterUlp(e.target.value);
+                setFilterPenyulang('ALL');
+                setFilterNoWo('ALL');
+              }}
               className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
             >
               <option value="ALL">Semua ULP</option>
@@ -572,9 +657,22 @@ export const CetakLaporanPage: React.FC = () => {
               className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
             >
               <option value="ALL">Semua Penyulang</option>
-              {penyulangList.map((p, idx) => (
+              {availablePenyulangList.map((p, idx) => (
                 <option key={`${p.id}-${idx}`} value={p.id}>
                   {p.namaPenyulang}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterNoWo}
+              onChange={(e) => setFilterNoWo(e.target.value)}
+              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
+            >
+              <option value="ALL">Semua NO WO</option>
+              {availableWONumbers.map((woNum, idx) => (
+                <option key={`${woNum}-${idx}`} value={woNum}>
+                  {woNum}
                 </option>
               ))}
             </select>
@@ -607,7 +705,7 @@ export const CetakLaporanPage: React.FC = () => {
                   {/* Banner Title 2 */}
                   <tr className="bg-sky-800 text-white font-bold text-[11px] uppercase tracking-wider">
                     <th colSpan={14} className="p-1.5 border-b border-sky-900 bg-sky-800 text-center">
-                      PT HALEYORA POWER
+                      PLN ELECTRICITY SERVICES
                     </th>
                   </tr>
                   {/* Columns */}
@@ -662,7 +760,7 @@ export const CetakLaporanPage: React.FC = () => {
                             {rel.noTiang || wo?.lokasi || '-'}
                           </td>
                           <td className="p-2 border border-slate-200 text-[10px]">
-                            {rel.tanggalRealisasi || wo?.tanggal || '-'}
+                            {formatExecutionDateTime(rel, wo)}
                           </td>
                           {/* Foto Sebelum */}
                           <td className="p-1.5 border border-slate-200">
@@ -731,7 +829,7 @@ export const CetakLaporanPage: React.FC = () => {
                   </div>
                   <div className="text-left leading-none">
                     <span className="font-extrabold text-sky-700 text-xs block">PLN</span>
-                    <span className="font-bold text-sky-900 text-[10px]">Haleyora Power</span>
+                    <span className="font-bold text-sky-900 text-[10px]">Electricity Services</span>
                   </div>
                 </div>
 
@@ -775,8 +873,8 @@ export const CetakLaporanPage: React.FC = () => {
                     style={{ height: '100%', width: '100%' }}
                   >
                     <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                      url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                       crossOrigin="anonymous"
                     />
 
@@ -872,57 +970,53 @@ export const CetakLaporanPage: React.FC = () => {
 
               {/* KETERANGAN Legend Block matching image bottom box */}
               <div className="border border-slate-900 rounded-lg p-3 bg-white text-[10px] space-y-2">
-                <div className="font-extrabold text-slate-900 border-b border-slate-900 pb-1 uppercase">
-                  KETERANGAN :
+                <div className="font-extrabold text-slate-900 border-b border-slate-900 pb-1 uppercase flex justify-between items-center">
+                  <span>KETERANGAN :</span>
+                  <span className="text-slate-600 font-semibold">TANGGAL REALISASI: {(() => {
+                    const tgl = filteredRealisasi[0]?.tanggalRealisasi || filteredWOs[0]?.tanggal || new Date();
+                    return formatDateOnly(tgl);
+                  })()}</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-300">
-                  {/* Column 1: Symbols */}
-                  <div className="space-y-1 font-medium text-slate-700 pt-2 sm:pt-0">
-                    <p>• = TIANG BESI</p>
-                    <p>⊙ = TIANG BETON</p>
-                    <p>⊗ = TIANG BESI VS BESI</p>
-                    <p>▲ = GARDU DISTRIBUSI (GD) 1 TIANG BESI</p>
-                    <p>◼ = GARDU DISTRIBUSI (GD) 2 TIANG BESI</p>
-                    <p>✖ = TOWER</p>
-                  </div>
+                {(() => {
+                  const summaryWoNumbers = filteredWOs.map(w => w.nomorWO).join(', ') || filteredRealisasi[0]?.nomorWO || '-';
+                  const summaryTanggal = formatDateOnly(filteredRealisasi[0]?.tanggalRealisasi || filteredWOs[0]?.tanggal || new Date());
+                  const summaryUlp = selectedUlpName;
+                  const summaryPenyulang = selectedPenyulangName;
+                  const summaryRegu = filteredRealisasi[0]?.reguName || filteredWOs[0]?.petugasName || 'Regu ROW Alpha';
+                  const summaryTotalRealisasi = nonOverlappingMapPoints.length;
+                  const summaryPangkas = nonOverlappingMapPoints.filter(p => (p.keterangan || p.jenisTanaman || '').toUpperCase().includes('PANGKAS')).length;
+                  const summaryTebang = nonOverlappingMapPoints.filter(p => (p.keterangan || p.jenisTanaman || '').toUpperCase().includes('TEBANG')).length;
+                  const summaryPotong = nonOverlappingMapPoints.filter(p => (p.keterangan || p.jenisTanaman || '').toUpperCase().includes('POTONG')).length;
 
-                  {/* Column 2: Line Types & Action Color Boxes */}
-                  <div className="space-y-2 font-medium text-slate-700 sm:pl-3 pt-2 sm:pt-0">
-                    <div className="space-y-0.5 text-[9px]">
-                      <p className="font-extrabold text-amber-800">────── = JARINGAN TEGANGAN RENDAH (TR) PLN</p>
-                      <p>------- = JARINGAN TEGANGAN MENENGAH (JTM)</p>
-                      <p>────── = KABEL TANAH (SKTM)</p>
-                      <p>───► = TRECK SCHOOR / DRUCK SCHOOR</p>
-                    </div>
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-300 font-medium text-slate-800 text-[11px]">
+                      {/* Column 1: Info Resmi Kiri */}
+                      <div className="space-y-1 pt-1 sm:pt-0">
+                        <p><span className="font-extrabold">NO WO:</span> {summaryWoNumbers}</p>
+                        <p><span className="font-extrabold">TANGGAL:</span> {summaryTanggal}</p>
+                        <p><span className="font-extrabold">NAMA ULP:</span> {summaryUlp}</p>
+                        <p><span className="font-extrabold">NAMA PENYULANG:</span> {summaryPenyulang}</p>
+                        <p><span className="font-extrabold">NAMA REGU:</span> {summaryRegu}</p>
+                      </div>
 
-                    <div className="flex flex-wrap items-center gap-3 pt-1 text-[10px] font-bold">
-                      <div className="flex items-center space-x-1">
-                        <span className="w-3.5 h-3.5 bg-yellow-400 border border-slate-800 inline-block rounded-2xs"></span>
-                        <span>= PANGKAS</span>
+                      {/* Column 2: Jumlah Realisasi Tengah */}
+                      <div className="space-y-1 sm:pl-3 pt-1 sm:pt-0">
+                        <p><span className="font-extrabold">JUMLAH REALISASI:</span> {summaryTotalRealisasi} Titik</p>
+                        <p><span className="font-extrabold text-amber-700">JUMLAH REALISASI PANGKAS:</span> {summaryPangkas}</p>
+                        <p><span className="font-extrabold text-red-600">JUMLAH REALISASI TEBANG:</span> {summaryTebang}</p>
+                        <p><span className="font-extrabold text-emerald-600">JUMLAH REALISASI POTONG:</span> {summaryPotong}</p>
                       </div>
-                      <div className="flex items-center space-x-1">
-                        <span className="w-3.5 h-3.5 bg-green-400 border border-slate-800 inline-block rounded-2xs"></span>
-                        <span>= POTONG</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <span className="w-3.5 h-3.5 bg-red-400 border border-slate-800 inline-block rounded-2xs"></span>
-                        <span>= TEBANG</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <span className="w-3.5 h-3.5 bg-white border border-slate-800 inline-block rounded-2xs"></span>
-                        <span>= TIDAK DIRAMPAL</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Column 3: Date Box */}
-                  <div className="sm:pl-3 flex flex-col justify-end items-center sm:items-end pt-2 sm:pt-0">
-                    <div className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
-                      TANGGAL {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      {/* Column 3: Mengetahui / Disetujui */}
+                      <div className="sm:pl-3 flex flex-col items-center justify-center pt-1 sm:pt-0 text-[11px]">
+                        <div className="text-center">
+                          <p className="font-extrabold text-slate-900 text-xs">Mengetahui / Disetujui</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             </div>
 

@@ -1,12 +1,92 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { WorkOrder, Realisasi, AppSettings } from '../types';
+import { formatDateTime, formatDateOnly, formatExecutionDateTime } from './dateFormatter';
 
 /**
- * Export Cetak Photo to Excel file (Format REKAP HASIL ROW PT HALEYORA POWER)
+ * Utility to convert an image URL or dataUrl into base64 for ExcelJS embedding
  */
-export function exportCetakPhotoToExcel(
+async function urlToBase64Image(url: string): Promise<{ base64: string; extension: 'jpeg' | 'png' } | null> {
+  if (!url || typeof url !== 'string') return null;
+
+  // 1. Data URL
+  if (url.startsWith('data:image/')) {
+    const isPng = url.startsWith('data:image/png');
+    const parts = url.split(',');
+    if (parts.length > 1 && parts[1].trim().length > 0) {
+      return { base64: parts[1].trim(), extension: isPng ? 'png' : 'jpeg' };
+    }
+    return null;
+  }
+
+  // 2. Load via HTML Image & Canvas
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const maxW = 400;
+        const maxH = 300;
+        let w = img.width || 400;
+        let h = img.height || 300;
+        if (w > maxW || h > maxH) {
+          const ratio = Math.min(maxW / w, maxH / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        canvas.width = Math.max(w, 10);
+        canvas.height = Math.max(h, 10);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const base64 = dataUrl.split(',')[1];
+          if (base64) {
+            resolve({ base64, extension: 'jpeg' });
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Canvas toDataURL failed:', e);
+      }
+      resolve(null);
+    };
+
+    img.onerror = () => {
+      fetch(url)
+        .then((res) => res.blob())
+        .then((blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            if (result && result.startsWith('data:image/')) {
+              const isPng = result.startsWith('data:image/png');
+              const base64 = result.split(',')[1];
+              resolve(base64 ? { base64, extension: isPng ? 'png' : 'jpeg' } : null);
+            } else {
+              resolve(null);
+            }
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        })
+        .catch(() => resolve(null));
+    };
+
+    img.src = url;
+  });
+}
+
+/**
+ * Export Cetak Photo to Excel file (Format REKAP HASIL ROW PLN ELECTRICITY SERVICES)
+ * Includes embedded photos directly inside the Excel cells with custom styles and borders.
+ */
+export async function exportCetakPhotoToExcel(
   realisasiList: Realisasi[],
   workOrdersMap: Record<string, WorkOrder>,
   settings: AppSettings,
@@ -16,106 +96,255 @@ export function exportCetakPhotoToExcel(
   const areaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
   const ulpTitle = filterUlpName && filterUlpName !== 'ALL' ? filterUlpName.toUpperCase() : 'BASO';
 
-  let items = realisasiList.map((rel) => {
-    const wo = workOrdersMap[rel.workOrderId];
-    const lat = rel.latitude || wo?.latitude || -0.286071;
-    const lng = rel.longitude || wo?.longitude || 100.449261;
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Eviden ROW Photo');
 
-    const fotoSebelum = rel.fotoSebelumUrl || (rel.photosSebelum?.[0]?.dataUrl ? 'TERSEDIA (FOTO EVIDEN)' : 'TIDAK ADA');
-    const fotoSesudah = rel.fotoSesudahUrl || (rel.photosSesudah?.[0]?.dataUrl ? 'TERSEDIA (FOTO EVIDEN)' : 'TIDAK ADA');
+  worksheet.views = [{ showGridLines: true }];
 
-    return [
-      rel.nomorWO || wo?.nomorWO || '-',
-      areaName,
-      rel.ulpName || wo?.ulpName || ulpTitle,
-      rel.reguName || wo?.reguName || rel.petugasName || 'TIM ROW BASO',
-      rel.penyulangName || wo?.penyulangName || 'F Baso',
-      rel.noTiang || wo?.lokasi || '-',
-      rel.tanggalRealisasi || wo?.tanggal || '-',
-      fotoSebelum,
-      fotoSesudah,
-      rel.jenisTanaman || wo?.jenisPekerjaan || 'PEMBERSIHAN HALAMAN GARDU',
-      rel.keterangan || 'POTONG',
-      rel.pertumbuhanTanaman || 'SEDANG',
-      rel.kendala || 'NIHIL',
-      `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-    ];
+  worksheet.columns = [
+    { key: 'noWo', width: 22 },
+    { key: 'area', width: 16 },
+    { key: 'ulp', width: 16 },
+    { key: 'namaTim', width: 22 },
+    { key: 'feeder', width: 20 },
+    { key: 'noTiang', width: 16 },
+    { key: 'tanggalEksekusi', width: 22 },
+    { key: 'fotoSebelum', width: 25 },
+    { key: 'fotoSesudah', width: 25 },
+    { key: 'jenisTanaman', width: 28 },
+    { key: 'keterangan', width: 18 },
+    { key: 'pertumbuhanTanaman', width: 22 },
+    { key: 'kendala', width: 18 },
+    { key: 'lokasi', width: 28 },
+  ];
+
+  // Row 1: REKAP HASIL ROW (bg-sky-600)
+  const row1 = worksheet.addRow(['REKAP HASIL ROW']);
+  row1.height = 28;
+  worksheet.mergeCells('A1:N1');
+  const cellA1 = worksheet.getCell('A1');
+  cellA1.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+  cellA1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } }; // Sky 600
+  cellA1.alignment = { horizontal: 'center', vertical: 'middle' };
+  cellA1.border = {
+    top: { style: 'thin', color: { argb: 'FF0369A1' } },
+    left: { style: 'thin', color: { argb: 'FF0369A1' } },
+    bottom: { style: 'thin', color: { argb: 'FF0369A1' } },
+    right: { style: 'thin', color: { argb: 'FF0369A1' } },
+  };
+
+  // Row 2: PLN ELECTRICITY SERVICES (bg-sky-800)
+  const row2 = worksheet.addRow(['PLN ELECTRICITY SERVICES']);
+  row2.height = 24;
+  worksheet.mergeCells('A2:N2');
+  const cellA2 = worksheet.getCell('A2');
+  cellA2.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cellA2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF075985' } }; // Sky 800
+  cellA2.alignment = { horizontal: 'center', vertical: 'middle' };
+  cellA2.border = {
+    top: { style: 'thin', color: { argb: 'FF0C4A6E' } },
+    left: { style: 'thin', color: { argb: 'FF0C4A6E' } },
+    bottom: { style: 'thin', color: { argb: 'FF0C4A6E' } },
+    right: { style: 'thin', color: { argb: 'FF0C4A6E' } },
+  };
+
+  // Row 3: Column Titles (bg-sky-900)
+  const headers = [
+    'NO WO',
+    'AREA',
+    'ULP',
+    'NAMA TIM',
+    'FEEDER',
+    'NO TIANG',
+    'TANGGAL EKSEKUSI',
+    'FOTO SEBELUM',
+    'FOTO SESUDAH',
+    'JENIS TANAMAN',
+    'KETERANGAN',
+    'PERTUMBUHAN TANAMAN',
+    'KENDALA',
+    'LOKASI',
+  ];
+  const row3 = worksheet.addRow(headers);
+  row3.height = 26;
+  row3.eachCell((cell) => {
+    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0C4A6E' } }; // Sky 900
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF0F172A' } },
+      left: { style: 'thin', color: { argb: 'FF0F172A' } },
+      bottom: { style: 'thin', color: { argb: 'FF0F172A' } },
+      right: { style: 'thin', color: { argb: 'FF0F172A' } },
+    };
   });
 
-  if (items.length === 0 && fallbackWorkOrders.length > 0) {
-    items = fallbackWorkOrders.map((wo) => {
+  // Data Items
+  let dataItems: Array<{
+    noWo: string;
+    area: string;
+    ulp: string;
+    namaTim: string;
+    feeder: string;
+    noTiang: string;
+    tanggalEksekusi: string;
+    fotoSebelumUrl?: string;
+    fotoSesudahUrl?: string;
+    jenisTanaman: string;
+    keterangan: string;
+    pertumbuhanTanaman: string;
+    kendala: string;
+    lokasi: string;
+  }> = [];
+
+  if (realisasiList.length > 0) {
+    dataItems = realisasiList.map((rel) => {
+      const wo = workOrdersMap[rel.workOrderId];
+      const lat = rel.latitude || wo?.latitude || -0.286071;
+      const lng = rel.longitude || wo?.longitude || 100.449261;
+
+      return {
+        noWo: rel.nomorWO || wo?.nomorWO || '-',
+        area: areaName,
+        ulp: rel.ulpName || wo?.ulpName || ulpTitle,
+        namaTim: rel.reguName || wo?.reguName || rel.petugasName || 'TIM ROW BASO',
+        feeder: rel.penyulangName || wo?.penyulangName || 'F Baso',
+        noTiang: rel.noTiang || wo?.lokasi || '-',
+        tanggalEksekusi: formatExecutionDateTime(rel, wo),
+        fotoSebelumUrl: rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl,
+        fotoSesudahUrl: rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl,
+        jenisTanaman: rel.jenisTanaman || wo?.jenisPekerjaan || 'PEMBERSIHAN HALAMAN GARDU',
+        keterangan: rel.keterangan || 'POTONG',
+        pertumbuhanTanaman: rel.pertumbuhanTanaman || 'SEDANG',
+        kendala: rel.kendala || 'NIHIL',
+        lokasi: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+      };
+    });
+  } else if (fallbackWorkOrders.length > 0) {
+    dataItems = fallbackWorkOrders.map((wo) => {
       const lat = wo.latitude || -0.286071;
       const lng = wo.longitude || 100.449261;
-      return [
-        wo.nomorWO || '-',
-        areaName,
-        wo.ulpName || ulpTitle,
-        wo.reguName || 'TIM ROW BASO',
-        wo.penyulangName || 'F Baso',
-        wo.lokasi || '-',
-        wo.tanggal || '-',
-        wo.lampiranUrl ? 'TERSEDIA (FOTO EVIDEN)' : 'TIDAK ADA',
-        'TIDAK ADA',
-        wo.jenisPekerjaan || 'PEMBANGKASAN POHON (ROW)',
-        wo.deskripsi || 'POTONG',
-        'SEDANG',
-        'NIHIL',
-        `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-      ];
+      return {
+        noWo: wo.nomorWO || '-',
+        area: areaName,
+        ulp: wo.ulpName || ulpTitle,
+        namaTim: wo.reguName || 'TIM ROW BASO',
+        feeder: wo.penyulangName || 'F Baso',
+        noTiang: wo.lokasi || '-',
+        tanggalEksekusi: formatExecutionDateTime(undefined, wo),
+        fotoSebelumUrl: wo.lampiranUrl,
+        fotoSesudahUrl: undefined,
+        jenisTanaman: wo.jenisPekerjaan || 'PEMBANGKASAN POHON (ROW)',
+        keterangan: wo.deskripsi || 'POTONG',
+        pertumbuhanTanaman: 'SEDANG',
+        kendala: 'NIHIL',
+        lokasi: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+      };
     });
   }
 
-  const titleHeader = [
-    ['REKAP HASIL ROW - PT HALEYORA POWER'],
-    [`EVIDEN ROW AREA ${areaName} | ULP ${ulpTitle}`],
-    [`TANGGAL EVIDEN: ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' }).toUpperCase()}`],
-    [''],
-    [
-      'NO WO',
-      'AREA',
-      'ULP',
-      'NAMA TIM',
-      'FEEDER',
-      'NO TIANG',
-      'TANGGAL EKSEKUSI',
-      'FOTO SEBELUM',
-      'FOTO SESUDAH',
-      'JENIS TANAMAN',
-      'KETERANGAN',
-      'PERTUMBUHAN TANAMAN',
-      'KENDALA',
-      'LOKASI',
-    ],
-  ];
+  const thinSlateBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  };
 
-  const sheetData = [...titleHeader, ...items];
-  const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+  for (let idx = 0; idx < dataItems.length; idx++) {
+    const item = dataItems[idx];
+    const excelRowIndex = 4 + idx; // Data starts at Row 4
 
-  worksheet['!cols'] = [
-    { wch: 18 },
-    { wch: 15 },
-    { wch: 14 },
-    { wch: 20 },
-    { wch: 18 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 25 },
-    { wch: 25 },
-    { wch: 28 },
-    { wch: 16 },
-    { wch: 22 },
-    { wch: 16 },
-    { wch: 25 },
-  ];
+    const row = worksheet.addRow([
+      item.noWo,
+      item.area,
+      item.ulp,
+      item.namaTim,
+      item.feeder,
+      item.noTiang,
+      item.tanggalEksekusi,
+      item.fotoSebelumUrl ? '' : 'No Photo',
+      item.fotoSesudahUrl ? '' : 'No Photo',
+      item.jenisTanaman,
+      item.keterangan,
+      item.pertumbuhanTanaman,
+      item.kendala,
+      item.lokasi,
+    ]);
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Eviden ROW Photo');
+    row.height = 95; // High row for embedding images cleanly
 
-  XLSX.writeFile(workbook, `Eviden_ROW_Photo_Area_${areaName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    row.eachCell((cell, colNumber) => {
+      cell.border = thinSlateBorder;
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.font = { name: 'Arial', size: 9.5, color: { argb: 'FF0F172A' } };
+
+      if (colNumber === 1) {
+        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF075985' } };
+      }
+      if (colNumber === 6) {
+        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+      }
+      if ((colNumber === 8 && !item.fotoSebelumUrl) || (colNumber === 9 && !item.fotoSesudahUrl)) {
+        cell.font = { name: 'Arial', size: 8.5, italic: true, color: { argb: 'FF94A3B8' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      }
+    });
+
+    // Embed Foto Sebelum into Col H (col 8 -> 7.1 in 0-based col)
+    if (item.fotoSebelumUrl) {
+      const imgData = await urlToBase64Image(item.fotoSebelumUrl);
+      if (imgData) {
+        const imageId = workbook.addImage({
+          base64: imgData.base64,
+          extension: imgData.extension,
+        });
+        worksheet.addImage(imageId, {
+          tl: { col: 7.1, row: excelRowIndex - 0.9 },
+          ext: { width: 140, height: 105 },
+          editAs: 'oneCell',
+        });
+      } else {
+        const cell = row.getCell(8);
+        cell.value = 'Foto Tidak Dimuat';
+        cell.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF94A3B8' } };
+      }
+    }
+
+    // Embed Foto Sesudah into Col I (col 9 -> 8.1 in 0-based col)
+    if (item.fotoSesudahUrl) {
+      const imgData = await urlToBase64Image(item.fotoSesudahUrl);
+      if (imgData) {
+        const imageId = workbook.addImage({
+          base64: imgData.base64,
+          extension: imgData.extension,
+        });
+        worksheet.addImage(imageId, {
+          tl: { col: 8.1, row: excelRowIndex - 0.9 },
+          ext: { width: 140, height: 105 },
+          editAs: 'oneCell',
+        });
+      } else {
+        const cell = row.getCell(9);
+        cell.value = 'Foto Tidak Dimuat';
+        cell.font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF94A3B8' } };
+      }
+    }
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = `Eviden_ROW_Photo_Area_${areaName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(downloadUrl);
 }
 
 /**
- * Generate PDF Report for Cetak Photo (Format REKAP HASIL ROW PT HALEYORA POWER)
+ * Generate PDF Report for Cetak Photo (Format REKAP HASIL ROW PLN ELECTRICITY SERVICES)
  */
 export function generateCetakPhotoPDF(
   realisasiList: Realisasi[],
@@ -137,7 +366,7 @@ export function generateCetakPhotoPDF(
   doc.text(`EVIDEN ROW AREA ${areaName}`, 14, 10);
   doc.text(`ULP ${ulpTitle}`, pageWidth - 14, 10, { align: 'right' });
 
-  // Main Banner REKAP HASIL ROW / PT HALEYORA POWER
+  // Main Banner REKAP HASIL ROW / PLN ELECTRICITY SERVICES
   doc.setFillColor(37, 99, 235); // Royal Blue
   doc.rect(14, 13, pageWidth - 28, 6, 'F');
   doc.setTextColor(255, 255, 255);
@@ -148,7 +377,7 @@ export function generateCetakPhotoPDF(
   doc.setFillColor(29, 78, 216); // Darker Blue
   doc.rect(14, 19, pageWidth - 28, 5, 'F');
   doc.setFontSize(8);
-  doc.text('PT HALEYORA POWER', pageWidth / 2, 22.5, { align: 'center' });
+  doc.text('PLN ELECTRICITY SERVICES', pageWidth / 2, 22.5, { align: 'center' });
 
   let tableData = realisasiList.map((rel) => {
     const wo = workOrdersMap[rel.workOrderId];
@@ -161,7 +390,7 @@ export function generateCetakPhotoPDF(
       rel.reguName || wo?.reguName || rel.petugasName || 'TIM ROW BASO',
       rel.penyulangName || wo?.penyulangName || 'F Baso',
       rel.noTiang || wo?.lokasi || '-',
-      rel.tanggalRealisasi || wo?.tanggal || '-',
+      formatExecutionDateTime(rel, wo),
       '', // Foto Sebelum (drawn via didDrawCell)
       '', // Foto Sesudah (drawn via didDrawCell)
       rel.jenisTanaman || wo?.jenisPekerjaan || 'PEMBERSIHAN HALAMAN GARDU',
@@ -183,7 +412,7 @@ export function generateCetakPhotoPDF(
         wo.reguName || 'TIM ROW BASO',
         wo.penyulangName || 'F Baso',
         wo.lokasi || '-',
-        wo.tanggal || '-',
+        formatExecutionDateTime(undefined, wo),
         '',
         '',
         wo.jenisPekerjaan || 'PEMBANGKASAN POHON (ROW)',
@@ -300,7 +529,7 @@ export function generateCetakPhotoPDF(
 /**
  * Export Cetak Peta to Excel file (Format GAMBAR PETA POHON ROW)
  */
-export function exportCetakPetaToExcel(
+export async function exportCetakPetaToExcel(
   mapPoints: Array<{
     nomorWO: string;
     ulpName: string;
@@ -322,70 +551,140 @@ export function exportCetakPetaToExcel(
   const ulpTitle = filterUlpName && filterUlpName !== 'ALL' ? filterUlpName.toUpperCase() : (mapPoints[0]?.ulpName?.toUpperCase() || 'BASO');
   const feederTitle = filterPenyulangName && filterPenyulangName !== 'ALL' ? filterPenyulangName.toUpperCase() : (mapPoints[0]?.penyulangName?.toUpperCase() || '1 BASO - G.H. TANJUNG ALAM');
 
-  const rows = mapPoints.map((pt, idx) => [
-    idx + 1,
-    pt.nomorWO || '-',
-    areaName,
-    pt.ulpName || ulpTitle,
-    pt.penyulangName || feederTitle,
-    pt.noTiang || '-',
-    pt.jenisTanaman || 'PEMBANGKASAN POHON (ROW)',
-    pt.keterangan || 'POTONG',
-    pt.pertumbuhanTanaman || 'SEDANG',
-    pt.status || 'Selesai',
-    pt.lat.toFixed(6),
-    pt.lng.toFixed(6),
-    `${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}`,
-    pt.photoUrl ? 'ADA FOTO' : 'TIDAK ADA',
-  ]);
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Peta Pohon ROW');
+  worksheet.views = [{ showGridLines: true }];
 
-  const titleHeader = [
-    ['GAMBAR PETA POHON (ROW) - PT HALEYORA POWER'],
-    [`FEEDER: ${feederTitle} | ULP: ${ulpTitle} | AREA: ${areaName}`],
-    [`TANGGAL CETAK: ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' }).toUpperCase()}`],
-    [''],
-    [
-      'NO',
-      'NOMOR WO',
-      'AREA',
-      'ULP',
-      'FEEDER / PENYULANG',
-      'NO TIANG / LOKASI',
-      'JENIS TANAMAN',
-      'KETERANGAN',
-      'PERTUMBUHAN TANAMAN',
-      'STATUS',
-      'LATITUDE',
-      'LONGITUDE',
-      'KOORDINAT',
-      'FOTO EVIDEN',
-    ],
+  worksheet.columns = [
+    { key: 'no', width: 8 },
+    { key: 'nomorWO', width: 22 },
+    { key: 'area', width: 16 },
+    { key: 'ulp', width: 16 },
+    { key: 'feeder', width: 22 },
+    { key: 'noTiang', width: 18 },
+    { key: 'jenisTanaman', width: 28 },
+    { key: 'keterangan', width: 16 },
+    { key: 'pertumbuhanTanaman', width: 22 },
+    { key: 'status', width: 16 },
+    { key: 'latitude', width: 16 },
+    { key: 'longitude', width: 16 },
+    { key: 'koordinat', width: 26 },
+    { key: 'fotoEviden', width: 25 },
   ];
 
-  const sheetData = [...titleHeader, ...rows];
-  const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+  // Row 1: Banner Title
+  const row1 = worksheet.addRow(['GAMBAR PETA POHON (ROW) - PLN ELECTRICITY SERVICES']);
+  row1.height = 28;
+  worksheet.mergeCells('A1:N1');
+  const cellA1 = worksheet.getCell('A1');
+  cellA1.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+  cellA1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } }; // Sky 600
+  cellA1.alignment = { horizontal: 'center', vertical: 'middle' };
 
-  worksheet['!cols'] = [
-    { wch: 6 },
-    { wch: 18 },
-    { wch: 15 },
-    { wch: 14 },
-    { wch: 22 },
-    { wch: 18 },
-    { wch: 28 },
-    { wch: 16 },
-    { wch: 22 },
-    { wch: 16 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 25 },
-    { wch: 15 },
+  // Row 2: Sub-Banner
+  const row2 = worksheet.addRow([`FEEDER: ${feederTitle} | ULP: ${ulpTitle} | AREA: ${areaName}`]);
+  row2.height = 24;
+  worksheet.mergeCells('A2:N2');
+  const cellA2 = worksheet.getCell('A2');
+  cellA2.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cellA2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF075985' } }; // Sky 800
+  cellA2.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // Row 3: Headers
+  const headers = [
+    'NO',
+    'NOMOR WO',
+    'AREA',
+    'ULP',
+    'FEEDER / PENYULANG',
+    'NO TIANG / LOKASI',
+    'JENIS TANAMAN',
+    'KETERANGAN',
+    'PERTUMBUHAN TANAMAN',
+    'STATUS',
+    'LATITUDE',
+    'LONGITUDE',
+    'KOORDINAT',
+    'FOTO EVIDEN',
   ];
+  const row3 = worksheet.addRow(headers);
+  row3.height = 26;
+  row3.eachCell((cell) => {
+    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0C4A6E' } }; // Sky 900
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  });
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Peta Pohon ROW');
+  const thinSlateBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  };
 
-  XLSX.writeFile(workbook, `Peta_Pohon_ROW_Area_${areaName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  for (let idx = 0; idx < mapPoints.length; idx++) {
+    const pt = mapPoints[idx];
+    const excelRowIndex = 4 + idx;
+
+    const row = worksheet.addRow([
+      idx + 1,
+      pt.nomorWO || '-',
+      areaName,
+      pt.ulpName || ulpTitle,
+      pt.penyulangName || feederTitle,
+      pt.noTiang || '-',
+      pt.jenisTanaman || 'PEMBANGKASAN POHON (ROW)',
+      pt.keterangan || 'POTONG',
+      pt.pertumbuhanTanaman || 'SEDANG',
+      pt.status || 'Selesai',
+      pt.lat.toFixed(6),
+      pt.lng.toFixed(6),
+      `${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}`,
+      pt.photoUrl ? '' : 'No Photo',
+    ]);
+
+    row.height = pt.photoUrl ? 95 : 28;
+
+    row.eachCell((cell, colNumber) => {
+      cell.border = thinSlateBorder;
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.font = { name: 'Arial', size: 9.5, color: { argb: 'FF0F172A' } };
+
+      if (colNumber === 2) {
+        cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF075985' } };
+      }
+      if (colNumber === 14 && !pt.photoUrl) {
+        cell.font = { name: 'Arial', size: 8.5, italic: true, color: { argb: 'FF94A3B8' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      }
+    });
+
+    if (pt.photoUrl) {
+      const imgData = await urlToBase64Image(pt.photoUrl);
+      if (imgData) {
+        const imageId = workbook.addImage({
+          base64: imgData.base64,
+          extension: imgData.extension,
+        });
+        worksheet.addImage(imageId, {
+          tl: { col: 13.1, row: excelRowIndex - 0.9 },
+          ext: { width: 140, height: 105 },
+          editAs: 'oneCell',
+        });
+      }
+    }
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = `Peta_Pohon_ROW_Area_${areaName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(downloadUrl);
 }
 
 /**
@@ -455,7 +754,7 @@ export function generateLaporanPetaPDF(
   doc.line(58, 8, 58, 26);
   doc.line(241, 8, 241, 26);
 
-  // Left Section: PLN Haleyora Power box
+  // Left Section: PLN Electricity Services box
   doc.setFillColor(234, 179, 8); // Yellow background for lightning
   doc.roundedRect(12, 11, 7, 12, 1, 1, 'F');
   doc.setFont('helvetica', 'bold');
@@ -468,7 +767,7 @@ export function generateLaporanPetaPDF(
   doc.text('PLN', 21, 16);
   doc.setFontSize(8);
   doc.setTextColor(30, 58, 138); // sky-900
-  doc.text('Haleyora Power', 21, 22);
+  doc.text('Electricity Services', 21, 22);
 
   // Middle Section: GAMBAR PETA POHON (ROW) Title Box
   doc.setFont('helvetica', 'bold');
@@ -524,7 +823,7 @@ export function generateLaporanPetaPDF(
     doc.line(260, 52, 276, 30);
   }
 
-  // 4. KETERANGAN Legend Block (Bottom Box matching image template)
+  // 4. KETERANGAN Legend Block (Bottom Box matching summary requirements)
   doc.roundedRect(8, 152, 281, 48, 2, 2);
 
   doc.setFontSize(8);
@@ -539,59 +838,51 @@ export function generateLaporanPetaPDF(
   // Column Dividers inside bottom legend
   doc.setDrawColor(226, 232, 240);
   doc.line(100, 159, 100, 200);
-  doc.line(220, 159, 220, 200);
+  doc.line(200, 159, 200, 200);
 
-  // Column 1: Equipment Symbols
-  doc.setFontSize(6.5);
+  const woNumbers = workOrders.map(w => w.nomorWO).join(', ') || realisasiList?.[0]?.nomorWO || '-';
+  const formattedDate = formatDateOnly(realisasiList?.[0]?.tanggalRealisasi || workOrders[0]?.tanggal || new Date());
+  const reguName = realisasiList?.[0]?.reguName || workOrders[0]?.petugasName || 'Regu ROW Alpha';
+  const totalRealisasi = mapPointsData?.length || realisasiList?.length || workOrders.length;
+  const pangkasCount = (mapPointsData || realisasiList || workOrders).filter(item => {
+    const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
+    return s.includes('PANGKAS');
+  }).length;
+  const tebangCount = (mapPointsData || realisasiList || workOrders).filter(item => {
+    const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
+    return s.includes('TEBANG');
+  }).length;
+  const potongCount = (mapPointsData || realisasiList || workOrders).filter(item => {
+    const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
+    return s.includes('POTONG');
+  }).length;
+
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(51, 65, 85);
+  doc.setTextColor(30, 41, 59);
 
-  doc.text('• = TIANG BESI', 12, 164);
-  doc.text('⊙ = TIANG BETON', 12, 169);
-  doc.text('⊗ = TIANG BESI VS BESI', 12, 174);
-  doc.text('▲ = GARDU DISTRIBUSI (GD) 1 TIANG BESI', 12, 179);
-  doc.text('◼ = GARDU DISTRIBUSI (GD) 2 TIANG BESI', 12, 184);
-  doc.text('✖ = TOWER', 12, 189);
+  // Column 1: Info Resmi Kiri (NO WO, TANGGAL, NAMA ULP, NAMA PENYULANG, NAMA REGU)
+  doc.text(`NO WO: ${woNumbers}`, 12, 164);
+  doc.text(`TANGGAL: ${formattedDate}`, 12, 171);
+  doc.text(`NAMA ULP: ${ulpTitle}`, 12, 178);
+  doc.text(`NAMA PENYULANG: ${feederTitle}`, 12, 185);
+  doc.text(`NAMA REGU: ${reguName}`, 12, 192);
 
-  // Column 2: Line Legend & Action Color Boxes
-  doc.text('────── = JARINGAN TEGANGAN RENDAH (TR) PLN', 105, 162);
-  doc.text('------- = JARINGAN TEGANGAN MENENGAH (JTM)', 105, 167);
-  doc.text('────── = KABEL TANAH (SKTM)', 105, 172);
-  doc.text('───► = TRECK SCHOOR / DRUCK SCHOOR', 105, 177);
-
-  // Colored action boxes
-  // 1. PANGKAS (Yellow)
-  doc.setFillColor(250, 204, 21);
-  doc.rect(105, 182, 4, 4, 'FD');
+  // Column 2: Jumlah Realisasi Tengah
+  doc.text(`JUMLAH REALISASI: ${totalRealisasi} Titik`, 104, 164);
   doc.setFont('helvetica', 'bold');
-  doc.text('= PANGKAS', 111, 185);
+  doc.setTextColor(180, 83, 9); // Amber for pangkas
+  doc.text(`JUMLAH REALISASI PANGKAS: ${pangkasCount}`, 104, 171);
+  doc.setTextColor(220, 38, 38); // Red for tebang
+  doc.text(`JUMLAH REALISASI TEBANG: ${tebangCount}`, 104, 178);
+  doc.setTextColor(22, 163, 74); // Green for potong
+  doc.text(`JUMLAH REALISASI POTONG: ${potongCount}`, 104, 185);
 
-  // 2. POTONG (Green)
-  doc.setFillColor(74, 222, 128);
-  doc.rect(138, 182, 4, 4, 'FD');
-  doc.text('= POTONG', 144, 185);
-
-  // 3. TEBANG (Red)
-  doc.setFillColor(248, 113, 113);
-  doc.rect(168, 182, 4, 4, 'FD');
-  doc.text('= TEBANG', 174, 185);
-
-  // 4. TIDAK DIRAMPAL (White)
-  doc.setFillColor(255, 255, 255);
-  doc.rect(198, 182, 4, 4, 'FD');
-  doc.text('= TIDAK DIRAMPAL', 204, 185);
-
-  // Column 3: Date
-  const formattedDate = new Date().toLocaleDateString('id-ID', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  }).toUpperCase();
-
-  doc.setFontSize(8.5);
+  // Column 3: Mengetahui / Disetujui
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text(`TANGGAL ${formattedDate}`, 254, 192, { align: 'center' });
+  doc.text('Mengetahui / Disetujui', 241, 175, { align: 'center' });
 
   // Save PDF file
   const safeUlp = ulpTitle.replace(/[^a-zA-Z0-9]/g, '_');
