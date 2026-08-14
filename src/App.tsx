@@ -27,6 +27,8 @@ import { SettingAplikasiPage } from './pages/SettingAplikasiPage';
 import { UserWelcomePage } from './pages/UserWelcomePage';
 import { AbsensiKerjaPage } from './pages/AbsensiKerjaPage';
 import { AbsensiMainPage } from './pages/AbsensiMainPage';
+import { InisiasiPage } from './pages/InisiasiPage';
+import { RekapPekerjaanHarianPage } from './pages/RekapPekerjaanHarianPage';
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
@@ -39,6 +41,9 @@ const AppContent: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showAbsensiForm, setShowAbsensiForm] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isInitiated, setIsInitiated] = useState<boolean>(() => {
+    return localStorage.getItem('aphro_has_initiated') === 'true';
+  });
 
   const isAdmbktUser = user && (
     (user.userName || '').toLowerCase() === 'admbkt' ||
@@ -57,6 +62,30 @@ const AppContent: React.FC = () => {
       setActiveTab('cetak_laporan');
     }
   }, [isAdmbktUser, activeTab, setActiveTab]);
+
+  const renderActivePage = () => {
+    if (isAdmbktUser) {
+      return <CetakLaporanPage />;
+    }
+
+    switch (activeTab) {
+      case 'dashboard': return <DashboardPage />;
+      case 'work_orders': return <WorkOrderPage />;
+      case 'input_wo': return <WorkOrderInputPage />;
+      case 'input_realisasi': return <InputRealisasiPage />;
+      case 'absensi':
+      case 'absensi_pulang': return <AbsensiMainPage initialSubTab="absensi_pulang" />;
+      case 'monitoring_absensi': return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
+      case 'monitoring': return <MonitoringPage />;
+      case 'cetak_laporan': return <CetakLaporanPage />;
+      case 'rekap_harian': return <RekapPekerjaanHarianPage />;
+      case 'master_data': return <MasterDataPage />;
+      case 'settings':
+      case 'logs': return <SettingAplikasiPage />;
+      case 'inisiasi': return <InisiasiPage isFromMenu={true} />;
+      default: return <DashboardPage />;
+    }
+  };
 
   if (isInitialLoading) {
     return (
@@ -101,68 +130,63 @@ const AppContent: React.FC = () => {
     );
   }
 
-  if (!user) {
-    return <LoginPage />;
+  // 2. CRITICAL: JIKA USERS SUDAH LOGIN, TIDAK LAGI MASUK KE HALAMAN INISIASI!
+  if (user) {
+    const isUserRole = (user.role || '').toUpperCase() === 'USER';
+    if (isUserRole && !isAdmbktUser && !hasCheckedInToday) {
+      return (
+        <>
+          {showAbsensiForm ? (
+            <AbsensiKerjaPage onSuccess={() => {
+              setShowAbsensiForm(false);
+              setActiveTab('input_realisasi');
+            }} />
+          ) : (
+            <UserWelcomePage onStartAbsensi={() => setShowAbsensiForm(true)} />
+          )}
+          <ToastContainer />
+        </>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 pb-20 lg:pb-0">
+        <Navbar onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} />
+
+        <div className="flex-1 flex max-w-[1600px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 gap-6">
+          <Sidebar
+            isOpen={isMobileSidebarOpen}
+            onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          />
+
+          <main className="flex-1 min-w-0">
+            {renderActivePage()}
+          </main>
+        </div>
+
+        <Footer />
+        <MobileBottomNav />
+        <ToastContainer />
+      </div>
+    );
   }
 
-  const isUserRole = (user.role || '').toUpperCase() === 'USER';
-  if (isUserRole && !isAdmbktUser && !hasCheckedInToday) {
+  // 3. JIKA BELUM LOGIN: Cek apakah perlu inisiasi awal atau langsung ke Halaman Login
+  if (!isInitiated) {
     return (
       <>
-        {showAbsensiForm ? (
-          <AbsensiKerjaPage onSuccess={() => {
-            setShowAbsensiForm(false);
-            setActiveTab('input_realisasi');
-          }} />
-        ) : (
-          <UserWelcomePage onStartAbsensi={() => setShowAbsensiForm(true)} />
-        )}
+        <InisiasiPage onInitiationComplete={() => setIsInitiated(true)} />
         <ToastContainer />
       </>
     );
   }
 
-  const renderActivePage = () => {
-    if (isAdmbktUser) {
-      return <CetakLaporanPage />;
-    }
-
-    switch (activeTab) {
-      case 'dashboard': return <DashboardPage />;
-      case 'work_orders': return <WorkOrderPage />;
-      case 'input_wo': return <WorkOrderInputPage />;
-      case 'input_realisasi': return <InputRealisasiPage />;
-      case 'absensi':
-      case 'absensi_pulang': return <AbsensiMainPage initialSubTab="absensi_pulang" />;
-      case 'monitoring_absensi': return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
-      case 'monitoring': return <MonitoringPage />;
-      case 'cetak_laporan': return <CetakLaporanPage />;
-      case 'master_data': return <MasterDataPage />;
-      case 'settings':
-      case 'logs': return <SettingAplikasiPage />;
-      default: return <DashboardPage />;
-    }
-  };
-
+  // 4. Halaman Login (Belum login & sudah inisiasi)
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 pb-20 lg:pb-0">
-      <Navbar onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} />
-
-      <div className="flex-1 flex max-w-[1600px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 gap-6">
-        <Sidebar
-          isOpen={isMobileSidebarOpen}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
-        />
-
-        <main className="flex-1 min-w-0">
-          {renderActivePage()}
-        </main>
-      </div>
-
-      <Footer />
-      <MobileBottomNav />
+    <>
+      <LoginPage onOpenInisiasi={() => setIsInitiated(false)} />
       <ToastContainer />
-    </div>
+    </>
   );
 };
 

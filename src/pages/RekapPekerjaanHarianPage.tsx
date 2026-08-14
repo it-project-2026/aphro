@@ -1,0 +1,1219 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSettings } from '../context/SettingsContext';
+import { useRealisasi } from '../context/RealisasiContext';
+import { useToast } from '../hooks/useToast';
+import {
+  INDONESIAN_MONTHS,
+  getDaysInMonth,
+  DayDetail,
+} from '../utils/holidaysIndonesia';
+import {
+  RekapHarianService,
+  DEFAULT_REKAP_ROWS,
+} from '../services/rekapHarianService';
+import {
+  RekapItemData,
+  exportRekapHarianToExcel,
+} from '../utils/rekapExportService';
+import {
+  CalendarRange,
+  FileSpreadsheet,
+  Printer,
+  RefreshCw,
+  Plus,
+  Trash2,
+  Edit3,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Calendar,
+  Layers,
+  Sparkles,
+  Save,
+  Building2,
+  Filter,
+} from 'lucide-react';
+
+export const RekapPekerjaanHarianPage: React.FC = () => {
+  const { settings } = useSettings();
+  const { realisasiList } = useRealisasi();
+  const { showToast } = useToast();
+
+  // Date Selection State (Default to current date or June 2026 as per template)
+  const [selectedYear, setSelectedYear] = useState<number>(() => {
+    const d = new Date();
+    return d.getFullYear();
+  });
+  const [selectedMonthIdx, setSelectedMonthIdx] = useState<number>(() => {
+    const d = new Date();
+    return d.getMonth();
+  });
+
+  const [rekapRows, setRekapRows] = useState<RekapItemData[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Selected cell for modal quick edit
+  const [editingCell, setEditingCell] = useState<{
+    rowId: string;
+    dayFormatted: string;
+    timRow: string;
+    namaUlp: string;
+    tebang1: number;
+    pangkas: number;
+    tebang2: number;
+  } | null>(null);
+
+  // Edit target / keterangan modal
+  const [editingRowConfig, setEditingRowConfig] = useState<{
+    id: string;
+    target: number;
+    keterangan: string;
+    timRow: string;
+    namaUlp: string;
+  } | null>(null);
+
+  // Modal for adding custom row
+  const [showAddRowModal, setShowAddRowModal] = useState<boolean>(false);
+  const [newRowData, setNewRowData] = useState({
+    kodeUnit: '13228',
+    namaUlp: 'ULP BUKITTINGGI',
+    timRow: 'TIM ROW 12',
+    target: 200,
+  });
+
+  // Calculate dynamic days in selected month with holiday detection
+  const daysInMonth: DayDetail[] = useMemo(() => {
+    return getDaysInMonth(selectedYear, selectedMonthIdx);
+  }, [selectedYear, selectedMonthIdx]);
+
+  const monthName = INDONESIAN_MONTHS[selectedMonthIdx];
+  const unitDisplayName = settings.namaUnitLayanan || 'UL BUKITTINGGI';
+
+  // Load Data on Year/Month change
+  useEffect(() => {
+    setIsLoading(true);
+    const data = RekapHarianService.loadRekapData(selectedYear, selectedMonthIdx, realisasiList);
+    setRekapRows(data);
+    setIsLoading(false);
+  }, [selectedYear, selectedMonthIdx, realisasiList]);
+
+  // Save changes to localStorage
+  const handleSaveData = (updated: RekapItemData[]) => {
+    setRekapRows(updated);
+    RekapHarianService.saveRekapData(selectedYear, selectedMonthIdx, updated);
+  };
+
+  // Sync data with Realisasi Context
+  const handleSyncRealisasi = () => {
+    const updated = RekapHarianService.syncFromRealisasi(
+      selectedYear,
+      selectedMonthIdx,
+      rekapRows,
+      realisasiList
+    );
+    handleSaveData(updated);
+    showToast('Data berhasil disinkronkan dengan entri Realisasi!', 'success');
+  };
+
+  // Reset to default rows
+  const handleResetToDefault = () => {
+    if (window.confirm('Kembalikan tabel rekap ke susunan awal template?')) {
+      const reset = DEFAULT_REKAP_ROWS.map((def) => ({
+        id: def.id,
+        kodeUnit: def.kodeUnit,
+        namaUlp: def.namaUlp,
+        timRow: def.timRow,
+        target: def.target,
+        keterangan: '',
+        dailyValues: {},
+      }));
+      handleSaveData(reset);
+      showToast('Susunan tabel telah direset ke template bawaan.', 'info');
+    }
+  };
+
+  // Direct cell value changer
+  const handleCellChange = (
+    rowId: string,
+    dayFormatted: string,
+    field: 'tebang1' | 'pangkas' | 'tebang2',
+    val: number
+  ) => {
+    const updated = rekapRows.map((row) => {
+      if (row.id === rowId) {
+        const daily = { ...(row.dailyValues[dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 }) };
+        daily[field] = Math.max(0, val || 0);
+        return {
+          ...row,
+          dailyValues: {
+            ...row.dailyValues,
+            [dayFormatted]: daily,
+          },
+        };
+      }
+      return row;
+    });
+    handleSaveData(updated);
+  };
+
+  // Save quick edit from modal
+  const handleSaveModalCell = () => {
+    if (!editingCell) return;
+    const updated = rekapRows.map((row) => {
+      if (row.id === editingCell.rowId) {
+        return {
+          ...row,
+          dailyValues: {
+            ...row.dailyValues,
+            [editingCell.dayFormatted]: {
+              tebang1: Number(editingCell.tebang1) || 0,
+              pangkas: Number(editingCell.pangkas) || 0,
+              tebang2: Number(editingCell.tebang2) || 0,
+            },
+          },
+        };
+      }
+      return row;
+    });
+    handleSaveData(updated);
+    setEditingCell(null);
+    showToast('Nilai pekerjaan berhasil disimpan.', 'success');
+  };
+
+  // Save row config (target & keterangan)
+  const handleSaveRowConfig = () => {
+    if (!editingRowConfig) return;
+    const updated = rekapRows.map((row) => {
+      if (row.id === editingRowConfig.id) {
+        return {
+          ...row,
+          target: Number(editingRowConfig.target) || 0,
+          keterangan: editingRowConfig.keterangan || '',
+        };
+      }
+      return row;
+    });
+    handleSaveData(updated);
+    setEditingRowConfig(null);
+    showToast('Target dan Keterangan tim berhasil diperbarui.', 'success');
+  };
+
+  // Add new row
+  const handleAddRow = () => {
+    if (!newRowData.timRow || !newRowData.namaUlp) {
+      showToast('Harap lengkapi nama ULP dan Tim ROW!', 'warning');
+      return;
+    }
+    const newRow: RekapItemData = {
+      id: 'row-' + Date.now(),
+      kodeUnit: newRowData.kodeUnit || '13221',
+      namaUlp: newRowData.namaUlp,
+      timRow: newRowData.timRow,
+      target: Number(newRowData.target) || 200,
+      keterangan: '',
+      dailyValues: {},
+    };
+    handleSaveData([...rekapRows, newRow]);
+    setShowAddRowModal(false);
+    showToast(`Tim ${newRow.timRow} berhasil ditambahkan ke tabel!`, 'success');
+  };
+
+  // Delete a row
+  const handleDeleteRow = (id: string, name: string) => {
+    if (window.confirm(`Hapus baris ${name} dari rekap harian?`)) {
+      const updated = rekapRows.filter((r) => r.id !== id);
+      handleSaveData(updated);
+      showToast(`Baris ${name} telah dihapus.`, 'info');
+    }
+  };
+
+  // Export to Excel
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
+      showToast('Menyiapkan berkas Excel laporan rekap...', 'info');
+      await exportRekapHarianToExcel(
+        unitDisplayName,
+        selectedYear,
+        monthName,
+        daysInMonth,
+        rekapRows,
+        'UP3 BUKITTINGGI',
+        '13200'
+      );
+      showToast('File Excel Rekap Pekerjaan Harian berhasil diunduh!', 'success');
+    } catch (err: any) {
+      console.error('Export Excel failed:', err);
+      showToast(`Gagal mengekspor Excel: ${err.message}`, 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Print view
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Filtered rows
+  const filteredRows = useMemo(() => {
+    if (!searchQuery.trim()) return rekapRows;
+    const q = searchQuery.toLowerCase();
+    return rekapRows.filter(
+      (r) =>
+        r.namaUlp.toLowerCase().includes(q) ||
+        r.timRow.toLowerCase().includes(q) ||
+        r.kodeUnit.toLowerCase().includes(q)
+    );
+  }, [rekapRows, searchQuery]);
+
+  // Compute Grand Totals across all rows
+  const grandTotalPerDay = useMemo(() => {
+    const totals: Record<string, { tebang1: number; pangkas: number; tebang2: number; total: number }> = {};
+    daysInMonth.forEach((d) => {
+      let t1 = 0;
+      let p = 0;
+      let t2 = 0;
+      let tot = 0;
+      rekapRows.forEach((row) => {
+        const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
+        t1 += v.tebang1 || 0;
+        p += v.pangkas || 0;
+        t2 += v.tebang2 || 0;
+        tot += (v.tebang1 || 0) + (v.pangkas || 0) + (v.tebang2 || 0);
+      });
+      totals[d.dayFormatted] = { tebang1: t1, pangkas: p, tebang2: t2, total: tot };
+    });
+    return totals;
+  }, [daysInMonth, rekapRows]);
+
+  const grandTotalsSummary = useMemo(() => {
+    let grandVolume = 0;
+    let grandTarget = 0;
+
+    rekapRows.forEach((row) => {
+      let rowTot = 0;
+      daysInMonth.forEach((d) => {
+        const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
+        rowTot += (v.tebang1 || 0) + (v.pangkas || 0) + (v.tebang2 || 0);
+      });
+      grandVolume += rowTot;
+      grandTarget += row.target || 0;
+    });
+
+    const sisa = grandTarget > 0 ? Math.max(0, grandTarget - grandVolume) : 0;
+    const percent = grandTarget > 0 ? Math.round((grandVolume / grandTarget) * 100) : 0;
+
+    return {
+      volume: grandVolume,
+      target: grandTarget,
+      sisa,
+      percent,
+    };
+  }, [daysInMonth, rekapRows]);
+
+  return (
+    <div className="space-y-6 pb-12 animate-in fade-in duration-300">
+      {/* Top Header Card */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          
+          {/* Title and Identification */}
+          <div className="space-y-2">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800/80 text-sky-600 dark:text-sky-400 text-xs font-black uppercase tracking-wider">
+              <CalendarRange className="w-3.5 h-3.5" />
+              <span>Matriks Rekap Pekerjaan Harian</span>
+            </div>
+            
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+              LAPORAN HARIAN TIM ROW {unitDisplayName.replace(/^(PLN\s*|UP3\s*)/i, '')}
+            </h1>
+            <p className="text-sm font-bold text-sky-600 dark:text-sky-400 tracking-wide uppercase flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              <span>PER TANGGAL {monthName} {selectedYear}</span>
+            </p>
+          </div>
+
+          {/* Month & Year Selectors & Actions */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Month Dropdown */}
+            <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedMonthIdx > 0) {
+                    setSelectedMonthIdx(selectedMonthIdx - 1);
+                  } else {
+                    setSelectedMonthIdx(11);
+                    setSelectedYear(selectedYear - 1);
+                  }
+                }}
+                className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                title="Bulan Sebelumnya"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <select
+                value={selectedMonthIdx}
+                onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}
+                className="bg-transparent text-xs sm:text-sm font-black text-slate-900 dark:text-white px-2 py-1 focus:outline-none cursor-pointer"
+              >
+                {INDONESIAN_MONTHS.map((m, idx) => (
+                  <option key={idx} value={idx} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                    {m}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="bg-transparent text-xs sm:text-sm font-black text-slate-900 dark:text-white px-2 py-1 focus:outline-none cursor-pointer border-l border-slate-300 dark:border-slate-700"
+              >
+                {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                  <option key={y} value={y} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                    {y}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedMonthIdx < 11) {
+                    setSelectedMonthIdx(selectedMonthIdx + 1);
+                  } else {
+                    setSelectedMonthIdx(0);
+                    setSelectedYear(selectedYear + 1);
+                  }
+                }}
+                className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                title="Bulan Berikutnya"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Export Excel Button */}
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black flex items-center space-x-2 shadow-lg shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>{isExporting ? 'Mengekspor...' : 'Export Excel (.xlsx)'}</span>
+            </button>
+
+            {/* Print Button */}
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-bold flex items-center space-x-2 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Cetak / PDF</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Legend and Toolbar */}
+        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* Legend Items */}
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="font-bold text-slate-500 dark:text-slate-400">Keterangan Warna:</span>
+            
+            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-red-600 text-white font-black text-[11px] shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <span>Hari Sabtu, Minggu & Libur Nasional (Merah)</span>
+            </div>
+
+            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[11px]">
+              <span className="w-2 h-2 rounded-full bg-slate-500" />
+              <span>Hari Kerja Efektif</span>
+            </div>
+
+            <div className="inline-flex items-center space-x-1.5 text-slate-500 dark:text-slate-400 text-[11px] italic">
+              <Info className="w-3.5 h-3.5 text-sky-500" />
+              <span>* Klik sel angka pada tanggal mana pun untuk input/edit data pekerjaan harian secara langsung.</span>
+            </div>
+          </div>
+
+          {/* Action Tools */}
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={handleSyncRealisasi}
+              className="px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900 border border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              title="Sinkronkan dengan data Realisasi Lapangan"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Tarik Realisasi Lapangan</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowAddRowModal(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tambah Tim</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetToDefault}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold transition-colors cursor-pointer"
+              title="Reset ke susunan template bawaan"
+            >
+              <span>Reset Template</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Table Container (Spreadsheet Matrix) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden">
+        
+        {/* Printable Title (visible in print mode) */}
+        <div className="hidden print:block p-6 text-center space-y-1 border-b border-black">
+          <h2 className="text-xl font-bold uppercase">LAPORAN HARIAN TIM ROW {unitDisplayName}</h2>
+          <h3 className="text-base font-bold uppercase">PER TANGGAL {monthName} {selectedYear}</h3>
+        </div>
+
+        {/* Matrix Table with Horizontal & Vertical Scrolling */}
+        <div className="overflow-x-auto overflow-y-auto max-h-[700px] select-none scrollbar-thin">
+          <table className="w-full border-collapse text-xs font-sans">
+            
+            {/* Multi-level Headers */}
+            <thead className="sticky top-0 z-30 bg-slate-300 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-black shadow-md border-b-2 border-slate-400 dark:border-slate-700">
+              {/* Header Row 1: Day Names */}
+              <tr>
+                <th
+                  rowSpan={3}
+                  className="sticky left-0 z-40 bg-slate-300 dark:bg-slate-800 px-3 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[90px]"
+                >
+                  KODE UNIT
+                </th>
+                <th
+                  rowSpan={3}
+                  className="sticky left-[90px] z-40 bg-slate-300 dark:bg-slate-800 px-4 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[170px]"
+                >
+                  ULP
+                </th>
+                <th
+                  rowSpan={3}
+                  className="sticky left-[260px] z-40 bg-slate-300 dark:bg-slate-800 px-3 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[120px]"
+                >
+                  TIM ROW
+                </th>
+
+                {/* Day Name Columns */}
+                {daysInMonth.map((d) => (
+                  <th
+                    key={`header-dayname-${d.dayFormatted}`}
+                    colSpan={4}
+                    className={`px-1 py-1.5 border-r border-b text-center font-black uppercase text-[11px] tracking-wider ${
+                      d.isRedDay
+                        ? 'bg-red-600 text-white border-red-700'
+                        : 'border-slate-400 dark:border-slate-700'
+                    }`}
+                    title={d.holidayName || (d.isWeekend ? 'Akhir Pekan' : undefined)}
+                  >
+                    {d.dayName}
+                  </th>
+                ))}
+
+                {/* Summary Headers */}
+                <th
+                  rowSpan={3}
+                  className="px-3 py-2 bg-slate-300 dark:bg-slate-800 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase font-black min-w-[70px]"
+                >
+                  TOTAL
+                </th>
+                <th
+                  rowSpan={3}
+                  className="px-3 py-2 bg-slate-300 dark:bg-slate-800 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase font-black min-w-[65px]"
+                >
+                  SISA
+                </th>
+                <th
+                  rowSpan={3}
+                  className="px-3 py-2 bg-slate-300 dark:bg-slate-800 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase font-black min-w-[55px]"
+                >
+                  %
+                </th>
+                <th
+                  rowSpan={3}
+                  className="px-4 py-2 bg-slate-300 dark:bg-slate-800 border-b border-slate-400 dark:border-slate-700 text-center uppercase font-black min-w-[130px]"
+                >
+                  KET
+                </th>
+              </tr>
+
+              {/* Header Row 2: Date Numbers (01, 02, 03, ...) */}
+              <tr>
+                {daysInMonth.map((d) => (
+                  <th
+                    key={`header-daynum-${d.dayFormatted}`}
+                    colSpan={4}
+                    className={`px-1 py-1 border-r border-b text-center font-black text-xs ${
+                      d.isRedDay
+                        ? 'bg-red-600 text-white border-red-700'
+                        : 'border-slate-400 dark:border-slate-700'
+                    }`}
+                  >
+                    {d.dayFormatted}
+                  </th>
+                ))}
+              </tr>
+
+              {/* Header Row 3: Sub-columns (TEBANG | PANGKAS | TEBANG | TOTAL) */}
+              <tr>
+                {daysInMonth.map((d) => (
+                  <React.Fragment key={`header-subcols-${d.dayFormatted}`}>
+                    <th
+                      className={`px-1 py-1 border-r border-b text-center font-bold text-[9px] min-w-[42px] ${
+                        d.isRedDay
+                          ? 'bg-red-600 text-white border-red-700'
+                          : 'border-slate-400 dark:border-slate-700 bg-slate-200 dark:bg-slate-850'
+                      }`}
+                    >
+                      TEBANG
+                    </th>
+                    <th
+                      className={`px-1 py-1 border-r border-b text-center font-bold text-[9px] min-w-[42px] ${
+                        d.isRedDay
+                          ? 'bg-red-600 text-white border-red-700'
+                          : 'border-slate-400 dark:border-slate-700 bg-slate-200 dark:bg-slate-850'
+                      }`}
+                    >
+                      PANGKAS
+                    </th>
+                    <th
+                      className={`px-1 py-1 border-r border-b text-center font-bold text-[9px] min-w-[42px] ${
+                        d.isRedDay
+                          ? 'bg-red-600 text-white border-red-700'
+                          : 'border-slate-400 dark:border-slate-700 bg-slate-200 dark:bg-slate-850'
+                      }`}
+                    >
+                      TEBANG
+                    </th>
+                    <th
+                      className={`px-1 py-1 border-r border-b text-center font-black text-[9px] min-w-[45px] ${
+                        d.isRedDay
+                          ? 'bg-red-700 text-white border-red-800'
+                          : 'border-slate-400 dark:border-slate-700 bg-slate-300 dark:bg-slate-800 text-sky-700 dark:text-sky-300'
+                      }`}
+                    >
+                      TOTAL
+                    </th>
+                  </React.Fragment>
+                ))}
+              </tr>
+            </thead>
+
+            {/* Table Body */}
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              {filteredRows.map((row, rIdx) => {
+                // Calculate Total for this row
+                let rowVolumeSum = 0;
+                daysInMonth.forEach((d) => {
+                  const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
+                  rowVolumeSum += (val.tebang1 || 0) + (val.pangkas || 0) + (val.tebang2 || 0);
+                });
+
+                const target = row.target || 0;
+                const sisa = target > 0 ? Math.max(0, target - rowVolumeSum) : 0;
+                const percent = target > 0 ? Math.round((rowVolumeSum / target) * 100) : 0;
+
+                return (
+                  <tr
+                    key={row.id}
+                    className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
+                  >
+                    {/* Sticky Left Columns */}
+                    <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                      {row.kodeUnit}
+                    </td>
+
+                    <td className="sticky left-[90px] z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                      {row.namaUlp}
+                    </td>
+
+                    <td className="sticky left-[260px] z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-extrabold text-sky-600 dark:text-sky-400 whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>{row.timRow}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingRowConfig({
+                              id: row.id,
+                              target: row.target,
+                              keterangan: row.keterangan || '',
+                              timRow: row.timRow,
+                              namaUlp: row.namaUlp,
+                            })
+                          }
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-400 hover:text-slate-200 transition-opacity"
+                          title="Ubah Target / Keterangan"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Daily Sub-columns */}
+                    {daysInMonth.map((d) => {
+                      const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
+                      const dayTotal = (val.tebang1 || 0) + (val.pangkas || 0) + (val.tebang2 || 0);
+
+                      if (d.isRedDay) {
+                        // MERAH Solid untuk Hari Libur & Akhir Pekan sesuai template gambar!
+                        return (
+                          <React.Fragment key={`cell-${row.id}-${d.dayFormatted}`}>
+                            <td
+                              onClick={() =>
+                                setEditingCell({
+                                  rowId: row.id,
+                                  dayFormatted: d.dayFormatted,
+                                  timRow: row.timRow,
+                                  namaUlp: row.namaUlp,
+                                  tebang1: val.tebang1,
+                                  pangkas: val.pangkas,
+                                  tebang2: val.tebang2,
+                                })
+                              }
+                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px] cursor-pointer hover:bg-red-500 transition-colors"
+                              title={`${d.dayName}, ${d.dayFormatted} ${monthName}: ${d.holidayName || 'Hari Libur / Weekend'}`}
+                            >
+                              {val.tebang1 > 0 ? val.tebang1 : ''}
+                            </td>
+                            <td
+                              onClick={() =>
+                                setEditingCell({
+                                  rowId: row.id,
+                                  dayFormatted: d.dayFormatted,
+                                  timRow: row.timRow,
+                                  namaUlp: row.namaUlp,
+                                  tebang1: val.tebang1,
+                                  pangkas: val.pangkas,
+                                  tebang2: val.tebang2,
+                                })
+                              }
+                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px] cursor-pointer hover:bg-red-500 transition-colors"
+                              title={`${d.dayName}, ${d.dayFormatted} ${monthName}: ${d.holidayName || 'Hari Libur / Weekend'}`}
+                            >
+                              {val.pangkas > 0 ? val.pangkas : ''}
+                            </td>
+                            <td
+                              onClick={() =>
+                                setEditingCell({
+                                  rowId: row.id,
+                                  dayFormatted: d.dayFormatted,
+                                  timRow: row.timRow,
+                                  namaUlp: row.namaUlp,
+                                  tebang1: val.tebang1,
+                                  pangkas: val.pangkas,
+                                  tebang2: val.tebang2,
+                                })
+                              }
+                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px] cursor-pointer hover:bg-red-500 transition-colors"
+                              title={`${d.dayName}, ${d.dayFormatted} ${monthName}: ${d.holidayName || 'Hari Libur / Weekend'}`}
+                            >
+                              {val.tebang2 > 0 ? val.tebang2 : ''}
+                            </td>
+                            <td
+                              onClick={() =>
+                                setEditingCell({
+                                  rowId: row.id,
+                                  dayFormatted: d.dayFormatted,
+                                  timRow: row.timRow,
+                                  namaUlp: row.namaUlp,
+                                  tebang1: val.tebang1,
+                                  pangkas: val.pangkas,
+                                  tebang2: val.tebang2,
+                                })
+                              }
+                              className="px-1 py-1.5 border-r border-red-800 bg-red-700 text-white text-center font-black text-[11px] cursor-pointer hover:bg-red-600 transition-colors"
+                              title={`${d.dayName}, ${d.dayFormatted} ${monthName}: Total Libur`}
+                            >
+                              {dayTotal > 0 ? dayTotal : ''}
+                            </td>
+                          </React.Fragment>
+                        );
+                      }
+
+                      // Hari Kerja Standar
+                      return (
+                        <React.Fragment key={`cell-${row.id}-${d.dayFormatted}`}>
+                          <td
+                            onClick={() =>
+                              setEditingCell({
+                                rowId: row.id,
+                                dayFormatted: d.dayFormatted,
+                                timRow: row.timRow,
+                                namaUlp: row.namaUlp,
+                                tebang1: val.tebang1,
+                                pangkas: val.pangkas,
+                                tebang2: val.tebang2,
+                              })
+                            }
+                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors"
+                          >
+                            {val.tebang1 > 0 ? val.tebang1 : ''}
+                          </td>
+                          <td
+                            onClick={() =>
+                              setEditingCell({
+                                rowId: row.id,
+                                dayFormatted: d.dayFormatted,
+                                timRow: row.timRow,
+                                namaUlp: row.namaUlp,
+                                tebang1: val.tebang1,
+                                pangkas: val.pangkas,
+                                tebang2: val.tebang2,
+                              })
+                            }
+                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors"
+                          >
+                            {val.pangkas > 0 ? val.pangkas : ''}
+                          </td>
+                          <td
+                            onClick={() =>
+                              setEditingCell({
+                                rowId: row.id,
+                                dayFormatted: d.dayFormatted,
+                                timRow: row.timRow,
+                                namaUlp: row.namaUlp,
+                                tebang1: val.tebang1,
+                                pangkas: val.pangkas,
+                                tebang2: val.tebang2,
+                              })
+                            }
+                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors"
+                          >
+                            {val.tebang2 > 0 ? val.tebang2 : ''}
+                          </td>
+                          <td
+                            onClick={() =>
+                              setEditingCell({
+                                rowId: row.id,
+                                dayFormatted: d.dayFormatted,
+                                timRow: row.timRow,
+                                namaUlp: row.namaUlp,
+                                tebang1: val.tebang1,
+                                pangkas: val.pangkas,
+                                tebang2: val.tebang2,
+                              })
+                            }
+                            className="px-1 py-1.5 border-r border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-center font-mono font-bold text-sky-600 dark:text-sky-400 cursor-pointer hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-colors"
+                          >
+                            {dayTotal > 0 ? dayTotal : ''}
+                          </td>
+                        </React.Fragment>
+                      );
+                    })}
+
+                    {/* Summary Columns */}
+                    <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-850">
+                      {rowVolumeSum > 0 ? rowVolumeSum : 0}
+                    </td>
+
+                    <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-850">
+                      {target > 0 ? sisa : '-'}
+                    </td>
+
+                    <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold bg-slate-50 dark:bg-slate-850">
+                      {target > 0 ? (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                            percent >= 100
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                              : percent >= 75
+                              ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+                              : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                          }`}
+                        >
+                          {percent}%
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+
+                    <td className="px-3 py-2 border-slate-200 dark:border-slate-800 text-left text-slate-600 dark:text-slate-400 text-[11px] truncate max-w-[150px]">
+                      {row.keterangan || '-'}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {/* Bottom Summary Row (UP3 BUKITTINGGI Total Matrix) */}
+              <tr className="bg-slate-300 dark:bg-slate-800 text-slate-900 dark:text-white font-black border-t-2 border-slate-400 dark:border-slate-700 shadow-inner">
+                <td className="sticky left-0 z-20 bg-slate-300 dark:bg-slate-800 px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black">
+                  13200
+                </td>
+
+                <td
+                  colSpan={2}
+                  className="sticky left-[90px] z-20 bg-slate-300 dark:bg-slate-800 px-4 py-2.5 border-r border-slate-400 dark:border-slate-700 font-black tracking-wider uppercase"
+                >
+                  UP3 BUKITTINGGI
+                </td>
+
+                {/* Day Summary Totals */}
+                {daysInMonth.map((d) => {
+                  const daySum = grandTotalPerDay[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, total: 0 };
+                  return (
+                    <React.Fragment key={`sum-${d.dayFormatted}`}>
+                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[10px]">
+                        {daySum.tebang1}
+                      </td>
+                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[10px]">
+                        {daySum.pangkas}
+                      </td>
+                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[10px]">
+                        {daySum.tebang2}
+                      </td>
+                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-[11px] bg-slate-400/40 dark:bg-slate-700">
+                        {daySum.total}
+                      </td>
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* Grand Summary Columns */}
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-sm text-sky-700 dark:text-sky-300">
+                  {grandTotalsSummary.volume}
+                </td>
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-bold text-xs text-slate-700 dark:text-slate-300">
+                  {grandTotalsSummary.sisa}
+                </td>
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-emerald-700 dark:text-emerald-400">
+                  {grandTotalsSummary.percent}%
+                </td>
+                <td className="px-3 py-2.5 text-center text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                  TOTAL UP3
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal: Quick Edit Day Cell */}
+      {editingCell && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-0.5">
+                <h3 className="text-base font-black text-slate-900 dark:text-white uppercase">
+                  Input Realisasi Pekerjaan
+                </h3>
+                <p className="text-xs font-bold text-sky-600 dark:text-sky-400">
+                  {editingCell.timRow} &bull; {editingCell.namaUlp}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Tanggal {editingCell.dayFormatted} {monthName} {selectedYear}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingCell(null)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Tebang Pohon (Kolom 1)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editingCell.tebang1 || ''}
+                  onChange={(e) =>
+                    setEditingCell({
+                      ...editingCell,
+                      tebang1: Number(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Pangkas Pohon (Kolom 2)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editingCell.pangkas || ''}
+                  onChange={(e) =>
+                    setEditingCell({
+                      ...editingCell,
+                      pangkas: Number(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Tebang Bambu / Lainnya (Kolom 3)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editingCell.tebang2 || ''}
+                  onChange={(e) =>
+                    setEditingCell({
+                      ...editingCell,
+                      tebang2: Number(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              {/* Total Calculation Preview */}
+              <div className="p-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/80 flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Total Realisasi Hari Ini:
+                </span>
+                <span className="text-base font-black text-sky-600 dark:text-sky-400">
+                  {(Number(editingCell.tebang1) || 0) +
+                    (Number(editingCell.pangkas) || 0) +
+                    (Number(editingCell.tebang2) || 0)}{' '}
+                  Batang / Titik
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingCell(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveModalCell}
+                className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black flex items-center space-x-1.5 shadow-lg shadow-sky-600/20 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Simpan Nilai</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Target & Keterangan Row */}
+      {editingRowConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-0.5">
+                <h3 className="text-base font-black text-slate-900 dark:text-white uppercase">
+                  Pengaturan Tim & Target
+                </h3>
+                <p className="text-xs font-bold text-sky-600 dark:text-sky-400">
+                  {editingRowConfig.timRow} &bull; {editingRowConfig.namaUlp}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingRowConfig(null)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Target Pekerjaan Bulanan (Batang)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editingRowConfig.target || ''}
+                  onChange={(e) =>
+                    setEditingRowConfig({
+                      ...editingRowConfig,
+                      target: Number(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="200"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Keterangan Tim (Opsional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={editingRowConfig.keterangan || ''}
+                  onChange={(e) =>
+                    setEditingRowConfig({
+                      ...editingRowConfig,
+                      keterangan: e.target.value,
+                    })
+                  }
+                  placeholder="Catatan kendala, area khusus atau status..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  handleDeleteRow(editingRowConfig.id, editingRowConfig.timRow);
+                  setEditingRowConfig(null);
+                }}
+                className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center space-x-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Tim</span>
+              </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingRowConfig(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRowConfig}
+                  className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black flex items-center space-x-1.5 shadow-lg shadow-sky-600/20 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Simpan</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Tambah Tim ROW */}
+      {showAddRowModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-black text-slate-900 dark:text-white uppercase">
+                Tambah Baris Tim ROW Baru
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddRowModal(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Kode Unit
+                </label>
+                <input
+                  type="text"
+                  value={newRowData.kodeUnit}
+                  onChange={(e) => setNewRowData({ ...newRowData, kodeUnit: e.target.value })}
+                  placeholder="13221"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Nama ULP
+                </label>
+                <input
+                  type="text"
+                  value={newRowData.namaUlp}
+                  onChange={(e) => setNewRowData({ ...newRowData, namaUlp: e.target.value })}
+                  placeholder="ULP BUKITTINGGI"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Nama Tim ROW
+                </label>
+                <input
+                  type="text"
+                  value={newRowData.timRow}
+                  onChange={(e) => setNewRowData({ ...newRowData, timRow: e.target.value })}
+                  placeholder="TIM ROW 12"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Target Bulanan (Batang)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={newRowData.target}
+                  onChange={(e) => setNewRowData({ ...newRowData, target: Number(e.target.value) || 0 })}
+                  placeholder="200"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddRowModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleAddRow}
+                className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black flex items-center space-x-1.5 shadow-lg shadow-sky-600/20 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambahkan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

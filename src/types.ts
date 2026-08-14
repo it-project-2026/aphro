@@ -169,6 +169,20 @@ export interface Petugas {
   status: 'Aktif' | 'Non-Aktif';
 }
 
+export interface InisiasiUnit {
+  id: string;
+  no?: number | string;
+  kodeUL?: string;
+  namaUL: string; // Kolom C (Nama_UL)
+  idSpreadsheet: string; // id_Spreadsheet
+  urlGas: string; // Url GAS
+  folderIdSpreadsheet: string; // Folder_id_spreadsheet
+  folderIdFoto: string; // Folder_id_Foto
+  folderIdAbsensi: string; // Folder_id_absensi
+  isCustom?: boolean;
+  notes?: string;
+}
+
 export interface AppSettings {
   namaUnitLayanan: string;
   logoAplikasiUrl: string;

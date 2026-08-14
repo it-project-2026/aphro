@@ -132,6 +132,28 @@ export function GASSyncProvider({ children }: { children: ReactNode }) {
   }, [settings.gasWebAppUrl, setMasterData, setWorkOrders, setRealisasiList, setAbsensiList, refreshPendingCount]);
 
   useEffect(() => {
+    // 0. Load cached data from local storage immediately for instantaneous startup
+    try {
+      const cachedStr = localStorage.getItem('aphro_cached_synced_data');
+      if (cachedStr) {
+        const cached = JSON.parse(cachedStr);
+        if (cached.masterData) {
+          setMasterData({
+            ulp: Array.isArray(cached.masterData.ulp) ? cached.masterData.ulp : undefined,
+            penyulang: Array.isArray(cached.masterData.penyulang) ? cached.masterData.penyulang : undefined,
+            regu: Array.isArray(cached.masterData.regu) ? cached.masterData.regu : undefined,
+            petugas: Array.isArray(cached.masterData.petugas) ? cached.masterData.petugas : undefined,
+            users: Array.isArray(cached.masterData.users) ? cached.masterData.users : undefined,
+          });
+        }
+        if (Array.isArray(cached.workOrders)) setWorkOrders(cached.workOrders);
+        if (Array.isArray(cached.realisasi)) setRealisasiList(cached.realisasi);
+        if (Array.isArray(cached.absensi)) setAbsensiList(cached.absensi);
+      }
+    } catch (e) {
+      console.warn('Failed to load cached sync data:', e);
+    }
+
     refreshPendingCount();
 
     const handleOnline = () => {

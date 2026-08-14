@@ -24,6 +24,8 @@ import {
   LogOut,
   Clock,
   CalendarCheck,
+  Building2,
+  CalendarRange,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -108,6 +110,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin'],
     },
     {
+      id: 'rekap_harian',
+      label: 'Rekap Pekerjaan Harian',
+      icon: CalendarRange,
+      roles: ['SuperAdmin', 'Admin', 'User'],
+    },
+    {
       id: 'master_data',
       label: 'Master Data',
       icon: Database,
@@ -120,6 +128,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin'],
     },
     {
+      id: 'inisiasi',
+      label: 'Inisiasi Unit Layanan',
+      icon: Building2,
+      roles: ['SuperAdmin', 'Admin', 'User'],
+    },
+    {
       id: 'logs',
       label: 'Audit Log & Activity',
       icon: History,
@@ -128,7 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   ];
 
   const allowedItems = isAdmbktUser
-    ? navItems.filter((item) => item.id === 'cetak_laporan')
+    ? navItems.filter((item) => item.id === 'cetak_laporan' || item.id === 'rekap_harian')
     : navItems.filter((item) => item.roles.includes(role));
 
   return (
@@ -204,8 +218,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                   }}
                   className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 group ${
                     isActive
-                      ? 'bg-sky-600 text-white font-bold shadow-md shadow-sky-600/25'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-gradient-to-r from-sky-700 via-sky-600 to-cyan-600 text-white font-black shadow-md shadow-sky-700/30 ring-1 ring-sky-400/30'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-sky-50/80 dark:hover:bg-slate-800/80 hover:text-sky-900 dark:hover:text-sky-300'
                   }`}
                 >
                   <Icon

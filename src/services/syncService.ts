@@ -256,20 +256,20 @@ export function normalizeRealisasi(r: any): any {
 }
 
 export class SyncService {
-  static async withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
+  static async withRetry<T>(fn: () => Promise<T>, retries = 1, delay = 300): Promise<T> {
     try {
       return await fn();
     } catch (error) {
       if (retries <= 0) throw error;
       await new Promise(resolve => setTimeout(resolve, delay));
-      return this.withRetry(fn, retries - 1, delay * 2);
+      return this.withRetry(fn, retries - 1, delay);
     }
   }
 
   static async fetchAllData(gasUrl: string) {
     try {
-      // Try the bulk fetch first as it is most efficient
-      const response = await this.withRetry(() => GASApiService.fetchAllData(gasUrl));
+      // Try bulk fetch with minimal retry delay
+      const response = await this.withRetry(() => GASApiService.fetchAllData(gasUrl), 1, 300);
       
       if (response.status === 'success' && response.data) {
         const d = response.data;
@@ -281,7 +281,7 @@ export class SyncService {
         const workOrdersList = Array.isArray(d.WORK_ORDER) ? d.WORK_ORDER.map(normalizeWorkOrder) : [];
         const realisasiList = Array.isArray(d.REALISASI) ? d.REALISASI.map(normalizeRealisasi) : [];
 
-        return {
+        const result = {
           masterData: {
             users: usersList,
             ulp: ulpList,
@@ -294,20 +294,29 @@ export class SyncService {
           absensi: Array.isArray(d.ABSENSI) ? d.ABSENSI.map(normalizeAbsensi) : [],
           errors: []
         };
+
+        // Cache in localStorage for instant future loads
+        try {
+          localStorage.setItem('aphro_cached_synced_data', JSON.stringify(result));
+        } catch (e) {
+          // ignore quote quota errors
+        }
+
+        return result;
       }
       throw new Error(response.message || 'Bulk fetch failed');
     } catch (err: any) {
-      // Fallback to individual fetches if bulk fetch fails
-      console.warn('Bulk fetch failed, trying individual fetches...', err);
+      // Fallback to individual parallel fetches if bulk fetch fails
+      console.warn('Bulk fetch failed, trying fast parallel fetches...', err);
       const results = await Promise.allSettled([
-        this.withRetry(() => GASApiService.fetchUsers(gasUrl)),
-        this.withRetry(() => GASApiService.fetchWorkOrders(gasUrl)),
-        this.withRetry(() => GASApiService.fetchRealisasi(gasUrl)),
-        this.withRetry(() => GASApiService.fetchAbsensi(gasUrl)),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getULP')),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPenyulang')),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getRegu')),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPetugas')),
+        this.withRetry(() => GASApiService.fetchUsers(gasUrl), 1, 200),
+        this.withRetry(() => GASApiService.fetchWorkOrders(gasUrl), 1, 200),
+        this.withRetry(() => GASApiService.fetchRealisasi(gasUrl), 1, 200),
+        this.withRetry(() => GASApiService.fetchAbsensi(gasUrl), 1, 200),
+        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getULP'), 1, 200),
+        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPenyulang'), 1, 200),
+        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getRegu'), 1, 200),
+        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPetugas'), 1, 200),
       ]);
 
       const errors = results.filter(r => r.status === 'rejected');
@@ -320,7 +329,7 @@ export class SyncService {
       const rawRegu = results[6].status === 'fulfilled' && Array.isArray(results[6].value.data) ? results[6].value.data : [];
       const rawPtg = results[7].status === 'fulfilled' && Array.isArray(results[7].value.data) ? results[7].value.data : [];
 
-      return {
+      const result = {
         masterData: {
           users: rawUsers.map(normalizeUser),
           ulp: rawUlp.map(normalizeULP),
@@ -333,6 +342,14 @@ export class SyncService {
         absensi: results[3].status === 'fulfilled' && Array.isArray(results[3].value.data) ? results[3].value.data.map(normalizeAbsensi) : [],
         errors: errors
       };
+
+      try {
+        localStorage.setItem('aphro_cached_synced_data', JSON.stringify(result));
+      } catch (e) {
+        // ignore
+      }
+
+      return result;
     }
   }
 }

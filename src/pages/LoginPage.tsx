@@ -24,10 +24,15 @@ import {
   Settings as SettingsIcon,
   X,
   ExternalLink,
-  Radio
+  Radio,
+  Building2,
 } from 'lucide-react';
 
-export const LoginPage: React.FC = () => {
+interface LoginPageProps {
+  onOpenInisiasi?: () => void;
+}
+
+export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
   const { login } = useAuth();
   const { settings, updateSettings } = useSettings();
   const { users } = useMasterData();
@@ -244,9 +249,22 @@ export const LoginPage: React.FC = () => {
             <p className="text-[10px] text-sky-400 font-bold tracking-[0.2em] uppercase">
               Asset Protection & Hazard Response Operations
             </p>
-            <span className="mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-bold bg-sky-950/80 text-sky-300 border border-sky-800 shadow-lg">
-              {settings.namaUnitLayanan}
-            </span>
+            <div className="mt-2 flex items-center justify-center space-x-2">
+              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-sky-950/80 text-sky-300 border border-sky-800 shadow-lg">
+                <Building2 className="w-3.5 h-3.5 text-sky-400" />
+                <span>{settings.namaUnitLayanan}</span>
+              </span>
+              {onOpenInisiasi && (
+                <button
+                  type="button"
+                  onClick={onOpenInisiasi}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border border-slate-700 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer"
+                  title="Ganti Unit Layanan & Sambungkan ke Spreadsheet Lain"
+                >
+                  <span>Ganti Unit</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -468,21 +486,6 @@ export const LoginPage: React.FC = () => {
               </div>
             );
           })()}
-
-          {/* Config link */}
-          <div className="flex items-center justify-end pt-1 text-[9px] text-slate-500">
-             <button
-               type="button"
-               onClick={() => {
-                 setTempGasUrl(settings.gasWebAppUrl || '');
-                 setShowGasModal(true);
-               }}
-               className="font-bold text-slate-500 hover:text-cyan-400 transition-colors uppercase tracking-widest cursor-pointer flex items-center space-x-1"
-             >
-               <span>Gas Web App URL</span>
-               <ExternalLink className="w-2.5 h-2.5" />
-             </button>
-          </div>
         </div>
 
         {/* Footer info */}
