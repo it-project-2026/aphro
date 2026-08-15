@@ -739,6 +739,7 @@ export function generateLaporanPetaPDF(
 ) {
   const doc = new jsPDF('landscape', 'mm', 'a4');
 
+  const areaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
   const ulpTitle = filterUlpName && filterUlpName !== 'ALL' ? filterUlpName.toUpperCase() : (realisasiList?.[0]?.ulpName?.toUpperCase() || workOrders[0]?.ulpName?.toUpperCase() || 'BASO');
   const feederTitle = filterPenyulangName && filterPenyulangName !== 'ALL' ? filterPenyulangName.toUpperCase() : (realisasiList?.[0]?.penyulangName?.toUpperCase() || workOrders[0]?.penyulangName?.toUpperCase() || 'F. MATUR');
 
@@ -747,114 +748,141 @@ export function generateLaporanPetaPDF(
   doc.setDrawColor(15, 23, 42); // slate-900
   doc.roundedRect(6, 6, 285, 198, 3, 3);
 
+  // 2. Header Block (Top Box)
+  doc.setLineWidth(0.5);
+  doc.roundedRect(8, 8, 281, 18, 2, 2);
+  doc.line(58, 8, 58, 26);
+  doc.line(241, 8, 241, 26);
+
+  // Left Section: PLN Electricity Services box
+  doc.setFillColor(234, 179, 8); // Yellow background for lightning
+  doc.roundedRect(12, 11, 7, 12, 1, 1, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text('⚡', 13.5, 19.5);
+
+  doc.setFontSize(11);
+  doc.setTextColor(3, 105, 161); // sky-700
+  doc.text('PLN', 21, 16);
+  doc.setFontSize(8);
+  doc.setTextColor(30, 58, 138); // sky-900
+  doc.text('Electricity Services', 21, 22);
+
+  // Middle Section: GAMBAR PETA POHON (ROW) Title Box
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('GAMBAR PETA POHON (ROW)', 149.5, 13.5, { align: 'center' });
+  doc.setFontSize(8.5);
+  doc.setTextColor(3, 105, 161);
+  doc.text(`FEEDER ${feederTitle}`, 149.5, 18.5, { align: 'center' });
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`ULP ${ulpTitle}`, 149.5, 23, { align: 'center' });
+
+  // Right Section: Safety First & Certification Box
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(4, 120, 87); // emerald-700
+  doc.text('Safety First 🛡️', 265, 15, { align: 'center' });
+  doc.setFontSize(6.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('YKAN / SK3 Certified', 265, 21, { align: 'center' });
+
+  // 3. Diagram / Map Canvas Box (x: 8..289, y: 28..150, height: 122)
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(15, 23, 42);
+  doc.roundedRect(8, 28, 281, 122, 2, 2);
+
   if (mapImageDataUrl) {
-    // Render Complete Cetak Peta Card Screenshot (Header + Map + Legend matching SubHalaman CETAK PETA 100%)
+    // Render Actual GIS Map Screenshot
     try {
-      doc.addImage(mapImageDataUrl, 'PNG', 8, 8, 281, 194, undefined, 'FAST');
+      doc.addImage(mapImageDataUrl, 'PNG', 8.5, 28.5, 280, 121, undefined, 'FAST');
     } catch (e) {
       console.error('Failed to draw map image in PDF:', e);
     }
   } else {
-    // Fallback manual drawing if capture is unavailable
-    // 2. Header Block (Top Box)
-    doc.setLineWidth(0.5);
-    doc.roundedRect(8, 8, 281, 18, 2, 2);
-    doc.line(58, 8, 58, 26);
-    doc.line(241, 8, 241, 26);
-
-    doc.setFillColor(234, 179, 8);
-    doc.roundedRect(12, 11, 7, 12, 1, 1, 'F');
+    // Fallback: Feeder line schematic
+    doc.setFillColor(234, 179, 8); // Yellow
+    doc.setDrawColor(180, 83, 9);
+    doc.circle(15, 75, 3.5, 'FD');
+    doc.setFontSize(7);
+    doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text('⚡', 13.5, 19.5);
+    doc.text('1', 15, 77.5, { align: 'center' });
 
-    doc.setFontSize(11);
-    doc.setTextColor(3, 105, 161);
-    doc.text('PLN', 21, 16);
-    doc.setFontSize(8);
-    doc.setTextColor(30, 58, 138);
-    doc.text('Electricity Services', 21, 22);
+    doc.circle(280, 42, 3.5, 'FD');
+    doc.text('2', 280, 44.5, { align: 'center' });
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text('GAMBAR PETA POHON (ROW)', 149.5, 13.5, { align: 'center' });
-    doc.setFontSize(8.5);
-    doc.setTextColor(3, 105, 161);
-    doc.text(`FEEDER ${feederTitle}`, 149.5, 18.5, { align: 'center' });
-    doc.setFontSize(8.5);
-    doc.setTextColor(15, 23, 42);
-    doc.text(`ULP ${ulpTitle}`, 149.5, 23, { align: 'center' });
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(4, 120, 87);
-    doc.text('Safety First 🛡️', 265, 15, { align: 'center' });
-    doc.setFontSize(6.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text('YKAN / SK3 Certified', 265, 21, { align: 'center' });
-
-    doc.setLineWidth(0.5);
-    doc.setDrawColor(15, 23, 42);
-    doc.roundedRect(8, 28, 281, 122, 2, 2);
-
-    // KETERANGAN Legend Block
-    doc.roundedRect(8, 152, 281, 48, 2, 2);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(15, 23, 42);
-    doc.text('KETERANGAN :', 12, 157);
-
-    doc.setLineWidth(0.4);
-    doc.setDrawColor(15, 23, 42);
-    doc.line(8, 159, 289, 159);
-
-    doc.setDrawColor(226, 232, 240);
-    doc.line(100, 159, 100, 200);
-    doc.line(200, 159, 200, 200);
-
-    const woNumbers = workOrders.map(w => w.nomorWO).join(', ') || realisasiList?.[0]?.nomorWO || '-';
-    const formattedDate = formatDateOnly(realisasiList?.[0]?.tanggalRealisasi || workOrders[0]?.tanggal || new Date());
-    const reguName = realisasiList?.[0]?.reguName || workOrders[0]?.petugasName || 'Regu ROW Alpha';
-    const totalRealisasi = mapPointsData?.length || realisasiList?.length || workOrders.length;
-    const pangkasCount = (mapPointsData || realisasiList || workOrders).filter(item => {
-      const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
-      return s.includes('PANGKAS');
-    }).length;
-    const tebangCount = (mapPointsData || realisasiList || workOrders).filter(item => {
-      const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
-      return s.includes('TEBANG');
-    }).length;
-    const potongCount = (mapPointsData || realisasiList || workOrders).filter(item => {
-      const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
-      return s.includes('POTONG');
-    }).length;
-
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(30, 41, 59);
-
-    doc.text(`NO WO: ${woNumbers}`, 12, 164);
-    doc.text(`TANGGAL: ${formattedDate}`, 12, 171);
-    doc.text(`NAMA ULP: ${ulpTitle}`, 12, 178);
-    doc.text(`NAMA PENYULANG: ${feederTitle}`, 12, 185);
-    doc.text(`NAMA REGU: ${reguName}`, 12, 192);
-
-    doc.text(`JUMLAH REALISASI: ${totalRealisasi} Titik`, 104, 164);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(180, 83, 9);
-    doc.text(`JUMLAH REALISASI PANGKAS: ${pangkasCount}`, 104, 171);
-    doc.setTextColor(220, 38, 38);
-    doc.text(`JUMLAH REALISASI TEBANG: ${tebangCount}`, 104, 178);
-    doc.setTextColor(22, 163, 74);
-    doc.text(`JUMLAH REALISASI POTONG: ${potongCount}`, 104, 185);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(15, 23, 42);
-    doc.text('Mengetahui / Disetujui', 241, 175, { align: 'center' });
+    doc.setLineWidth(1.2);
+    doc.setDrawColor(245, 158, 11);
+    doc.line(18, 75, 225, 88);
+    doc.line(225, 88, 252, 75);
+    doc.line(252, 75, 260, 52);
+    doc.line(260, 52, 276, 30);
   }
+
+  // 4. KETERANGAN Legend Block (Bottom Box matching summary requirements)
+  doc.roundedRect(8, 152, 281, 48, 2, 2);
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('KETERANGAN :', 12, 157);
+
+  doc.setLineWidth(0.4);
+  doc.setDrawColor(15, 23, 42);
+  doc.line(8, 159, 289, 159);
+
+  // Column Dividers inside bottom legend
+  doc.setDrawColor(226, 232, 240);
+  doc.line(100, 159, 100, 200);
+  doc.line(200, 159, 200, 200);
+
+  const woNumbers = workOrders.map(w => w.nomorWO).join(', ') || realisasiList?.[0]?.nomorWO || '-';
+  const formattedDate = formatDateOnly(realisasiList?.[0]?.tanggalRealisasi || workOrders[0]?.tanggal || new Date());
+  const reguName = realisasiList?.[0]?.reguName || workOrders[0]?.petugasName || 'Regu ROW Alpha';
+  const totalRealisasi = mapPointsData?.length || realisasiList?.length || workOrders.length;
+  const pangkasCount = (mapPointsData || realisasiList || workOrders).filter(item => {
+    const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
+    return s.includes('PANGKAS');
+  }).length;
+  const tebangCount = (mapPointsData || realisasiList || workOrders).filter(item => {
+    const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
+    return s.includes('TEBANG');
+  }).length;
+  const potongCount = (mapPointsData || realisasiList || workOrders).filter(item => {
+    const s = ((item as any).keterangan || (item as any).jenisPekerjaan || (item as any).jenisTanaman || '').toUpperCase();
+    return s.includes('POTONG');
+  }).length;
+
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(30, 41, 59);
+
+  // Column 1: Info Resmi Kiri (NO WO, TANGGAL, NAMA ULP, NAMA PENYULANG, NAMA REGU)
+  doc.text(`NO WO: ${woNumbers}`, 12, 164);
+  doc.text(`TANGGAL: ${formattedDate}`, 12, 171);
+  doc.text(`NAMA ULP: ${ulpTitle}`, 12, 178);
+  doc.text(`NAMA PENYULANG: ${feederTitle}`, 12, 185);
+  doc.text(`NAMA REGU: ${reguName}`, 12, 192);
+
+  // Column 2: Jumlah Realisasi Tengah
+  doc.text(`JUMLAH REALISASI: ${totalRealisasi} Titik`, 104, 164);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(180, 83, 9); // Amber for pangkas
+  doc.text(`JUMLAH REALISASI PANGKAS: ${pangkasCount}`, 104, 171);
+  doc.setTextColor(220, 38, 38); // Red for tebang
+  doc.text(`JUMLAH REALISASI TEBANG: ${tebangCount}`, 104, 178);
+  doc.setTextColor(22, 163, 74); // Green for potong
+  doc.text(`JUMLAH REALISASI POTONG: ${potongCount}`, 104, 185);
+
+  // Column 3: Mengetahui / Disetujui
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Mengetahui / Disetujui', 241, 175, { align: 'center' });
 
   // Save PDF file
   const safeUlp = ulpTitle.replace(/[^a-zA-Z0-9]/g, '_');

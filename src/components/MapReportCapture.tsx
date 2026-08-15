@@ -54,23 +54,6 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
         logging: false,
         backgroundColor: '#f8fafc',
         onclone: (clonedDoc) => {
-          // Fix for Leaflet's transform: translate3d to avoid scattered tiles and markers
-          const leafletElements = clonedDoc.querySelectorAll<HTMLElement>('.leaflet-pane, .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow, .leaflet-shadow-pane, .leaflet-tile-container, .leaflet-zoom-animated, .leaflet-layer, .leaflet-vml-shape, svg, path');
-          leafletElements.forEach((el) => {
-            const transform = el.style.transform;
-            if (transform) {
-              let match = transform.match(/translate3d\(([-0-9.]+)px,\s*([-0-9.]+)px/);
-              if (!match) {
-                match = transform.match(/translate\(([-0-9.]+)px,\s*([-0-9.]+)px/);
-              }
-              if (match) {
-                el.style.left = match[1] + 'px';
-                el.style.top = match[2] + 'px';
-                el.style.transform = 'none';
-              }
-            }
-          });
-
           const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]');
           links.forEach((link) => link.remove());
 

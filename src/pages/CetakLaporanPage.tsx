@@ -819,17 +819,7 @@ export const CetakLaporanPage: React.FC = () => {
         {activeReportTab === 'peta' && (
           <div className="space-y-6">
             {/* Diagram Schematic Frame - GAMBAR PETA POHON (ROW) matching attached image */}
-            <MapReportCapture
-              ref={mapCaptureRef}
-              id="gis-map-container"
-              className="border-2 border-slate-900 rounded-2xl p-4 sm:p-6 bg-white space-y-4 shadow-sm overflow-x-auto relative"
-              onCapture={setLatestMapImage}
-              triggerKey={nonOverlappingMapPoints.length}
-              points={nonOverlappingMapPoints}
-              polylinePositions={activePolylinePositions}
-              feederName={selectedPenyulangName}
-              ulpName={selectedUlpName}
-            >
+            <div className="border-2 border-slate-900 rounded-2xl p-4 sm:p-6 bg-white space-y-4 shadow-sm overflow-x-auto">
               {/* Header Box */}
               <div className="grid grid-cols-12 border border-slate-900 rounded-lg overflow-hidden text-center divide-x divide-slate-900">
                 {/* Left Logo */}
@@ -863,8 +853,18 @@ export const CetakLaporanPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Interactive GIS Map */}
-              <div className="border-2 border-slate-900 rounded-xl overflow-hidden bg-slate-100 shadow-inner relative">
+              {/* Interactive GIS Map replacing static schematic SVG with MapReportCapture */}
+              <MapReportCapture
+                ref={mapCaptureRef}
+                id="gis-map-container"
+                className="border-2 border-slate-900 rounded-xl overflow-hidden bg-slate-100 shadow-inner relative"
+                onCapture={setLatestMapImage}
+                triggerKey={nonOverlappingMapPoints.length}
+                points={nonOverlappingMapPoints}
+                polylinePositions={activePolylinePositions}
+                feederName={selectedPenyulangName}
+                ulpName={selectedUlpName}
+              >
                 <div className="h-[600px] w-full relative z-0">
                   <MapContainer
                     center={mapCenter}
@@ -966,7 +966,7 @@ export const CetakLaporanPage: React.FC = () => {
                     {isRoutingLoading && <span className="animate-spin text-amber-600">⏳</span>}
                   </p>
                 </div>
-              </div>
+              </MapReportCapture>
 
               {/* KETERANGAN Legend Block matching image bottom box */}
               <div className="border border-slate-900 rounded-lg p-3 bg-white text-[10px] space-y-2">
@@ -1018,7 +1018,7 @@ export const CetakLaporanPage: React.FC = () => {
                   );
                 })()}
               </div>
-            </MapReportCapture>
+            </div>
 
             {/* Rekapitualsi Table below diagram */}
             <div className="overflow-x-auto border border-slate-200 rounded-xl">
