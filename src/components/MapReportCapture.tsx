@@ -54,9 +54,6 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
         logging: false,
         backgroundColor: '#f8fafc',
         onclone: (clonedDoc) => {
-          const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]');
-          links.forEach((link) => link.remove());
-
           const styles = clonedDoc.querySelectorAll('style');
           styles.forEach((style) => {
             if (style.textContent) {
@@ -68,6 +65,8 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
             }
           });
 
+          // Also iterate over link stylesheets if possible, but do not remove them.
+          // We must keep <link rel="stylesheet"> so Tailwind and Leaflet CSS apply in production.
           const allEls = clonedDoc.querySelectorAll('*');
           allEls.forEach((el) => {
             const styleAttr = el.getAttribute('style');
