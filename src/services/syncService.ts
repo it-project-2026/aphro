@@ -155,7 +155,7 @@ export function normalizeAbsensi(a: any): any {
 
   let petugasList: any[] = Array.isArray(a.petugasList) ? a.petugasList : [];
   if (petugasList.length === 0) {
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 20; i++) {
       const pVal = a[`PETUGAS_${i}`] || a[`Petugas_${i}`] || a[`petugas_${i}`];
       const kVal = a[`KET_${i}`] || a[`Ket_${i}`] || a[`ket_${i}`] || 'HADIR';
       if (pVal && pVal !== '-') {

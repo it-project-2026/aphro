@@ -20,6 +20,9 @@ import {
   Search,
   Filter,
   FileSpreadsheet,
+  Eye,
+  X,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface AbsensiMainPageProps {
@@ -83,6 +86,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   // State for Foto Pulang upload
   const [fotoKeluar, setFotoKeluar] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveUrl: string } | null>(null);
 
   // Filters for Monitoring Absensi Table
   const [searchQuery, setSearchQuery] = useState('');
@@ -572,19 +576,41 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         {/* Foto Masuk */}
                         <td className="p-3 border-r border-slate-200 dark:border-slate-700 text-center">
                           {item.fotoMasuk ? (
-                            <a
-                              href={formatDriveViewUrl(item.fotoMasuk)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-block relative group"
-                              title="Klik untuk membuka Foto Masuk"
-                            >
-                              <img
-                                src={formatDriveImageUrl(item.fotoMasuk)}
-                                alt="Foto Masuk"
-                                className="w-16 h-16 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs group-hover:scale-105 transition-transform bg-slate-100 dark:bg-slate-900"
-                              />
-                            </a>
+                            <div className="inline-flex items-center space-x-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    url: formatDriveImageUrl(item.fotoMasuk!),
+                                    title: `Foto Masuk - ${item.reguName} (${item.tanggal})`,
+                                    driveUrl: formatDriveViewUrl(item.fotoMasuk!),
+                                  })
+                                }
+                                className="relative group block w-14 h-14 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xs group-hover:scale-105 transition-transform bg-slate-100 dark:bg-slate-900 cursor-pointer"
+                                title="Klik untuk memperbesar Foto Masuk"
+                              >
+                                <img
+                                  src={formatDriveImageUrl(item.fotoMasuk)}
+                                  alt="Foto Masuk"
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Eye className="w-4 h-4 text-white" />
+                                </div>
+                              </button>
+                              <a
+                                href={formatDriveViewUrl(item.fotoMasuk)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 rounded-lg text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950 transition-colors"
+                                title="Buka di Google Drive"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
                           ) : (
                             <span className="text-slate-400 text-[11px]">-</span>
                           )}
@@ -593,19 +619,41 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         {/* Foto Keluar */}
                         <td className="p-3 text-center">
                           {item.fotoKeluar ? (
-                            <a
-                              href={formatDriveViewUrl(item.fotoKeluar)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-block relative group"
-                              title="Klik untuk membuka Foto Keluar"
-                            >
-                              <img
-                                src={formatDriveImageUrl(item.fotoKeluar)}
-                                alt="Foto Keluar"
-                                className="w-16 h-16 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs group-hover:scale-105 transition-transform bg-slate-100 dark:bg-slate-900"
-                              />
-                            </a>
+                            <div className="inline-flex items-center space-x-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    url: formatDriveImageUrl(item.fotoKeluar!),
+                                    title: `Foto Keluar - ${item.reguName} (${item.tanggal})`,
+                                    driveUrl: formatDriveViewUrl(item.fotoKeluar!),
+                                  })
+                                }
+                                className="relative group block w-14 h-14 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xs group-hover:scale-105 transition-transform bg-slate-100 dark:bg-slate-900 cursor-pointer"
+                                title="Klik untuk memperbesar Foto Keluar"
+                              >
+                                <img
+                                  src={formatDriveImageUrl(item.fotoKeluar)}
+                                  alt="Foto Keluar"
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Eye className="w-4 h-4 text-white" />
+                                </div>
+                              </button>
+                              <a
+                                href={formatDriveViewUrl(item.fotoKeluar)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors"
+                                title="Buka di Google Drive"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
                           ) : (
                             <span className="text-slate-400 text-[11px]">-</span>
                           )}
@@ -616,6 +664,56 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-4">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <ImageIcon className="w-4 h-4 text-cyan-400" />
+                <h4 className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
+                  {previewImage.title}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 flex items-center justify-center bg-black/50 min-h-[300px] max-h-[70vh] overflow-hidden">
+              <img
+                src={previewImage.url}
+                alt={previewImage.title}
+                className="max-h-[65vh] max-w-full object-contain rounded-2xl shadow-lg"
+              />
+            </div>
+
+            <div className="p-4 border-t border-slate-800 flex items-center justify-between">
+              <a
+                href={previewImage.driveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Buka Full di Google Drive</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

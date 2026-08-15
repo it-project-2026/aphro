@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useRealisasi } from '../context/RealisasiContext';
+import { useMasterData } from '../context/MasterDataContext';
 import { useToast } from '../hooks/useToast';
 import {
   INDONESIAN_MONTHS,
@@ -9,12 +10,13 @@ import {
 } from '../utils/holidaysIndonesia';
 import {
   RekapHarianService,
-  DEFAULT_REKAP_ROWS,
 } from '../services/rekapHarianService';
 import {
   RekapItemData,
   exportRekapHarianToExcel,
 } from '../utils/rekapExportService';
+import { SyncService } from '../services/syncService';
+import { getActiveGasConfig } from '../config/gasConfig';
 import {
   CalendarRange,
   FileSpreadsheet,
@@ -23,24 +25,33 @@ import {
   Plus,
   Trash2,
   Edit3,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Info,
   Calendar,
-  Layers,
-  Sparkles,
-  Save,
-  Building2,
   Filter,
+  Save,
+  CheckCircle2,
+  RotateCcw,
+  Database,
 } from 'lucide-react';
 
 export const RekapPekerjaanHarianPage: React.FC = () => {
   const { settings } = useSettings();
   const { realisasiList } = useRealisasi();
+  const { ulpList, reguList, setMasterData } = useMasterData();
   const { showToast } = useToast();
 
-  // Date Selection State (Default to current date or June 2026 as per template)
+  // Unit Layanan (UL) Key derived from settings
+  const selectedULKey = useMemo(() => {
+    const fromSettings = settings.namaUnitLayanan || 'BUKITTINGGI';
+    return RekapHarianService.normalizeUnitKey(fromSettings);
+  }, [settings.namaUnitLayanan]);
+
+  // ULP Filter inside selected UL ('ALL' or specific ULP name)
+  const [selectedUlpFilter, setSelectedUlpFilter] = useState<string>('ALL');
+
+  // Date Selection State
   const [selectedYear, setSelectedYear] = useState<number>(() => {
     const d = new Date();
     return d.getFullYear();
@@ -52,6 +63,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
   const [rekapRows, setRekapRows] = useState<RekapItemData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSyncingMaster, setIsSyncingMaster] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -78,9 +90,8 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
   // Modal for adding custom row
   const [showAddRowModal, setShowAddRowModal] = useState<boolean>(false);
   const [newRowData, setNewRowData] = useState({
-    kodeUnit: '13228',
-    namaUlp: 'ULP BUKITTINGGI',
-    timRow: 'TIM ROW 12',
+    namaUlp: '',
+    timRow: '',
     target: 200,
   });
 
@@ -90,20 +101,41 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
   }, [selectedYear, selectedMonthIdx]);
 
   const monthName = INDONESIAN_MONTHS[selectedMonthIdx];
-  const unitDisplayName = settings.namaUnitLayanan || 'UL BUKITTINGGI';
 
-  // Load Data on Year/Month change
+  // Active UL display label
+  const unitDisplayName = useMemo(() => {
+    if (selectedULKey === 'PADANG') return 'UL PADANG';
+    if (selectedULKey === 'PAYAKUMBUH') return 'UL PAYAKUMBUH';
+    if (selectedULKey === 'SOLOK') return 'UL SOLOK';
+    if (selectedULKey === 'BUKITTINGGI') return 'UL BUKITTINGGI';
+    if (settings.namaUnitLayanan) return settings.namaUnitLayanan;
+    return `UL ${selectedULKey}`;
+  }, [selectedULKey, settings.namaUnitLayanan]);
+
+  // Load Data when UL, Year, or Month changes
   useEffect(() => {
     setIsLoading(true);
-    const data = RekapHarianService.loadRekapData(selectedYear, selectedMonthIdx, realisasiList);
+    const data = RekapHarianService.loadRekapData(
+      selectedULKey,
+      selectedYear,
+      selectedMonthIdx,
+      realisasiList,
+      ulpList,
+      reguList
+    );
     setRekapRows(data);
     setIsLoading(false);
-  }, [selectedYear, selectedMonthIdx, realisasiList]);
+  }, [selectedULKey, selectedYear, selectedMonthIdx, realisasiList, ulpList, reguList]);
 
   // Save changes to localStorage
   const handleSaveData = (updated: RekapItemData[]) => {
-    setRekapRows(updated);
-    RekapHarianService.saveRekapData(selectedYear, selectedMonthIdx, updated);
+    // Re-index No. Urut sequentially 1..N
+    const indexed = updated.map((r, idx) => ({
+      ...r,
+      noUrut: idx + 1,
+    }));
+    setRekapRows(indexed);
+    RekapHarianService.saveRekapData(selectedULKey, selectedYear, selectedMonthIdx, indexed);
   };
 
   // Sync data with Realisasi Context
@@ -118,11 +150,57 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     showToast('Data berhasil disinkronkan dengan entri Realisasi!', 'success');
   };
 
-  // Reset to default rows
+  // Sync Master Data (ULP & Regu ROW) directly from Google Spreadsheet
+  const handleSyncMasterSpreadsheet = async () => {
+    try {
+      setIsSyncingMaster(true);
+      showToast('Menghubungi Google Spreadsheet untuk memuat Master ULP & Regu...', 'info');
+      const gasUrl = settings.gasWebAppUrl || getActiveGasConfig().gasWebAppUrl;
+      const res = await SyncService.fetchAllData(gasUrl);
+      
+      if (res && res.masterData && res.masterData.regu && res.masterData.regu.length > 0) {
+        setMasterData(res.masterData);
+        const synced = RekapHarianService.syncWithMasterData(
+          selectedULKey,
+          rekapRows,
+          res.masterData.ulp,
+          res.masterData.regu
+        );
+        handleSaveData(synced);
+        showToast(`Berhasil memuat ${res.masterData.regu.length} Regu ROW & ${res.masterData.ulp.length} ULP dari Spreadsheet!`, 'success');
+      } else {
+        // Fallback sync with current master data context
+        const synced = RekapHarianService.syncWithMasterData(
+          selectedULKey,
+          rekapRows,
+          ulpList,
+          reguList
+        );
+        handleSaveData(synced);
+        showToast('Data ULP & Tim ROW diselaraskan dengan Master Data.', 'success');
+      }
+    } catch (err: any) {
+      console.warn('Sync Master Spreadsheet error:', err);
+      const synced = RekapHarianService.syncWithMasterData(
+        selectedULKey,
+        rekapRows,
+        ulpList,
+        reguList
+      );
+      handleSaveData(synced);
+      showToast('Data diselaraskan dengan Master Data yang tersimpan.', 'info');
+    } finally {
+      setIsSyncingMaster(false);
+    }
+  };
+
+  // Reset to default rows for the active Unit Layanan
   const handleResetToDefault = () => {
-    if (window.confirm('Kembalikan tabel rekap ke susunan awal template?')) {
-      const reset = DEFAULT_REKAP_ROWS.map((def) => ({
+    if (window.confirm(`Kembalikan susunan tabel ke susunan master ULP & Regu untuk ${unitDisplayName}?`)) {
+      const defaultRows = RekapHarianService.getDefaultRowsForUnit(selectedULKey, ulpList, reguList);
+      const reset: RekapItemData[] = defaultRows.map((def, idx) => ({
         id: def.id,
+        noUrut: idx + 1,
         kodeUnit: def.kodeUnit,
         namaUlp: def.namaUlp,
         timRow: def.timRow,
@@ -131,32 +209,8 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
         dailyValues: {},
       }));
       handleSaveData(reset);
-      showToast('Susunan tabel telah direset ke template bawaan.', 'info');
+      showToast(`Susunan tabel telah disesuaikan dengan Master Data ${unitDisplayName}.`, 'info');
     }
-  };
-
-  // Direct cell value changer
-  const handleCellChange = (
-    rowId: string,
-    dayFormatted: string,
-    field: 'tebang1' | 'pangkas' | 'tebang2',
-    val: number
-  ) => {
-    const updated = rekapRows.map((row) => {
-      if (row.id === rowId) {
-        const daily = { ...(row.dailyValues[dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 }) };
-        daily[field] = Math.max(0, val || 0);
-        return {
-          ...row,
-          dailyValues: {
-            ...row.dailyValues,
-            [dayFormatted]: daily,
-          },
-        };
-      }
-      return row;
-    });
-    handleSaveData(updated);
   };
 
   // Save quick edit from modal
@@ -207,10 +261,12 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       showToast('Harap lengkapi nama ULP dan Tim ROW!', 'warning');
       return;
     }
+    const newSeq = rekapRows.length + 1;
     const newRow: RekapItemData = {
       id: 'row-' + Date.now(),
-      kodeUnit: newRowData.kodeUnit || '13221',
-      namaUlp: newRowData.namaUlp,
+      noUrut: newSeq,
+      kodeUnit: '',
+      namaUlp: newRowData.namaUlp.toUpperCase(),
       timRow: newRowData.timRow,
       target: Number(newRowData.target) || 200,
       keterangan: '',
@@ -218,6 +274,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     };
     handleSaveData([...rekapRows, newRow]);
     setShowAddRowModal(false);
+    setNewRowData({ namaUlp: '', timRow: '', target: 200 });
     showToast(`Tim ${newRow.timRow} berhasil ditambahkan ke tabel!`, 'success');
   };
 
@@ -230,19 +287,46 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     }
   };
 
+  // Unique list of ULPs currently in the table for filtering & adding
+  const availableUlps = useMemo(() => {
+    const set = new Set<string>();
+    rekapRows.forEach((r) => {
+      if (r.namaUlp) set.add(r.namaUlp);
+    });
+    return Array.from(set);
+  }, [rekapRows]);
+
+  // Filtered rows (by ULP dropdown and search query)
+  const filteredRows = useMemo(() => {
+    let result = rekapRows;
+    if (selectedUlpFilter !== 'ALL') {
+      result = result.filter((r) => r.namaUlp === selectedUlpFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (r) =>
+          r.namaUlp.toLowerCase().includes(q) ||
+          r.timRow.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [rekapRows, selectedUlpFilter, searchQuery]);
+
   // Export to Excel
   const handleExportExcel = async () => {
     try {
       setIsExporting(true);
       showToast('Menyiapkan berkas Excel laporan rekap...', 'info');
+      const summaryHeader = `UP3 ${selectedULKey}`;
       await exportRekapHarianToExcel(
         unitDisplayName,
         selectedYear,
         monthName,
         daysInMonth,
-        rekapRows,
-        'UP3 BUKITTINGGI',
-        '13200'
+        filteredRows,
+        summaryHeader,
+        ''
       );
       showToast('File Excel Rekap Pekerjaan Harian berhasil diunduh!', 'success');
     } catch (err: any) {
@@ -258,19 +342,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     window.print();
   };
 
-  // Filtered rows
-  const filteredRows = useMemo(() => {
-    if (!searchQuery.trim()) return rekapRows;
-    const q = searchQuery.toLowerCase();
-    return rekapRows.filter(
-      (r) =>
-        r.namaUlp.toLowerCase().includes(q) ||
-        r.timRow.toLowerCase().includes(q) ||
-        r.kodeUnit.toLowerCase().includes(q)
-    );
-  }, [rekapRows, searchQuery]);
-
-  // Compute Grand Totals across all rows
+  // Compute Grand Totals across visible/filtered rows
   const grandTotalPerDay = useMemo(() => {
     const totals: Record<string, { tebang1: number; pangkas: number; tebang2: number; total: number }> = {};
     daysInMonth.forEach((d) => {
@@ -278,7 +350,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       let p = 0;
       let t2 = 0;
       let tot = 0;
-      rekapRows.forEach((row) => {
+      filteredRows.forEach((row) => {
         const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
         t1 += v.tebang1 || 0;
         p += v.pangkas || 0;
@@ -288,13 +360,13 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       totals[d.dayFormatted] = { tebang1: t1, pangkas: p, tebang2: t2, total: tot };
     });
     return totals;
-  }, [daysInMonth, rekapRows]);
+  }, [daysInMonth, filteredRows]);
 
   const grandTotalsSummary = useMemo(() => {
     let grandVolume = 0;
     let grandTarget = 0;
 
-    rekapRows.forEach((row) => {
+    filteredRows.forEach((row) => {
       let rowTot = 0;
       daysInMonth.forEach((d) => {
         const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
@@ -313,7 +385,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       sisa,
       percent,
     };
-  }, [daysInMonth, rekapRows]);
+  }, [daysInMonth, filteredRows]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-300">
@@ -351,7 +423,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                     setSelectedYear(selectedYear - 1);
                   }
                 }}
-                className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
                 title="Bulan Sebelumnya"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -391,7 +463,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                     setSelectedYear(selectedYear + 1);
                   }
                 }}
-                className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                className="p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
                 title="Bulan Berikutnya"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -421,30 +493,50 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Legend and Toolbar */}
+        {/* Toolbar: ULP Filter, Realisasi Sync, Add Tim, Reset */}
         <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          {/* Legend Items */}
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="font-bold text-slate-500 dark:text-slate-400">Keterangan Warna:</span>
-            
+          
+          {/* ULP Filter and Search */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+              <Filter className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span className="font-bold text-slate-600 dark:text-slate-300">Filter ULP:</span>
+              <select
+                value={selectedUlpFilter}
+                onChange={(e) => setSelectedUlpFilter(e.target.value)}
+                className="bg-transparent font-black text-slate-900 dark:text-white focus:outline-none cursor-pointer"
+              >
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                  Semua ULP ({availableUlps.length} ULP)
+                </option>
+                {availableUlps.map((u) => (
+                  <option key={u} value={u} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Legend Badge */}
             <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-red-600 text-white font-black text-[11px] shadow-sm">
               <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              <span>Hari Sabtu, Minggu & Libur Nasional (Merah)</span>
-            </div>
-
-            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[11px]">
-              <span className="w-2 h-2 rounded-full bg-slate-500" />
-              <span>Hari Kerja Efektif</span>
-            </div>
-
-            <div className="inline-flex items-center space-x-1.5 text-slate-500 dark:text-slate-400 text-[11px] italic">
-              <Info className="w-3.5 h-3.5 text-sky-500" />
-              <span>* Klik sel angka pada tanggal mana pun untuk input/edit data pekerjaan harian secara langsung.</span>
+              <span>Sabtu, Minggu & Libur Nasional (Merah)</span>
             </div>
           </div>
 
           {/* Action Tools */}
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSyncMasterSpreadsheet}
+              disabled={isSyncingMaster}
+              className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              title="Sinkronkan susunan ULP & Tim ROW (Regu) langsung dari Google Spreadsheet"
+            >
+              <Database className={`w-3.5 h-3.5 ${isSyncingMaster ? 'animate-spin' : ''}`} />
+              <span>{isSyncingMaster ? 'Memuat Master...' : 'Tarik Master ULP & Regu'}</span>
+            </button>
+
             <button
               type="button"
               onClick={handleSyncRealisasi}
@@ -457,7 +549,14 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setShowAddRowModal(true)}
+              onClick={() => {
+                setNewRowData({
+                  namaUlp: availableUlps[0] || `ULP ${selectedULKey}`,
+                  timRow: `TIM ROW ${rekapRows.length + 1}`,
+                  target: 200,
+                });
+                setShowAddRowModal(true);
+              }}
               className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -467,10 +566,11 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
             <button
               type="button"
               onClick={handleResetToDefault}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold transition-colors cursor-pointer"
-              title="Reset ke susunan template bawaan"
+              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer"
+              title="Reset ke susunan master ULP & Regu"
             >
-              <span>Reset Template</span>
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset Master</span>
             </button>
           </div>
         </div>
@@ -495,21 +595,21 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               <tr>
                 <th
                   rowSpan={3}
-                  className="sticky left-0 z-40 bg-slate-300 dark:bg-slate-800 px-3 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[90px]"
+                  className="sticky left-0 z-40 bg-slate-300 dark:bg-slate-800 px-3 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[70px]"
                 >
-                  KODE UNIT
+                  NO. URUT
                 </th>
                 <th
                   rowSpan={3}
-                  className="sticky left-[90px] z-40 bg-slate-300 dark:bg-slate-800 px-4 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[170px]"
+                  className="sticky left-[70px] z-40 bg-slate-300 dark:bg-slate-800 px-4 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[170px]"
                 >
-                  ULP
+                  NAMA ULP
                 </th>
                 <th
                   rowSpan={3}
-                  className="sticky left-[260px] z-40 bg-slate-300 dark:bg-slate-800 px-3 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[120px]"
+                  className="sticky left-[240px] z-40 bg-slate-300 dark:bg-slate-800 px-3 py-2 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase tracking-wider min-w-[190px]"
                 >
-                  TIM ROW
+                  TIM ROW (NAMA REGU)
                 </th>
 
                 {/* Day Name Columns */}
@@ -636,16 +736,18 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                     key={row.id}
                     className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
                   >
-                    {/* Sticky Left Columns */}
-                    <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
-                      {row.kodeUnit}
+                    {/* Sticky Left Column: NO. URUT */}
+                    <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {row.noUrut ?? (rIdx + 1)}
                     </td>
 
-                    <td className="sticky left-[90px] z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                    {/* Sticky Left Column: NAMA ULP */}
+                    <td className="sticky left-[70px] z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-bold text-slate-900 dark:text-white whitespace-nowrap">
                       {row.namaUlp}
                     </td>
 
-                    <td className="sticky left-[260px] z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-extrabold text-sky-600 dark:text-sky-400 whitespace-nowrap">
+                    {/* Sticky Left Column: TIM ROW (NAMA REGU) */}
+                    <td className="sticky left-[240px] z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-850 px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-extrabold text-sky-600 dark:text-sky-400 whitespace-nowrap">
                       <div className="flex items-center justify-between gap-1">
                         <span>{row.timRow}</span>
                         <button
@@ -659,7 +761,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                               namaUlp: row.namaUlp,
                             })
                           }
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-400 hover:text-slate-200 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-400 hover:text-slate-200 transition-opacity cursor-pointer"
                           title="Ubah Target / Keterangan"
                         >
                           <Edit3 className="w-3 h-3" />
@@ -673,7 +775,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                       const dayTotal = (val.tebang1 || 0) + (val.pangkas || 0) + (val.tebang2 || 0);
 
                       if (d.isRedDay) {
-                        // MERAH Solid untuk Hari Libur & Akhir Pekan sesuai template gambar!
+                        // MERAH Solid untuk Hari Libur & Akhir Pekan
                         return (
                           <React.Fragment key={`cell-${row.id}-${d.dayFormatted}`}>
                             <td
@@ -853,17 +955,17 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 );
               })}
 
-              {/* Bottom Summary Row (UP3 BUKITTINGGI Total Matrix) */}
+              {/* Bottom Summary Row (UP3 / UL Total Matrix) */}
               <tr className="bg-slate-300 dark:bg-slate-800 text-slate-900 dark:text-white font-black border-t-2 border-slate-400 dark:border-slate-700 shadow-inner">
                 <td className="sticky left-0 z-20 bg-slate-300 dark:bg-slate-800 px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black">
-                  13200
+                  -
                 </td>
 
                 <td
                   colSpan={2}
-                  className="sticky left-[90px] z-20 bg-slate-300 dark:bg-slate-800 px-4 py-2.5 border-r border-slate-400 dark:border-slate-700 font-black tracking-wider uppercase"
+                  className="sticky left-[70px] z-20 bg-slate-300 dark:bg-slate-800 px-4 py-2.5 border-r border-slate-400 dark:border-slate-700 font-black tracking-wider uppercase"
                 >
-                  UP3 BUKITTINGGI
+                  UP3 {selectedULKey}
                 </td>
 
                 {/* Day Summary Totals */}
@@ -897,7 +999,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-emerald-700 dark:text-emerald-400">
                   {grandTotalsSummary.percent}%
                 </td>
-                <td className="px-3 py-2.5 text-center text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                <td className="px-3 py-2.5 text-center text-[10px] text-slate-600 dark:text-slate-400 uppercase tracking-widest font-black">
                   TOTAL UP3
                 </td>
               </tr>
@@ -926,7 +1028,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setEditingCell(null)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 ✕
               </button>
@@ -1008,7 +1110,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setEditingCell(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               >
                 Batal
               </button>
@@ -1042,7 +1144,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setEditingRowConfig(null)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 ✕
               </button>
@@ -1094,7 +1196,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                   handleDeleteRow(editingRowConfig.id, editingRowConfig.timRow);
                   setEditingRowConfig(null);
                 }}
-                className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center space-x-1"
+                className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center space-x-1 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Hapus Tim</span>
@@ -1104,7 +1206,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setEditingRowConfig(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   Batal
                 </button>
@@ -1128,12 +1230,12 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-black text-slate-900 dark:text-white uppercase">
-                Tambah Baris Tim ROW Baru
+                Tambah Tim ROW Baru
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAddRowModal(false)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 ✕
               </button>
@@ -1142,39 +1244,34 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Kode Unit
-                </label>
-                <input
-                  type="text"
-                  value={newRowData.kodeUnit}
-                  onChange={(e) => setNewRowData({ ...newRowData, kodeUnit: e.target.value })}
-                  placeholder="13221"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   Nama ULP
                 </label>
-                <input
-                  type="text"
-                  value={newRowData.namaUlp}
-                  onChange={(e) => setNewRowData({ ...newRowData, namaUlp: e.target.value })}
-                  placeholder="ULP BUKITTINGGI"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={newRowData.namaUlp}
+                    onChange={(e) => setNewRowData({ ...newRowData, namaUlp: e.target.value })}
+                    placeholder="Contoh: ULP BUKITTINGGI"
+                    list="ulp-suggestions"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 uppercase"
+                  />
+                  <datalist id="ulp-suggestions">
+                    {availableUlps.map((u) => (
+                      <option key={u} value={u} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Nama Tim ROW
+                  Nama Tim ROW / Regu
                 </label>
                 <input
                   type="text"
                   value={newRowData.timRow}
                   onChange={(e) => setNewRowData({ ...newRowData, timRow: e.target.value })}
-                  placeholder="TIM ROW 12"
+                  placeholder="Contoh: TIM ROW 12 / Regu ROW Echo"
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                 />
               </div>
@@ -1198,7 +1295,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowAddRowModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               >
                 Batal
               </button>

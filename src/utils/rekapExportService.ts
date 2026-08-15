@@ -9,7 +9,8 @@ import { DayDetail } from './holidaysIndonesia';
 
 export interface RekapItemData {
   id: string;
-  kodeUnit: string;
+  noUrut?: number;
+  kodeUnit?: string;
   namaUlp: string;
   timRow: string;
   target: number;
@@ -25,7 +26,7 @@ export async function exportRekapHarianToExcel(
   days: DayDetail[],
   rowsData: RekapItemData[],
   summaryTitle: string = 'UP3 BUKITTINGGI',
-  summaryKodeUnit: string = '13200'
+  summaryKodeUnit: string = ''
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'APHRO PLN System';
@@ -55,11 +56,11 @@ export async function exportRekapHarianToExcel(
   worksheet.addRow([]); // Blank line
 
   // 2. Table Headers (Multi-level header)
-  // Header Row 1: KODE UNIT | ULP | TIM ROW | [Day Name per 4 cols] | TOTAL | SISA | % | KET
-  // Header Row 2:           |     |         | [Day Number (01, 02..)] |       |      |   |
-  // Header Row 3:           |     |         | TEBANG | PANGKAS | TEBANG | TOTAL | | | |
+  // Header Row 1: NO. URUT | ULP | TIM ROW | [Day Name per 4 cols] | TOTAL | SISA | % | KET
+  // Header Row 2:          |     |         | [Day Number (01, 02..)] |       |      |   |
+  // Header Row 3:          |     |         | TEBANG | PANGKAS | TEBANG | TOTAL | | | |
 
-  const headerRow1Values: any[] = ['KODE UNIT', 'ULP', 'TIM ROW'];
+  const headerRow1Values: any[] = ['NO. URUT', 'NAMA ULP', 'TIM ROW (NAMA REGU)'];
   const headerRow2Values: any[] = ['', '', ''];
   const headerRow3Values: any[] = ['', '', ''];
 
@@ -103,7 +104,7 @@ export async function exportRekapHarianToExcel(
     right: { style: 'thin', color: { argb: 'FF000000' } },
   };
 
-  // Format static headers (KODE UNIT, ULP, TIM ROW)
+  // Format static headers (NO. URUT, ULP, TIM ROW)
   worksheet.mergeCells(startHeaderRowNum, 1, endHeaderRowNum, 1);
   worksheet.mergeCells(startHeaderRowNum, 2, endHeaderRowNum, 2);
   worksheet.mergeCells(startHeaderRowNum, 3, endHeaderRowNum, 3);
@@ -164,13 +165,9 @@ export async function exportRekapHarianToExcel(
 
   let currentRowIdx = endHeaderRowNum + 1;
 
-  // Track ULP groups for merging KODE UNIT and ULP
-  let currentUlp = '';
-  let groupStartRow = currentRowIdx;
-
   rowsData.forEach((item, itemIdx) => {
     const rowValues: any[] = [
-      item.kodeUnit,
+      item.noUrut ?? (itemIdx + 1),
       item.namaUlp,
       item.timRow,
     ];
@@ -186,7 +183,7 @@ export async function exportRekapHarianToExcel(
         val.tebang1 > 0 ? val.tebang1 : '',
         val.pangkas > 0 ? val.pangkas : '',
         val.tebang2 > 0 ? val.tebang2 : '',
-        dayTotal > 0 ? dayTotal : (dayTotal === 0 ? '' : '')
+        dayTotal > 0 ? dayTotal : ''
       );
     });
 
@@ -210,7 +207,9 @@ export async function exportRekapHarianToExcel(
       cell.border = thinBorder;
       cell.font = regularFont;
 
-      if (c <= 2) {
+      if (c === 1) {
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      } else if (c === 2) {
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
       } else if (c === 3) {
         cell.alignment = { vertical: 'middle', horizontal: 'left' };
@@ -239,7 +238,7 @@ export async function exportRekapHarianToExcel(
     currentRowIdx++;
   });
 
-  // 4. Merge ULP and Kode Unit for consecutive rows with the same ULP
+  // 4. Merge ULP for consecutive rows with the same ULP
   let uStart = endHeaderRowNum + 1;
   while (uStart < currentRowIdx) {
     const startUlpVal = rowsData[uStart - (endHeaderRowNum + 1)].namaUlp;
@@ -252,15 +251,14 @@ export async function exportRekapHarianToExcel(
     }
 
     if (uEnd > uStart) {
-      worksheet.mergeCells(uStart, 1, uEnd, 1);
       worksheet.mergeCells(uStart, 2, uEnd, 2);
     }
     uStart = uEnd + 1;
   }
 
-  // 5. Total Summary Row (UP3 BUKITTINGGI)
+  // 5. Total Summary Row (UP3 / UL Total Matrix)
   const summaryRowValues: any[] = [
-    summaryKodeUnit,
+    '',
     summaryTitle,
     '', // TIM ROW empty in summary
   ];
@@ -319,9 +317,9 @@ export async function exportRekapHarianToExcel(
   }
 
   // Auto column widths
-  worksheet.getColumn(1).width = 12; // KODE UNIT
-  worksheet.getColumn(2).width = 24; // ULP
-  worksheet.getColumn(3).width = 16; // TIM ROW
+  worksheet.getColumn(1).width = 12; // NO. URUT
+  worksheet.getColumn(2).width = 24; // NAMA ULP
+  worksheet.getColumn(3).width = 26; // TIM ROW (NAMA REGU)
 
   for (let c = 4; c < totalCol; c++) {
     worksheet.getColumn(c).width = 6; // Compact subcolumns for days

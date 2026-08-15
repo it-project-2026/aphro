@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAbsensi } from '../context/AbsensiContext';
@@ -17,7 +17,11 @@ import {
   ExternalLink,
   Clock,
   Sparkles,
-  Info
+  Info,
+  Plus,
+  Eye,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import { AbsensiPetugas } from '../types';
 
@@ -27,7 +31,7 @@ interface AbsensiKerjaPageProps {
 
 export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess }) => {
   const { user: currentUser, logout } = useAuth();
-  const { petugasList } = useMasterData();
+  const { petugasList, users } = useMasterData();
   const { absensiList, addAbsensi } = useAbsensi();
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
@@ -62,61 +66,122 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     todayAbsensi && (todayAbsensi.fotoMasuk || (todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0))
   );
 
-  // Find petugas matching reguName
-  const reguPetugas = petugasList.filter(
-    (p) => (p.reguName || '').toLowerCase() === (reguName || '').toLowerCase() || (p.ulpName || '').toLowerCase() === (ulpName || '').toLowerCase()
-  );
+  // Helper to get all Petugas members matching the active Regu
+  const getReguMembersFromMaster = (): AbsensiPetugas[] => {
+    // 1. Match from Petugas Master Data
+    const matchedPetugas = petugasList.filter((p) => {
+      if (!p || p.status === 'Non-Aktif') return false;
+      const cleanPRegu = cleanStr(p.reguName);
+      const isExactRegu = (p.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
+      const isCleanMatch = userReguClean && cleanPRegu === userReguClean;
+      const isIdMatch = Boolean(currentUser?.reguId && p.reguId && p.reguId === currentUser.reguId);
+      return isExactRegu || isCleanMatch || isIdMatch;
+    });
 
-  // Initialize 5 petugas slots
-  const defaultPetugasNames = [
-    reguPetugas[0]?.nama || currentUser?.name || '',
-    reguPetugas[1]?.nama || '',
-    reguPetugas[2]?.nama || '',
-    reguPetugas[3]?.nama || '',
-    reguPetugas[4]?.nama || '',
-  ];
+    if (matchedPetugas.length > 0) {
+      return matchedPetugas.map((p) => ({
+        nama: p.nama,
+        keterangan: 'HADIR' as const,
+      }));
+    }
 
-  const [petugasRows, setPetugasRows] = useState<AbsensiPetugas[]>(
-    defaultPetugasNames.slice(0, 5).map((nama) => ({
-      nama,
-      keterangan: 'HADIR' as const,
-    }))
-  );
+    // 2. Fallback: match from Users list
+    const matchedUsers = users.filter((u) => {
+      if (!u || u.status === 'Non-Aktif') return false;
+      const cleanURegu = cleanStr(u.reguName);
+      const isExactRegu = (u.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
+      const isCleanMatch = userReguClean && cleanURegu === userReguClean;
+      const isIdMatch = Boolean(currentUser?.reguId && u.reguId && u.reguId === currentUser.reguId);
+      return isExactRegu || isCleanMatch || isIdMatch;
+    });
+
+    if (matchedUsers.length > 0) {
+      return matchedUsers.map((u) => ({
+        nama: u.name,
+        keterangan: 'HADIR' as const,
+      }));
+    }
+
+    // 3. Fallback: current logged-in user
+    if (currentUser?.name) {
+      return [{ nama: currentUser.name, keterangan: 'HADIR' as const }];
+    }
+
+    return [{ nama: '', keterangan: 'HADIR' as const }];
+  };
+
+  const [petugasRows, setPetugasRows] = useState<AbsensiPetugas[]>(() => {
+    if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
+      return todayAbsensi.petugasList.map((p) => ({
+        nama: p.nama || '',
+        keterangan: p.keterangan || 'HADIR',
+      }));
+    }
+    return getReguMembersFromMaster();
+  });
 
   useEffect(() => {
     if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
-      // Pre-fill with existing petugas list if available
-      const merged = defaultPetugasNames.map((defName, idx) => {
-        const existingP = todayAbsensi.petugasList[idx];
-        if (existingP && existingP.nama) {
-          return {
-            nama: existingP.nama,
-            keterangan: existingP.keterangan || 'HADIR',
-          };
-        }
-        return {
-          nama: defName,
-          keterangan: 'HADIR' as const,
-        };
-      });
-      setPetugasRows(merged);
+      setPetugasRows(
+        todayAbsensi.petugasList.map((p) => ({
+          nama: p.nama || '',
+          keterangan: p.keterangan || 'HADIR',
+        }))
+      );
+    } else {
+      setPetugasRows(getReguMembersFromMaster());
     }
-  }, [todayAbsensi]);
+  }, [todayAbsensi, reguName, petugasList, users]);
+
+  // Filter history strictly for the logged-in user's Regu
+  const reguAbsensiHistory = useMemo(() => {
+    return absensiList.filter((item) => {
+      if (!item) return false;
+      
+      const itemReguClean = cleanStr(item.reguName);
+      const isExactRegu = (item.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
+      const isCleanMatch = Boolean(userReguClean && itemReguClean && itemReguClean === userReguClean);
+      
+      // Also match by userName / nip / id if reguName is not explicitly matching
+      const itemUserClean = cleanStr(item.userName);
+      const activeUserClean = cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id);
+      const isUserMatch = Boolean(activeUserClean && itemUserClean && itemUserClean === activeUserClean);
+      const isNipMatch = Boolean(currentUser?.nip && item.nip && item.nip === currentUser.nip);
+
+      return isExactRegu || isCleanMatch || isUserMatch || isNipMatch;
+    });
+  }, [absensiList, reguName, userReguClean, currentUser]);
 
   const [fotoMasuk, setFotoMasuk] = useState<string>('');
   const [fotoKeluar, setFotoKeluar] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveUrl: string } | null>(null);
 
   const handlePetugasNameChange = (index: number, val: string) => {
     const updated = [...petugasRows];
-    updated[index].nama = val;
+    updated[index] = { ...updated[index], nama: val };
     setPetugasRows(updated);
   };
 
   const handlePetugasStatusChange = (index: number, status: 'HADIR' | 'TIDAK HADIR' | 'SAKIT' | 'IZIN') => {
     const updated = [...petugasRows];
-    updated[index].keterangan = status;
+    updated[index] = { ...updated[index], keterangan: status };
     setPetugasRows(updated);
+  };
+
+  const handleAddPetugas = () => {
+    setPetugasRows((prev) => [
+      ...prev,
+      { nama: '', keterangan: 'HADIR' as const },
+    ]);
+  };
+
+  const handleRemovePetugas = (index: number) => {
+    if (petugasRows.length <= 1) {
+      setPetugasRows([{ nama: '', keterangan: 'HADIR' as const }]);
+      return;
+    }
+    setPetugasRows((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'masuk' | 'keluar') => {
@@ -273,20 +338,35 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
             </div>
           </div>
 
-          {/* Petugas 1 - 5 Attendance Table */}
+          {/* Attendance Table for Regu Members */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-700 dark:text-slate-300">
-                Daftar Kehadiran Anggota Regu (Petugas 1 s.d. 5)
-              </h3>
-              <span className="text-[11px] text-slate-400">Status akan tercatat di kolom KET_1..5</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center space-x-2">
+                  <Users className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                  <span>Daftar Kehadiran Anggota Regu ({petugasRows.length} Petugas)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Daftar anggota untuk <span className="font-bold text-cyan-600 dark:text-cyan-400">{reguName}</span>.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddPetugas}
+                className="px-3 py-1.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 border border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 text-xs font-bold flex items-center space-x-1.5 transition-all self-start sm:self-auto cursor-pointer shadow-xs"
+                title="Tambah baris anggota regu baru"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambah Petugas</span>
+              </button>
             </div>
 
             <div className="space-y-3">
               {petugasRows.map((petugas, idx) => (
                 <div
                   key={idx}
-                  className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3"
+                  className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 transition-all hover:border-cyan-300 dark:hover:border-cyan-800"
                 >
                   <div className="flex items-center space-x-3 flex-1">
                     <span className="w-7 h-7 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-black text-xs shrink-0">
@@ -296,8 +376,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                       type="text"
                       value={petugas.nama}
                       onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
-                      placeholder={`Nama Petugas ${idx + 1}`}
-                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold"
+                      placeholder={`Nama Petugas #${idx + 1}`}
+                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
 
@@ -314,7 +394,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                           key={status}
                           type="button"
                           onClick={() => handlePetugasStatusChange(idx, status)}
-                          className={`px-3 py-1.5 text-[11px] font-bold rounded-xl border transition-all ${
+                          className={`px-3 py-1.5 text-[11px] font-bold rounded-xl border transition-all cursor-pointer ${
                             isSelected
                               ? activeStyle
                               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
@@ -324,6 +404,17 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                         </button>
                       );
                     })}
+
+                    {petugasRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePetugas(idx)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        title="Hapus baris petugas ini"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -497,15 +588,15 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         </form>
       </div>
 
-      {/* History Table displaying Foto Links */}
-      {absensiList.length > 0 && (
+      {/* History Table displaying Foto Links for logged-in Regu */}
+      {reguAbsensiHistory.length > 0 && (
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-md space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
               <Clock className="w-4 h-4 text-cyan-500" />
-              <span>Riwayat Absensi Regu ({absensiList.length})</span>
+              <span>Riwayat Absensi Regu {reguName} ({reguAbsensiHistory.length})</span>
             </h3>
-            <span className="text-xs text-slate-400">Termasuk Link Foto Masuk & Keluar</span>
+            <span className="text-xs text-slate-400">Daftar riwayat absensi & link foto khusus untuk {reguName}</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -521,7 +612,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {absensiList.slice(0, 10).map((item) => (
+                {reguAbsensiHistory.slice(0, 15).map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                     <td className="p-3 font-bold text-slate-900 dark:text-white whitespace-nowrap">
                       {item.tanggal}
@@ -537,40 +628,142 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                         </span>
                       ))}
                     </td>
-                    <td className="p-3 whitespace-nowrap">
+                    <td className="p-3">
                       {item.fotoMasuk ? (
-                        <a
-                          href={formatDriveViewUrl(item.fotoMasuk)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-cyan-50 dark:bg-cyan-950 text-cyan-600 dark:text-cyan-400 font-bold text-[11px] hover:underline border border-cyan-200 dark:border-cyan-800"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>Link Foto Masuk</span>
-                        </a>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewImage({
+                                url: formatDriveImageUrl(item.fotoMasuk!),
+                                title: `Foto Masuk - ${item.reguName} (${item.tanggal})`,
+                                driveUrl: formatDriveViewUrl(item.fotoMasuk!),
+                              })
+                            }
+                            className="relative group block w-14 h-14 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0 cursor-pointer shadow-xs"
+                            title="Klik untuk memperbesar foto masuk"
+                          >
+                            <img
+                              src={formatDriveImageUrl(item.fotoMasuk)}
+                              alt="Foto Masuk"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Eye className="w-4 h-4 text-white" />
+                            </div>
+                          </button>
+                          <a
+                            href={formatDriveViewUrl(item.fotoMasuk)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950 transition-colors"
+                            title="Buka di Google Drive"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
                       ) : (
-                        <span className="text-slate-400 text-[11px]">-</span>
+                        <span className="text-slate-400 text-[11px] italic">Belum Ada</span>
                       )}
                     </td>
-                    <td className="p-3 whitespace-nowrap">
+                    <td className="p-3">
                       {item.fotoKeluar ? (
-                        <a
-                          href={formatDriveViewUrl(item.fotoKeluar)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] hover:underline border border-indigo-200 dark:border-indigo-800"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>Link Foto Keluar</span>
-                        </a>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewImage({
+                                url: formatDriveImageUrl(item.fotoKeluar!),
+                                title: `Foto Keluar - ${item.reguName} (${item.tanggal})`,
+                                driveUrl: formatDriveViewUrl(item.fotoKeluar!),
+                              })
+                            }
+                            className="relative group block w-14 h-14 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0 cursor-pointer shadow-xs"
+                            title="Klik untuk memperbesar foto keluar"
+                          >
+                            <img
+                              src={formatDriveImageUrl(item.fotoKeluar)}
+                              alt="Foto Keluar"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Eye className="w-4 h-4 text-white" />
+                            </div>
+                          </button>
+                          <a
+                            href={formatDriveViewUrl(item.fotoKeluar)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors"
+                            title="Buka di Google Drive"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
                       ) : (
-                        <span className="text-slate-400 text-[11px]">-</span>
+                        <span className="text-slate-400 text-[11px] italic">Belum Ada</span>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox / Image Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-4">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <ImageIcon className="w-4 h-4 text-cyan-400" />
+                <h4 className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
+                  {previewImage.title}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 flex items-center justify-center bg-black/50 min-h-[300px] max-h-[70vh] overflow-hidden">
+              <img
+                src={previewImage.url}
+                alt={previewImage.title}
+                className="max-h-[65vh] max-w-full object-contain rounded-2xl shadow-lg"
+              />
+            </div>
+
+            <div className="p-4 border-t border-slate-800 flex items-center justify-between">
+              <a
+                href={previewImage.driveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Buka Full di Google Drive</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}
