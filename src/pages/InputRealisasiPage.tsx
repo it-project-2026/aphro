@@ -139,16 +139,17 @@ export const InputRealisasiPage: React.FC = () => {
   // GPS Auto Fetch
   const handleFetchGPS = () => {
     if ('geolocation' in navigator) {
+      showToast('Sedang membaca koordinat GPS...', 'info');
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setLatitude(pos.coords.latitude);
           setLongitude(pos.coords.longitude);
-          showToast('Koordinat GPS lokasi Anda berhasil diperoleh!', 'success');
+          showToast('Koordinat GPS lokasi Anda berhasil diperoleh dengan akurasi tinggi!', 'success');
         },
         (err) => {
           showToast(`Gagal membaca GPS: ${err.message}`, 'error');
         },
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
       );
     } else {
       showToast('Perangkat tidak mendukung GPS', 'warning');
@@ -170,56 +171,75 @@ export const InputRealisasiPage: React.FC = () => {
     }
 
     setIsProcessing(true);
-    showToast('Sedang membubuhkan watermark otomatis pada foto...', 'info');
+    showToast('Membaca GPS & membubuhkan watermark otomatis pada foto...', 'info');
 
-    try {
-      const timestampStr = new Date().toLocaleString('id-ID', {
-        dateStyle: 'full',
-        timeStyle: 'medium',
-      });
+    const processPhoto = async (lat: number, lon: number) => {
+      try {
+        const timestampStr = new Date().toLocaleString('id-ID', {
+          dateStyle: 'full',
+          timeStyle: 'medium',
+        });
 
-      const watermarkedBase64 = await generateWatermarkedImage({
-        imageFile: file,
-        userName: petugasName,
-        ulpName: selectedWO.ulpName,
-        nomorWO: selectedWO.nomorWO,
-        noTiang,
-        latitude,
-        longitude,
-        customTimestamp: timestampStr,
-      });
+        const watermarkedBase64 = await generateWatermarkedImage({
+          imageFile: file,
+          userName: petugasName,
+          ulpName: selectedWO.ulpName,
+          nomorWO: selectedWO.nomorWO,
+          noTiang,
+          latitude: lat,
+          longitude: lon,
+          customTimestamp: timestampStr,
+        });
 
-      const photoObj: WatermarkedPhoto = {
-        id: `pic-${Date.now()}-${slotIndex}-${Math.random().toString(36).substring(2, 6)}`,
-        type,
-        slotIndex,
-        dataUrl: watermarkedBase64,
-        fileUrl: '', // Uploaded once during realisasi save
-        originalName: file.name,
-        timestamp: timestampStr,
-        latitude,
-        longitude,
-        userName: petugasName,
-        ulpName: selectedWO.ulpName,
-      };
+        const photoObj: WatermarkedPhoto = {
+          id: `pic-${Date.now()}-${slotIndex}-${Math.random().toString(36).substring(2, 6)}`,
+          type,
+          slotIndex,
+          dataUrl: watermarkedBase64,
+          fileUrl: '', // Uploaded once during realisasi save
+          originalName: file.name,
+          timestamp: timestampStr,
+          latitude: lat,
+          longitude: lon,
+          userName: petugasName,
+          ulpName: selectedWO.ulpName,
+        };
 
-      if (type === 'sebelum') {
-        setPhotosSebelum((prev) => [
-          ...prev.filter((p) => p.slotIndex !== slotIndex),
-          photoObj,
-        ]);
-      } else {
-        setPhotosSesudah((prev) => [
-          ...prev.filter((p) => p.slotIndex !== slotIndex),
-          photoObj,
-        ]);
+        if (type === 'sebelum') {
+          setPhotosSebelum((prev) => [
+            ...prev.filter((p) => p.slotIndex !== slotIndex),
+            photoObj,
+          ]);
+        } else {
+          setPhotosSesudah((prev) => [
+            ...prev.filter((p) => p.slotIndex !== slotIndex),
+            photoObj,
+          ]);
+        }
+
+        showToast(`Foto ${type} slot ${slotIndex} berhasil diberi watermark!`, 'success');
+      } catch (err: any) {
+        showToast(`Gagal memproses watermark foto: ${err.message}`, 'error');
+      } finally {
+        setIsProcessing(false);
       }
+    };
 
-      showToast(`Foto ${type} slot ${slotIndex} berhasil diberi watermark!`, 'success');
-    } catch (err: any) {
-      showToast(`Gagal memproses watermark foto: ${err.message}`, 'error');
-    } finally {
-      setIsProcessing(false);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLatitude(pos.coords.latitude);
+          setLongitude(pos.coords.longitude);
+          processPhoto(pos.coords.latitude, pos.coords.longitude);
+        },
+        (err) => {
+          showToast(`Gagal membaca GPS foto: ${err.message}. Menggunakan GPS terakhir.`, 'warning');
+          processPhoto(latitude, longitude); // fallback to state
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      );
+    } else {
+      processPhoto(latitude, longitude);
     }
   };
 

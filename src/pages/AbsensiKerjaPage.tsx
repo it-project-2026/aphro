@@ -23,6 +23,7 @@ import {
   X,
   Image as ImageIcon
 } from 'lucide-react';
+import { generateWatermarkedImage } from '../utils/watermark';
 import { AbsensiPetugas } from '../types';
 
 interface AbsensiKerjaPageProps {
@@ -184,22 +185,56 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     setPetugasRows((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'masuk' | 'keluar') => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'masuk' | 'keluar') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const base64 = uploadEvent.target?.result as string;
-      if (type === 'masuk') {
-        setFotoMasuk(base64);
-        showToast('Foto Masuk berhasil diambil!', 'success');
-      } else {
-        setFotoKeluar(base64);
-        showToast('Foto Keluar berhasil diambil!', 'success');
+    setIsSubmitting(true);
+    showToast('Sedang memproses foto dan membaca GPS (Akurat)...', 'info');
+
+    const processPhoto = async (lat: number, lon: number) => {
+      try {
+        const timestampStr = new Date().toLocaleString('id-ID', {
+          dateStyle: 'full',
+          timeStyle: 'medium',
+        });
+
+        const watermarkedBase64 = await generateWatermarkedImage({
+          imageFile: file,
+          userName: currentUser?.name || 'Petugas',
+          ulpName: ulpName || 'ULP',
+          latitude: lat,
+          longitude: lon,
+          customTimestamp: timestampStr,
+        });
+
+        if (type === 'masuk') {
+          setFotoMasuk(watermarkedBase64);
+          showToast('Foto Masuk berhasil diambil & diberi watermark GPS!', 'success');
+        } else {
+          setFotoKeluar(watermarkedBase64);
+          showToast('Foto Keluar berhasil diambil & diberi watermark GPS!', 'success');
+        }
+      } catch (err: any) {
+        showToast(`Gagal memproses foto: ${err.message}`, 'error');
+      } finally {
+        setIsSubmitting(false);
       }
     };
-    reader.readAsDataURL(file);
+
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => processPhoto(pos.coords.latitude, pos.coords.longitude),
+        (err) => {
+          showToast(`Gagal membaca GPS untuk foto: ${err.message}. Menggunakan koordinat default (0,0).`, 'warning');
+          processPhoto(0, 0); // fallback if gps fails but we still want the photo
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      );
+    } else {
+      showToast('Browser tidak mendukung GPS, lokasi tidak terdeteksi', 'warning');
+      processPhoto(0, 0);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
