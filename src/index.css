@@ -89,8 +89,8 @@
 /* Print Styles */
 @media print {
   @page {
-    size: A3 landscape;
-    margin: 8mm;
+    size: A4 landscape;
+    margin: 6mm;
   }
   body {
     background: #ffffff !important;
