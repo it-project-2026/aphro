@@ -3,10 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useRealisasi } from '../context/RealisasiContext';
 import { useMasterData } from '../context/MasterDataContext';
-import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
 import { StatusBadge } from '../components/common/StatusBadge';
-import { ExportVisioModal } from '../components/ExportVisioModal';
 import { WorkOrder, Realisasi } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -52,7 +50,6 @@ export const MonitoringPage: React.FC = () => {
   const { workOrders, displayedWorkOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
   const { ulpList, penyulangList } = useMasterData();
-  const { settings } = useSettings();
   const { setActiveTab } = useUI();
 
   const isUserRole = currentUser?.role === 'User';
@@ -187,29 +184,6 @@ export const MonitoringPage: React.FC = () => {
       .filter((wo) => wo.latitude && wo.longitude)
       .map((wo) => [wo.latitude as number, wo.longitude as number]);
   }, [filteredWOs]);
-
-  const visioExportProps = {
-    mapPointsData: filteredWOs.map((wo) => {
-      const wAny = wo as any;
-      return {
-        id: wo.id,
-        nomorWO: wo.nomorWO,
-        noTiang: wAny.noTiang || wo.nomorWO,
-        jenisTanaman: wAny.jenisTanaman || 'Pohon ROW',
-        lat: wo.latitude || -0.92,
-        lng: wo.longitude || 100.4,
-        keterangan: wo.jenisPekerjaan || 'Pangkas',
-        ulpName: wo.ulpName,
-        penyulangName: wo.penyulangName,
-      };
-    }),
-    settings,
-    filterUlpName: filterUlp,
-    filterPenyulangName: filterPenyulang,
-    fallbackWorkOrders: filteredWOs,
-    realisasiList: realisasiList,
-    polylinePositions: mapPolylinePositions,
-  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -471,13 +445,6 @@ export const MonitoringPage: React.FC = () => {
                 <p className="text-amber-600 dark:text-amber-400 font-extrabold pt-1 border-t border-slate-200 dark:border-slate-700">
                   ⚡ Jaringan Listrik TR (Tegangan Rendah) PLN
                 </p>
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                  <ExportVisioModal
-                    {...visioExportProps}
-                    triggerButtonClassName="w-full inline-flex items-center justify-center space-x-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-lg shadow-sm transition-all active:scale-95"
-                    buttonLabel="📐 Export to Visio"
-                  />
-                </div>
               </div>
 
               <MapContainer
