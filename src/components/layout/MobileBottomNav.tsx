@@ -12,6 +12,7 @@ import {
   Clock,
   PlusCircle,
   Printer,
+  CalendarRange,
 } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
@@ -23,20 +24,31 @@ export const MobileBottomNav: React.FC = () => {
 
   const role = user.role || 'User';
 
-  const isAdmbktUser = user && (
+  const isAdmRole = user && (
+    (user.role || '').toUpperCase() === 'ADM' ||
     (user.userName || '').toLowerCase() === 'admbkt' ||
     (user.nip || '').toLowerCase() === 'admbkt' ||
     (user.id || '').toLowerCase() === 'admbkt'
   );
 
   // Navigation tabs optimized for mobile HP usage
-  const mobileTabs = isAdmbktUser
+  const mobileTabs = isAdmRole
     ? [
         {
           id: 'cetak_laporan',
           label: 'Cetak Laporan',
           icon: Printer,
           highlight: true,
+        },
+        {
+          id: 'rekap_harian',
+          label: 'Rekap Harian',
+          icon: CalendarRange,
+        },
+        {
+          id: 'monitoring_absensi',
+          label: 'Monitoring Absensi',
+          icon: Clock,
         },
       ]
     : [

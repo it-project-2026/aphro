@@ -8,30 +8,34 @@ export function normalizeUser(u: any): User {
       id: 'usr-' + Math.random().toString(36).substring(2, 7),
       nip: 'usr-unknown',
       name: 'Unknown User',
+      userName: 'user',
       email: 'user@pln.co.id',
       role: 'User'
     };
   }
 
-  const id = String(u.id || u.UserID || u.User_ID || u.ID || u.NIP || u.nip || u.Username || u.username || 'usr-' + Math.random().toString(36).substring(2, 7));
-  const nip = String(u.nip || u.NIP || u.Username || u.username || u.UserID || u.id || id);
-  const name = String(u.name || u.Nama || u.Name || u.Username || u.username || u.NIP || u.nip || id);
-  const userName = String(u.userName || u.Username || u.username || name);
-  const password = String(u.password || u.Password || u.PASSWORD || u.pass || u.Pass || u.KataSandi || u.kataSandi || u.KATA_SANDI || '');
+  const id = String(u.id || u.UserID || u.User_ID || u.ID || u.Username || u.username || u.NIP || u.nip || 'usr-' + Math.random().toString(36).substring(2, 7));
+  const nip = String(u.UserID || u.User_ID || u.nip || u.NIP || u.Username || u.username || u.id || id);
+  const userName = String(u.Username || u.username || u.userName || u.UserID || u.User_ID || u.nip || u.NIP || id).trim();
+  const name = String(u.name || u.Nama || u.Name || userName || nip || id).trim();
+  const password = String(u.Password || u.password || u.PASSWORD || u.pass || u.Pass || u.KataSandi || u.kataSandi || u.KATA_SANDI || '').trim();
   const email = String(u.email || u.Email || `${userName.toLowerCase().replace(/[^a-z0-9]/g, '')}@pln.co.id`);
   
-  const rawRole = String(u.role || u.Role || 'User').trim();
+  const rawRole = String(u.Role || u.role || 'User').trim();
   let role: UserRole = 'User';
-  if (/super\s*admin/i.test(rawRole) || /admin\s*utama/i.test(rawRole)) {
+  if (/^super\s*admin$/i.test(rawRole) || /superadmin/i.test(rawRole) || /admin\s*utama/i.test(rawRole)) {
     role = 'SuperAdmin';
-  } else if (/admin/i.test(rawRole) || /manajer/i.test(rawRole) || /supervisor/i.test(rawRole)) {
+  } else if (/^adm$/i.test(rawRole) || rawRole.toLowerCase() === 'adm') {
+    role = 'Adm';
+  } else if (/admin/i.test(rawRole) || /admbkt/i.test(rawRole) || /manajer/i.test(rawRole) || /supervisor/i.test(rawRole)) {
     role = 'Admin';
   } else {
     role = 'User';
   }
 
-  const reguName = String(u.reguName || u.NAMA_REGU || u.Nama_Regu || u.NamaRegu || u.Regu_ROW || u.Regu || u.namaRegu || '');
-  const ulpName = String(u.ulpName || u.NAMA_ULP || u.Nama_ULP || u.ULP || u.namaULP || '');
+  const reguName = String(u.NamaRegu || u.Nama_Regu || u.reguName || u.NAMA_REGU || u.Regu_ROW || u.Regu || u.namaRegu || '').trim();
+  const ulpName = String(u.ULP || u.ulpName || u.NAMA_ULP || u.Nama_ULP || u.namaULP || '').trim();
+  const status = (u.Status === 'Non-Aktif' || u.status === 'Non-Aktif' || u.Status === 'Nonaktif' || u.status === 'Nonaktif') ? 'Non-Aktif' : 'Aktif';
 
   return {
     id,
@@ -45,7 +49,8 @@ export function normalizeUser(u: any): User {
     ulpName,
     reguId: String(u.reguId || u.ReguID || ''),
     ulpId: String(u.ulpId || u.ULPId || ''),
-    phone: String(u.phone || u.No_HP || u.Kontak || '')
+    phone: String(u.phone || u.No_HP || u.Kontak || ''),
+    status,
   };
 }
 
@@ -96,7 +101,8 @@ export function normalizeRegu(r: any): ReguROW {
 export function normalizePetugas(p: any): Petugas {
   const rawRole = String(p.role || p.Role || 'User').trim();
   let role: UserRole = 'User';
-  if (/super\s*admin/i.test(rawRole)) role = 'SuperAdmin';
+  if (/^super\s*admin$/i.test(rawRole) || /superadmin/i.test(rawRole)) role = 'SuperAdmin';
+  else if (/^adm$/i.test(rawRole) || rawRole.toLowerCase() === 'adm') role = 'Adm';
   else if (/admin/i.test(rawRole)) role = 'Admin';
 
   return {

@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { WorkOrder, WOStatus } from '../../types';
 import { useMasterData } from '../../context/MasterDataContext';
 import { useWorkOrders } from '../../context/WorkOrderContext';
 import { useToast } from '../../hooks/useToast';
-import { X, Save } from 'lucide-react';
+import { X, Save, AlertTriangle } from 'lucide-react';
 
 interface EditWorkOrderModalProps {
   workOrder: WorkOrder;
@@ -12,7 +12,7 @@ interface EditWorkOrderModalProps {
 
 export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrder, onClose }) => {
   const { ulpList, penyulangList, reguList } = useMasterData();
-  const { updateWorkOrder } = useWorkOrders();
+  const { workOrders, updateWorkOrder } = useWorkOrders();
   const { showToast } = useToast();
 
   const [nomorWO, setNomorWO] = useState(workOrder.nomorWO);
@@ -26,6 +26,22 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
   const [volumePekerjaan, setVolumePekerjaan] = useState(workOrder.volumePekerjaan?.toString() || '');
   const [satuan, setSatuan] = useState(workOrder.satuan || 'KMS');
   const [status, setStatus] = useState<WOStatus>((workOrder.status as WOStatus) || 'BELUM SELESAI');
+
+  const cleanStr = (s: any) => String(s || '').trim().toUpperCase();
+
+  // Helper: Detect duplicate Work Order with the same Nomor_WO AND same Penyulang
+  const existingDuplicateWO = useMemo(() => {
+    const currentNoWoClean = cleanStr(nomorWO);
+    const currentPenyulangClean = cleanStr(penyulangName);
+    if (!currentNoWoClean || !currentPenyulangClean) return null;
+
+    return (
+      workOrders.find((wo) => {
+        if (wo.id === workOrder.id) return false;
+        return cleanStr(wo.nomorWO) === currentNoWoClean && cleanStr(wo.penyulangName) === currentPenyulangClean;
+      }) || null
+    );
+  }, [workOrders, workOrder.id, nomorWO, penyulangName]);
 
   const matchedUlp = ulpList.find((u) => u.namaULP === ulpName);
   const filteredPenyulang = penyulangList.filter((p) => {
@@ -95,6 +111,14 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
       return;
     }
 
+    if (existingDuplicateWO) {
+      showToast(
+        `Nomor Work Order "${nomorWO}" dengan Penyulang "${penyulangName}" sudah digunakan pada Work Order lain!`,
+        'error'
+      );
+      return;
+    }
+
     const currentUlpObj = ulpList.find((u) => u.namaULP === ulpName) || ulpList[0];
     const currentPenyulangObj = penyulangList.find((p) => p.namaPenyulang === penyulangName) || penyulangList[0];
     const currentReguObj = reguList.find((r) => r.namaRegu === reguName) || reguList[0];
@@ -157,7 +181,11 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
                 required
                 value={nomorWO}
                 onChange={(e) => setNomorWO(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className={`w-full px-3 py-2 text-sm rounded-xl border transition-colors ${
+                  existingDuplicateWO
+                    ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-sky-500'
+                } focus:outline-none`}
               />
             </div>
             <div>
@@ -177,7 +205,11 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               <select
                 value={penyulangName}
                 onChange={(e) => setPenyulangName(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className={`w-full px-3 py-2 text-sm rounded-xl border transition-colors ${
+                  existingDuplicateWO
+                    ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-sky-500'
+                } focus:outline-none`}
               >
                 {availablePenyulang.map((p, i) => (
                   <option key={i} value={p.namaPenyulang}>{p.namaPenyulang}</option>
@@ -232,6 +264,22 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               </select>
             </div>
           </div>
+
+          {/* DUPLICATE WARNING ALERT */}
+          {existingDuplicateWO && (
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 rounded-2xl flex items-start space-x-3 text-rose-800 dark:text-rose-300 animate-in fade-in duration-200">
+              <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-extrabold text-rose-700 dark:text-rose-300">
+                  Duplikasi Terdeteksi!
+                </p>
+                <p className="text-rose-600 dark:text-rose-400">
+                  Nomor WO <span className="font-mono font-bold underline">{nomorWO}</span> dengan Penyulang <span className="font-bold underline">{penyulangName}</span> sudah digunakan pada data Work Order lain.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end pt-4 space-x-3">
             <button
               type="button"
@@ -242,7 +290,8 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             </button>
             <button
               type="submit"
-              className="inline-flex items-center space-x-2 px-5 py-2 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-lg shadow-sky-600/25 transition-all"
+              disabled={Boolean(existingDuplicateWO)}
+              className="inline-flex items-center space-x-2 px-5 py-2 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-sky-600/25 transition-all"
             >
               <Save className="w-4 h-4" />
               <span>Simpan Perubahan</span>

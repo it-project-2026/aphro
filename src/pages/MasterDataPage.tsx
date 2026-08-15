@@ -796,6 +796,8 @@ export const MasterDataPage: React.FC = () => {
                               ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
                               : u.role === 'Admin'
                               ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'
+                              : u.role === 'Adm'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
                               : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
                           }`}
                         >
@@ -1144,6 +1146,7 @@ export const MasterDataPage: React.FC = () => {
                 >
                   <option value="SuperAdmin">SuperAdmin (Akses Penuh Seluruh Sistem)</option>
                   <option value="Admin">Admin (Akses Manajemen & Work Order)</option>
+                  <option value="Adm">Adm (Akses Administrator Operasional)</option>
                   <option value="User">User / Petugas Lapangan (Input Realisasi & Absensi)</option>
                 </select>
               </div>

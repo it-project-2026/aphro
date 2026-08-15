@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useRealisasi } from '../context/RealisasiContext';
 import { useMasterData } from '../context/MasterDataContext';
+import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { ExportVisioModal } from '../components/ExportVisioModal';
 import { WorkOrder, Realisasi } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -47,9 +49,10 @@ function createCustomMarkerIcon(status: string) {
 
 export const MonitoringPage: React.FC = () => {
   const { user: currentUser } = useAuth();
-  const { workOrders } = useWorkOrders();
+  const { workOrders, displayedWorkOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
   const { ulpList, penyulangList } = useMasterData();
+  const { settings } = useSettings();
   const { setActiveTab } = useUI();
 
   const isUserRole = currentUser?.role === 'User';
@@ -63,64 +66,150 @@ export const MonitoringPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filtered WOs
-  const filteredWOs = workOrders.filter((wo) => {
-    const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
-    const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
-    const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
-    
-    const query = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      !query ||
-      (wo.nomorWO || '').toLowerCase().includes(query) ||
-      (wo.ulpName || '').toLowerCase().includes(query) ||
-      (wo.penyulangName || '').toLowerCase().includes(query) ||
-      (wo.jenisPekerjaan || '').toLowerCase().includes(query);
+  // 1. Deduplicate Work Orders to ensure each Nomor WO only appears once
+  const uniqueWorkOrders = useMemo(() => {
+    const baseList = isUserRole ? displayedWorkOrders : workOrders;
+    const seen = new Map<string, WorkOrder>();
 
-    return matchesUlp && matchesPenyulang && matchesStatus && matchesSearch;
-  });
+    baseList.forEach((wo) => {
+      if (!wo) return;
+      const woKey = (wo.nomorWO || '').trim().toUpperCase() || (wo.id || '').trim().toUpperCase();
+      if (!woKey) return;
 
-  // Calculate totals across filtered WOs
-  const woMonitoringRows = filteredWOs.map((wo) => {
-    const relList = realisasiList.filter(
-      (r) => r.workOrderId === wo.id || (r.nomorWO && r.nomorWO === wo.nomorWO)
-    );
+      if (!seen.has(woKey)) {
+        seen.set(woKey, wo);
+      } else {
+        // Merge duplicate work orders taking the most complete details
+        const existing = seen.get(woKey)!;
+        const merged: WorkOrder = {
+          ...existing,
+          ...wo,
+          ulpName: wo.ulpName || existing.ulpName,
+          penyulangName: wo.penyulangName || existing.penyulangName,
+          reguName: wo.reguName || existing.reguName,
+          petugasName: wo.petugasName || existing.petugasName,
+          status: (wo.status === 'Selesai' || existing.status === 'Selesai') ? 'Selesai' : (wo.status || existing.status),
+          latitude: wo.latitude || existing.latitude,
+          longitude: wo.longitude || existing.longitude,
+        };
+        seen.set(woKey, merged);
+      }
+    });
 
-    const totalTebang = relList.filter((r) => {
-      const ket = (r.keterangan || '').toUpperCase();
-      return ket.includes('TEBANG');
-    }).length;
+    return Array.from(seen.values());
+  }, [isUserRole, displayedWorkOrders, workOrders]);
 
-    const totalPotong = relList.filter((r) => {
-      const ket = (r.keterangan || '').toUpperCase();
-      return ket.includes('POTONG') || ket.includes('PANGKAS');
-    }).length;
+  // 2. Filtered unique WOs
+  const filteredWOs = useMemo(() => {
+    return uniqueWorkOrders.filter((wo) => {
+      const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
+      const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
+      const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
+      
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        (wo.nomorWO || '').toLowerCase().includes(query) ||
+        (wo.ulpName || '').toLowerCase().includes(query) ||
+        (wo.penyulangName || '').toLowerCase().includes(query) ||
+        (wo.jenisPekerjaan || '').toLowerCase().includes(query);
 
-    // TOTAL REALISASI adalah Jumlah TOTAL TEBANG + TOTAL POTONG
-    const totalRealisasiCount = totalTebang + totalPotong;
+      return matchesUlp && matchesPenyulang && matchesStatus && matchesSearch;
+    });
+  }, [uniqueWorkOrders, filterUlp, filterPenyulang, filterStatus, searchQuery]);
 
-    return {
-      workOrder: wo,
-      nomorWO: wo.nomorWO,
-      tanggal: wo.tanggal,
-      ulpName: wo.ulpName || '-',
-      penyulangName: wo.penyulangName || '-',
-      totalRealisasiCount,
-      totalTebang,
-      totalPotong,
-    };
-  });
+  // 3. Calculate totals across filtered WOs with deduplicated realisasi items
+  const woMonitoringRows = useMemo(() => {
+    return filteredWOs.map((wo) => {
+      const woNomorClean = (wo.nomorWO || '').trim().toUpperCase();
 
-  const grandTotalRealisasi = woMonitoringRows.reduce((acc, row) => acc + row.totalRealisasiCount, 0);
-  const grandTotalTebang = woMonitoringRows.reduce((acc, row) => acc + row.totalTebang, 0);
-  const grandTotalPotong = woMonitoringRows.reduce((acc, row) => acc + row.totalPotong, 0);
+      const matchedRealisasi = realisasiList.filter((r) => {
+        if (!r) return false;
+        const matchId = r.workOrderId && r.workOrderId === wo.id;
+        const rNoWoClean = (r.nomorWO || '').trim().toUpperCase();
+        const matchNoWo = Boolean(woNomorClean && rNoWoClean && rNoWoClean === woNomorClean);
+        return matchId || matchNoWo;
+      });
+
+      // Deduplicate realisasi items to prevent double counting
+      const seenRel = new Set<string>();
+      const uniqueRelList = matchedRealisasi.filter((r) => {
+        const key = r.id || `${r.nomorWO}-${r.fotoSebelumUrl}-${r.fotoSesudahUrl}-${r.noTiang || ''}-${r.keterangan || ''}`;
+        if (seenRel.has(key)) return false;
+        seenRel.add(key);
+        return true;
+      });
+
+      const totalTebang = uniqueRelList.filter((r) => {
+        const ket = (r.keterangan || '').toUpperCase();
+        return ket.includes('TEBANG');
+      }).length;
+
+      const totalPotong = uniqueRelList.filter((r) => {
+        const ket = (r.keterangan || '').toUpperCase();
+        return ket.includes('POTONG') || ket.includes('PANGKAS');
+      }).length;
+
+      // TOTAL REALISASI adalah Jumlah TOTAL TEBANG + TOTAL POTONG
+      const totalRealisasiCount = totalTebang + totalPotong;
+
+      return {
+        workOrder: wo,
+        nomorWO: wo.nomorWO,
+        tanggal: wo.tanggal,
+        ulpName: wo.ulpName || '-',
+        penyulangName: wo.penyulangName || '-',
+        totalRealisasiCount,
+        totalTebang,
+        totalPotong,
+      };
+    });
+  }, [filteredWOs, realisasiList]);
+
+  const grandTotalRealisasi = useMemo(
+    () => woMonitoringRows.reduce((acc, row) => acc + row.totalRealisasiCount, 0),
+    [woMonitoringRows]
+  );
+  const grandTotalTebang = useMemo(
+    () => woMonitoringRows.reduce((acc, row) => acc + row.totalTebang, 0),
+    [woMonitoringRows]
+  );
+  const grandTotalPotong = useMemo(
+    () => woMonitoringRows.reduce((acc, row) => acc + row.totalPotong, 0),
+    [woMonitoringRows]
+  );
 
   // Map Center (Padang, West Sumatra default)
   const mapCenter: [number, number] = [-0.92, 100.4];
 
-  const mapPolylinePositions: [number, number][] = filteredWOs
-    .filter((wo) => wo.latitude && wo.longitude)
-    .map((wo) => [wo.latitude as number, wo.longitude as number]);
+  const mapPolylinePositions: [number, number][] = useMemo(() => {
+    return filteredWOs
+      .filter((wo) => wo.latitude && wo.longitude)
+      .map((wo) => [wo.latitude as number, wo.longitude as number]);
+  }, [filteredWOs]);
+
+  const visioExportProps = {
+    mapPointsData: filteredWOs.map((wo) => {
+      const wAny = wo as any;
+      return {
+        id: wo.id,
+        nomorWO: wo.nomorWO,
+        noTiang: wAny.noTiang || wo.nomorWO,
+        jenisTanaman: wAny.jenisTanaman || 'Pohon ROW',
+        lat: wo.latitude || -0.92,
+        lng: wo.longitude || 100.4,
+        keterangan: wo.jenisPekerjaan || 'Pangkas',
+        ulpName: wo.ulpName,
+        penyulangName: wo.penyulangName,
+      };
+    }),
+    settings,
+    filterUlpName: filterUlp,
+    filterPenyulangName: filterPenyulang,
+    fallbackWorkOrders: filteredWOs,
+    realisasiList: realisasiList,
+    polylinePositions: mapPolylinePositions,
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -382,6 +471,13 @@ export const MonitoringPage: React.FC = () => {
                 <p className="text-amber-600 dark:text-amber-400 font-extrabold pt-1 border-t border-slate-200 dark:border-slate-700">
                   ⚡ Jaringan Listrik TR (Tegangan Rendah) PLN
                 </p>
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <ExportVisioModal
+                    {...visioExportProps}
+                    triggerButtonClassName="w-full inline-flex items-center justify-center space-x-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-lg shadow-sm transition-all active:scale-95"
+                    buttonLabel="📐 Export to Visio"
+                  />
+                </div>
               </div>
 
               <MapContainer

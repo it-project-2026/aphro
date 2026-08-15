@@ -16,6 +16,7 @@ import {
   exportCetakPhotoToExcel,
   exportCetakPetaToExcel,
 } from '../utils/exportUtils';
+import { ExportVisioModal } from '../components/ExportVisioModal';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -45,6 +46,7 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   RefreshCw,
+  Workflow,
 } from 'lucide-react';
 
 // Custom Plant Marker Icon with Sequence Number, No. Tiang, Jenis Tanaman, Coordinate Dot, and Leader Line
@@ -156,6 +158,7 @@ export const CetakLaporanPage: React.FC = () => {
   const [filterNoWo, setFilterNoWo] = useState('ALL');
   const [latestMapImage, setLatestMapImage] = useState<string | null>(null);
   const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
+  const [isGeneratingVisio, setIsGeneratingVisio] = useState(false);
   const mapCaptureRef = useRef<MapReportCaptureRef>(null);
 
   const isAdmbktUser = useMemo(() => {
@@ -167,7 +170,7 @@ export const CetakLaporanPage: React.FC = () => {
       currentUser.name ||
       ''
     ).toLowerCase();
-    return uName.includes('admbkt') || currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin';
+    return uName.includes('admbkt') || currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin' || currentUser.role === 'Adm';
   }, [currentUser]);
 
   // Map WO by ID for easy lookup
@@ -521,6 +524,17 @@ export const CetakLaporanPage: React.FC = () => {
     }
   };
 
+  const visioExportProps = {
+    mapPointsData: nonOverlappingMapPoints,
+    settings,
+    filterUlpName: selectedUlpName,
+    filterPenyulangName: selectedPenyulangName,
+    fallbackWorkOrders: filteredWOs,
+    realisasiList: filteredRealisasi,
+    mapImageDataUrl: latestMapImage || null,
+    polylinePositions: activePolylinePositions,
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <style>{`
@@ -554,11 +568,11 @@ export const CetakLaporanPage: React.FC = () => {
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
               {activeReportTab === 'foto'
                 ? 'Fitur Download PDF dan Excel Laporan CETAK PHOTO (Rekap Hasil ROW Eviden Area & ULP).'
-                : 'Fitur Download PDF dan Excel Laporan CETAK PETA (Rekapitulasi Titik Lokasi Work Order).'}
+                : 'Fitur Download PDF, Excel, dan Export to Visio (.vdx) Laporan CETAK PETA (Hasil dari Maps & Rekapitulasi Titik Work Order).'}
             </p>
           </div>
 
-          {/* Action Buttons: Sync, Download PDF, Download Excel, Print */}
+          {/* Action Buttons: Sync, Export to Visio, Download PDF, Download Excel, Print */}
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => syncWithGAS(showToast)}
@@ -569,6 +583,10 @@ export const CetakLaporanPage: React.FC = () => {
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
               <span>{isSyncing ? 'Proses...' : 'Sync Spreadsheet'}</span>
             </button>
+
+            {activeReportTab === 'peta' && (
+              <ExportVisioModal {...visioExportProps} />
+            )}
 
             <button
               onClick={handleExportPDF}
@@ -620,7 +638,7 @@ export const CetakLaporanPage: React.FC = () => {
               onClick={() => setActiveReportTab('peta')}
               className={`flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeReportTab === 'peta'
-                  ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-xs'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-extrabold'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
@@ -818,6 +836,26 @@ export const CetakLaporanPage: React.FC = () => {
         {/* Report Content 2: Subhalaman CETAK PETA */}
         {activeReportTab === 'peta' && (
           <div className="space-y-6">
+            {/* Quick Export Controls Banner for Cetak Peta */}
+            <div className="no-print flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs">
+                  <Workflow className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-indigo-950 dark:text-indigo-200">
+                    SubHalaman Cetak Peta (Peta Pohon ROW)
+                  </h3>
+                  <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                    Ekspor diagram vektor Microsoft Visio (.vdx) hasil dari Maps lengkap dengan citra peta, titik tiang, jenis pohon, tindakan dan konektor jalur penyulang.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                <ExportVisioModal {...visioExportProps} />
+              </div>
+            </div>
+
             {/* Diagram Schematic Frame - GAMBAR PETA POHON (ROW) matching attached image */}
             <div className="border-2 border-slate-900 rounded-2xl p-4 sm:p-6 bg-white space-y-4 shadow-sm overflow-x-auto">
               {/* Header Box */}
@@ -954,7 +992,7 @@ export const CetakLaporanPage: React.FC = () => {
                 </div>
 
                 {/* Floating Overlay Badge */}
-                <div className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm p-3 rounded-xl border border-slate-300 shadow-md text-[10px] space-y-1 font-sans">
+                <div className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm p-3 rounded-xl border border-slate-300 shadow-md text-[10px] space-y-1.5 font-sans">
                   <p className="font-extrabold text-slate-900 flex items-center space-x-1">
                     <span>⚡ JARINGAN TR & PETA GIS ROW</span>
                   </p>
@@ -965,6 +1003,15 @@ export const CetakLaporanPage: React.FC = () => {
                     <span>⚡ Jaringan Listrik TR PLN</span>
                     {isRoutingLoading && <span className="animate-spin text-amber-600">⏳</span>}
                   </p>
+                  
+                  {/* Direct Export to Visio from Maps */}
+                  <div className="pt-1.5 border-t border-slate-200">
+                    <ExportVisioModal
+                      {...visioExportProps}
+                      triggerButtonClassName="w-full inline-flex items-center justify-center space-x-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] rounded-lg shadow-sm transition-all active:scale-95"
+                      buttonLabel="Export Visio dari Map"
+                    />
+                  </div>
                 </div>
               </MapReportCapture>
 

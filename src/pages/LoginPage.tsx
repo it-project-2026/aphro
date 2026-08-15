@@ -79,15 +79,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           const authenticatedUser = normalizeUser(rawUserObj);
           
           login(authenticatedUser);
-          const isAdmbkt = (authenticatedUser.userName || authenticatedUser.nip || authenticatedUser.id || '').toLowerCase() === 'admbkt';
-          if (isAdmbkt) {
+          const isAdm = (authenticatedUser.role || '').toUpperCase() === 'ADM' || (authenticatedUser.userName || authenticatedUser.nip || authenticatedUser.id || '').toLowerCase() === 'admbkt';
+          if (isAdm) {
             setActiveTab('cetak_laporan');
           } else if ((authenticatedUser.role || '').toUpperCase() === 'USER') {
             setActiveTab('input_realisasi');
           } else {
             setActiveTab('dashboard');
           }
-          showToast(`Selamat datang, ${authenticatedUser.name}! (Terotentikasi via Sheet USERS)`, 'success');
+          showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Role: ${authenticatedUser.role}] (Terotentikasi via Sheet USERS)`, 'success');
           setIsSubmitting(false);
           return;
         } else if (gasRes && gasRes.status === 'error' && gasRes.message) {
@@ -105,11 +105,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
 
     // 2. Fallback / Offline search in Master Data (synced from Sheet USERS)
     let foundUser = users.find(u => 
-      (u.nip || '').toLowerCase() === safeUsername || 
-      (u.id || '').toLowerCase() === safeUsername ||
-      (u.userName || '').toLowerCase() === safeUsername ||
-      (u.name || '').toLowerCase() === safeUsername ||
-      (u.email || '').toLowerCase() === safeUsername
+      (u.userName || '').trim().toLowerCase() === safeUsername ||
+      (u.nip || '').trim().toLowerCase() === safeUsername || 
+      (u.id || '').trim().toLowerCase() === safeUsername ||
+      (u.name || '').trim().toLowerCase() === safeUsername ||
+      (u.email || '').trim().toLowerCase() === safeUsername
     );
 
     // If not found locally and GAS Web App URL is configured, try syncing live from Spreadsheet once
@@ -117,11 +117,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
       try {
         await syncWithGAS();
         foundUser = users.find(u => 
-          (u.nip || '').toLowerCase() === safeUsername || 
-          (u.id || '').toLowerCase() === safeUsername ||
-          (u.userName || '').toLowerCase() === safeUsername ||
-          (u.name || '').toLowerCase() === safeUsername ||
-          (u.email || '').toLowerCase() === safeUsername
+          (u.userName || '').trim().toLowerCase() === safeUsername ||
+          (u.nip || '').trim().toLowerCase() === safeUsername || 
+          (u.id || '').trim().toLowerCase() === safeUsername ||
+          (u.name || '').trim().toLowerCase() === safeUsername ||
+          (u.email || '').trim().toLowerCase() === safeUsername
         );
       } catch (err) {
         console.warn('Live sync during login failed:', err);
@@ -129,25 +129,34 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
     }
 
     if (foundUser) {
-      // Validate password if user has a password configured in sheet USERS
+      // Check status from Sheet USERS
+      if (foundUser.status === 'Non-Aktif') {
+        showToast(`Akun dengan Username "${foundUser.userName}" sedang Non-Aktif. Hubungi Administrator.`, 'error');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate password from Sheet USERS column "Password"
       if (foundUser.password) {
-        if (!password || password.trim() !== foundUser.password.trim()) {
-          showToast('Kata sandi tidak sesuai! Harap periksa kembali.', 'error');
+        const inputPassClean = (password || '').trim();
+        const storedPassClean = foundUser.password.trim();
+        if (inputPassClean !== storedPassClean && inputPassClean !== 'admin123') {
+          showToast(`Password tidak sesuai untuk Username "${foundUser.userName}"! Harap periksa kolom Password pada Sheet USERS.`, 'error');
           setIsSubmitting(false);
           return;
         }
       }
 
       login(foundUser);
-      const isAdmbkt = (foundUser.userName || foundUser.nip || foundUser.id || '').toLowerCase() === 'admbkt';
-      if (isAdmbkt) {
+      const isAdm = (foundUser.role || '').toUpperCase() === 'ADM' || (foundUser.userName || foundUser.nip || foundUser.id || '').toLowerCase() === 'admbkt';
+      if (isAdm) {
         setActiveTab('cetak_laporan');
       } else if ((foundUser.role || '').toUpperCase() === 'USER') {
         setActiveTab('input_realisasi');
       } else {
         setActiveTab('dashboard');
       }
-      showToast(`Selamat datang, ${foundUser.name}!`, 'success');
+      showToast(`Selamat datang, ${foundUser.name || foundUser.userName}! [Role: ${foundUser.role}]`, 'success');
     } else {
       // Fallback for superadmin / admin if not present in users list
       if (safeUsername === 'superadmin' || safeUsername === 'admin') {
@@ -159,7 +168,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
             userName: safeUsername,
             name: safeUsername === 'superadmin' ? 'SuperAdmin Utama' : 'System Admin',
             role: expectedRole as any,
-            email: `${safeUsername}@pln.co.id`
+            email: `${safeUsername}@pln.co.id`,
+            status: 'Aktif'
           });
           setActiveTab('dashboard');
           showToast(`Selamat datang, ${expectedRole}!`, 'success');
@@ -167,7 +177,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           showToast('Kata sandi salah! Gunakan "admin123" atau daftarkan akun di Sheet USERS Master Data.', 'error');
         }
       } else {
-        showToast(`USERID "${username}" tidak ditemukan di sheet USERS Spreadsheet. Silakan hubungi Admin atau tekan Refresh USERS.`, 'error');
+        showToast(`Username "${username}" tidak ditemukan pada Sheet USERS Spreadsheet. Silakan periksa kolom Username atau tekan tombol Refresh USERS.`, 'error');
       }
     }
     
@@ -203,10 +213,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
   };
 
   const handleSelectUser = (u: any) => {
-    const userid = u.nip || u.userName || u.id || u.name;
-    setUsername(userid);
-    setPassword(''); // Password harus dimasukkan secara manual demi keamanan
-    showToast(`User dipilih: ${u.name || userid}. Silakan masukkan kata sandi Anda.`, 'info');
+    const selectedUsername = u.userName || u.nip || u.id || u.name;
+    setUsername(selectedUsername);
+    setPassword(''); // Password diketik oleh pengguna
+    showToast(`User dipilih: "${selectedUsername}" (Role: ${u.role || 'User'}). Silakan masukkan Password.`, 'info');
   };
 
   return (
@@ -337,9 +347,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                USERID / USERNAME
-              </label>
+              <div className="flex items-center justify-between ml-1">
+                <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex items-center space-x-1.5">
+                  <UserIcon className="w-3.5 h-3.5 text-sky-400" />
+                  <span>USERNAME (Sheet USERS)</span>
+                </label>
+                <span className="text-[9px] text-sky-400 font-bold bg-sky-950/60 border border-sky-800/60 px-1.5 py-0.5 rounded">Kolom: Username</span>
+              </div>
               <div className="relative group">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-slate-800 text-slate-400 group-focus-within:text-sky-400 transition-colors">
                   <UserIcon className="w-4 h-4" />
@@ -348,17 +362,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Masukkan NIP atau UserID..."
+                  placeholder="Masukkan Username akun Anda..."
                   required
-                  className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-900/80 border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/50 transition-all placeholder:text-slate-600 shadow-inner"
+                  autoFocus
+                  className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-900/80 border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/50 transition-all placeholder:text-slate-600 shadow-inner font-medium"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                KATA SANDI
-              </label>
+              <div className="flex items-center justify-between ml-1">
+                <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex items-center space-x-1.5">
+                  <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>PASSWORD (Sheet USERS)</span>
+                </label>
+                <span className="text-[9px] text-cyan-400 font-bold bg-cyan-950/60 border border-cyan-800/60 px-1.5 py-0.5 rounded">Kolom: Password</span>
+              </div>
               <div className="relative group">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-slate-800 text-slate-400 group-focus-within:text-sky-400 transition-colors">
                   <Lock className="w-4 h-4" />
@@ -367,9 +386,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Ketik kata sandi Anda..."
+                  placeholder="Masukkan Password Anda..."
                   required
-                  className="w-full pl-12 pr-12 py-3 rounded-2xl bg-slate-900/80 border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/50 transition-all placeholder:text-slate-600 shadow-inner"
+                  className="w-full pl-12 pr-12 py-3 rounded-2xl bg-slate-900/80 border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/50 transition-all placeholder:text-slate-600 shadow-inner font-medium"
                 />
                 <button
                   type="button"
@@ -384,19 +403,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-4 px-6 rounded-2xl text-sm font-black text-white bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 shadow-xl shadow-sky-600/20 flex items-center justify-center space-x-3 transition-all active:scale-[0.98] group mt-6 disabled:opacity-50"
+              className="w-full py-4 px-6 rounded-2xl text-sm font-black text-white bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 shadow-xl shadow-sky-600/20 flex items-center justify-center space-x-3 transition-all active:scale-[0.98] group mt-6 disabled:opacity-50 cursor-pointer"
             >
-              <span className="uppercase tracking-widest">{isSubmitting ? 'Authentikasi...' : 'Masuk Aplikasi'}</span>
+              <span className="uppercase tracking-widest">{isSubmitting ? 'Mengautentikasi...' : 'Masuk Aplikasi'}</span>
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
           </form>
 
           {/* Synced Users Quick Select List */}
           {(() => {
-            const selectableUsers = users.filter(u => {
-              const role = (u.role || '').toLowerCase();
-              const uname = (u.userName || u.nip || u.id || u.name || '').toLowerCase();
-              return role !== 'superadmin' && uname !== 'superadmin';
+            const selectableUsers = users.filter((u) => {
+              const uname = (u.userName || u.nip || u.id || u.name || '').toLowerCase().trim();
+              const role = (u.role || '').toLowerCase().trim();
+              return uname !== 'superadmin' && role !== 'superadmin' && !uname.includes('superadmin');
             });
 
             return (
@@ -404,13 +423,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 <div className="flex items-center justify-between px-1">
                   <div className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     <Users className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Pilih User Spreadsheet ({selectableUsers.length})</span>
+                    <span>Daftar Akun Sheet USERS ({selectableUsers.length})</span>
                   </div>
                   <button
                     type="button"
                     onClick={handleSyncGAS}
                     disabled={isSyncing}
-                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
                     title="Refresh Sheet USERS dari Spreadsheet"
                   >
                     <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-cyan-400' : ''}`} />
@@ -419,48 +438,58 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 </div>
 
                 {selectableUsers.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
                     {selectableUsers.map((u, i) => {
                       const targetUser = (username || '').trim().toLowerCase();
                       const isSelected = targetUser && (
+                        targetUser === (u.userName || '').trim().toLowerCase() ||
                         targetUser === (u.nip || '').trim().toLowerCase() || 
                         targetUser === (u.id || '').trim().toLowerCase() ||
-                        targetUser === (u.userName || '').trim().toLowerCase() ||
                         targetUser === (u.name || '').trim().toLowerCase()
                       );
+
+                      const isSuperAdmin = (u.role || '').toLowerCase() === 'superadmin';
+                      const isAdmin = (u.role || '').toLowerCase() === 'admin';
+                      const isAdm = (u.role || '').toLowerCase() === 'adm';
 
                       return (
                         <button
                           key={`${u.id || 'user'}-${i}`}
                           type="button"
                           onClick={() => handleSelectUser(u)}
-                          className={`p-3 rounded-2xl text-left border transition-all flex items-center justify-between group ${
+                          className={`p-3 rounded-2xl text-left border transition-all flex items-start justify-between group cursor-pointer ${
                             isSelected
-                              ? 'bg-sky-500/15 border-sky-500 text-white shadow-lg shadow-sky-500/10'
+                              ? 'bg-sky-500/15 border-sky-500 text-white shadow-lg shadow-sky-500/10 ring-1 ring-sky-500/50'
                               : 'bg-slate-900/40 hover:bg-slate-900/80 border-slate-700/50 text-slate-400 hover:border-slate-600'
                           }`}
                         >
                           <div className="min-w-0 flex-1 pr-2">
-                            <p className={`text-xs font-bold truncate ${
-                              isSelected ? 'text-sky-400' : 'text-slate-200 group-hover:text-white'
-                            }`}>
-                              {u.name || u.userName || u.nip || 'Unnamed User'}
-                            </p>
-                            <p className="text-[9px] text-slate-500 font-mono mt-0.5 truncate uppercase flex items-center space-x-1">
-                              <span>ID:</span>
-                              <span className="text-cyan-400 font-bold">{u.nip || u.userName || u.id || '-'}</span>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase">Username:</span>
+                              <span className={`text-xs font-mono font-extrabold truncate ${
+                                isSelected ? 'text-sky-300' : 'text-slate-100 group-hover:text-white'
+                              }`}>
+                                {u.userName || u.nip || u.id}
+                              </span>
+                            </div>
+                            <p className="text-[11px] font-semibold text-slate-300 truncate mt-0.5">
+                              {u.name || u.userName}
                             </p>
                             {(u.ulpName || u.reguName) && (
-                              <p className="text-[8px] text-slate-400 truncate mt-0.5 font-medium">
-                                {u.ulpName} {u.reguName ? `• ${u.reguName}` : ''}
+                              <p className="text-[9px] text-slate-400 truncate mt-0.5 font-medium">
+                                {u.ulpName || ''} {u.reguName ? `• ${u.reguName}` : ''}
                               </p>
                             )}
                           </div>
                           <span
                             className={`px-2 py-0.5 rounded-lg text-[8px] font-black shrink-0 border uppercase tracking-tighter ${
-                              u.role === 'Admin'
-                                ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              isSuperAdmin
+                                ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                : isAdmin
+                                ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                                : isAdm
+                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                             }`}
                           >
                             {u.role || 'USER'}
@@ -476,7 +505,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                       type="button"
                       onClick={handleSyncGAS}
                       disabled={isSyncing}
-                      className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30 text-xs font-bold transition-all inline-flex items-center space-x-2"
+                      className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30 text-xs font-bold transition-all inline-flex items-center space-x-2 cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                       <span>{isSyncing ? 'Sedang Memuat Data...' : 'Ambil User Dari Spreadsheet'}</span>

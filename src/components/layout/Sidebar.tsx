@@ -54,7 +54,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
 
   const role = currentUser?.role || 'User';
 
-  const isAdmbktUser = currentUser && (
+  const isAdmRole = currentUser && (
+    (currentUser.role || '').toUpperCase() === 'ADM' ||
     (currentUser.userName || '').toLowerCase() === 'admbkt' ||
     (currentUser.nip || '').toLowerCase() === 'admbkt' ||
     (currentUser.id || '').toLowerCase() === 'admbkt'
@@ -95,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       id: 'monitoring_absensi',
       label: 'Monitoring Absensi',
       icon: Clock,
-      roles: ['SuperAdmin', 'Admin', 'User'],
+      roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
     },
     {
       id: 'monitoring',
@@ -107,13 +108,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       id: 'cetak_laporan',
       label: 'Cetak Laporan',
       icon: Printer,
-      roles: ['SuperAdmin', 'Admin'],
+      roles: ['SuperAdmin', 'Admin', 'Adm'],
     },
     {
       id: 'rekap_harian',
       label: 'Rekap Pekerjaan Harian',
       icon: CalendarRange,
-      roles: ['SuperAdmin', 'Admin', 'User'],
+      roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
     },
     {
       id: 'master_data',
@@ -141,8 +142,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
     },
   ];
 
-  const allowedItems = isAdmbktUser
-    ? navItems.filter((item) => item.id === 'cetak_laporan' || item.id === 'rekap_harian')
+  const allowedItems = isAdmRole
+    ? navItems.filter((item) => item.id === 'cetak_laporan' || item.id === 'rekap_harian' || item.id === 'monitoring_absensi')
     : navItems.filter((item) => item.roles.includes(role));
 
   return (

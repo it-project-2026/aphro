@@ -115,7 +115,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
       if (currentUser.role === 'SuperAdmin') return true;
 
       // Admin sees all in their ULP or all if no ULP
-      if (currentUser.role === 'Admin') {
+      if (currentUser.role === 'Admin' || currentUser.role === 'Adm') {
         if (!currentUser.ulpId && !currentUser.ulpName) return true;
         if (currentUser.ulpId && wo.ulpId && currentUser.ulpId === wo.ulpId) return true;
         if (currentUser.ulpName && wo.ulpName) {

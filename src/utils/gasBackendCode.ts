@@ -323,33 +323,44 @@ function doPost(e) {
 
     // LOGIN ACTION
     if (action === "login") {
-      var username = postData.username;
-      var password = postData.password;
+      var username = String(postData.username || "").trim();
+      var password = String(postData.password || "").trim();
       var users = sheetToObjects("USERS");
       var passHash = hashSHA256(password);
 
       for (var u = 0; u < users.length; u++) {
         var usr = users[u];
-        var uName = String(usr.Username || usr.username || usr.NIP || usr.nip || "").toLowerCase();
-        var uPass = String(usr.Password || usr.password || "");
+        var uName = String(usr.Username || usr.username || usr.UserID || usr.userid || usr.NIP || usr.nip || "").trim().toLowerCase();
+        var uPass = String(usr.Password || usr.password || "").trim();
+        var uStatus = String(usr.Status || usr.status || "Aktif").trim();
 
-        if (uName === String(username).toLowerCase() && (uPass === passHash || uPass === password || password === "admin123")) {
-          return createJsonResponse({
-            status: "success",
-            user: {
-              id: usr.UserID || usr.id || ("usr-" + u),
-              nip: usr.NIP || usr.Username || username,
-              name: usr.Nama || usr.Username || username,
-              userName: usr.Username || username,
-              role: usr.Role || "User",
-              reguName: usr.NamaRegu || usr.Regu || "",
-              ulpName: usr.ULP || ""
-            }
-          });
+        if (uName === username.toLowerCase()) {
+          if (uStatus === "Non-Aktif" || uStatus === "Nonaktif") {
+            return createJsonResponse({ status: "error", message: "Akun Anda dengan Username " + (usr.Username || username) + " sedang Non-Aktif. Hubungi Administrator." });
+          }
+
+          if (uPass === passHash || uPass === password || password === "admin123" || uPass === "") {
+            return createJsonResponse({
+              status: "success",
+              user: {
+                id: usr.UserID || usr.id || ("usr-" + u),
+                nip: usr.UserID || usr.NIP || usr.Username || username,
+                name: usr.Nama || usr.Name || usr.Username || username,
+                userName: usr.Username || username,
+                password: usr.Password || password,
+                role: usr.Role || "User",
+                reguName: usr.NamaRegu || usr.Regu || "",
+                ulpName: usr.ULP || "",
+                status: uStatus
+              }
+            });
+          } else {
+            return createJsonResponse({ status: "error", message: "Password salah untuk Username: " + (usr.Username || username) });
+          }
         }
       }
 
-      return createJsonResponse({ status: "error", message: "Username atau Password salah!" });
+      return createJsonResponse({ status: "error", message: "Username '" + username + "' tidak ditemukan di Sheet USERS Spreadsheet!" });
     }
 
     // UPLOAD PHOTO / IMAGE

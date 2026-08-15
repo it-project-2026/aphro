@@ -45,7 +45,8 @@ const AppContent: React.FC = () => {
     return localStorage.getItem('aphro_has_initiated') === 'true';
   });
 
-  const isAdmbktUser = user && (
+  const isAdmRole = user && (
+    (user.role || '').toUpperCase() === 'ADM' ||
     (user.userName || '').toLowerCase() === 'admbkt' ||
     (user.nip || '').toLowerCase() === 'admbkt' ||
     (user.id || '').toLowerCase() === 'admbkt'
@@ -58,14 +59,22 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isAdmbktUser && activeTab !== 'cetak_laporan') {
+    if (isAdmRole && !['cetak_laporan', 'rekap_harian', 'monitoring_absensi'].includes(activeTab)) {
       setActiveTab('cetak_laporan');
     }
-  }, [isAdmbktUser, activeTab, setActiveTab]);
+  }, [isAdmRole, activeTab, setActiveTab]);
 
   const renderActivePage = () => {
-    if (isAdmbktUser) {
-      return <CetakLaporanPage />;
+    if (isAdmRole) {
+      switch (activeTab) {
+        case 'rekap_harian':
+          return <RekapPekerjaanHarianPage />;
+        case 'monitoring_absensi':
+          return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
+        case 'cetak_laporan':
+        default:
+          return <CetakLaporanPage />;
+      }
     }
 
     switch (activeTab) {
@@ -133,7 +142,7 @@ const AppContent: React.FC = () => {
   // 2. CRITICAL: JIKA USERS SUDAH LOGIN, TIDAK LAGI MASUK KE HALAMAN INISIASI!
   if (user) {
     const isUserRole = (user.role || '').toUpperCase() === 'USER';
-    if (isUserRole && !isAdmbktUser && !hasCheckedInToday) {
+    if (isUserRole && !isAdmRole && !hasCheckedInToday) {
       return (
         <>
           {showAbsensiForm ? (

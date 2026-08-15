@@ -92,7 +92,7 @@ export const WorkOrderPage: React.FC = () => {
             </button>
           )}
 
-          {(role === 'Admin' || role === 'SuperAdmin') && (
+          {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
             <button
               onClick={() => setActiveTab('input_wo')}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-md shadow-sky-600/20 transition-all"
@@ -414,7 +414,7 @@ export const WorkOrderPage: React.FC = () => {
                           <CheckSquare className="w-4 h-4" />
                         </button>
 
-                        {(role === 'Admin' || role === 'SuperAdmin') && (
+                        {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
                           <>
                             <button
                               onClick={() => setEditModalWO(wo)}

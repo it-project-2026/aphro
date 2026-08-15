@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAbsensi } from '../context/AbsensiContext';
@@ -45,16 +45,22 @@ function formatHariTanggal(dateStr: string) {
 export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab = 'absensi_pulang' }) => {
   const { user: currentUser } = useAuth();
   const { absensiList, addAbsensi } = useAbsensi();
-  const { ulpList } = useMasterData();
+  const { ulpList, reguList } = useMasterData();
   const { showToast } = useToast();
 
+  const isAdmRole = (currentUser?.role || '').toUpperCase() === 'ADM' || (currentUser?.userName || '').toLowerCase() === 'admbkt';
+
   const [activeSubTab, setActiveSubTab] = useState<'absensi_pulang' | 'monitoring_absensi'>(
-    initialSubTab
+    isAdmRole ? 'monitoring_absensi' : initialSubTab
   );
 
   useEffect(() => {
-    setActiveSubTab(initialSubTab);
-  }, [initialSubTab]);
+    if (isAdmRole) {
+      setActiveSubTab('monitoring_absensi');
+    } else {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab, isAdmRole]);
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const reguName = currentUser?.reguName || 'Regu ROW Alpha';
@@ -91,6 +97,23 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   // Filters for Monitoring Absensi Table
   const [searchQuery, setSearchQuery] = useState('');
   const [filterUlp, setFilterUlp] = useState('ALL');
+  const [filterRegu, setFilterRegu] = useState('ALL');
+
+  // Dynamic unique regu options
+  const allReguOptions = useMemo(() => {
+    const set = new Set<string>();
+    if (Array.isArray(reguList)) {
+      reguList.forEach((r) => {
+        if (r?.namaRegu && r.namaRegu.trim()) set.add(r.namaRegu.trim());
+      });
+    }
+    if (Array.isArray(absensiList)) {
+      absensiList.forEach((a) => {
+        if (a?.reguName && a.reguName.trim()) set.add(a.reguName.trim());
+      });
+    }
+    return Array.from(set).sort();
+  }, [reguList, absensiList]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -138,19 +161,53 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     }
   };
 
-  // Filtered Absensi List for Monitoring Table
-  const filteredAbsensiList = absensiList.filter((item) => {
-    const matchesUlp = filterUlp === 'ALL' || (item.ulpName || '').toLowerCase().includes(filterUlp.toLowerCase());
-    const query = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      !query ||
-      (item.tanggal || '').toLowerCase().includes(query) ||
-      (item.ulpName || '').toLowerCase().includes(query) ||
-      (item.reguName || '').toLowerCase().includes(query) ||
-      item.petugasList?.some((p) => (p.nama || '').toLowerCase().includes(query));
+  const isUserRole = (currentUser?.role || 'User').toUpperCase() === 'USER';
 
-    return matchesUlp && matchesSearch;
-  });
+  // Filtered Absensi List for Monitoring Table
+  const filteredAbsensiList = useMemo(() => {
+    return absensiList.filter((item) => {
+      if (!item) return false;
+
+      // 1. Role-based user filter: if role === 'USER', only show entries for the logged-in user's Regu / account
+      if (isUserRole) {
+        const itemReguClean = cleanStr(item.reguName);
+        const itemUserClean = cleanStr(item.userName);
+        const activeUserClean = cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id);
+        const activeNameClean = cleanStr(currentUser?.name);
+
+        const isExactRegu = (item.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
+        const isCleanReguMatch = Boolean(userReguClean && itemReguClean && itemReguClean === userReguClean);
+        const isUserMatch = Boolean(activeUserClean && itemUserClean && itemUserClean === activeUserClean);
+        const isNameMatch = Boolean(activeNameClean && cleanStr(item.namaPetugas) === activeNameClean);
+        const isNipMatch = Boolean(currentUser?.nip && item.nip && item.nip === currentUser.nip);
+        const isPetugasMemberMatch = Boolean(
+          activeNameClean &&
+          Array.isArray(item.petugasList) &&
+          item.petugasList.some((p: any) => cleanStr(p.nama) === activeNameClean)
+        );
+
+        const belongsToUser = isExactRegu || isCleanReguMatch || isUserMatch || isNameMatch || isNipMatch || isPetugasMemberMatch;
+        if (!belongsToUser) return false;
+      }
+
+      // 2. ULP Filter
+      const matchesUlp = filterUlp === 'ALL' || (item.ulpName || '').toLowerCase().includes(filterUlp.toLowerCase());
+
+      // 3. Regu Filter (setiap Nama Regu)
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(item.reguName) === cleanStr(filterRegu);
+
+      // 4. Search Query
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        (item.tanggal || '').toLowerCase().includes(query) ||
+        (item.ulpName || '').toLowerCase().includes(query) ||
+        (item.reguName || '').toLowerCase().includes(query) ||
+        item.petugasList?.some((p) => (p.nama || '').toLowerCase().includes(query));
+
+      return matchesUlp && matchesRegu && matchesSearch;
+    });
+  }, [absensiList, isUserRole, reguName, userReguClean, currentUser, filterUlp, filterRegu, searchQuery]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -160,41 +217,45 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
           <div className="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400">
             <UserCheck className="w-6 h-6" />
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white font-display">
-              Halaman Absensi Regu
+              {isAdmRole ? 'Monitoring Absensi Setiap Nama Regu' : 'Halaman Absensi Regu'}
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Pilih menu Absensi Pulang untuk kirim foto pulang atau Monitoring Absensi untuk melihat data absensi.
+            {isAdmRole
+              ? 'Monitoring riwayat dan status absensi kehadiran setiap Nama Regu operasional.'
+              : 'Pilih menu Absensi Pulang untuk kirim foto pulang atau Monitoring Absensi untuk melihat data absensi.'}
           </p>
         </div>
 
-        {/* Tab Buttons */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('absensi_pulang')}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
-              activeSubTab === 'absensi_pulang'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <LogOut className="w-4 h-4" />
-            <span>ABSENSI PULANG</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('monitoring_absensi')}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
-              activeSubTab === 'monitoring_absensi'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>MONITORING ABSENSI</span>
-          </button>
-        </div>
+        {/* Tab Buttons (hidden if isAdmRole to ensure exclusive access to Monitoring) */}
+        {!isAdmRole && (
+          <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('absensi_pulang')}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+                activeSubTab === 'absensi_pulang'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <LogOut className="w-4 h-4" />
+              <span>ABSENSI PULANG</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('monitoring_absensi')}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+                activeSubTab === 'monitoring_absensi'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>MONITORING ABSENSI</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* VIEW 1: ABSENSI PULANG */}
@@ -358,16 +419,20 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
             <div>
               <h2 className="text-lg font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-2">
                 <Clock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <span>Tabel Monitoring Absensi ({filteredAbsensiList.length})</span>
+                <span>
+                  Tabel Monitoring Absensi {isUserRole ? `- ${reguName} ` : ''}({filteredAbsensiList.length})
+                </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Data kehadiran regu, status Petugas 1 s.d 5, serta Foto Masuk & Foto Keluar.
+                {isUserRole
+                  ? `Menampilkan riwayat absensi khusus untuk ${reguName} (${currentUser?.name || currentUser?.userName || 'Petugas'}).`
+                  : 'Data kehadiran regu, status Petugas 1 s.d 5, serta Foto Masuk & Foto Keluar.'}
               </p>
             </div>
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative w-full sm:w-60">
+              <div className="relative w-full sm:w-52">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
@@ -381,7 +446,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               <select
                 value={filterUlp}
                 onChange={(e) => setFilterUlp(e.target.value)}
-                className="w-full sm:w-44 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                className="w-full sm:w-36 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
               >
                 <option value="ALL">Semua ULP</option>
                 {ulpList.map((u, idx) => (
@@ -390,6 +455,21 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                   </option>
                 ))}
               </select>
+
+              {!isUserRole && (
+                <select
+                  value={filterRegu}
+                  onChange={(e) => setFilterRegu(e.target.value)}
+                  className="w-full sm:w-44 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
+                >
+                  <option value="ALL">Semua Nama Regu</option>
+                  {allReguOptions.map((r, idx) => (
+                    <option key={`${r}-${idx}`} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
