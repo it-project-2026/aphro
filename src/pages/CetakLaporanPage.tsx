@@ -857,7 +857,7 @@ export const CetakLaporanPage: React.FC = () => {
             </div>
 
             {/* Diagram Schematic Frame - GAMBAR PETA POHON (ROW) matching attached image */}
-            <div className="border-2 border-slate-900 rounded-2xl p-4 sm:p-6 bg-white space-y-4 shadow-sm overflow-x-auto">
+            <div className="border-2 border-slate-900 rounded-2xl p-4 sm:p-6 bg-white space-y-4 shadow-sm overflow-x-auto print-single-page">
               {/* Header Box */}
               <div className="grid grid-cols-12 border border-slate-900 rounded-lg overflow-hidden text-center divide-x divide-slate-900">
                 {/* Left Logo */}
@@ -903,7 +903,7 @@ export const CetakLaporanPage: React.FC = () => {
                 feederName={selectedPenyulangName}
                 ulpName={selectedUlpName}
               >
-                <div className="h-[600px] w-full relative z-0">
+                <div className="h-[600px] print:h-[400px] w-full relative z-0">
                   <MapContainer
                     center={mapCenter}
                     zoom={13}
