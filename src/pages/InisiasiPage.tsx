@@ -438,7 +438,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
         <p className="font-bold tracking-widest uppercase text-slate-400">
           APHRO - Asset Protection & Hazard Response Operations
         </p>
-        <p>PT PLN (Persero) &bull; Master Database Inisiasi Unit Layanan</p>
+        <p>© 13307BKT- 2026 PLN ES UP4 Sumatera Barat. All rights reserved.</p>
       </div>
     </div>
   );

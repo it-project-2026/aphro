@@ -12,7 +12,7 @@ export const Footer: React.FC = () => {
           <p className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm">
             {settings.namaUnitLayanan}
           </p>
-          <p className="text-[10px] sm:text-xs">{settings.footerText}</p>
+          <p className="text-[10px] sm:text-xs">© 13307BKT- 2026 PLN ES UP4 Sumatera Barat. All rights reserved.</p>
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-[10px] sm:text-[11px]">

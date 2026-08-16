@@ -5,6 +5,7 @@ import { useAbsensi } from '../context/AbsensiContext';
 import { useUI } from '../context/UIContext';
 import { useToast } from '../hooks/useToast';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
+import { generateWatermarkedImage } from '../utils/watermark';
 import {
   UserCheck,
   Calendar,
@@ -63,8 +64,8 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   }, [initialSubTab, isAdmRole]);
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  const reguName = currentUser?.reguName || 'Regu ROW Alpha';
-  const ulpName = currentUser?.ulpName || 'ULP Kuranji';
+  const reguName = currentUser?.reguName || currentUser?.reguId || (currentUser?.role === 'SuperAdmin' || currentUser?.role === 'Admin' ? 'Manajemen/Admin' : 'Belum Ada Regu');
+  const ulpName = currentUser?.ulpName || currentUser?.ulpId || 'Belum Ada ULP';
 
   // Helper to normalize strings for comparison
   const cleanStr = (s?: string | null) => {
@@ -72,7 +73,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     return String(s)
       .toLowerCase()
       .trim()
-      .replace(/^(regu|tim|petugas)\s+/gi, '')
+      .replace(/^(regu|tim|petugas|kelompok|regu_row)\s+/gi, '')
       .replace(/[^a-z0-9]/gi, '');
   };
 
@@ -115,17 +116,51 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     return Array.from(set).sort();
   }, [reguList, absensiList]);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const base64 = uploadEvent.target?.result as string;
-      setFotoKeluar(base64);
-      showToast('Foto Pulang berhasil diambil/diunggah!', 'success');
+    setIsSubmitting(true);
+    showToast('Sedang memproses foto dan membaca GPS (Akurat)...', 'info');
+
+    const processPhoto = async (lat: number, lon: number) => {
+      try {
+        const timestampStr = new Date().toLocaleString('id-ID', {
+          dateStyle: 'full',
+          timeStyle: 'medium',
+        });
+
+        const watermarkedBase64 = await generateWatermarkedImage({
+          imageFile: file,
+          userName: currentUser?.name || 'Petugas',
+          ulpName: ulpName || 'ULP',
+          latitude: lat,
+          longitude: lon,
+          customTimestamp: timestampStr,
+        });
+
+        setFotoKeluar(watermarkedBase64);
+        showToast('Foto Pulang berhasil diambil & diberi watermark GPS!', 'success');
+      } catch (err: any) {
+        showToast(`Gagal memproses foto: ${err.message}`, 'error');
+      } finally {
+        setIsSubmitting(false);
+      }
     };
-    reader.readAsDataURL(file);
+
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => processPhoto(pos.coords.latitude, pos.coords.longitude),
+        (err) => {
+          showToast(`Gagal membaca GPS untuk foto: ${err.message}. Menggunakan koordinat default (0,0).`, 'warning');
+          processPhoto(0, 0); // fallback if gps fails but we still want the photo
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      );
+    } else {
+      showToast('Browser tidak mendukung GPS, lokasi tidak terdeteksi', 'warning');
+      processPhoto(0, 0);
+    }
   };
 
   const handleSubmitFotoPulang = async (e: React.FormEvent) => {

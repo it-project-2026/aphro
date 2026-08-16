@@ -5,12 +5,12 @@ const embeddedConfig = getActiveGasConfig();
 
 export const SettingsContextData = {
   defaultSettings: {
-    namaUnitLayanan: 'PT PLN (Persero) UP3 Padang',
+    namaUnitLayanan: 'PLN ES UP4 Sumatera Barat UP3 Padang',
     logoAplikasiUrl: '',
     logoInstansiUrl: '',
     loginBgUrl: '',
     themeColor: 'PLN Blue',
-    footerText: '© 2026 PT PLN (Persero). All rights reserved.',
+    footerText: '© 13307BKT- 2026 PLN ES UP4 Sumatera Barat. All rights reserved.',
     versiAplikasi: '1.0.0',
     gasWebAppUrl: embeddedConfig.gasWebAppUrl || '',
     spreadsheetId: embeddedConfig.spreadsheetId || '',

@@ -33,8 +33,8 @@ export function normalizeUser(u: any): User {
     role = 'User';
   }
 
-  const reguName = String(u.NamaRegu || u.Nama_Regu || u.reguName || u.NAMA_REGU || u.Regu_ROW || u.Regu || u.namaRegu || '').trim();
-  const ulpName = String(u.ULP || u.ulpName || u.NAMA_ULP || u.Nama_ULP || u.namaULP || '').trim();
+  const reguName = String(u.NamaRegu || u.Nama_Regu || u.reguName || u.NAMA_REGU || u.Regu_ROW || u.Regu || u.namaRegu || u.regu || u.ReguROW || u.Nama_Regu_ROW || u.Tim || u.Nama_Tim || u.Kelompok || '').trim();
+  const ulpName = String(u.ULP || u.ulpName || u.NAMA_ULP || u.Nama_ULP || u.namaULP || u.ulp || u.NamaULP || u.nama_ulp || '').trim();
   const status = (u.Status === 'Non-Aktif' || u.status === 'Non-Aktif' || u.Status === 'Nonaktif' || u.status === 'Nonaktif') ? 'Non-Aktif' : 'Aktif';
 
   return {
@@ -108,11 +108,11 @@ export function normalizePetugas(p: any): Petugas {
   return {
     id: String(p.id || p.ID || 'ptg-' + Math.random().toString(36).substring(2, 7)),
     nip: String(p.nip || p.NIP || p.id || p.ID || ''),
-    nama: String(p.nama || p.Nama || p.Petugas || ''),
+    nama: String(p.nama || p.Nama || p.Petugas || p.namaPetugas || p.Nama_Petugas || p.NAMA_PETUGAS || p.nama_petugas || p.Nama_petugas || p.name || p.Name || p.petugas_name || p.Petugas_Name || p.Nama_Anggota || p.NamaAnggota || p.petugas_name || ''),
     reguId: String(p.reguId || p.ReguID || ''),
-    reguName: String(p.reguName || p.Regu || p.Nama_Regu || ''),
+    reguName: String(p.reguName || p.Regu || p.Nama_Regu || p.NAMA_REGU || p.regu || p.NamaRegu || p.ReguROW || p.Nama_Regu_ROW || p.Tim || p.Nama_Tim || p.Tim_ROW || p.Kelompok || ''),
     ulpId: String(p.ulpId || p.ULPId || ''),
-    ulpName: String(p.ulpName || p.ULP || p.Nama_ULP || ''),
+    ulpName: String(p.ulpName || p.ULP || p.Nama_ULP || p.NAMA_ULP || p.ulp || p.NamaULP || p.namaULP || p.nama_ulp || ''),
     noHp: String(p.noHp || p.nomorHP || p.Nomor_HP || p.Kontak || ''),
     role,
     status: (p.status === 'Non-Aktif' || p.status === 'Nonaktif' || p.Status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
@@ -187,6 +187,8 @@ export function normalizeAbsensi(a: any): any {
     timestampMasuk: String(a.timestampMasuk || a['TIMESTAMP MASUK'] || a.TIMESTAMP_MASUK || a.TIMESTAMP || ''),
     fotoKeluar: formatDriveViewUrl(String(a.fotoKeluar || a.FOTO_KELUAR || a.FotoKeluar || '')),
     timestampKeluar: String(a.timestampKeluar || a['TIMESTAMP KELUAR'] || a.TIMESTAMP_KELUAR || ''),
+    latitude: Number(a.latitude || a.Latitude || a.LATITUDE || a.lat || 0),
+    longitude: Number(a.longitude || a.Longitude || a.LONGITUDE || a.lon || 0),
     createdAt: String(a.createdAt || a.CREATED_AT || a.Created_At || new Date().toISOString()),
   };
 }
@@ -279,13 +281,13 @@ export class SyncService {
       
       if (response.status === 'success' && response.data) {
         const d = response.data;
-        const usersList = Array.isArray(d.USERS) ? d.USERS.map(normalizeUser) : [];
-        const ulpList = Array.isArray(d.ULP) ? d.ULP.map(normalizeULP) : [];
-        const penyulangList = Array.isArray(d.PENYULANG) ? d.PENYULANG.map(normalizePenyulang) : [];
-        const reguList = Array.isArray(d.REGU_ROW) ? d.REGU_ROW.map(normalizeRegu) : [];
-        const petugasList = Array.isArray(d.PETUGAS) ? d.PETUGAS.map(normalizePetugas) : [];
-        const workOrdersList = Array.isArray(d.WORK_ORDER) ? d.WORK_ORDER.map(normalizeWorkOrder) : [];
-        const realisasiList = Array.isArray(d.REALISASI) ? d.REALISASI.map(normalizeRealisasi) : [];
+        const usersList = Array.isArray(d.USERS || d.Users || d.users) ? (d.USERS || d.Users || d.users).map(normalizeUser) : [];
+        const ulpList = Array.isArray(d.ULP || d.Ulp || d.ulp) ? (d.ULP || d.Ulp || d.ulp).map(normalizeULP) : [];
+        const penyulangList = Array.isArray(d.PENYULANG || d.Penyulang || d.penyulang) ? (d.PENYULANG || d.Penyulang || d.penyulang).map(normalizePenyulang) : [];
+        const reguList = Array.isArray(d.REGU_ROW || d.Regu_ROW || d.ReguROW || d.Regu || d.regu) ? (d.REGU_ROW || d.Regu_ROW || d.ReguROW || d.Regu || d.regu).map(normalizeRegu) : [];
+        const petugasList = Array.isArray(d.PETUGAS || d.Petugas || d.petugas || d.Data_Petugas || d.DATA_PETUGAS) ? (d.PETUGAS || d.Petugas || d.petugas || d.Data_Petugas || d.DATA_PETUGAS).map(normalizePetugas) : [];
+        const workOrdersList = Array.isArray(d.WORK_ORDER || d.Work_Order || d.WorkOrder || d.WO || d.wo) ? (d.WORK_ORDER || d.Work_Order || d.WorkOrder || d.WO || d.wo).map(normalizeWorkOrder) : [];
+        const realisasiList = Array.isArray(d.REALISASI || d.Realisasi || d.realisasi) ? (d.REALISASI || d.Realisasi || d.realisasi).map(normalizeRealisasi) : [];
 
         const result = {
           masterData: {
@@ -297,7 +299,7 @@ export class SyncService {
           },
           workOrders: workOrdersList,
           realisasi: realisasiList,
-          absensi: Array.isArray(d.ABSENSI) ? d.ABSENSI.map(normalizeAbsensi) : [],
+          absensi: Array.isArray(d.ABSENSI || d.Absensi || d.absensi) ? (d.ABSENSI || d.Absensi || d.absensi).map(normalizeAbsensi) : [],
           errors: []
         };
 

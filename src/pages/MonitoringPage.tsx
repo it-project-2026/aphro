@@ -2,11 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useRealisasi } from '../context/RealisasiContext';
+import { useAbsensi } from '../context/AbsensiContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useUI } from '../context/UIContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { WorkOrder, Realisasi } from '../types';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import {
   MapPin,
@@ -28,8 +29,14 @@ function createCustomMarkerIcon(status: string) {
   let color = '#f43f5e'; // Red Belum
   if (status === 'Selesai') color = '#10b981'; // Green Selesai
   else if (status === 'Sedang Dikerjakan') color = '#f59e0b'; // Yellow Progress
+  else if (status === 'Regu') color = '#0ea5e9'; // Blue for Regu
 
-  const svg = `
+  const svg = status === 'Regu' ? `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="32" height="48">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
+      <path d="M12 7c-1.65 0-3 1.35-3 3s1.35 3 3 3 3-1.35 3-3-1.35-3-3-3zm0 10c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="#ffffff" />
+    </svg>
+  ` : `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="28" height="42">
       <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
       <circle cx="12" cy="12" r="5" fill="#ffffff" />
@@ -39,8 +46,8 @@ function createCustomMarkerIcon(status: string) {
   return L.divIcon({
     className: 'custom-leaflet-marker',
     html: svg,
-    iconSize: [28, 42],
-    iconAnchor: [14, 42],
+    iconSize: status === 'Regu' ? [32, 48] : [28, 42],
+    iconAnchor: status === 'Regu' ? [16, 48] : [14, 42],
     popupAnchor: [0, -38],
   });
 }
@@ -49,7 +56,8 @@ export const MonitoringPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { workOrders, displayedWorkOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
-  const { ulpList, penyulangList } = useMasterData();
+  const { absensiList } = useAbsensi();
+  const { ulpList, penyulangList, reguList } = useMasterData();
   const { setActiveTab } = useUI();
 
   const isUserRole = currentUser?.role === 'User';
@@ -184,6 +192,51 @@ export const MonitoringPage: React.FC = () => {
       .filter((wo) => wo.latitude && wo.longitude)
       .map((wo) => [wo.latitude as number, wo.longitude as number]);
   }, [filteredWOs]);
+
+  const activeReguLocations = useMemo(() => {
+    // Sesuai Tanggal saat Login (Today)
+    const today = new Date().toISOString().slice(0, 10);
+    
+    // 1. Get active regu based on today's attendance
+    let todayAbsensi = absensiList.filter(a => a.tanggal && a.tanggal.slice(0, 10) === today);
+    
+    // 2. Filter by Unit Layanan (Inisiasi)
+    if (filterUlp !== 'ALL') {
+      todayAbsensi = todayAbsensi.filter(a => {
+        // Find ULP for this regu from master data
+        const reguInfo = reguList.find(r => r.namaRegu === a.reguName);
+        return reguInfo?.ulpName === filterUlp;
+      });
+    }
+    
+    // Unique regus that have checked in today
+    const activeReguNames = Array.from(new Set(todayAbsensi.map(a => a.reguName)));
+    
+    return activeReguNames.map(name => {
+      // Find latest activity for this regu
+      const reguRealisasi = realisasiList
+        .filter(r => r.reguName === name && r.createdAt.slice(0, 10) === today)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      const latestRel = reguRealisasi[0];
+      const reguAbsen = todayAbsensi.find(a => a.reguName === name);
+
+      // Priority: Latest Realisasi location > Absensi clock-in location
+      const lat = latestRel?.latitude || reguAbsen?.latitude;
+      const lon = latestRel?.longitude || reguAbsen?.longitude;
+
+      if (lat && lon) {
+        return {
+          name,
+          lat,
+          lon,
+          lastUpdate: latestRel?.createdAt || reguAbsen?.createdAt || today,
+          type: latestRel ? 'Realisasi' : 'Absensi'
+        };
+      }
+      return null;
+    }).filter(Boolean);
+  }, [absensiList, realisasiList, filterUlp, reguList]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -442,6 +495,7 @@ export const MonitoringPage: React.FC = () => {
                   <span>⚡ JARINGAN TR & PETA GIS</span>
                 </p>
                 <p className="text-slate-600 dark:text-slate-400">Total Lokasi: <span className="font-extrabold text-sky-600">{filteredWOs.length} Titik</span></p>
+                <p className="text-slate-600 dark:text-slate-400">Regu Aktif: <span className="font-extrabold text-blue-600">{activeReguLocations.length} Regu</span></p>
                 <p className="text-amber-600 dark:text-amber-400 font-extrabold pt-1 border-t border-slate-200 dark:border-slate-700">
                   ⚡ Jaringan Listrik TR (Tegangan Rendah) PLN
                 </p>
@@ -511,6 +565,44 @@ export const MonitoringPage: React.FC = () => {
                     </Marker>
                   );
                 })}
+
+                {/* Live Regu Markers */}
+                {activeReguLocations.map((regu: any, idx: number) => (
+                  <Marker
+                    key={`regu-${regu.name}-${idx}`}
+                    position={[regu.lat, regu.lon]}
+                    icon={createCustomMarkerIcon('Regu')}
+                  >
+                    <Tooltip permanent direction="top" offset={[0, -40]} className="bg-blue-600 text-white font-bold border-none rounded-lg px-2 py-1 shadow-md text-[10px]">
+                      {regu.name}
+                    </Tooltip>
+                    <Popup>
+                      <div className="p-2 space-y-2 min-w-[180px] font-sans">
+                        <div className="border-b border-slate-200 pb-1 flex items-center justify-between">
+                          <span className="font-black text-blue-700 text-sm italic">
+                            LIVE TRACKING
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-black uppercase">
+                            AKTIF
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-black text-slate-900 uppercase">
+                            {regu.name}
+                          </p>
+                          <div className="flex items-center space-x-1.5 text-[11px] text-slate-600">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Update: {new Date(regu.lastUpdate).toLocaleTimeString('id-ID')}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 flex items-center space-x-1">
+                            <MapPin className="w-3 h-3" />
+                            <span>Sumber: {regu.type}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
               </MapContainer>
             </div>
           </div>

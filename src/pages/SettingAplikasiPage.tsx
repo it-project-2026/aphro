@@ -48,7 +48,6 @@ export const SettingAplikasiPage: React.FC = () => {
   const [logoInstansiUrl, setLogoInstansiUrl] = useState(settings.logoInstansiUrl);
   const [loginBgUrl, setLoginBgUrl] = useState(settings.loginBgUrl);
   const [themeColor, setThemeColor] = useState(settings.themeColor);
-  const [footerText, setFooterText] = useState(settings.footerText);
   const [versiAplikasi, setVersiAplikasi] = useState(settings.versiAplikasi);
   const [gasWebAppUrl, setGasWebAppUrl] = useState(settings.gasWebAppUrl || '');
 
@@ -139,7 +138,6 @@ export const SettingAplikasiPage: React.FC = () => {
       logoInstansiUrl,
       loginBgUrl,
       themeColor,
-      footerText,
       versiAplikasi,
       gasWebAppUrl: cleanGasUrl,
       kontakAdmin: {
@@ -560,17 +558,6 @@ export const SettingAplikasiPage: React.FC = () => {
               />
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Teks Footer Copyright
-              </label>
-              <input
-                type="text"
-                value={footerText}
-                onChange={(e) => setFooterText(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
-              />
-            </div>
           </div>
         </div>
 

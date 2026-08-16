@@ -1,6 +1,6 @@
 /**
  * KONFIGURASI NATIVE TERANAM (EMBEDDED GAS CONFIGURATION)
- * Sistem APHRO - PT PLN (Persero) UP3 Padang
+ * Sistem APHRO - PLN ES UP4 Sumatera Barat UP3 Padang
  */
 
 export interface EmbeddedGASConfig {

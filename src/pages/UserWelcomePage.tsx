@@ -201,7 +201,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
             />
             <div>
               <h1 className="text-xs font-black uppercase tracking-wider text-cyan-400">
-                {settings.namaUnitLayanan || 'PT PLN (Persero) UP3 Padang'}
+                {settings.namaUnitLayanan || 'PLN ES UP4 Sumatera Barat UP3 Padang'}
               </h1>
               <p className="text-[11px] text-slate-400 font-medium">
                 APHRO - Asset Protection & Hazard Response Operations
@@ -417,9 +417,8 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
           )}
         </div>
 
-        {/* Footer info */}
         <div className="text-center text-[11px] text-slate-500 pb-4">
-          {settings.footerText || '© 2026 APHRO - Asset Protection & Hazard Response Operations. PT PLN (Persero).'}
+          © 13307BKT- 2026 PLN ES UP4 Sumatera Barat. All rights reserved.
         </div>
       </div>
     </div>

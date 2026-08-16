@@ -517,10 +517,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           })()}
         </div>
 
-        {/* Footer info */}
         <div className="text-center space-y-1">
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-            {settings.footerText}
+            © 13307BKT- 2026 PLN ES UP4 Sumatera Barat. All rights reserved.
           </p>
           <div className="flex items-center justify-center space-x-3 text-[9px] text-slate-600 font-bold uppercase tracking-widest">
             <span>VER {settings.versiAplikasi}</span>

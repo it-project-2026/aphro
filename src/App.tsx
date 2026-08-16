@@ -118,7 +118,7 @@ const AppContent: React.FC = () => {
 
           <div className="space-y-1">
             <p className="text-xs font-extrabold text-cyan-400 tracking-widest uppercase">
-              {settings.namaUnitLayanan || 'PT PLN (Persero) UP3 Padang'}
+              {settings.namaUnitLayanan || 'PLN ES UP4 Sumatera Barat UP3 Padang'}
             </p>
           </div>
 

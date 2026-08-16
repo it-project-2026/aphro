@@ -94,6 +94,8 @@ export interface Absensi {
   timestampMasuk?: string;
   fotoKeluar?: string;
   timestampKeluar?: string;
+  latitude?: number;
+  longitude?: number;
   createdAt: string;
 }
 

@@ -38,8 +38,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   const { showToast } = useToast();
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  const reguName = currentUser?.reguName || 'Regu ROW Alpha (Tim Utama)';
-  const ulpName = currentUser?.ulpName || 'ULP Kuranji';
+  const reguName = currentUser?.reguName || currentUser?.reguId || (currentUser?.role === 'SuperAdmin' || currentUser?.role === 'Admin' ? 'Manajemen/Admin' : 'Belum Ada Regu');
+  const ulpName = currentUser?.ulpName || currentUser?.ulpId || 'Belum Ada ULP';
 
   // Helper to normalize strings for comparison
   const cleanStr = (s?: string | null) => {
@@ -47,7 +47,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     return String(s)
       .toLowerCase()
       .trim()
-      .replace(/^(regu|tim|petugas)\s+/gi, '')
+      .replace(/^(regu|tim|petugas|kelompok|regu_row)\s+/gi, '')
       .replace(/[^a-z0-9]/gi, '');
   };
 
@@ -155,6 +155,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
   const [fotoMasuk, setFotoMasuk] = useState<string>('');
   const [fotoKeluar, setFotoKeluar] = useState<string>('');
+  const [currentCoords, setCurrentCoords] = useState<{lat: number; lon: number} | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveUrl: string } | null>(null);
 
@@ -210,9 +211,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
         if (type === 'masuk') {
           setFotoMasuk(watermarkedBase64);
+          setCurrentCoords({ lat, lon });
           showToast('Foto Masuk berhasil diambil & diberi watermark GPS!', 'success');
         } else {
           setFotoKeluar(watermarkedBase64);
+          setCurrentCoords({ lat, lon });
           showToast('Foto Keluar berhasil diambil & diberi watermark GPS!', 'success');
         }
       } catch (err: any) {
@@ -264,6 +267,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         petugasList: petugasRows,
         fotoMasuk: fotoMasuk || todayAbsensi?.fotoMasuk || '',
         fotoKeluar: fotoKeluar || todayAbsensi?.fotoKeluar || '',
+        latitude: currentCoords?.lat || todayAbsensi?.latitude,
+        longitude: currentCoords?.lon || todayAbsensi?.longitude,
       });
 
       showToast(

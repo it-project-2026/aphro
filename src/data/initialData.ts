@@ -288,7 +288,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   logoInstansiUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/97/Logo_PLN.png',
   loginBgUrl: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1600&q=80',
   themeColor: 'PLN Blue',
-  footerText: '© 2026 APHRO - Asset Protection & Hazard Response Operations. PT PLN (Persero). All Rights Reserved.',
+  footerText: '© 13307BKT- 2026 APHRO - Asset Protection & Hazard Response Operations. PLN ES UP4 Sumatera Barat. All Rights Reserved.',
   versiAplikasi: 'v2.4.0 Enterprise',
   gasWebAppUrl: getActiveGasConfig().gasWebAppUrl,
   kontakAdmin: {
