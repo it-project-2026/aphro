@@ -341,13 +341,13 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
             </div>
           ) : (
             <div className="space-y-3 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
-              {todaysWorkOrders.map((wo) => {
+              {todaysWorkOrders.map((wo, index) => {
                 const isFinished = wo.status === 'Selesai' || wo.status === 'SELESAI';
                 const isProgress = wo.status === 'Sedang Dikerjakan';
 
                 return (
                   <div
-                    key={wo.id}
+                    key={`${wo.id}-${index}`}
                     className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700 transition-all space-y-2.5 group"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">

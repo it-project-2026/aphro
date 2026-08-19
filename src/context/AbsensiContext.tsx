@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useCallback, useMemo } from 'react';
+import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
 import { Absensi } from '../types';
 import { INITIAL_ABSENSI } from '../data/initialData';
@@ -16,15 +16,15 @@ interface AbsensiContextType {
   hasCheckedInToday: boolean;
 }
 
-const AbsensiContext = createContext<AbsensiContextType | undefined>(undefined);
+const AbsensiContext = React.createContext<AbsensiContextType | undefined>(undefined);
 
-export function AbsensiProvider({ children }: { children: ReactNode }) {
+export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
   const [absensiList, setAbsensiList] = usePersistState<Absensi[]>('aphro_absensi', INITIAL_ABSENSI);
 
-  const addAbsensi = useCallback(async (absData: Omit<Absensi, 'id' | 'createdAt'>) => {
+  const addAbsensi = React.useCallback(async (absData: Omit<Absensi, 'id' | 'createdAt'>) => {
     const todayStr = absData.tanggal || new Date().toISOString().slice(0, 10);
     const nowStr = new Date().toLocaleString('id-ID');
 
@@ -106,7 +106,7 @@ export function AbsensiProvider({ children }: { children: ReactNode }) {
     return finalAbs;
   }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.absensiFolderId, showToast]);
 
-  const hasCheckedInToday = useMemo(() => {
+  const hasCheckedInToday = React.useMemo(() => {
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
     
     const now = new Date();
@@ -208,7 +208,7 @@ export function AbsensiProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAbsensi() {
-  const context = useContext(AbsensiContext);
+  const context = React.useContext(AbsensiContext);
   if (context === undefined) {
     throw new Error('useAbsensi must be used within a AbsensiProvider');
   }

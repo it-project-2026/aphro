@@ -189,6 +189,9 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
       showToast('Absensi Pulang (Foto Pulang) berhasil disimpan & disinkronkan!', 'success');
       setFotoKeluar('');
+      
+      // Auto redirect to Monitoring Absensi after checkout
+      setActiveSubTab('monitoring_absensi');
     } catch (err: any) {
       showToast(`Gagal menyimpan Foto Pulang: ${err.message}`, 'error');
     } finally {
@@ -200,10 +203,11 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
   // Filtered Absensi List for Monitoring Table
   const filteredAbsensiList = useMemo(() => {
-    return absensiList.filter((item) => {
+    // 1. Basic filter based on user role and search query
+    const baseList = absensiList.filter((item) => {
       if (!item) return false;
 
-      // 1. Role-based user filter: if role === 'USER', only show entries for the logged-in user's Regu / account
+      // Role-based user filter: if role === 'USER', only show entries for the logged-in user's Regu / account
       if (isUserRole) {
         const itemReguClean = cleanStr(item.reguName);
         const itemUserClean = cleanStr(item.userName);
@@ -225,13 +229,13 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         if (!belongsToUser) return false;
       }
 
-      // 2. ULP Filter
+      // ULP Filter
       const matchesUlp = filterUlp === 'ALL' || (item.ulpName || '').toLowerCase().includes(filterUlp.toLowerCase());
 
-      // 3. Regu Filter (setiap Nama Regu)
+      // Regu Filter
       const matchesRegu = filterRegu === 'ALL' || cleanStr(item.reguName) === cleanStr(filterRegu);
 
-      // 4. Search Query
+      // Search Query
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !query ||
@@ -242,6 +246,41 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
       return matchesUlp && matchesRegu && matchesSearch;
     });
+
+    // 2. Deduplicate: Ensure only one row per (Tanggal + Regu)
+    // This addresses the user request: "update existing row instead of creating a new row"
+    // even if the backend might have sent multiple rows.
+    const uniqueMap = new Map<string, typeof baseList[0]>();
+    
+    // Sort by updatedAt descending so we keep the freshest one
+    const sorted = [...baseList].sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    for (const item of sorted) {
+      const datePart = (item.tanggal || '').slice(0, 10);
+      const reguPart = cleanStr(item.reguName);
+      const key = `${datePart}_${reguPart}`;
+      
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, item);
+      } else {
+        // Merge entries if one has fotoMasuk and other has fotoKeluar
+        const existing = uniqueMap.get(key)!;
+        uniqueMap.set(key, {
+          ...existing,
+          fotoMasuk: existing.fotoMasuk || item.fotoMasuk,
+          fotoKeluar: existing.fotoKeluar || item.fotoKeluar,
+          petugasList: (existing.petugasList && existing.petugasList.length > 0) ? existing.petugasList : item.petugasList,
+          timestampMasuk: existing.timestampMasuk || item.timestampMasuk,
+          timestampKeluar: existing.timestampKeluar || item.timestampKeluar,
+        });
+      }
+    }
+
+    return Array.from(uniqueMap.values());
   }, [absensiList, isUserRole, reguName, userReguClean, currentUser, filterUlp, filterRegu, searchQuery]);
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useRealisasi } from '../context/RealisasiContext';
@@ -25,7 +25,7 @@ import {
 
 export const InputRealisasiPage: React.FC = () => {
   const { user: currentUser } = useAuth();
-  const { workOrders } = useWorkOrders();
+  const { workOrders, updateWorkOrder } = useWorkOrders();
   const { addRealisasi } = useRealisasi();
   const { settings } = useSettings();
   const { setActiveTab, selectedWoIdForRealisasi, setSelectedWoIdForRealisasi } = useUI();
@@ -63,7 +63,7 @@ export const InputRealisasiPage: React.FC = () => {
       return dateB - dateA;
     });
 
-  const [selectedWoId, setSelectedWoId] = useState<string>(() => {
+  const [selectedWoId, setSelectedWoId] = React.useState<string>(() => {
     if (selectedWoIdForRealisasi) return selectedWoIdForRealisasi;
     const defaultWo = availableWorkOrders.find((w) => w.status !== 'Selesai') || availableWorkOrders[0];
     return defaultWo?.id || '';
@@ -71,21 +71,22 @@ export const InputRealisasiPage: React.FC = () => {
 
   const selectedWO = availableWorkOrders.find((w) => w.id === selectedWoId);
 
-  const [tanggalRealisasi, setTanggalRealisasi] = useState(
+  const [tanggalRealisasi, setTanggalRealisasi] = React.useState(
     new Date().toISOString().slice(0, 10)
   );
-  const [petugasName, setPetugasName] = useState(currentUser?.name || 'Rahmat Hidayat');
-  const [latitude, setLatitude] = useState(-0.9142);
-  const [longitude, setLongitude] = useState(100.4631);
-  const [keterangan, setKeterangan] = useState('TEBANG');
-  const [noTiang, setNoTiang] = useState('');
-  const [jenisTanaman, setJenisTanaman] = useState('Kelapa Sawit');
-  const [pertumbuhanTanaman, setPertumbuhanTanaman] = useState('CEPAT');
-  const [kendala, setKendala] = useState('Tidak Ada Kendala');
+  const [petugasName, setPetugasName] = React.useState(currentUser?.name || 'Rahmat Hidayat');
+  const [latitude, setLatitude] = React.useState(-0.9142);
+  const [longitude, setLongitude] = React.useState(100.4631);
+  const [keterangan, setKeterangan] = React.useState('TEBANG');
+  const [noTiang, setNoTiang] = React.useState('');
+  const [jenisTanaman, setJenisTanaman] = React.useState('Kelapa Sawit');
+  const [pertumbuhanTanaman, setPertumbuhanTanaman] = React.useState('CEPAT');
+  const [kendala, setKendala] = React.useState('Tidak Ada Kendala');
+  const [lokasiKerja, setLokasiKerja] = React.useState('');
 
   // Handle direct selection from external tabs or after Spreadsheet sync
   // When work orders change (e.g. loaded asynchronously), ensure selectedWoId is valid
-  useEffect(() => {
+  React.useEffect(() => {
     if (availableWorkOrders.length === 0) return;
 
     if (selectedWoIdForRealisasi) {
@@ -111,7 +112,7 @@ export const InputRealisasiPage: React.FC = () => {
   }, [availableWorkOrders.length, selectedWoIdForRealisasi]);
 
   // Sync WO details when selectedWO changes
-  useEffect(() => {
+  React.useEffect(() => {
     if (selectedWO) {
       setLatitude(selectedWO.latitude);
       setLongitude(selectedWO.longitude);
@@ -119,12 +120,19 @@ export const InputRealisasiPage: React.FC = () => {
   }, [selectedWoId]);
 
   // Photo slots
-  const [photosSebelum, setPhotosSebelum] = useState<WatermarkedPhoto[]>([]);
-  const [photosSesudah, setPhotosSesudah] = useState<WatermarkedPhoto[]>([]);
+  const [photosSebelum, setPhotosSebelum] = React.useState<WatermarkedPhoto[]>([]);
+  const [photosSesudah, setPhotosSesudah] = React.useState<WatermarkedPhoto[]>([]);
 
   // Preview Modal
-  const [previewPhoto, setPreviewPhoto] = useState<WatermarkedPhoto | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = React.useState<WatermarkedPhoto | null>(null);
+  const [isProcessing, setIsProcessing] = React.useState(false);
+  
+  // Submission Flow
+  const [submissionStatus, setSubmissionStatus] = React.useState<'idle' | 'success' | 'finalizing'>('idle');
+  const [totalVolume, setTotalVolume] = React.useState<number>(0);
+  const [finalSatuan, setFinalSatuan] = React.useState<'KMS' | 'GAWANG'>('KMS');
+  const [lokasiStart, setLokasiStart] = React.useState<string>('');
+  const [lokasiFinish, setLokasiFinish] = React.useState<string>('');
 
   // Handle WO Change
   const handleWoChange = (id: string) => {
@@ -290,6 +298,7 @@ export const InputRealisasiPage: React.FC = () => {
         photosSesudah,
         petugasName,
         jenisTanaman,
+        lokasiKerja,
         keterangan,
         pertumbuhanTanaman,
         kendala,
@@ -305,17 +314,202 @@ export const InputRealisasiPage: React.FC = () => {
       setPertumbuhanTanaman('CEPAT');
       setJenisTanaman('Kelapa Sawit');
       setKendala('Tidak Ada Kendala');
+      setLokasiKerja('');
       setPhotosSebelum([]);
       setPhotosSesudah([]);
       setTanggalRealisasi(new Date().toISOString().slice(0, 10));
 
-      showToast('Realisasi berhasil diinput. Anda dapat menginput realisasi lain untuk WO ini.', 'success');
+      setSubmissionStatus('success');
+      showToast('Realisasi berhasil diinput.', 'success');
     } catch (err: any) {
       showToast(`Gagal menyimpan realisasi: ${err.message || 'Terjadi kesalahan'}`, 'error');
     } finally {
       setIsProcessing(false);
     }
   };
+
+  const handleFinalizeWorkOrder = async () => {
+    if (!selectedWO) return;
+    
+    setIsProcessing(true);
+    showToast('Memproses penyelesaian pekerjaan...', 'info');
+    
+    try {
+      // Use the context update method which handles both local and server sync
+      updateWorkOrder(selectedWO.id, {
+        status: 'Selesai' as WOStatus,
+        volumePekerjaan: totalVolume, // Legacy field
+        satuan: finalSatuan, // Legacy field
+        totalRealisasi: totalVolume,
+        satuanTotalRealisasi: finalSatuan,
+        lokasiStart,
+        lokasiFinish,
+      });
+      
+      showToast(`Pekerjaan ${selectedWO.nomorWO} telah dinyatakan SELESAI dengan volume ${totalVolume} ${finalSatuan}.`, 'success');
+      
+      setTimeout(() => {
+        setActiveTab('dashboard');
+      }, 1500);
+    } catch (err: any) {
+      showToast(`Gagal menyelesaikan pekerjaan: ${err.message}`, 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleResetForNewRealisasi = () => {
+    setSubmissionStatus('idle');
+  };
+
+  if (submissionStatus === 'success') {
+    return (
+      <div className="max-w-2xl mx-auto py-12 animate-in zoom-in duration-300">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 text-center shadow-xl space-y-6">
+          <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-50 dark:border-emerald-900/20">
+            <CheckCircle2 className="w-10 h-10" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white font-display">Data Berhasil Tersimpan!</h2>
+            <p className="text-slate-500 dark:text-slate-400">Realisasi titik pekerjaan ini telah berhasil dicatat ke sistem.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+            <button
+              type="button"
+              onClick={handleResetForNewRealisasi}
+              className="flex items-center justify-center space-x-2 py-4 px-6 bg-sky-100 hover:bg-sky-200 dark:bg-sky-900/30 dark:hover:bg-sky-900/50 text-sky-700 dark:text-sky-400 font-black rounded-2xl transition-all border border-sky-200 dark:border-sky-800 shadow-sm"
+            >
+              <Camera className="w-5 h-5" />
+              <span>TAMBAH REALISASI</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubmissionStatus('finalizing')}
+              className="flex items-center justify-center space-x-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-emerald-600/25"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              <span>PEKERJAAN SELESAI</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (submissionStatus === 'finalizing') {
+    return (
+      <div className="max-w-2xl mx-auto py-12 animate-in slide-in-from-bottom-10 duration-300">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 shadow-xl space-y-6">
+          <div className="flex items-center space-x-3 text-emerald-600 dark:text-emerald-400 border-b border-slate-100 dark:border-slate-700 pb-4">
+            <FileCheck2 className="w-7 h-7" />
+            <h2 className="text-xl font-black text-slate-900 dark:text-white font-display">Penyelesaian Pekerjaan (Final)</h2>
+          </div>
+          
+          <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Order</p>
+            <p className="font-black text-slate-900 dark:text-white">{selectedWO?.nomorWO} - {selectedWO?.penyulangName}</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  LOKASI START
+                </label>
+                <input
+                  type="text"
+                  placeholder="Titik mulai..."
+                  value={lokasiStart}
+                  onChange={(e) => setLokasiStart(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-sky-500 outline-none transition-all"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  LOKASI FINISH
+                </label>
+                <input
+                  type="text"
+                  placeholder="Titik selesai..."
+                  value={lokasiFinish}
+                  onChange={(e) => setLokasiFinish(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-sky-500 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                TOTAL VOLUME REALISASI
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={totalVolume || ''}
+                onChange={(e) => setTotalVolume(Number(e.target.value))}
+                className="w-full px-5 py-4 text-2xl font-black rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-emerald-500 outline-none transition-all shadow-inner"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                PILIH SATUAN
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setFinalSatuan('KMS')}
+                  className={`py-4 rounded-2xl font-black text-sm border-2 transition-all ${
+                    finalSatuan === 'KMS'
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      : 'bg-white border-slate-100 text-slate-400 dark:bg-slate-900 dark:border-slate-800'
+                  }`}
+                >
+                  KMS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFinalSatuan('GAWANG')}
+                  className={`py-4 rounded-2xl font-black text-sm border-2 transition-all ${
+                    finalSatuan === 'GAWANG'
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      : 'bg-white border-slate-100 text-slate-400 dark:bg-slate-900 dark:border-slate-800'
+                  }`}
+                >
+                  GAWANG
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-6 flex flex-col sm:flex-row gap-4">
+            <button
+              type="button"
+              onClick={() => setSubmissionStatus('success')}
+              className="flex-1 py-4 px-6 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 font-black rounded-2xl transition-all"
+            >
+              KEMBALI
+            </button>
+            <button
+              type="button"
+              onClick={handleFinalizeWorkOrder}
+              disabled={isProcessing || totalVolume <= 0}
+              className="flex-[2] py-4 px-6 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2"
+            >
+              {isProcessing ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                <Save className="w-5 h-5" />
+              )}
+              <span>SIMPAN PEKERJAAN SELESAI</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-300">
@@ -480,7 +674,7 @@ export const InputRealisasiPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
              <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 KENDALA
@@ -490,6 +684,19 @@ export const InputRealisasiPage: React.FC = () => {
                 placeholder="Kendala lapangan..."
                 value={kendala || ''}
                 onChange={(e) => setKendala(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                LOKASI KERJA (Manual)
+              </label>
+              <input
+                type="text"
+                placeholder="Contoh: Depan Kantor ULP..."
+                value={lokasiKerja || ''}
+                onChange={(e) => setLokasiKerja(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
             </div>

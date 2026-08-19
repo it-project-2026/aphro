@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useCallback } from 'react';
+import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
 import { User, UserRole } from '../types';
 import { AuthContextData } from './contextConstants';
@@ -12,9 +12,9 @@ interface AuthContextType {
   loginAsRole: (role: UserRole) => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = usePersistState<User | null>(
     'pln_mobile_user',
     AuthContextData.defaultUser
@@ -22,13 +22,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // This would normally come from MasterDataContext users, but let's assume we fetch it or it's provided
   // For simplicity during migration, I'll keep it basic
-  const loginWithCredentials = useCallback(async (userid: string, _password?: string) => {
+  const loginWithCredentials = React.useCallback(async (userid: string, _password?: string) => {
     // In a real app, this would verify against a backend or MasterDataContext users
     // For now, we'll assume the component calling this will handle the lookup and then call login()
     return true; 
   }, []);
 
-  const login = useCallback((userData: User) => {
+  const login = React.useCallback((userData: User) => {
     setUser(userData);
     try {
       localStorage.setItem('aphro_user', JSON.stringify(userData)); // Backward compatibility
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [setUser]);
 
-  const loginAsRole = useCallback((role: UserRole) => {
+  const loginAsRole = React.useCallback((role: UserRole) => {
     // Mock user for role switcher
     const safeRole = role || '';
     const mockUser: User = {
@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login(mockUser);
   }, [login]);
 
-  const logout = useCallback(() => {
+  const logout = React.useCallback(() => {
     setUser(null);
     localStorage.removeItem('aphro_user');
   }, [setUser]);
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const context = React.useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within a AuthProvider');
   }

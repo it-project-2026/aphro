@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
 import { GlobalProvider } from './context/index';
 import { useAuth } from './context/AuthContext';
 import { useSettings } from './context/SettingsContext';
@@ -38,10 +38,10 @@ const AppContent: React.FC = () => {
   const { isSyncing, syncWithGAS } = useGASSync();
   const { showToast } = useToast();
   
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [showAbsensiForm, setShowAbsensiForm] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isInitiated, setIsInitiated] = useState<boolean>(() => {
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
+  const [showAbsensiForm, setShowAbsensiForm] = React.useState(false);
+  const [isInitialLoading, setIsInitialLoading] = React.useState(true);
+  const [isInitiated, setIsInitiated] = React.useState<boolean>(() => {
     return localStorage.getItem('aphro_has_initiated') === 'true';
   });
 
@@ -52,13 +52,13 @@ const AppContent: React.FC = () => {
     (user.id || '').toLowerCase() === 'admbkt'
   );
 
-  useEffect(() => {
+  React.useEffect(() => {
     // Just handle splash screen timing
     const timer = setTimeout(() => setIsInitialLoading(false), 1500);
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (isAdmRole && !['cetak_laporan', 'rekap_harian', 'monitoring_absensi'].includes(activeTab)) {
       setActiveTab('cetak_laporan');
     }
@@ -78,7 +78,11 @@ const AppContent: React.FC = () => {
     }
 
     switch (activeTab) {
-      case 'dashboard': return <DashboardPage />;
+      case 'dashboard': 
+        if ((user?.role || '').toUpperCase() === 'USER') {
+          return <WorkOrderPage />;
+        }
+        return <DashboardPage />;
       case 'work_orders': return <WorkOrderPage />;
       case 'input_wo': return <WorkOrderInputPage />;
       case 'input_realisasi': return <InputRealisasiPage />;
@@ -148,7 +152,7 @@ const AppContent: React.FC = () => {
           {showAbsensiForm ? (
             <AbsensiKerjaPage onSuccess={() => {
               setShowAbsensiForm(false);
-              setActiveTab('input_realisasi');
+              setActiveTab('monitoring_absensi');
             }} />
           ) : (
             <UserWelcomePage onStartAbsensi={() => setShowAbsensiForm(true)} />

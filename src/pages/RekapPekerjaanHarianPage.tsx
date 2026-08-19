@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useRealisasi } from '../context/RealisasiContext';
+import { useWorkOrders } from '../context/WorkOrderContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useToast } from '../hooks/useToast';
+import { useGASSync } from '../context/GASSyncContext';
 import {
   INDONESIAN_MONTHS,
   getDaysInMonth,
@@ -34,19 +36,24 @@ import {
   CheckCircle2,
   RotateCcw,
   Database,
+  Building2,
 } from 'lucide-react';
 
 export const RekapPekerjaanHarianPage: React.FC = () => {
   const { settings } = useSettings();
   const { realisasiList } = useRealisasi();
+  const { workOrders } = useWorkOrders();
   const { ulpList, reguList, setMasterData } = useMasterData();
   const { showToast } = useToast();
+  const { syncWithGAS, isSyncing: isGASSyncing } = useGASSync();
 
-  // Unit Layanan (UL) Key derived from settings
-  const selectedULKey = useMemo(() => {
+  // Unit Layanan (UL) Selection
+  const [activeUL, setActiveUL] = useState<string>(() => {
     const fromSettings = settings.namaUnitLayanan || 'BUKITTINGGI';
     return RekapHarianService.normalizeUnitKey(fromSettings);
-  }, [settings.namaUnitLayanan]);
+  });
+
+  const selectedULKey = useMemo(() => activeUL, [activeUL]);
 
   // ULP Filter inside selected UL ('ALL' or specific ULP name)
   const [selectedUlpFilter, setSelectedUlpFilter] = useState<string>('ALL');
@@ -67,18 +74,77 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Selected cell for modal quick edit
-  const [editingCell, setEditingCell] = useState<{
-    rowId: string;
-    dayFormatted: string;
-    timRow: string;
-    namaUlp: string;
-    tebang1: number;
-    pangkas: number;
-    tebang2: number;
-  } | null>(null);
+  // Drag to scroll state
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
-  // Edit target / keterangan modal
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
+    setScrollLeft(scrollContainerRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 2; // scroll-fast factor
+    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  // Sync data with Realisasi & Work Order Context (Manual Trigger)
+  const handleSyncData = async () => {
+    try {
+      setIsLoading(true);
+      let currentRealisasi = realisasiList;
+      let currentWorkOrders = workOrders;
+
+      // 1. Ambil data terbaru dari Spreadsheet jika online
+      if (navigator.onLine) {
+        showToast('Mengambil data terbaru dari Spreadsheet...', 'info');
+        const freshData = await syncWithGAS();
+        if (freshData) {
+          if (Array.isArray(freshData.realisasi)) currentRealisasi = freshData.realisasi;
+          if (Array.isArray(freshData.workOrders)) currentWorkOrders = freshData.workOrders;
+          
+          // If we got fresh master data, update the context
+          if (freshData.masterData) {
+            setMasterData(freshData.masterData);
+          }
+        }
+      }
+
+      // 2. Jalankan sinkronisasi lokal menggunakan data terbaru
+      // Kita ambil rows dari state yang paling mutakhir
+      const updated = RekapHarianService.syncFromData(
+        selectedYear,
+        selectedMonthIdx,
+        rekapRows,
+        currentRealisasi,
+        currentWorkOrders
+      );
+      
+      setRekapRows(updated);
+      RekapHarianService.saveRekapData(selectedULKey, selectedYear, selectedMonthIdx, updated);
+      showToast('Data berhasil disinkronkan dan diperbarui!', 'success');
+    } catch (err) {
+      console.error('Manual sync error:', err);
+      showToast('Gagal sinkronisasi data.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const [editingRowConfig, setEditingRowConfig] = useState<{
     id: string;
     target: number;
@@ -104,28 +170,32 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
   // Active UL display label
   const unitDisplayName = useMemo(() => {
-    if (selectedULKey === 'PADANG') return 'UL PADANG';
-    if (selectedULKey === 'PAYAKUMBUH') return 'UL PAYAKUMBUH';
-    if (selectedULKey === 'SOLOK') return 'UL SOLOK';
-    if (selectedULKey === 'BUKITTINGGI') return 'UL BUKITTINGGI';
-    if (settings.namaUnitLayanan) return settings.namaUnitLayanan;
-    return `UL ${selectedULKey}`;
-  }, [selectedULKey, settings.namaUnitLayanan]);
+    if (activeUL === 'PADANG') return 'UL PADANG';
+    if (activeUL === 'PAYAKUMBUH') return 'UL PAYAKUMBUH';
+    if (activeUL === 'SOLOK') return 'UL SOLOK';
+    if (activeUL === 'BUKITTINGGI') return 'UL BUKITTINGGI';
+    return `UL ${activeUL}`;
+  }, [activeUL]);
 
   // Load Data when UL, Year, or Month changes
   useEffect(() => {
     setIsLoading(true);
-    const data = RekapHarianService.loadRekapData(
-      selectedULKey,
-      selectedYear,
-      selectedMonthIdx,
-      realisasiList,
-      ulpList,
-      reguList
-    );
-    setRekapRows(data);
-    setIsLoading(false);
-  }, [selectedULKey, selectedYear, selectedMonthIdx, realisasiList, ulpList, reguList]);
+    // Add a small delay to ensure contexts are settled
+    const timer = setTimeout(() => {
+      const data = RekapHarianService.loadRekapData(
+        selectedULKey,
+        selectedYear,
+        selectedMonthIdx,
+        realisasiList,
+        ulpList,
+        reguList,
+        workOrders
+      );
+      setRekapRows(data);
+      setIsLoading(false);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [selectedULKey, selectedYear, selectedMonthIdx, realisasiList, ulpList, reguList, workOrders]);
 
   // Save changes to localStorage
   const handleSaveData = (updated: RekapItemData[]) => {
@@ -138,57 +208,16 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     RekapHarianService.saveRekapData(selectedULKey, selectedYear, selectedMonthIdx, indexed);
   };
 
-  // Sync data with Realisasi Context
-  const handleSyncRealisasi = () => {
-    const updated = RekapHarianService.syncFromRealisasi(
-      selectedYear,
-      selectedMonthIdx,
-      rekapRows,
-      realisasiList
-    );
-    handleSaveData(updated);
-    showToast('Data berhasil disinkronkan dengan entri Realisasi!', 'success');
-  };
-
   // Sync Master Data (ULP & Regu ROW) directly from Google Spreadsheet
   const handleSyncMasterSpreadsheet = async () => {
     try {
       setIsSyncingMaster(true);
       showToast('Menghubungi Google Spreadsheet untuk memuat Master ULP & Regu...', 'info');
-      const gasUrl = settings.gasWebAppUrl || getActiveGasConfig().gasWebAppUrl;
-      const res = await SyncService.fetchAllData(gasUrl);
-      
-      if (res && res.masterData && res.masterData.regu && res.masterData.regu.length > 0) {
-        setMasterData(res.masterData);
-        const synced = RekapHarianService.syncWithMasterData(
-          selectedULKey,
-          rekapRows,
-          res.masterData.ulp,
-          res.masterData.regu
-        );
-        handleSaveData(synced);
-        showToast(`Berhasil memuat ${res.masterData.regu.length} Regu ROW & ${res.masterData.ulp.length} ULP dari Spreadsheet!`, 'success');
-      } else {
-        // Fallback sync with current master data context
-        const synced = RekapHarianService.syncWithMasterData(
-          selectedULKey,
-          rekapRows,
-          ulpList,
-          reguList
-        );
-        handleSaveData(synced);
-        showToast('Data ULP & Tim ROW diselaraskan dengan Master Data.', 'success');
-      }
+      await syncWithGAS();
+      showToast('Master data & Realisasi berhasil ditarik dari Spreadsheet!', 'success');
     } catch (err: any) {
       console.warn('Sync Master Spreadsheet error:', err);
-      const synced = RekapHarianService.syncWithMasterData(
-        selectedULKey,
-        rekapRows,
-        ulpList,
-        reguList
-      );
-      handleSaveData(synced);
-      showToast('Data diselaraskan dengan Master Data yang tersimpan.', 'info');
+      showToast('Gagal menarik data dari Spreadsheet.', 'error');
     } finally {
       setIsSyncingMaster(false);
     }
@@ -211,30 +240,6 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       handleSaveData(reset);
       showToast(`Susunan tabel telah disesuaikan dengan Master Data ${unitDisplayName}.`, 'info');
     }
-  };
-
-  // Save quick edit from modal
-  const handleSaveModalCell = () => {
-    if (!editingCell) return;
-    const updated = rekapRows.map((row) => {
-      if (row.id === editingCell.rowId) {
-        return {
-          ...row,
-          dailyValues: {
-            ...row.dailyValues,
-            [editingCell.dayFormatted]: {
-              tebang1: Number(editingCell.tebang1) || 0,
-              pangkas: Number(editingCell.pangkas) || 0,
-              tebang2: Number(editingCell.tebang2) || 0,
-            },
-          },
-        };
-      }
-      return row;
-    });
-    handleSaveData(updated);
-    setEditingCell(null);
-    showToast('Nilai pekerjaan berhasil disimpan.', 'success');
   };
 
   // Save row config (target & keterangan)
@@ -344,20 +349,24 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
   // Compute Grand Totals across visible/filtered rows
   const grandTotalPerDay = useMemo(() => {
-    const totals: Record<string, { tebang1: number; pangkas: number; tebang2: number; total: number }> = {};
+    const totals: Record<string, { targetKms: number; realisasiKms: number; tebang1: number; pangkas: number; tebang2: number; total: number }> = {};
     daysInMonth.forEach((d) => {
+      let tk = 0;
+      let rk = 0;
       let t1 = 0;
       let p = 0;
       let t2 = 0;
       let tot = 0;
       filteredRows.forEach((row) => {
-        const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
+        const v = row.dailyValues[d.dayFormatted] || { targetKms: 0, realisasiKms: 0, tebang1: 0, pangkas: 0, tebang2: 0 };
+        tk += v.targetKms || 0;
+        rk += v.realisasiKms || 0;
         t1 += v.tebang1 || 0;
         p += v.pangkas || 0;
         t2 += v.tebang2 || 0;
-        tot += (v.tebang1 || 0) + (v.pangkas || 0) + (v.tebang2 || 0);
+        tot += (v.tebang1 || 0) + (v.pangkas || 0); // Only sum tebang1 and pangkas as per request
       });
-      totals[d.dayFormatted] = { tebang1: t1, pangkas: p, tebang2: t2, total: tot };
+      totals[d.dayFormatted] = { targetKms: tk, realisasiKms: rk, tebang1: t1, pangkas: p, tebang2: t2, total: tot };
     });
     return totals;
   }, [daysInMonth, filteredRows]);
@@ -401,7 +410,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
             </div>
             
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
-              LAPORAN HARIAN TIM ROW {unitDisplayName.replace(/^(PLN\s*|UP3\s*)/i, '')}
+              LAPORAN HARIAN TIM ROW {unitDisplayName.replace(/^UL\s+/i, '')}
             </h1>
             <p className="text-sm font-bold text-sky-600 dark:text-sky-400 tracking-wide uppercase flex items-center gap-2">
               <Calendar className="w-4 h-4" />
@@ -411,6 +420,24 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
           {/* Month & Year Selectors & Actions */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* UL Selection Dropdown */}
+            <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 shadow-sm">
+              <Building2 className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+              <select
+                value={activeUL}
+                onChange={(e) => {
+                  setActiveUL(e.target.value);
+                  setIsLoading(true);
+                }}
+                className="bg-transparent font-black text-slate-900 dark:text-white focus:outline-none cursor-pointer text-sm"
+              >
+                <option value="BUKITTINGGI">UL BUKITTINGGI</option>
+                <option value="PADANG">UL PADANG</option>
+                <option value="PAYAKUMBUH">UL PAYAKUMBUH</option>
+                <option value="SOLOK">UL SOLOK</option>
+              </select>
+            </div>
+
             {/* Month Dropdown */}
             <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1.5">
               <button
@@ -469,6 +496,17 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Sync Data Button */}
+            <button
+              type="button"
+              onClick={handleSyncData}
+              disabled={isLoading || isGASSyncing}
+              className="px-4 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black flex items-center space-x-2 shadow-lg shadow-sky-600/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading || isGASSyncing ? 'animate-spin' : ''}`} />
+              <span>{isGASSyncing ? 'SINKRONISASI GAS...' : 'SINKRONISASI DATA'}</span>
+            </button>
 
             {/* Export Excel Button */}
             <button
@@ -539,7 +577,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
             <button
               type="button"
-              onClick={handleSyncRealisasi}
+              onClick={handleSyncData}
               className="px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900 border border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
               title="Sinkronkan dengan data Realisasi Lapangan"
             >
@@ -586,9 +624,15 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
         </div>
 
         {/* Matrix Table with Horizontal & Vertical Scrolling */}
-        <div className="overflow-x-auto overflow-y-auto max-h-[700px] select-none scrollbar-thin">
+        <div 
+          ref={scrollContainerRef}
+          onMouseDown={handleMouseDown}
+          onMouseLeave={handleMouseLeave}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
+          className={`overflow-x-auto overflow-y-auto max-h-[700px] select-none scrollbar-thin ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        >
           <table className="w-full border-collapse text-xs font-sans">
-            
             {/* Multi-level Headers */}
             <thead className="sticky top-0 z-30 bg-slate-300 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-black shadow-md border-b-2 border-slate-400 dark:border-slate-700">
               {/* Header Row 1: Day Names */}
@@ -616,7 +660,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 {daysInMonth.map((d) => (
                   <th
                     key={`header-dayname-${d.dayFormatted}`}
-                    colSpan={4}
+                    colSpan={6}
                     className={`px-1 py-1.5 border-r border-b text-center font-black uppercase text-[11px] tracking-wider ${
                       d.isRedDay
                         ? 'bg-red-600 text-white border-red-700'
@@ -660,7 +704,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 {daysInMonth.map((d) => (
                   <th
                     key={`header-daynum-${d.dayFormatted}`}
-                    colSpan={4}
+                    colSpan={5}
                     className={`px-1 py-1 border-r border-b text-center font-black text-xs ${
                       d.isRedDay
                         ? 'bg-red-600 text-white border-red-700'
@@ -672,10 +716,28 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 ))}
               </tr>
 
-              {/* Header Row 3: Sub-columns (TEBANG | PANGKAS | TEBANG | TOTAL) */}
+              {/* Header Row 3: Sub-columns (TARGET KMS | REALISASI KMS | TEBANG | PANGKAS | TEBANG | TOTAL) */}
               <tr>
                 {daysInMonth.map((d) => (
                   <React.Fragment key={`header-subcols-${d.dayFormatted}`}>
+                    <th
+                      className={`px-1 py-1 border-r border-b text-center font-bold text-[8px] min-w-[38px] ${
+                        d.isRedDay
+                          ? 'bg-red-600 text-white border-red-700'
+                          : 'border-slate-400 dark:border-slate-700 bg-slate-200 dark:bg-slate-850'
+                      }`}
+                    >
+                      TARGET KMS
+                    </th>
+                    <th
+                      className={`px-1 py-1 border-r border-b text-center font-bold text-[8px] min-w-[38px] ${
+                        d.isRedDay
+                          ? 'bg-red-600 text-white border-red-700'
+                          : 'border-slate-400 dark:border-slate-700 bg-slate-200 dark:bg-slate-850'
+                      }`}
+                    >
+                      REALISASI KMS
+                    </th>
                     <th
                       className={`px-1 py-1 border-r border-b text-center font-bold text-[9px] min-w-[42px] ${
                         d.isRedDay
@@ -693,15 +755,6 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                       }`}
                     >
                       PANGKAS
-                    </th>
-                    <th
-                      className={`px-1 py-1 border-r border-b text-center font-bold text-[9px] min-w-[42px] ${
-                        d.isRedDay
-                          ? 'bg-red-600 text-white border-red-700'
-                          : 'border-slate-400 dark:border-slate-700 bg-slate-200 dark:bg-slate-850'
-                      }`}
-                    >
-                      TEBANG
                     </th>
                     <th
                       className={`px-1 py-1 border-r border-b text-center font-black text-[9px] min-w-[45px] ${
@@ -771,77 +824,37 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
                     {/* Daily Sub-columns */}
                     {daysInMonth.map((d) => {
-                      const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
-                      const dayTotal = (val.tebang1 || 0) + (val.pangkas || 0) + (val.tebang2 || 0);
+                      const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
+                      const dayTotal = (val.tebang1 || 0) + (val.pangkas || 0); // User requested: TEBANG + PANGKAS
 
                       if (d.isRedDay) {
                         // MERAH Solid untuk Hari Libur & Akhir Pekan
                         return (
                           <React.Fragment key={`cell-${row.id}-${d.dayFormatted}`}>
                             <td
-                              onClick={() =>
-                                setEditingCell({
-                                  rowId: row.id,
-                                  dayFormatted: d.dayFormatted,
-                                  timRow: row.timRow,
-                                  namaUlp: row.namaUlp,
-                                  tebang1: val.tebang1,
-                                  pangkas: val.pangkas,
-                                  tebang2: val.tebang2,
-                                })
-                              }
-                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px] cursor-pointer hover:bg-red-500 transition-colors"
+                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[10px]"
+                            >
+                              {val.targetKms > 0 ? val.targetKms : ''}
+                            </td>
+                            <td
+                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[10px]"
+                            >
+                              {val.realisasiKms > 0 ? val.realisasiKms : ''}
+                            </td>
+                            <td
+                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px]"
                               title={`${d.dayName}, ${d.dayFormatted} ${monthName}: ${d.holidayName || 'Hari Libur / Weekend'}`}
                             >
                               {val.tebang1 > 0 ? val.tebang1 : ''}
                             </td>
                             <td
-                              onClick={() =>
-                                setEditingCell({
-                                  rowId: row.id,
-                                  dayFormatted: d.dayFormatted,
-                                  timRow: row.timRow,
-                                  namaUlp: row.namaUlp,
-                                  tebang1: val.tebang1,
-                                  pangkas: val.pangkas,
-                                  tebang2: val.tebang2,
-                                })
-                              }
-                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px] cursor-pointer hover:bg-red-500 transition-colors"
+                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px]"
                               title={`${d.dayName}, ${d.dayFormatted} ${monthName}: ${d.holidayName || 'Hari Libur / Weekend'}`}
                             >
                               {val.pangkas > 0 ? val.pangkas : ''}
                             </td>
                             <td
-                              onClick={() =>
-                                setEditingCell({
-                                  rowId: row.id,
-                                  dayFormatted: d.dayFormatted,
-                                  timRow: row.timRow,
-                                  namaUlp: row.namaUlp,
-                                  tebang1: val.tebang1,
-                                  pangkas: val.pangkas,
-                                  tebang2: val.tebang2,
-                                })
-                              }
-                              className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px] cursor-pointer hover:bg-red-500 transition-colors"
-                              title={`${d.dayName}, ${d.dayFormatted} ${monthName}: ${d.holidayName || 'Hari Libur / Weekend'}`}
-                            >
-                              {val.tebang2 > 0 ? val.tebang2 : ''}
-                            </td>
-                            <td
-                              onClick={() =>
-                                setEditingCell({
-                                  rowId: row.id,
-                                  dayFormatted: d.dayFormatted,
-                                  timRow: row.timRow,
-                                  namaUlp: row.namaUlp,
-                                  tebang1: val.tebang1,
-                                  pangkas: val.pangkas,
-                                  tebang2: val.tebang2,
-                                })
-                              }
-                              className="px-1 py-1.5 border-r border-red-800 bg-red-700 text-white text-center font-black text-[11px] cursor-pointer hover:bg-red-600 transition-colors"
+                              className="px-1 py-1.5 border-r border-red-800 bg-red-700 text-white text-center font-black text-[11px]"
                               title={`${d.dayName}, ${d.dayFormatted} ${monthName}: Total Libur`}
                             >
                               {dayTotal > 0 ? dayTotal : ''}
@@ -854,70 +867,37 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                       return (
                         <React.Fragment key={`cell-${row.id}-${d.dayFormatted}`}>
                           <td
-                            onClick={() =>
-                              setEditingCell({
-                                rowId: row.id,
-                                dayFormatted: d.dayFormatted,
-                                timRow: row.timRow,
-                                namaUlp: row.namaUlp,
-                                tebang1: val.tebang1,
-                                pangkas: val.pangkas,
-                                tebang2: val.tebang2,
-                              })
-                            }
-                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors"
+                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-emerald-600 dark:text-emerald-400 font-bold text-[10px]"
+                          >
+                            {val.targetKms > 0 ? val.targetKms.toFixed(2) : ''}
+                          </td>
+                          <td
+                            className={`px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-[10px] ${
+                              val.targetKms > 0 && val.realisasiKms < val.targetKms
+                                ? 'text-red-600 dark:text-red-400'
+                                : val.realisasiKms > 0 
+                                  ? 'text-blue-600 dark:text-blue-400'
+                                  : 'text-slate-400'
+                            }`}
+                          >
+                            {val.realisasiKms > 0 ? val.realisasiKms.toFixed(2) : '0.00'}
+                          </td>
+                          <td
+                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200"
                           >
                             {val.tebang1 > 0 ? val.tebang1 : ''}
                           </td>
                           <td
-                            onClick={() =>
-                              setEditingCell({
-                                rowId: row.id,
-                                dayFormatted: d.dayFormatted,
-                                timRow: row.timRow,
-                                namaUlp: row.namaUlp,
-                                tebang1: val.tebang1,
-                                pangkas: val.pangkas,
-                                tebang2: val.tebang2,
-                              })
-                            }
-                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors"
+                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200"
                           >
                             {val.pangkas > 0 ? val.pangkas : ''}
                           </td>
                           <td
-                            onClick={() =>
-                              setEditingCell({
-                                rowId: row.id,
-                                dayFormatted: d.dayFormatted,
-                                timRow: row.timRow,
-                                namaUlp: row.namaUlp,
-                                tebang1: val.tebang1,
-                                pangkas: val.pangkas,
-                                tebang2: val.tebang2,
-                              })
-                            }
-                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors"
-                          >
-                            {val.tebang2 > 0 ? val.tebang2 : ''}
-                          </td>
-                          <td
-                            onClick={() =>
-                              setEditingCell({
-                                rowId: row.id,
-                                dayFormatted: d.dayFormatted,
-                                timRow: row.timRow,
-                                namaUlp: row.namaUlp,
-                                tebang1: val.tebang1,
-                                pangkas: val.pangkas,
-                                tebang2: val.tebang2,
-                              })
-                            }
-                            className="px-1 py-1.5 border-r border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-center font-mono font-bold text-sky-600 dark:text-sky-400 cursor-pointer hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-colors"
+                            className="px-1 py-1.5 border-r border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-center font-mono font-bold text-sky-600 dark:text-sky-400"
                           >
                             {dayTotal > 0 ? dayTotal : ''}
                           </td>
-                        </React.Fragment>
+                          </React.Fragment>
                       );
                     })}
 
@@ -970,17 +950,20 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
                 {/* Day Summary Totals */}
                 {daysInMonth.map((d) => {
-                  const daySum = grandTotalPerDay[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, total: 0 };
+                  const daySum = grandTotalPerDay[d.dayFormatted] || { targetKms: 0, realisasiKms: 0, tebang1: 0, pangkas: 0, tebang2: 0, total: 0 };
                   return (
                     <React.Fragment key={`sum-${d.dayFormatted}`}>
+                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[9px] text-emerald-600 dark:text-emerald-400 font-bold">
+                        {daySum.targetKms > 0 ? daySum.targetKms.toFixed(2) : '0'}
+                      </td>
+                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[9px] text-blue-600 dark:text-blue-400 font-bold">
+                        {daySum.realisasiKms > 0 ? daySum.realisasiKms.toFixed(2) : '0'}
+                      </td>
                       <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[10px]">
                         {daySum.tebang1}
                       </td>
                       <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[10px]">
                         {daySum.pangkas}
-                      </td>
-                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[10px]">
-                        {daySum.tebang2}
                       </td>
                       <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-[11px] bg-slate-400/40 dark:bg-slate-700">
                         {daySum.total}
@@ -1007,125 +990,6 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
           </table>
         </div>
       </div>
-
-      {/* Modal: Quick Edit Day Cell */}
-      {editingCell && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="space-y-0.5">
-                <h3 className="text-base font-black text-slate-900 dark:text-white uppercase">
-                  Input Realisasi Pekerjaan
-                </h3>
-                <p className="text-xs font-bold text-sky-600 dark:text-sky-400">
-                  {editingCell.timRow} &bull; {editingCell.namaUlp}
-                </p>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Tanggal {editingCell.dayFormatted} {monthName} {selectedYear}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setEditingCell(null)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Tebang Pohon (Kolom 1)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editingCell.tebang1 || ''}
-                  onChange={(e) =>
-                    setEditingCell({
-                      ...editingCell,
-                      tebang1: Number(e.target.value) || 0,
-                    })
-                  }
-                  placeholder="0"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Pangkas Pohon (Kolom 2)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editingCell.pangkas || ''}
-                  onChange={(e) =>
-                    setEditingCell({
-                      ...editingCell,
-                      pangkas: Number(e.target.value) || 0,
-                    })
-                  }
-                  placeholder="0"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Tebang Bambu / Lainnya (Kolom 3)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editingCell.tebang2 || ''}
-                  onChange={(e) =>
-                    setEditingCell({
-                      ...editingCell,
-                      tebang2: Number(e.target.value) || 0,
-                    })
-                  }
-                  placeholder="0"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              {/* Total Calculation Preview */}
-              <div className="p-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/80 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Total Realisasi Hari Ini:
-                </span>
-                <span className="text-base font-black text-sky-600 dark:text-sky-400">
-                  {(Number(editingCell.tebang1) || 0) +
-                    (Number(editingCell.pangkas) || 0) +
-                    (Number(editingCell.tebang2) || 0)}{' '}
-                  Batang / Titik
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end space-x-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setEditingCell(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveModalCell}
-                className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black flex items-center space-x-1.5 shadow-lg shadow-sky-600/20 cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>Simpan Nilai</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal: Edit Target & Keterangan Row */}
       {editingRowConfig && (

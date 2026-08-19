@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useCallback } from 'react';
+import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
 import { ULP, Penyulang, ReguROW, Petugas, User } from '../types';
 import { 
@@ -45,16 +45,16 @@ interface MasterDataContextType {
   deleteUser: (id: string) => void;
 }
 
-const MasterDataContext = createContext<MasterDataContextType | undefined>(undefined);
+const MasterDataContext = React.createContext<MasterDataContextType | undefined>(undefined);
 
-export function MasterDataProvider({ children }: { children: ReactNode }) {
+export function MasterDataProvider({ children }: { children: React.ReactNode }) {
   const [ulpList, setUlpList] = usePersistState<ULP[]>('aphro_ulp', INITIAL_ULP);
   const [penyulangList, setPenyulangList] = usePersistState<Penyulang[]>('aphro_penyulang', INITIAL_PENYULANG);
   const [reguList, setReguList] = usePersistState<ReguROW[]>('aphro_regu', INITIAL_REGU);
   const [petugasList, setPetugasList] = usePersistState<Petugas[]>('aphro_ptg', INITIAL_PETUGAS);
   const [users, setUsers] = usePersistState<User[]>('aphro_synced_users', INITIAL_USERS);
 
-  const setMasterData = useCallback((data: {
+  const setMasterData = React.useCallback((data: {
     ulp?: ULP[];
     penyulang?: Penyulang[];
     regu?: ReguROW[];
@@ -68,64 +68,64 @@ export function MasterDataProvider({ children }: { children: ReactNode }) {
     if (data.users) setUsers(data.users);
   }, [setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
 
-  const addULP = useCallback((data: Omit<ULP, 'id'>) => {
+  const addULP = React.useCallback((data: Omit<ULP, 'id'>) => {
     setUlpList(prev => [...prev, { ...data, id: 'ULP-' + Date.now() }]);
   }, [setUlpList]);
 
-  const updateULP = useCallback((id: string, data: Partial<ULP>) => {
+  const updateULP = React.useCallback((id: string, data: Partial<ULP>) => {
     setUlpList(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
   }, [setUlpList]);
 
-  const deleteULP = useCallback((id: string) => {
+  const deleteULP = React.useCallback((id: string) => {
     setUlpList(prev => prev.filter(item => item.id !== id));
   }, [setUlpList]);
 
   // Similar for others... (skipped for brevity but should be implemented)
-  const addPenyulang = useCallback((data: Omit<Penyulang, 'id'>) => {
+  const addPenyulang = React.useCallback((data: Omit<Penyulang, 'id'>) => {
     setPenyulangList(prev => [...prev, { ...data, id: 'PYL-' + Date.now() }]);
   }, [setPenyulangList]);
 
-  const updatePenyulang = useCallback((id: string, data: Partial<Penyulang>) => {
+  const updatePenyulang = React.useCallback((id: string, data: Partial<Penyulang>) => {
     setPenyulangList(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
   }, [setPenyulangList]);
 
-  const deletePenyulang = useCallback((id: string) => {
+  const deletePenyulang = React.useCallback((id: string) => {
     setPenyulangList(prev => prev.filter(item => item.id !== id));
   }, [setPenyulangList]);
 
-  const addRegu = useCallback((data: Omit<ReguROW, 'id'>) => {
+  const addRegu = React.useCallback((data: Omit<ReguROW, 'id'>) => {
     setReguList(prev => [...prev, { ...data, id: 'RGU-' + Date.now() }]);
   }, [setReguList]);
 
-  const updateRegu = useCallback((id: string, data: Partial<ReguROW>) => {
+  const updateRegu = React.useCallback((id: string, data: Partial<ReguROW>) => {
     setReguList(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
   }, [setReguList]);
 
-  const deleteRegu = useCallback((id: string) => {
+  const deleteRegu = React.useCallback((id: string) => {
     setReguList(prev => prev.filter(item => item.id !== id));
   }, [setReguList]);
 
-  const addPetugas = useCallback((data: Omit<Petugas, 'id'>) => {
+  const addPetugas = React.useCallback((data: Omit<Petugas, 'id'>) => {
     setPetugasList(prev => [...prev, { ...data, id: 'PTG-' + Date.now() }]);
   }, [setPetugasList]);
 
-  const updatePetugas = useCallback((id: string, data: Partial<Petugas>) => {
+  const updatePetugas = React.useCallback((id: string, data: Partial<Petugas>) => {
     setPetugasList(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
   }, [setPetugasList]);
 
-  const deletePetugas = useCallback((id: string) => {
+  const deletePetugas = React.useCallback((id: string) => {
     setPetugasList(prev => prev.filter(item => item.id !== id));
   }, [setPetugasList]);
 
-  const addUser = useCallback((data: Omit<User, 'id'>) => {
+  const addUser = React.useCallback((data: Omit<User, 'id'>) => {
     setUsers(prev => [...prev, { ...data, id: 'usr-' + Date.now() }]);
   }, [setUsers]);
 
-  const updateUser = useCallback((id: string, data: Partial<User>) => {
+  const updateUser = React.useCallback((id: string, data: Partial<User>) => {
     setUsers(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
   }, [setUsers]);
 
-  const deleteUser = useCallback((id: string) => {
+  const deleteUser = React.useCallback((id: string) => {
     setUsers(prev => prev.filter(item => item.id !== id));
   }, [setUsers]);
 
@@ -145,7 +145,7 @@ export function MasterDataProvider({ children }: { children: ReactNode }) {
 }
 
 export function useMasterData() {
-  const context = useContext(MasterDataContext);
+  const context = React.useContext(MasterDataContext);
   if (context === undefined) {
     throw new Error('useMasterData must be used within a MasterDataProvider');
   }

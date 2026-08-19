@@ -51,6 +51,10 @@ export interface WorkOrder {
   petugasName?: string;
   volumePekerjaan?: number;
   satuan?: 'KMS' | 'GAWANG';
+  totalRealisasi?: number;
+  satuanTotalRealisasi?: 'KMS' | 'GAWANG';
+  lokasiStart?: string;
+  lokasiFinish?: string;
   woKms?: number;
   woBatang?: number;
   deskripsi?: string;
@@ -97,6 +101,7 @@ export interface Absensi {
   latitude?: number;
   longitude?: number;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Realisasi {
@@ -115,6 +120,7 @@ export interface Realisasi {
   kendala?: string;
   latitude: number;
   longitude: number;
+  lokasiKerja?: string;
   keterangan: string;
   progressPercent: number;
   status: WOStatus;

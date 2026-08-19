@@ -88,12 +88,20 @@ export class GASApiService {
    */
   static async createWorkOrder(gasUrl: string, workOrder: any): Promise<GASApiResponse> {
     try {
+      const mappedWo = {
+        ...workOrder,
+        TOTAL_REALISASI: workOrder.totalRealisasi || workOrder.volumePekerjaan,
+        SATUAN_TOTAL_REALISASI: workOrder.satuanTotalRealisasi || workOrder.satuan,
+        LOKASI_START: workOrder.lokasiStart || '',
+        LOKASI_FINISH: workOrder.lokasiFinish || '',
+      };
+
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'createWorkOrder',
-          workOrder,
+          workOrder: mappedWo,
         }),
       });
       return await response.json();
@@ -147,12 +155,17 @@ export class GASApiService {
    */
   static async saveRealisasi(gasUrl: string, realisasi: any): Promise<GASApiResponse> {
     try {
+      const mappedRel = {
+        ...realisasi,
+        Lokasi_kerja: realisasi.lokasiKerja || '',
+      };
+
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'saveRealisasi',
-          realisasi,
+          realisasi: mappedRel,
         }),
       });
       return await response.json();
@@ -231,10 +244,18 @@ export class GASApiService {
    */
   static async updateWorkOrder(gasUrl: string, id: string, wo: any): Promise<GASApiResponse> {
     try {
+      const mappedWo = {
+        ...wo,
+        TOTAL_REALISASI: wo.totalRealisasi,
+        SATUAN_TOTAL_REALISASI: wo.satuanTotalRealisasi,
+        LOKASI_START: wo.lokasiStart,
+        LOKASI_FINISH: wo.lokasiFinish,
+      };
+
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'updateWorkOrder', id, workOrder: wo }),
+        body: JSON.stringify({ action: 'updateWorkOrder', id, workOrder: mappedWo }),
       });
       return await response.json();
     } catch (err: any) {

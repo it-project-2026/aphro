@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useState, useMemo, useCallback } from 'react';
+import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
 import { WorkOrder } from '../types';
 import { INITIAL_WORK_ORDERS } from '../data/initialData';
@@ -19,16 +19,16 @@ interface WorkOrderContextType {
   deleteWorkOrder: (id: string) => void;
 }
 
-const WorkOrderContext = createContext<WorkOrderContextType | undefined>(undefined);
+const WorkOrderContext = React.createContext<WorkOrderContextType | undefined>(undefined);
 
-export function WorkOrderProvider({ children }: { children: ReactNode }) {
+export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
   const [workOrders, setWorkOrders] = usePersistState<WorkOrder[]>('aphro_wo', INITIAL_WORK_ORDERS);
-  const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = useState<string | null>(null);
+  const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = React.useState<string | null>(null);
 
-  const displayedWorkOrders = useMemo(() => {
+  const displayedWorkOrders = React.useMemo(() => {
     if (user && user.role === 'User') {
       const cleanStr = (s?: string | null) => {
         if (!s) return '';
@@ -91,7 +91,7 @@ export function WorkOrderProvider({ children }: { children: ReactNode }) {
     return workOrders;
   }, [workOrders, user]);
 
-  const addWorkOrder = useCallback((woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addWorkOrder = React.useCallback((woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newWo: WorkOrder = {
       ...woData,
       id: 'WO-' + Date.now(),
@@ -123,7 +123,7 @@ export function WorkOrderProvider({ children }: { children: ReactNode }) {
     return newWo;
   }, [setWorkOrders, settings.gasWebAppUrl, showToast]);
 
-  const updateWorkOrder = useCallback((id: string, updates: Partial<WorkOrder>) => {
+  const updateWorkOrder = React.useCallback((id: string, updates: Partial<WorkOrder>) => {
     let updatedWo: WorkOrder | undefined;
     setWorkOrders(prev => prev.map(wo => {
       if (wo.id === id) {
@@ -146,7 +146,7 @@ export function WorkOrderProvider({ children }: { children: ReactNode }) {
     }
   }, [setWorkOrders, settings.gasWebAppUrl]);
 
-  const deleteWorkOrder = useCallback((id: string) => {
+  const deleteWorkOrder = React.useCallback((id: string) => {
     setWorkOrders(prev => prev.filter(wo => wo.id !== id));
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
@@ -177,7 +177,7 @@ export function WorkOrderProvider({ children }: { children: ReactNode }) {
 }
 
 export function useWorkOrders() {
-  const context = useContext(WorkOrderContext);
+  const context = React.useContext(WorkOrderContext);
   if (context === undefined) {
     throw new Error('useWorkOrders must be used within a WorkOrderProvider');
   }

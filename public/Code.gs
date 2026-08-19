@@ -49,8 +49,8 @@ function setupDatabase() {
   // List of required Sheets and Header Columns
   var sheetsSchema = {
     "USERS": ["UserID", "Username", "Password", "NamaRegu", "Role", "ULP", "Status", "Last Login", "Created At"],
-    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "STATUS", "Created_At"],
-    "REALISASI": ["WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Timestamp"],
+    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "STATUS", "LOKASI_START", "LOKASI_FINISH", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI", "Created_At"],
+    "REALISASI": ["WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Lokasi_kerja", "Timestamp"],
     "ULP": ["ID", "Kode_ULP", "Nama_ULP", "Manajer", "Kontak", "Alamat", "Status"],
     "PENYULANG": ["ID", "Nama_Penyulang", "ULP", "Panjang_Kms", "Jumlah_Trafo", "Status"],
     "REGU_ROW": ["ID", "Kode_Regu", "Nama_Regu", "ULP", "Jumlah_Anggota", "Kontak", "Status"],
@@ -290,13 +290,35 @@ function savePhotoToDrive(base64Data, folderIdToUse, woIdentifier, photoType) {
 
 function formatDateForCompare(val) {
   if (!val) return "";
+  var date;
   if (val instanceof Date) {
-    return Utilities.formatDate(val, Session.getScriptTimeZone() || "GMT+7", "yyyy-MM-dd");
+    date = val;
+  } else {
+    var s = String(val).trim();
+    // Handle YYYY-MM-DD
+    if (s.indexOf("-") === 4 && s.length >= 10) {
+      date = new Date(s.slice(0, 10));
+    } 
+    // Handle DD/MM/YYYY or DD-MM-YYYY
+    else if (s.indexOf("/") > 0 || (s.indexOf("-") > 0 && s.indexOf("-") < 4)) {
+      var parts = s.split(/[\/\-]/);
+      if (parts.length >= 3) {
+        // Assume DD is first, MM second, YYYY third
+        var d = parseInt(parts[0], 10);
+        var m = parseInt(parts[1], 10) - 1;
+        var y = parseInt(parts[2], 10);
+        if (y < 100) y += 2000;
+        date = new Date(y, m, d);
+      }
+    }
+    // Fallback
+    if (!date || isNaN(date.getTime())) {
+      date = new Date(s);
+    }
   }
-  var s = String(val).trim();
-  if (s.indexOf("T") > 0) return s.split("T")[0];
-  if (s.length >= 10 && s.indexOf("-") === 4) return s.slice(0, 10);
-  return s;
+  
+  if (!date || isNaN(date.getTime())) return String(val).slice(0, 10);
+  return Utilities.formatDate(date, "GMT+7", "yyyy-MM-dd");
 }
 
 function formatDriveViewUrlGAS(url) {
@@ -391,7 +413,11 @@ function doPost(e) {
         volPekerjaan,                         // 8. VOLUME
         satuanVal,                            // 9. SATUAN
         wo.status || "BELUM SELESAI",         // 10. STATUS
-        createdTime                           // 11. Created_At
+        wo.LOKASI_START || "",                // 11. LOKASI_START
+        wo.LOKASI_FINISH || "",               // 12. LOKASI_FINISH
+        wo.TOTAL_REALISASI || 0,              // 13. TOTAL_REALISASI
+        wo.SATUAN_TOTAL_REALISASI || "",      // 14. SATUAN_TOTAL_REALISASI
+        createdTime                           // 15. Created_At
       ]);
 
       return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO });
@@ -449,7 +475,8 @@ function doPost(e) {
         rel.pertumbuhanTanaman || "-",                  // 12. Pertumbuhan_Tanaman (Col L)
         rel.kendala || "-",                             // 13. Kendala (Col M)
         latLng,                                         // 14. Latitude_Longitude (Col N)
-        timestampStr                                    // 15. Timestamp (Col O)
+        rel.Lokasi_kerja || "",                         // 15. Lokasi_kerja (Col O)
+        timestampStr                                    // 16. Timestamp (Col P)
       ]);
 
       // Update progress in WORK_ORDER sheet
@@ -599,6 +626,10 @@ function doPost(e) {
           if (wo.volumePekerjaan !== undefined) sheet.getRange(r + 1, 8).setValue(wo.volumePekerjaan);
           if (wo.satuan !== undefined) sheet.getRange(r + 1, 9).setValue(wo.satuan);
           if (wo.status !== undefined) sheet.getRange(r + 1, 10).setValue(wo.status);
+          if (wo.LOKASI_START !== undefined) sheet.getRange(r + 1, 11).setValue(wo.LOKASI_START);
+          if (wo.LOKASI_FINISH !== undefined) sheet.getRange(r + 1, 12).setValue(wo.LOKASI_FINISH);
+          if (wo.TOTAL_REALISASI !== undefined) sheet.getRange(r + 1, 13).setValue(wo.TOTAL_REALISASI);
+          if (wo.SATUAN_TOTAL_REALISASI !== undefined) sheet.getRange(r + 1, 14).setValue(wo.SATUAN_TOTAL_REALISASI);
           updated = true;
           break;
         }

@@ -222,26 +222,10 @@ export const WorkOrderInputPage: React.FC = () => {
         progressPercent: status === 'SELESAI' ? 100 : 0,
       };
 
-      const createdWo = addWorkOrder(newWoData);
-
-      if (settings.gasWebAppUrl) {
-        showToast('Menyimpan ke Google Spreadsheet...', 'info');
-        const res = await GASApiService.createWorkOrder(settings.gasWebAppUrl, {
-          ...createdWo,
-          reguName: reguName, // Ensure NAMA_REGU is stored in sheet
-          ulpName: ulpName,
-          penyulangName: penyulangName,
-        });
-
-        if (res.status === 'success') {
-          showToast(`Work Order Baru (${numVolume} ${satuan}) Berhasil Disimpan ke Spreadsheet!`, 'success');
-        } else {
-          showToast(`WO tersimpan lokal. Info GAS: ${res.message || 'Gagal terhubung ke Spreadsheet'}`, 'info');
-        }
-      } else {
-        showToast(`Work Order Baru (${numVolume} ${satuan}) Berhasil Disimpan! Status: ${status}`, 'success');
-      }
-
+      // addWorkOrder already handles both local state and GAS API synchronization
+      addWorkOrder(newWoData);
+      
+      showToast(`Work Order Baru (${numVolume} ${satuan}) Berhasil Disimpan!`, 'success');
       setActiveTab('work_orders');
     } catch (err: any) {
       console.error('Error saving Work Order:', err);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useCallback } from 'react';
+import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
 import { Realisasi } from '../types';
 import { INITIAL_REALISASI } from '../data/initialData';
@@ -14,14 +14,14 @@ interface RealisasiContextType {
   addRealisasi: (rel: Omit<Realisasi, 'id' | 'createdAt'>) => Promise<Realisasi>;
 }
 
-const RealisasiContext = createContext<RealisasiContextType | undefined>(undefined);
+const RealisasiContext = React.createContext<RealisasiContextType | undefined>(undefined);
 
-export function RealisasiProvider({ children }: { children: ReactNode }) {
+export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { showToast } = useToast();
   const [realisasiList, setRealisasiList] = usePersistState<Realisasi[]>('aphro_realisasi', INITIAL_REALISASI);
 
-  const addRealisasi = useCallback(async (relData: Omit<Realisasi, 'id' | 'createdAt'>) => {
+  const addRealisasi = React.useCallback(async (relData: Omit<Realisasi, 'id' | 'createdAt'>) => {
     const newRel: Realisasi = {
       ...relData,
       id: 'REL-' + Date.now(),
@@ -80,7 +80,7 @@ export function RealisasiProvider({ children }: { children: ReactNode }) {
 }
 
 export function useRealisasi() {
-  const context = useContext(RealisasiContext);
+  const context = React.useContext(RealisasiContext);
   if (context === undefined) {
     throw new Error('useRealisasi must be used within a RealisasiProvider');
   }

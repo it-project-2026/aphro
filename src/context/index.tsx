@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import * as React from 'react';
 import { AuthProvider } from './AuthContext';
 import { SettingsProvider } from './SettingsContext';
 import { MasterDataProvider } from './MasterDataContext';
@@ -10,7 +10,7 @@ import { UIProvider } from './UIContext';
 
 import { GASSyncProvider } from './GASSyncContext';
 
-export function GlobalProvider({ children }: { children: ReactNode }) {
+export function GlobalProvider({ children }: { children: React.ReactNode }) {
   return (
     <SettingsProvider>
       <UIProvider>

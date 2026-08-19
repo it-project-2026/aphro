@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useCallback, useMemo } from 'react';
+import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
 import { AppSettings } from '../types';
 import { SettingsContextData } from './contextConstants';
@@ -10,9 +10,9 @@ interface SettingsContextType {
   resetSettings: () => void;
 }
 
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+const SettingsContext = React.createContext<SettingsContextType | undefined>(undefined);
 
-export function SettingsProvider({ children }: { children: ReactNode }) {
+export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [rawSettings, setRawSettings] = usePersistState<AppSettings>(
     'pln_mobile_settings',
     SettingsContextData.defaultSettings
@@ -20,7 +20,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   // Guarantee that gasWebAppUrl and critical properties fall back to active embedded config if empty
   const embeddedConfig = getActiveGasConfig();
-  const settings: AppSettings = useMemo(() => {
+  const settings: AppSettings = React.useMemo(() => {
     return {
       ...SettingsContextData.defaultSettings,
       ...rawSettings,
@@ -31,11 +31,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
   }, [rawSettings, embeddedConfig]);
 
-  const updateSettings = useCallback((newSettings: Partial<AppSettings>) => {
+  const updateSettings = React.useCallback((newSettings: Partial<AppSettings>) => {
     setRawSettings(prev => ({ ...prev, ...newSettings }));
   }, [setRawSettings]);
 
-  const resetSettings = useCallback(() => {
+  const resetSettings = React.useCallback(() => {
     setRawSettings(SettingsContextData.defaultSettings);
   }, [setRawSettings]);
 
@@ -47,7 +47,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 }
 
 export function useSettings() {
-  const context = useContext(SettingsContext);
+  const context = React.useContext(SettingsContext);
   if (context === undefined) {
     throw new Error('useSettings must be used within a SettingsProvider');
   }

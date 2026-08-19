@@ -15,8 +15,14 @@ export interface RekapItemData {
   timRow: string;
   target: number;
   keterangan: string;
-  // Key: 'day_01', 'day_02', ..., each containing { tebang1: number, pangkas: number, tebang2: number }
-  dailyValues: Record<string, { tebang1: number; pangkas: number; tebang2: number }>;
+  // Key: 'day_01', 'day_02', ..., each containing { targetKms: number, realisasiKms: number, tebang1: number, pangkas: number, tebang2: number }
+  dailyValues: Record<string, { 
+    targetKms?: number;
+    realisasiKms?: number;
+    tebang1: number; 
+    pangkas: number; 
+    tebang2: number 
+  }>;
 }
 
 export async function exportRekapHarianToExcel(
@@ -65,10 +71,10 @@ export async function exportRekapHarianToExcel(
   const headerRow3Values: any[] = ['', '', ''];
 
   days.forEach((d) => {
-    // 4 columns per day: TEBANG, PANGKAS, TEBANG, TOTAL
-    headerRow1Values.push(d.dayName, '', '', '');
-    headerRow2Values.push(d.dayFormatted, '', '', '');
-    headerRow3Values.push('TEBANG', 'PANGKAS', 'TEBANG', 'TOTAL');
+    // 6 columns per day: TARGET KMS, REALISASI KMS, TEBANG, PANGKAS, TEBANG, TOTAL
+    headerRow1Values.push(d.dayName, '', '', '', '', '');
+    headerRow2Values.push(d.dayFormatted, '', '', '', '', '');
+    headerRow3Values.push('TARGET KMS', 'REALISASI KMS', 'TEBANG', 'PANGKAS', 'TEBANG', 'TOTAL');
   });
 
   // Summary headers
@@ -112,11 +118,11 @@ export async function exportRekapHarianToExcel(
   // Format dynamic date headers
   let currentCol = 4;
   days.forEach((d) => {
-    // Merge Day Name (cols: currentCol to currentCol + 3, row: 4)
-    worksheet.mergeCells(startHeaderRowNum, currentCol, startHeaderRowNum, currentCol + 3);
-    // Merge Day Number (cols: currentCol to currentCol + 3, row: 5)
-    worksheet.mergeCells(startHeaderRowNum + 1, currentCol, startHeaderRowNum + 1, currentCol + 3);
-    currentCol += 4;
+    // Merge Day Name (cols: currentCol to currentCol + 5, row: 4)
+    worksheet.mergeCells(startHeaderRowNum, currentCol, startHeaderRowNum, currentCol + 5);
+    // Merge Day Number (cols: currentCol to currentCol + 5, row: 5)
+    worksheet.mergeCells(startHeaderRowNum + 1, currentCol, startHeaderRowNum + 1, currentCol + 5);
+    currentCol += 6;
   });
 
   // Format end headers (TOTAL, SISA, %, KET)
@@ -175,11 +181,13 @@ export async function exportRekapHarianToExcel(
     let rowTotal = 0;
 
     days.forEach((d) => {
-      const val = item.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
+      const val = item.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
       const dayTotal = (val.tebang1 || 0) + (val.pangkas || 0) + (val.tebang2 || 0);
       rowTotal += dayTotal;
 
       rowValues.push(
+        val.targetKms && val.targetKms > 0 ? val.targetKms : '',
+        val.realisasiKms && val.realisasiKms > 0 ? val.realisasiKms : '',
         val.tebang1 > 0 ? val.tebang1 : '',
         val.pangkas > 0 ? val.pangkas : '',
         val.tebang2 > 0 ? val.tebang2 : '',
@@ -224,15 +232,15 @@ export async function exportRekapHarianToExcel(
     let dayColStart = 4;
     days.forEach((d) => {
       if (d.isRedDay) {
-        // Red color for all 4 subcolumns of this holiday/weekend
-        for (let sub = 0; sub < 4; sub++) {
+        // Red color for all 6 subcolumns of this holiday/weekend
+        for (let sub = 0; sub < 6; sub++) {
           const cIdx = dayColStart + sub;
           const cell = dataRow.getCell(cIdx);
           cell.fill = redFill;
           cell.font = redFont;
         }
       }
-      dayColStart += 4;
+      dayColStart += 6;
     });
 
     currentRowIdx++;
@@ -266,13 +274,17 @@ export async function exportRekapHarianToExcel(
   let grandTotal = 0;
 
   days.forEach((d) => {
+    let dayTargetKmsSum = 0;
+    let dayRealisasiKmsSum = 0;
     let dayTebang1Sum = 0;
     let dayPangkasSum = 0;
     let dayTebang2Sum = 0;
     let dayTotalSum = 0;
 
     rowsData.forEach((row) => {
-      const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
+      const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
+      dayTargetKmsSum += v.targetKms || 0;
+      dayRealisasiKmsSum += v.realisasiKms || 0;
       dayTebang1Sum += v.tebang1 || 0;
       dayPangkasSum += v.pangkas || 0;
       dayTebang2Sum += v.tebang2 || 0;
@@ -282,6 +294,8 @@ export async function exportRekapHarianToExcel(
     grandTotal += dayTotalSum;
 
     summaryRowValues.push(
+      dayTargetKmsSum > 0 ? dayTargetKmsSum : '',
+      dayRealisasiKmsSum > 0 ? dayRealisasiKmsSum : '',
       dayTebang1Sum,
       dayPangkasSum,
       dayTebang2Sum,

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import * as React from 'react';
 
 // Helper to sanitize large base64 image strings if localStorage reaches quota
 function sanitizeForStorage(obj: any): any {
@@ -42,7 +42,7 @@ function safeSetLocalStorage(key: string, value: any): void {
 }
 
 export function usePersistState<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [state, setState] = useState<T>(() => {
+  const [state, setState] = React.useState<T>(() => {
     try {
       const saved = localStorage.getItem(key);
       if (saved !== null) {
@@ -54,7 +54,7 @@ export function usePersistState<T>(key: string, defaultValue: T): [T, React.Disp
     return defaultValue;
   });
 
-  const setPersistentState = useCallback((value: React.SetStateAction<T>) => {
+  const setPersistentState = React.useCallback((value: React.SetStateAction<T>) => {
     setState((prev) => {
       const nextValue = value instanceof Function ? value(prev) : value;
       safeSetLocalStorage(key, nextValue);

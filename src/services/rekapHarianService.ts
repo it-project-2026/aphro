@@ -4,7 +4,7 @@
  */
 
 import { RekapItemData } from '../utils/rekapExportService';
-import { Realisasi, ULP, ReguROW } from '../types';
+import { Realisasi, ULP, ReguROW, WorkOrder } from '../types';
 
 export interface ULConfigPreset {
   kodeUL: string;
@@ -237,79 +237,29 @@ export class RekapHarianService {
     monthIndex: number,
     realisasiList?: Realisasi[],
     ulpList?: ULP[],
-    reguList?: ReguROW[]
+    reguList?: ReguROW[],
+    workOrders?: WorkOrder[]
   ): RekapItemData[] {
     const key = this.getStorageKey(unitName, year, monthIndex);
     
     // Coba load key spesifik unit
+    let rows: RekapItemData[] = [];
     try {
       const saved = localStorage.getItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item, idx) => ({
-            ...item,
-            noUrut: idx + 1,
-          }));
+          rows = parsed;
         }
       }
     } catch (e) {
       console.warn('Failed to parse saved rekap harian:', e);
     }
 
-    // Fallback coba legacy key (tanpa unitKey) jika ada
-    const legacyKey = `aphro_rekap_harian_${year}_${String(monthIndex + 1).padStart(2, '0')}`;
-    try {
-      const legacySaved = localStorage.getItem(legacyKey);
-      if (legacySaved && this.normalizeUnitKey(unitName) === 'BUKITTINGGI') {
-        const parsed = JSON.parse(legacySaved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item, idx) => ({
-            ...item,
-            noUrut: idx + 1,
-          }));
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-
-    // Inisialisasi awal jika belum ada data tersimpan
-    const defaultRows = this.getDefaultRowsForUnit(unitName, ulpList, reguList);
-    const monthPadded = String(monthIndex + 1).padStart(2, '0');
-    const initialRows: RekapItemData[] = defaultRows.map((def, idx) => {
-      const dailyValues: Record<string, { tebang1: number; pangkas: number; tebang2: number }> = {};
-
-      // Jika ada realisasiList dari sistem, hitung agregasi otomatis
-      if (realisasiList && realisasiList.length > 0) {
-        realisasiList.forEach((rel) => {
-          if (!rel.tanggalRealisasi) return;
-          const [rYear, rMonth, rDay] = rel.tanggalRealisasi.split('-');
-          if (Number(rYear) === year && rMonth === monthPadded) {
-            // Cek kesesuaian tim atau ULP
-            const matchUlp = (rel.ulpName || '').toUpperCase().includes(def.namaUlp.replace('ULP ', ''));
-            const matchTim = (rel.reguName || '').toUpperCase().includes(def.timRow.replace(/^(TIM|REGU)\s*/i, ''));
-
-            if (matchUlp || matchTim) {
-              const dayKey = rDay; // e.g. "01"
-              if (!dailyValues[dayKey]) {
-                dailyValues[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0 };
-              }
-
-              const ket = ((rel.keterangan || '') + ' ' + (rel.jenisTanaman || '')).toUpperCase();
-              if (ket.includes('TEBANG')) {
-                dailyValues[dayKey].tebang1 += 1;
-              } else if (ket.includes('PANGKAS')) {
-                dailyValues[dayKey].pangkas += 1;
-              } else {
-                dailyValues[dayKey].tebang1 += 1;
-              }
-            }
-          }
-        });
-      }
-
-      return {
+    // Jika belum ada data tersimpan, inisialisasi dari default
+    if (rows.length === 0) {
+      const defaultRows = this.getDefaultRowsForUnit(unitName, ulpList, reguList);
+      rows = defaultRows.map((def, idx) => ({
         id: def.id,
         noUrut: idx + 1,
         kodeUnit: def.kodeUnit,
@@ -317,11 +267,17 @@ export class RekapHarianService {
         timRow: def.timRow,
         target: def.target,
         keterangan: '',
-        dailyValues,
-      };
-    });
+        dailyValues: {},
+      }));
+    }
 
-    return initialRows;
+    // SELALU jalankan sync otomatis jika ada data referensi (realisasiList/workOrders)
+    // agar data selalu mutakhir dengan entri lapangan
+    if ((realisasiList && realisasiList.length > 0) || (workOrders && workOrders.length > 0)) {
+      rows = this.syncFromData(year, monthIndex, rows, realisasiList || [], workOrders || []);
+    }
+
+    return rows.map((r, idx) => ({ ...r, noUrut: idx + 1 }));
   }
 
   /**
@@ -337,7 +293,182 @@ export class RekapHarianService {
   }
 
   /**
-   * Menarik data Realisasi terbaru dan mengupdate data rekap
+   * Helper to parse date parts from various formats accurately
+   * Prevents timezone shifts by using manual parsing for ISO strings
+   */
+  static parseDateParts(dateStr: any) {
+    if (!dateStr) return null;
+    
+    // If it's already a Date object
+    if (dateStr instanceof Date) {
+      return { y: dateStr.getFullYear(), m: dateStr.getMonth() + 1, d: dateStr.getDate() };
+    }
+
+    const s = String(dateStr).trim();
+    if (!s) return null;
+
+    // 1. ISO format YYYY-MM-DD (optionally with T and time)
+    const isoMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+      return { 
+        y: parseInt(isoMatch[1], 10), 
+        m: parseInt(isoMatch[2], 10), 
+        d: parseInt(isoMatch[3], 10) 
+      };
+    }
+
+    // 2. Indo format DD-MM-YYYY or DD/MM/YYYY
+    const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmyMatch) {
+      return { 
+        y: parseInt(dmyMatch[3], 10), 
+        m: parseInt(dmyMatch[2], 10), 
+        d: parseInt(dmyMatch[1], 10) 
+      };
+    }
+
+    // 3. Fallback for strings like "Aug 19, 2026" or "08/19/2026"
+    const dt = new Date(s);
+    if (!isNaN(dt.getTime())) {
+      // If the input string starts with something that looks like an ISO date (YYYY-MM-DD),
+      // JS Date parses it as UTC midnight. We MUST use UTC getters to stay on the correct day.
+      if (/^\d{4}-\d{1,2}-\d{1,2}/.test(s)) {
+        return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+      }
+      // Otherwise, assume local parsing
+      return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
+    }
+
+    return null;
+  }
+
+  /**
+   * Sinkronisasi data dari Realisasi dan Work Orders
+   */
+  static syncFromData(
+    year: number,
+    monthIndex: number,
+    currentRows: RekapItemData[],
+    realisasiList: Realisasi[],
+    workOrders: WorkOrder[]
+  ): RekapItemData[] {
+    const normalize = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    const stripPrefix = (s: string) => normalize(s)
+      .replace(/^(TIM|REGU|TEAM|KELOMPOK|ULP|UP3|UP4|ROW|REGU_ROW)\s*/gi, '')
+      .replace(/^(TIM|REGU|TEAM|KELOMPOK|ULP|UP3|UP4|ROW|REGU_ROW)\s*/gi, '') // Double pass
+      .trim();
+    const normalizeNumbers = (s: string) => s.replace(/(\d+)/g, (m) => parseInt(m, 10).toString());
+
+    return currentRows.map((row) => {
+      const updatedDaily = { ...row.dailyValues };
+      
+      // Reset ALL days for the current month being synced to avoid stale data
+      for (let i = 1; i <= 31; i++) {
+        const dayKey = String(i).padStart(2, '0');
+        updatedDaily[dayKey] = {
+          tebang1: 0,
+          pangkas: 0,
+          tebang2: 0,
+          targetKms: 0,
+          realisasiKms: 0
+        };
+      }
+
+      const rowUlpClean = normalizeNumbers(stripPrefix(row.namaUlp));
+      const rowTimClean = normalizeNumbers(stripPrefix(row.timRow));
+
+      // 1. Data KMS from Work Order
+      if (Array.isArray(workOrders)) {
+        workOrders.forEach((wo) => {
+          if (!wo) return;
+          const parts = this.parseDateParts(wo.tanggal);
+          if (!parts) return;
+
+          // Strict matching for year and month
+          if (parts.y === year && parts.m === monthIndex + 1) {
+            const woUlp = normalizeNumbers(stripPrefix(wo.ulpName || ''));
+            const woTimFull = normalizeNumbers(normalize(wo.reguName || ''));
+            const woTimClean = normalizeNumbers(stripPrefix(wo.reguName || ''));
+            
+            // Precise matching for team numbers
+            const rowNumMatch = rowTimClean.match(/\d+/);
+            const woNumMatch = woTimClean.match(/\d+/);
+            
+            let matchTim = false;
+            if (rowNumMatch && woNumMatch) {
+              matchTim = rowNumMatch[0] === woNumMatch[0];
+            } else {
+              matchTim = woTimFull.includes(rowTimClean) || rowTimClean.includes(woTimClean);
+            }
+
+            const matchUlp = woUlp.includes(rowUlpClean) || rowUlpClean.includes(woUlp) || woTimFull.includes(rowUlpClean);
+
+            if (matchUlp && matchTim) {
+              const dayKey = String(parts.d).padStart(2, '0');
+              if (!updatedDaily[dayKey]) {
+                updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
+              }
+
+              let targetKms = Number(wo.volumePekerjaan) || 0;
+              if (wo.satuan?.toUpperCase() === 'GAWANG') targetKms = targetKms / 20;
+
+              let realisasiKms = Number(wo.totalRealisasi) || 0;
+              if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') realisasiKms = realisasiKms / 20;
+
+              updatedDaily[dayKey].targetKms += targetKms;
+              updatedDaily[dayKey].realisasiKms += realisasiKms;
+            }
+          }
+        });
+      }
+
+      // 2. Data Pohon from Realisasi
+      if (Array.isArray(realisasiList)) {
+        realisasiList.forEach((rel) => {
+          if (!rel) return;
+          const parts = this.parseDateParts(rel.tanggalRealisasi);
+          if (!parts) return;
+
+          if (parts.y === year && parts.m === monthIndex + 1) {
+            const relUlp = normalizeNumbers(stripPrefix(rel.ulpName || ''));
+            const relTimFull = normalizeNumbers(normalize(rel.reguName || ''));
+            const relTimClean = normalizeNumbers(stripPrefix(rel.reguName || ''));
+            
+            const rowNumMatch = rowTimClean.match(/\d+/);
+            const relNumMatch = relTimClean.match(/\d+/);
+            
+            let matchTim = false;
+            if (rowNumMatch && relNumMatch) {
+              matchTim = rowNumMatch[0] === relNumMatch[0];
+            } else {
+              matchTim = relTimFull.includes(rowTimClean) || relTimClean.includes(rowTimClean) || rowTimClean.includes(relTimClean);
+            }
+
+            const matchUlp = relUlp.includes(rowUlpClean) || rowUlpClean.includes(relUlp) || relTimFull.includes(rowUlpClean);
+
+            if (matchUlp && matchTim) {
+              const dayKey = String(parts.d).padStart(2, '0');
+              if (!updatedDaily[dayKey]) {
+                updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
+              }
+
+              const ket = normalize(rel.keterangan || '');
+              if (ket.includes('TEBANG')) {
+                updatedDaily[dayKey].tebang1++;
+              } else if (ket.includes('PANGKAS') || ket.includes('POTONG')) {
+                updatedDaily[dayKey].pangkas++;
+              }
+            }
+          }
+        });
+      }
+
+      return { ...row, dailyValues: updatedDaily };
+    });
+  }
+
+  /**
+   * Legacy method for backward compatibility if needed
    */
   static syncFromRealisasi(
     year: number,
@@ -345,41 +476,7 @@ export class RekapHarianService {
     currentRows: RekapItemData[],
     realisasiList: Realisasi[]
   ): RekapItemData[] {
-    const monthPadded = String(monthIndex + 1).padStart(2, '0');
-
-    return currentRows.map((row) => {
-      const updatedDaily = { ...row.dailyValues };
-
-      realisasiList.forEach((rel) => {
-        if (!rel.tanggalRealisasi) return;
-        const [rYear, rMonth, rDay] = rel.tanggalRealisasi.split('-');
-        if (Number(rYear) === year && rMonth === monthPadded) {
-          const matchUlp = (rel.ulpName || '').toUpperCase().includes(row.namaUlp.replace('ULP ', ''));
-          const matchTim = (rel.reguName || '').toUpperCase().includes(row.timRow.replace(/^(TIM|REGU)\s*/i, ''));
-
-          if (matchUlp || matchTim) {
-            const dayKey = rDay;
-            if (!updatedDaily[dayKey]) {
-              updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0 };
-            }
-
-            const ket = ((rel.keterangan || '') + ' ' + (rel.jenisTanaman || '')).toUpperCase();
-            if (ket.includes('TEBANG')) {
-              updatedDaily[dayKey].tebang1 += 1;
-            } else if (ket.includes('PANGKAS')) {
-              updatedDaily[dayKey].pangkas += 1;
-            } else {
-              updatedDaily[dayKey].tebang1 += 1;
-            }
-          }
-        }
-      });
-
-      return {
-        ...row,
-        dailyValues: updatedDaily,
-      };
-    });
+    return this.syncFromData(year, monthIndex, currentRows, realisasiList, []);
   }
 }
 

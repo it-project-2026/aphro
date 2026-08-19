@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useState, useCallback, useEffect } from 'react';
+import * as React from 'react';
 
 interface ToastState {
   id: string;
@@ -18,17 +18,17 @@ interface UIContextType {
   removeToast: (id: string) => void;
 }
 
-const UIContext = createContext<UIContextType | undefined>(undefined);
+const UIContext = React.createContext<UIContextType | undefined>(undefined);
 
-export function UIProvider({ children }: { children: ReactNode }) {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+export function UIProvider({ children }: { children: React.ReactNode }) {
+  const [activeTab, setActiveTab] = React.useState<string>('dashboard');
+  const [isDarkMode, setIsDarkMode] = React.useState<boolean>(() => {
     return localStorage.getItem('aphro_dark_mode') === 'true';
   });
-  const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<ToastState[]>([]);
+  const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = React.useState<string | null>(null);
+  const [toasts, setToasts] = React.useState<ToastState[]>([]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     try {
       localStorage.setItem('aphro_dark_mode', String(isDarkMode));
     } catch (e) {
@@ -41,11 +41,11 @@ export function UIProvider({ children }: { children: ReactNode }) {
     }
   }, [isDarkMode]);
 
-  const toggleDarkMode = useCallback(() => {
+  const toggleDarkMode = React.useCallback(() => {
     setIsDarkMode(prev => !prev);
   }, []);
 
-  const showToast = useCallback((message: string, type: ToastState['type'] = 'info') => {
+  const showToast = React.useCallback((message: string, type: ToastState['type'] = 'info') => {
     const id = Date.now().toString();
     setToasts((prev) => [...prev, { id, type, message }]);
     setTimeout(() => {
@@ -53,7 +53,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
     }, 4000);
   }, []);
 
-  const removeToast = useCallback((id: string) => {
+  const removeToast = React.useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
@@ -75,7 +75,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
 }
 
 export function useUI() {
-  const context = useContext(UIContext);
+  const context = React.useContext(UIContext);
   if (context === undefined) {
     throw new Error('useUI must be used within a UIProvider');
   }

@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useRealisasi } from '../context/RealisasiContext';
 import { useAbsensi } from '../context/AbsensiContext';
 import { useMasterData } from '../context/MasterDataContext';
+import { useSettings } from '../context/SettingsContext';
+import { useGASSync } from '../context/GASSyncContext';
 import { useUI } from '../context/UIContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { WorkOrder, Realisasi } from '../types';
@@ -58,6 +60,8 @@ export const MonitoringPage: React.FC = () => {
   const { realisasiList } = useRealisasi();
   const { absensiList } = useAbsensi();
   const { ulpList, penyulangList, reguList } = useMasterData();
+  const { settings } = useSettings();
+  const { syncWithGAS } = useGASSync();
   const { setActiveTab } = useUI();
 
   const isUserRole = currentUser?.role === 'User';
@@ -238,6 +242,17 @@ export const MonitoringPage: React.FC = () => {
     }).filter(Boolean);
   }, [absensiList, realisasiList, filterUlp, reguList]);
 
+  // Auto-refresh coordinates every 5 minutes when page is active
+  useEffect(() => {
+    if (!navigator.onLine || !settings.gasWebAppUrl) return;
+
+    const interval = setInterval(() => {
+      syncWithGAS();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [syncWithGAS, settings.gasWebAppUrl]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Banner */}
@@ -255,32 +270,34 @@ export const MonitoringPage: React.FC = () => {
         </div>
 
         {/* View Mode Toggle (Table / Map) */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <button
-            type="button"
-            onClick={() => setActiveViewMode('table')}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
-              activeViewMode === 'table'
-                ? 'bg-sky-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <TableIcon className="w-4 h-4" />
-            <span>Tabel Realisasi</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveViewMode('map')}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
-              activeViewMode === 'map'
-                ? 'bg-sky-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <MapIcon className="w-4 h-4" />
-            <span>Peta GIS Field</span>
-          </button>
-        </div>
+        {!isUserRole && (
+          <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setActiveViewMode('table')}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+                activeViewMode === 'table'
+                  ? 'bg-sky-600 text-white shadow-md'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <TableIcon className="w-4 h-4" />
+              <span>Tabel Realisasi</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveViewMode('map')}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+                activeViewMode === 'map'
+                  ? 'bg-sky-600 text-white shadow-md'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <MapIcon className="w-4 h-4" />
+              <span>Peta GIS Field</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Overview Stat Cards */}

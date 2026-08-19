@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       id: 'dashboard',
       label: 'Dashboard Utama',
       icon: LayoutDashboard,
-      roles: ['SuperAdmin', 'Admin', 'User'],
+      roles: ['SuperAdmin', 'Admin'],
     },
     {
       id: 'work_orders',

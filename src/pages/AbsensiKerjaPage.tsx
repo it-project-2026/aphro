@@ -278,7 +278,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         'success'
       );
 
-      setActiveTab('input_realisasi');
+      setActiveTab('monitoring_absensi');
       onSuccess();
     } catch (err: any) {
       showToast(`Gagal menyimpan absensi: ${err.message}`, 'error');
