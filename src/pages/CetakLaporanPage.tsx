@@ -49,7 +49,7 @@ import {
 } from 'lucide-react';
 
 // Custom Plant Marker Icon with Sequence Number, No. Tiang, Jenis Tanaman, Coordinate Dot, and Leader Line
-function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: number, status?: string, keterangan?: string) {
+function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: number, status?: string, keterangan?: string, lokasiKerja?: string) {
   const name = (jenisTanaman || 'TANAMAN').toUpperCase();
   const checkStr = ((keterangan || '') + ' ' + name).toUpperCase();
   let badgeColor = '#facc15'; // Yellow for Pangkas
@@ -64,20 +64,20 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
   const html = `
     <div style="
       position: relative;
-      width: 100px;
-      height: 40px;
+      width: 110px;
+      height: 55px;
       font-family: system-ui, -apple-system, sans-serif;
     ">
       <!-- Leader Line from coordinate dot to box -->
-      <svg width="100" height="40" style="position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible;">
-        <line x1="50" y1="35" x2="50" y2="18" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" />
+      <svg width="110" height="55" style="position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible;">
+        <line x1="55" y1="50" x2="55" y2="28" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" />
       </svg>
 
       <!-- Coordinate Dot at exact lat/lng anchor -->
       <div style="
         position: absolute;
-        left: 46px;
-        top: 32px;
+        left: 51px;
+        top: 47px;
         width: 8px;
         height: 8px;
         background: ${badgeColor};
@@ -87,21 +87,21 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
         z-index: 2;
       "></div>
 
-      <!-- Description Box (1/3 smaller than original) -->
+      <!-- Description Box -->
       <div style="
         position: absolute;
         left: 4px;
         top: 0px;
-        width: 92px;
+        width: 102px;
         display: inline-flex;
         align-items: center;
         background: rgba(255, 255, 255, 0.95);
         border: 1.2px solid #0f172a;
         border-radius: 8px;
-        padding: 1px 4px 1px 1px;
+        padding: 2px 4px 2px 2px;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         white-space: nowrap;
-        gap: 3px;
+        gap: 4px;
         backdrop-filter: blur(4px);
         z-index: 3;
       ">
@@ -110,8 +110,8 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
           color: #0f172a;
           font-weight: 900;
           font-size: 8px;
-          width: 14px;
-          height: 14px;
+          width: 16px;
+          height: 16px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -121,13 +121,18 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
         ">
           ${seqNo}
         </div>
-        <div style="display: flex; flex-direction: column; text-align: left; overflow: hidden;">
-          <span style="color: #0f172a; font-weight: 800; font-size: 8px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis;">
+        <div style="display: flex; flex-direction: column; text-align: left; overflow: hidden; width: 100%;">
+          <span style="color: #0f172a; font-weight: 800; font-size: 8px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block;">
             📌 ${noTiang || `T#${seqNo}`}
           </span>
-          <span style="color: #0f172a; font-weight: 800; font-size: 7.5px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis;">
+          <span style="color: #0f172a; font-weight: 800; font-size: 7.5px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block;">
             🌳 ${name}
           </span>
+          ${lokasiKerja ? `
+          <span style="color: #ef4444; font-weight: 900; font-size: 7px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 1px; border-top: 0.5px solid #e2e8f0; padding-top: 1px;">
+            🏠 ${lokasiKerja}
+          </span>
+          ` : ''}
         </div>
       </div>
     </div>
@@ -136,9 +141,9 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
   return L.divIcon({
     className: 'custom-plant-leaflet-marker',
     html: html,
-    iconSize: [100, 40],
-    iconAnchor: [50, 35],
-    popupAnchor: [0, -25],
+    iconSize: [110, 55],
+    iconAnchor: [55, 50],
+    popupAnchor: [0, -40],
   });
 }
 
@@ -348,6 +353,7 @@ export const CetakLaporanPage: React.FC = () => {
             lat,
             lng,
             keterangan: rel.keterangan || 'POTONG',
+            lokasiKerja: rel.lokasiKerja || wo?.lokasi || '',
             pertumbuhanTanaman: rel.pertumbuhanTanaman || 'SEDANG',
             status: rel.status || wo?.status || 'Selesai',
             photoUrl,
@@ -366,6 +372,7 @@ export const CetakLaporanPage: React.FC = () => {
             lat,
             lng,
             keterangan: wo.deskripsi || 'PEMBANGKASAN POHON (ROW)',
+            lokasiKerja: wo.lokasi || '',
             pertumbuhanTanaman: 'SEDANG',
             status: wo.status || 'Belum Dikerjakan',
             photoUrl: wo.lampiranUrl,
@@ -902,7 +909,7 @@ export const CetakLaporanPage: React.FC = () => {
                     )}
 
                     {nonOverlappingMapPoints.map((pt, idx) => {
-                      const plantIcon = createPlantMarkerIcon(pt.jenisTanaman, pt.noTiang, idx + 1, pt.status);
+                      const plantIcon = createPlantMarkerIcon(pt.jenisTanaman, pt.noTiang, idx + 1, pt.status, pt.keterangan, pt.lokasiKerja);
 
                       return (
                         <Marker
@@ -932,7 +939,8 @@ export const CetakLaporanPage: React.FC = () => {
                                 <p className="font-medium text-slate-700 text-[11px]">
                                   🏢 ULP: <span className="font-bold">{pt.ulpName}</span>
                                 </p>
-                                <p className="text-slate-600 text-[10px]">📍 Lokasi / Tiang: {pt.noTiang}</p>
+                                <p className="text-slate-600 text-[10px] font-bold">🏠 Lokasi Kerja: {pt.lokasiKerja || pt.noTiang}</p>
+                                <p className="text-slate-600 text-[10px]">📍 No Tiang: {pt.noTiang}</p>
                                 <p className="font-mono text-[10px] text-slate-500">
                                   🌐 GPS: {pt.lat.toFixed(6)}, {pt.lng.toFixed(6)}
                                 </p>

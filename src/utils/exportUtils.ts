@@ -561,6 +561,7 @@ export async function exportCetakPetaToExcel(
     { key: 'area', width: 16 },
     { key: 'ulp', width: 16 },
     { key: 'feeder', width: 22 },
+    { key: 'lokasiKerja', width: 28 },
     { key: 'noTiang', width: 18 },
     { key: 'jenisTanaman', width: 28 },
     { key: 'keterangan', width: 16 },
@@ -575,7 +576,7 @@ export async function exportCetakPetaToExcel(
   // Row 1: Banner Title
   const row1 = worksheet.addRow(['GAMBAR PETA POHON (ROW) - PLN ELECTRICITY SERVICES']);
   row1.height = 28;
-  worksheet.mergeCells('A1:N1');
+  worksheet.mergeCells('A1:O1');
   const cellA1 = worksheet.getCell('A1');
   cellA1.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
   cellA1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } }; // Sky 600
@@ -584,7 +585,7 @@ export async function exportCetakPetaToExcel(
   // Row 2: Sub-Banner
   const row2 = worksheet.addRow([`FEEDER: ${feederTitle} | ULP: ${ulpTitle} | AREA: ${areaName}`]);
   row2.height = 24;
-  worksheet.mergeCells('A2:N2');
+  worksheet.mergeCells('A2:O2');
   const cellA2 = worksheet.getCell('A2');
   cellA2.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
   cellA2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF075985' } }; // Sky 800
@@ -597,6 +598,7 @@ export async function exportCetakPetaToExcel(
     'AREA',
     'ULP',
     'FEEDER / PENYULANG',
+    'LOKASI KERJA',
     'NO TIANG / LOKASI',
     'JENIS TANAMAN',
     'KETERANGAN',
@@ -623,7 +625,7 @@ export async function exportCetakPetaToExcel(
   };
 
   for (let idx = 0; idx < mapPoints.length; idx++) {
-    const pt = mapPoints[idx];
+    const pt = mapPoints[idx] as any;
     const excelRowIndex = 4 + idx;
 
     const row = worksheet.addRow([
@@ -632,6 +634,7 @@ export async function exportCetakPetaToExcel(
       areaName,
       pt.ulpName || ulpTitle,
       pt.penyulangName || feederTitle,
+      pt.lokasiKerja || '-',
       pt.noTiang || '-',
       pt.jenisTanaman || 'PEMBANGKASAN POHON (ROW)',
       pt.keterangan || 'POTONG',
@@ -733,6 +736,7 @@ export function generateLaporanPetaPDF(
     lat: number;
     lng: number;
     keterangan: string;
+    lokasiKerja?: string;
     status: string;
   }>,
   customFilename?: string
