@@ -139,7 +139,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
         const uniqueRel = new Map<string, any>();
         data.realisasi.forEach((rel: any) => {
           if (!rel) return;
-          const key = `${rel.workOrderId}_${rel.tanggalRealisasi}_${rel.latitude}_${rel.longitude}_${clean(rel.keterangan)}`;
+          const key = `${rel.id}_${rel.workOrderId}_${rel.tanggalRealisasi}_${rel.latitude}_${rel.longitude}_${clean(rel.keterangan)}`;
           uniqueRel.set(key, rel);
         });
         setRealisasiList(Array.from(uniqueRel.values()));

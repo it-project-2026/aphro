@@ -215,7 +215,7 @@ export function normalizeRealisasi(r: any): any {
   const fotoSesudahImg = formatDriveImageUrl(rawFotoSesudah);
 
   return {
-    id: String(r.id || r.WO_ID || 'rel-' + Math.random().toString(36).substring(2, 7)),
+    id: String(r.id || 'rel-' + Math.random().toString(36).substring(2, 7)),
     workOrderId: String(r.WO_ID || r.workOrderId || r.id || ''),
     nomorWO: String(r.Nomor_WO || r.nomorWO || r.NO_WO || ''),
     ulpName: String(r.ULP || r.ulpName || ''),

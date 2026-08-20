@@ -56,20 +56,20 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
   return (
     <div className="bg-[#f8fafc] rounded-[2rem] border border-blue-100 shadow-2xl overflow-hidden font-display">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-[#003594] via-[#0047bb] to-[#005cda] p-5 text-white relative">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-md border border-white/30">
-              <Zap className="w-6 h-6 text-yellow-400 fill-yellow-400" />
+      <div className="bg-gradient-to-r from-[#003594] via-[#0047bb] to-[#005cda] p-3 text-white relative">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md border border-white/30">
+              <Zap className="w-5 h-5 text-yellow-400 fill-yellow-400" />
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-black tracking-tight leading-none">{title}</h1>
-              <p className="text-blue-100/80 text-[11px] md:text-xs mt-1 font-semibold uppercase tracking-wider">{subtitle}</p>
+              <h1 className="text-lg md:text-xl font-black tracking-tight leading-none">{title}</h1>
+              <p className="text-blue-100/70 text-[10px] mt-0.5 font-semibold uppercase tracking-wider">{subtitle}</p>
             </div>
           </div>
-          <div className="bg-[#002874] px-3 py-1.5 rounded-lg border border-blue-400/30 flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-blue-300" />
-            <span className="text-xs font-bold tracking-tight">
+          <div className="bg-[#002874] px-2.5 py-1 rounded-lg border border-blue-400/30 flex items-center gap-2">
+            <Calendar className="w-3 h-3 text-blue-300" />
+            <span className="text-[10px] font-bold tracking-tight">
               {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
             </span>
           </div>
@@ -78,38 +78,38 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
         <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-white/5 to-transparent skew-x-12" />
       </div>
 
-      <div className="p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="p-3 md:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column: List Table */}
-        <div className="lg:col-span-8 flex flex-col gap-4">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="bg-[#0047bb] p-4 flex justify-between items-center text-white font-bold text-xs uppercase tracking-widest">
-              <div className="flex items-center gap-3">
-                <LayoutDashboard className="w-4 h-4" />
+        <div className="lg:col-span-8 flex flex-col gap-3">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="bg-[#0047bb] p-2.5 px-4 flex justify-between items-center text-white font-bold text-[10px] uppercase tracking-widest">
+              <div className="flex items-center gap-2">
+                <LayoutDashboard className="w-3.5 h-3.5" />
                 <span>TIM ROW</span>
               </div>
-              <div className="flex gap-12 mr-8">
+              <div className="flex gap-10 mr-6">
                 <span>REALISASI</span>
                 <span>TARGET</span>
               </div>
             </div>
             
-            <div className="p-2 flex flex-col gap-0.5">
+            <div className="p-1.5 flex flex-col gap-0.5">
               {data.map((item, idx) => (
-                <div key={item.id} className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-blue-50 transition-colors group">
-                  <div className="p-1.5 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-200">
-                    <CheckCircle2 className="w-3 h-3" />
+                <div key={item.id} className="flex items-center gap-2.5 p-1 rounded-lg hover:bg-blue-50 transition-colors group">
+                  <div className="p-1 rounded bg-blue-600 text-white shadow-sm shadow-blue-100">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center mb-0.5">
-                      <span className="text-[10px] font-black text-slate-800 uppercase truncate">
+                      <span className="text-[9px] font-black text-slate-800 uppercase truncate">
                         {item.name}
                       </span>
-                      <div className="flex gap-8 text-[10px] font-black">
-                        <span className="text-[#0047bb] w-10 text-right">{item.realisasi}</span>
-                        <span className="text-slate-400 w-10 text-right">{item.target}</span>
+                      <div className="flex gap-6 text-[9px] font-black">
+                        <span className="text-[#0047bb] w-8 text-right">{item.realisasi}</span>
+                        <span className="text-slate-400 w-8 text-right">{item.target}</span>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000"
                         style={{ width: `${Math.min(100, (item.realisasi / (item.target || 1)) * 100)}%` }}
@@ -121,16 +121,16 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
             </div>
 
             {/* List Footer Summary */}
-            <div className="mt-auto bg-[#0047bb] p-5 flex justify-between items-center text-white">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="w-5 h-5" />
-                <span className="font-black tracking-widest text-sm">TOTAL REALISASI</span>
+            <div className="mt-auto bg-[#0047bb] p-3 px-5 flex justify-between items-center text-white">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                <span className="font-black tracking-widest text-[11px]">TOTAL REALISASI</span>
               </div>
-              <div className="flex items-center gap-12">
-                <span className="text-2xl font-black">{totalRealisasi}</span>
-                <div className="flex items-center gap-4 pl-8 border-l border-white/20">
-                  <span className="text-xs font-bold text-blue-200 tracking-widest">TOTAL TARGET</span>
-                  <span className="text-2xl font-black">{totalTarget.toFixed(1)}</span>
+              <div className="flex items-center gap-8">
+                <span className="text-xl font-black">{totalRealisasi}</span>
+                <div className="flex items-center gap-3 pl-6 border-l border-white/20">
+                  <span className="text-[10px] font-bold text-blue-200 tracking-widest">TOTAL TARGET</span>
+                  <span className="text-xl font-black">{totalTarget.toFixed(1)}</span>
                 </div>
               </div>
             </div>

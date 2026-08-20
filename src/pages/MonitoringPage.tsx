@@ -146,7 +146,8 @@ export const MonitoringPage: React.FC = () => {
       // Deduplicate realisasi items to prevent double counting
       const seenRel = new Set<string>();
       const uniqueRelList = matchedRealisasi.filter((r) => {
-        const key = r.id || `${r.nomorWO}-${r.fotoSebelumUrl}-${r.fotoSesudahUrl}-${r.noTiang || ''}-${r.keterangan || ''}`;
+        // Use ID if available, otherwise combine fields including createdAt to ensure uniqueness
+        const key = r.id || `${r.nomorWO}-${r.createdAt || ''}-${r.fotoSebelumUrl}-${r.fotoSesudahUrl}-${r.noTiang || ''}-${r.keterangan || ''}`;
         if (seenRel.has(key)) return false;
         seenRel.add(key);
         return true;
@@ -162,8 +163,8 @@ export const MonitoringPage: React.FC = () => {
         return ket.includes('POTONG') || ket.includes('PANGKAS');
       }).length;
 
-      // TOTAL REALISASI adalah Jumlah TOTAL TEBANG + TOTAL POTONG
-      const totalRealisasiCount = totalTebang + totalPotong;
+      // TOTAL REALISASI should at least be the count of unique records
+      const totalRealisasiCount = Math.max(uniqueRelList.length, totalTebang + totalPotong);
 
       return {
         workOrder: wo,
