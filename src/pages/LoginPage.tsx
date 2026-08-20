@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Radio,
   Building2,
+  LogIn,
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -220,31 +221,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4 bg-slate-900 overflow-hidden font-sans">
-      {/* Background Image with Dark Overlay */}
+    <div className="min-h-screen relative flex items-center justify-center p-4 bg-emerald-50 overflow-hidden font-sans">
+      {/* Background Image - Clean and Clear */}
       <div
-        className="absolute inset-0 bg-cover bg-center opacity-30 scale-105 filter blur-xs transition-all duration-700"
+        className="absolute inset-0 bg-cover bg-center transition-all duration-700"
         style={{
           backgroundImage: `url(${
             settings.loginBgUrl ||
-            'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1600&q=80'
+            'https://lh3.googleusercontent.com/d/1GdbvOn9MIRGeyhdzjpdIeM68Ka0giF_K'
           })`,
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/95 to-slate-900/80" />
-
-      {/* Decorative Glow Elements */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-72 h-72 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-lg space-y-4 my-6">
         {/* Branding Title / Logo */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center mx-auto mb-2">
+          <div className="inline-flex items-center justify-center mx-auto mb-2 relative">
+            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/10 to-rose-500/10 rounded-full blur-2xl pointer-events-none"></div>
             <img
               src={APP_LOGO_URL}
               alt="Logo"
-              className="w-48 h-48 sm:w-64 sm:h-64 object-contain drop-shadow-2xl"
+              className="w-48 h-48 sm:w-64 sm:h-64 object-contain drop-shadow-xl relative z-10"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 if (!target.dataset.failed) {
@@ -254,21 +251,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
               }}
             />
           </div>
-          <div className="flex flex-col items-center justify-center space-y-1">
-            <h1 className="text-2xl font-black text-white tracking-tight uppercase">APHRO</h1>
-            <p className="text-[10px] text-sky-400 font-bold tracking-[0.2em] uppercase">
-              Asset Protection & Hazard Response Operations
-            </p>
-            <div className="mt-2 flex items-center justify-center space-x-2">
-              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-sky-950/80 text-sky-300 border border-sky-800 shadow-lg">
-                <Building2 className="w-3.5 h-3.5 text-sky-400" />
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center justify-center space-x-2">
+              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/80 text-black border border-emerald-200 shadow-sm backdrop-blur-sm">
+                <Building2 className="w-3.5 h-3.5 text-black" />
                 <span>{settings.namaUnitLayanan}</span>
               </span>
               {onOpenInisiasi && (
                 <button
                   type="button"
                   onClick={onOpenInisiasi}
-                  className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border border-slate-700 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer"
+                  className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-white/60 hover:bg-emerald-50 text-black hover:text-black border border-emerald-200 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer backdrop-blur-sm"
                   title="Ganti Unit Layanan & Sambungkan ke Spreadsheet Lain"
                 >
                   <span>Ganti Unit</span>
@@ -279,43 +272,43 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
         </div>
 
         {/* Login Card */}
-        <div className="bg-slate-800/90 backdrop-blur-2xl border border-slate-700/80 rounded-[2rem] p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="bg-white/90 backdrop-blur-2xl border border-emerald-100 rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-emerald-900/5 space-y-6">
           {/* Spreadsheet Connection Indicator Banner */}
-          <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-700/60 flex items-center justify-between shadow-inner">
+          <div className="p-3.5 rounded-2xl bg-emerald-50/50 border border-emerald-100/50 flex items-center justify-between shadow-inner">
             <div className="flex items-center space-x-3 min-w-0 pr-2">
-              <div className={`p-2 rounded-xl shrink-0 ${isSyncing ? 'bg-sky-950/60 text-sky-400' : isGasConnected ? 'bg-emerald-950/60 text-emerald-400' : 'bg-amber-950/60 text-amber-400'}`}>
+              <div className={`p-2 rounded-xl shrink-0 ${isSyncing ? 'bg-sky-100 text-sky-600' : isGasConnected ? 'bg-black text-white' : 'bg-rose-100 text-rose-600'}`}>
                 <FileSpreadsheet className="w-5 h-5" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <span className="text-[11px] font-black text-slate-200 uppercase tracking-tighter">Spreadsheet Data</span>
+                  <span className="text-[11px] font-black text-black uppercase tracking-tighter">Spreadsheet Data</span>
                   <span
                     className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black ${
                       isSyncing
-                        ? 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
+                        ? 'bg-sky-100 text-sky-600 border border-sky-200'
                         : isGasConnected
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                        ? 'bg-black text-white border border-black'
+                        : 'bg-rose-100 text-rose-600 border border-rose-200'
                     }`}
                   >
                     <span
                       className={`w-1.5 h-1.5 rounded-full ${
                         isSyncing
-                          ? 'bg-sky-400 animate-ping'
+                          ? 'bg-sky-500 animate-ping'
                           : isGasConnected
-                          ? 'bg-emerald-400 animate-pulse'
-                          : 'bg-amber-400'
+                          ? 'bg-white animate-pulse'
+                          : 'bg-rose-500'
                       }`}
                     />
                     <span>{isSyncing ? 'SINKRONISASI...' : isGasConnected ? 'TERHUBUNG' : 'STANDBY'}</span>
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                <p className="text-[10px] text-black mt-0.5 truncate opacity-70">
                   {isSyncing
                     ? 'Proses menghubungkan & mengambil data USERS...'
                     : isGasConnected
-                    ? 'Terhubung ke Google Spreadsheet (Sheet USERS & Work Order)'
-                    : 'Belum terhubung. Klik tombol refresh untuk menyambungkan.'}
+                    ? 'Terhubung ke Google Spreadsheet'
+                    : 'Belum terhubung. Klik tombol refresh.'}
                 </p>
               </div>
             </div>
@@ -325,21 +318,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 type="button"
                 onClick={handleSyncGAS}
                 disabled={isSyncing}
-                className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all border border-slate-700 shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                className="p-2.5 rounded-xl bg-white hover:bg-emerald-50 text-black hover:text-black transition-all border border-emerald-100 shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                 title="Refresh Connection & Sync Users"
               >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-sky-400' : ''}`} />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setTempGasUrl(settings.gasWebAppUrl || '');
-                  setShowGasModal(true);
-                }}
-                className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-all border border-slate-700 shadow-xs cursor-pointer"
-                title="Atur URL Google Apps Script"
-              >
-                <SettingsIcon className="w-4 h-4" />
+                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-sky-500' : ''}`} />
               </button>
             </div>
           </div>
@@ -348,14 +330,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between ml-1">
-                <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex items-center space-x-1.5">
-                  <UserIcon className="w-3.5 h-3.5 text-sky-400" />
+                <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
+                  <UserIcon className="w-3.5 h-3.5 text-black" />
                   <span>USERNAME (Sheet USERS)</span>
                 </label>
-                <span className="text-[9px] text-sky-400 font-bold bg-sky-950/60 border border-sky-800/60 px-1.5 py-0.5 rounded">Kolom: Username</span>
+                <span className="text-[9px] text-black font-bold bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">Kolom: Username</span>
               </div>
               <div className="relative group">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-slate-800 text-slate-400 group-focus-within:text-sky-400 transition-colors">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-emerald-50 text-black group-focus-within:text-black transition-colors">
                   <UserIcon className="w-4 h-4" />
                 </div>
                 <input
@@ -365,21 +347,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   placeholder="Masukkan Username akun Anda..."
                   required
                   autoFocus
-                  className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-900/80 border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/50 transition-all placeholder:text-slate-600 shadow-inner font-medium"
+                  className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white border border-emerald-100 text-black text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between ml-1">
-                <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex items-center space-x-1.5">
-                  <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
+                  <Lock className="w-3.5 h-3.5 text-rose-600" />
                   <span>PASSWORD (Sheet USERS)</span>
                 </label>
-                <span className="text-[9px] text-cyan-400 font-bold bg-cyan-950/60 border border-cyan-800/60 px-1.5 py-0.5 rounded">Kolom: Password</span>
+                <span className="text-[9px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded">Kolom: Password</span>
               </div>
               <div className="relative group">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-slate-800 text-slate-400 group-focus-within:text-sky-400 transition-colors">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-emerald-50 text-black group-focus-within:text-black transition-colors">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -388,12 +370,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Masukkan Password Anda..."
                   required
-                  className="w-full pl-12 pr-12 py-3 rounded-2xl bg-slate-900/80 border border-slate-700 text-white text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/50 transition-all placeholder:text-slate-600 shadow-inner font-medium"
+                  className="w-full pl-12 pr-12 py-3 rounded-2xl bg-white border border-emerald-100 text-black text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300 transition-colors"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-black/40 hover:text-black transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -403,10 +385,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-4 px-6 rounded-2xl text-sm font-black text-white bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500 shadow-xl shadow-sky-600/20 flex items-center justify-center space-x-3 transition-all active:scale-[0.98] group mt-6 disabled:opacity-50 cursor-pointer"
+              className="w-full py-3.5 px-6 rounded-full text-base font-black text-white bg-gradient-to-r from-black via-slate-900 to-red-600 hover:brightness-110 shadow-xl shadow-red-900/20 flex items-center justify-center space-x-4 transition-all active:scale-[0.98] group mt-6 disabled:opacity-50 cursor-pointer border-b-2 border-black/20"
             >
-              <span className="uppercase tracking-widest">{isSubmitting ? 'Mengautentikasi...' : 'Masuk Aplikasi'}</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <LogIn className="w-6 h-6" />
+              <span className="uppercase tracking-[0.2em]">{isSubmitting ? '...' : 'MASUK'}</span>
             </button>
           </form>
 
@@ -419,20 +401,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
             });
 
             return (
-              <div className="pt-4 border-t border-slate-700/50 space-y-3">
+              <div className="pt-4 border-t border-slate-100 space-y-3">
                 <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    <Users className="w-3.5 h-3.5 text-cyan-400" />
+                  <div className="flex items-center space-x-2 text-[10px] font-black text-black uppercase tracking-widest">
+                    <Users className="w-3.5 h-3.5 text-black" />
                     <span>Daftar Akun Sheet USERS ({selectableUsers.length})</span>
                   </div>
                   <button
                     type="button"
                     onClick={handleSyncGAS}
                     disabled={isSyncing}
-                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-emerald-500/5 hover:bg-emerald-500/10 text-black border border-emerald-500/10 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
                     title="Refresh Sheet USERS dari Spreadsheet"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-cyan-400' : ''}`} />
+                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-black' : ''}`} />
                     <span>{isSyncing ? 'Memuat...' : 'Refresh USERS'}</span>
                   </button>
                 </div>
@@ -459,24 +441,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                           onClick={() => handleSelectUser(u)}
                           className={`p-3 rounded-2xl text-left border transition-all flex items-start justify-between group cursor-pointer ${
                             isSelected
-                              ? 'bg-sky-500/15 border-sky-500 text-white shadow-lg shadow-sky-500/10 ring-1 ring-sky-500/50'
-                              : 'bg-slate-900/40 hover:bg-slate-900/80 border-slate-700/50 text-slate-400 hover:border-slate-600'
+                              ? 'bg-black text-white border-black shadow-sm ring-1 ring-black/20'
+                              : 'bg-white hover:bg-emerald-50 border-emerald-100 text-black hover:border-emerald-300'
                           }`}
                         >
                           <div className="min-w-0 flex-1 pr-2">
                             <div className="flex items-center space-x-1.5">
-                              <span className="text-[10px] text-slate-400 font-bold uppercase">Username:</span>
+                              <span className="text-[10px] text-black font-bold uppercase opacity-40">User:</span>
                               <span className={`text-xs font-mono font-extrabold truncate ${
-                                isSelected ? 'text-sky-300' : 'text-slate-100 group-hover:text-white'
+                                isSelected ? 'text-white' : 'text-black group-hover:text-black'
                               }`}>
                                 {u.userName || u.nip || u.id}
                               </span>
                             </div>
-                            <p className="text-[11px] font-semibold text-slate-300 truncate mt-0.5">
+                            <p className={`text-[11px] font-black truncate mt-0.5 ${isSelected ? 'text-slate-100' : 'text-black'}`}>
                               {u.name || u.userName}
                             </p>
                             {(u.ulpName || u.reguName) && (
-                              <p className="text-[9px] text-slate-400 truncate mt-0.5 font-medium">
+                              <p className={`text-[9px] truncate mt-0.5 font-bold ${isSelected ? 'text-slate-300' : 'text-black/60'}`}>
                                 {u.ulpName || ''} {u.reguName ? `• ${u.reguName}` : ''}
                               </p>
                             )}
@@ -484,12 +466,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                           <span
                             className={`px-2 py-0.5 rounded-lg text-[8px] font-black shrink-0 border uppercase tracking-tighter ${
                               isSuperAdmin
-                                ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                ? 'bg-purple-100 text-purple-700 border-purple-200'
                                 : isAdmin
-                                ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                                ? 'bg-black text-white border-black'
                                 : isAdm
-                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                : 'bg-emerald-100 text-black border-emerald-200'
                             }`}
                           >
                             {u.role || 'USER'}
@@ -499,16 +481,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                     })}
                   </div>
                 ) : (
-                  <div className="p-6 text-center rounded-2xl bg-slate-900/40 border border-slate-700/50 border-dashed space-y-2">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Belum ada data user dari Sheet USERS</p>
+                  <div className="p-6 text-center rounded-2xl bg-emerald-50/50 border border-emerald-100 border-dashed space-y-2">
+                    <p className="text-[10px] text-black font-black uppercase tracking-widest opacity-40">Belum ada data user</p>
                     <button
                       type="button"
                       onClick={handleSyncGAS}
                       disabled={isSyncing}
-                      className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30 text-xs font-bold transition-all inline-flex items-center space-x-2 cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-black text-white hover:bg-slate-900 border border-black text-xs font-bold transition-all inline-flex items-center space-x-2 cursor-pointer"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                      <span>{isSyncing ? 'Sedang Memuat Data...' : 'Ambil User Dari Spreadsheet'}</span>
+                      <span>{isSyncing ? 'Sedang Memuat...' : 'Ambil User'}</span>
                     </button>
                   </div>
                 )}
@@ -518,14 +500,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
         </div>
 
         <div className="text-center space-y-1">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+          <p className="text-[10px] text-black font-black uppercase tracking-widest opacity-60">
             © 13307BKT- 2026 PLN ES UP4 Sumatera Barat. All rights reserved.
           </p>
-          <div className="flex items-center justify-center space-x-3 text-[9px] text-slate-600 font-bold uppercase tracking-widest">
+          <div className="flex items-center justify-center space-x-3 text-[9px] text-black/40 font-black uppercase tracking-widest">
             <span>VER {settings.versiAplikasi}</span>
-            <span className="w-1 h-1 rounded-full bg-slate-700" />
+            <span className="w-1 h-1 rounded-full bg-emerald-200" />
             <span className="flex items-center space-x-1">
-               <ShieldCheck className="w-3 h-3 text-emerald-600" />
+               <ShieldCheck className="w-3 h-3 text-emerald-500" />
                <span>Secured Access</span>
             </span>
           </div>
