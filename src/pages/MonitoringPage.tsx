@@ -9,6 +9,7 @@ import { useGASSync } from '../context/GASSyncContext';
 import { useUI } from '../context/UIContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { WorkOrder, Realisasi } from '../types';
+import { getLocalDateTimeString, formatDateDisplay } from '../utils/dateUtils';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import {
@@ -199,10 +200,10 @@ export const MonitoringPage: React.FC = () => {
 
   const activeReguLocations = useMemo(() => {
     // Sesuai Tanggal saat Login (Today)
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateTimeString().slice(0, 10);
     
     // 1. Get active regu based on today's attendance
-    let todayAbsensi = absensiList.filter(a => a.tanggal && a.tanggal.slice(0, 10) === today);
+    let todayAbsensi = absensiList.filter(a => a.tanggal && formatDateDisplay(a.tanggal) === today);
     
     // 2. Filter by Unit Layanan (Inisiasi)
     if (filterUlp !== 'ALL') {
@@ -219,7 +220,7 @@ export const MonitoringPage: React.FC = () => {
     return activeReguNames.map(name => {
       // Find latest activity for this regu
       const reguRealisasi = realisasiList
-        .filter(r => r.reguName === name && r.createdAt.slice(0, 10) === today)
+        .filter(r => r.reguName === name && formatDateDisplay(r.tanggalRealisasi || r.createdAt) === today)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
       const latestRel = reguRealisasi[0];
@@ -453,7 +454,7 @@ export const MonitoringPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap text-slate-700 dark:text-slate-300">
-                        {row.tanggal}
+                        {formatDateDisplay(row.tanggal)}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap text-slate-800 dark:text-slate-200 font-semibold">
                         {row.ulpName}

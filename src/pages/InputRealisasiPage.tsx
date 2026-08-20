@@ -338,8 +338,6 @@ export const InputRealisasiPage: React.FC = () => {
       // Use the context update method which handles both local and server sync
       updateWorkOrder(selectedWO.id, {
         status: 'Selesai' as WOStatus,
-        volumePekerjaan: totalVolume, // Legacy field
-        satuan: finalSatuan, // Legacy field
         totalRealisasi: totalVolume,
         satuanTotalRealisasi: finalSatuan,
         lokasiStart,

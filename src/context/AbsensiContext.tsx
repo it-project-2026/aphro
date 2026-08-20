@@ -28,11 +28,30 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     const todayStr = absData.tanggal || new Date().toISOString().slice(0, 10);
     const nowStr = new Date().toLocaleString('id-ID');
 
+    // Helper to normalize date for comparison
+    const normalizeDate = (d: any) => {
+      if (!d) return '';
+      const s = String(d).trim();
+      // ISO YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      // Indo DD-MM-YYYY or DD/MM/YYYY
+      const match = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+      if (match) {
+        return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+      }
+      return s.slice(0, 10);
+    };
+
+    const targetDate = normalizeDate(todayStr);
+
     // Find existing entry for today & regu
-    const existingIndex = absensiList.findIndex(a => 
-      a && String(a.tanggal).slice(0, 10) === todayStr &&
-      (a.reguName || '').trim().toLowerCase() === (absData.reguName || '').trim().toLowerCase()
-    );
+    const existingIndex = absensiList.findIndex(a => {
+      if (!a) return false;
+      const rowDate = normalizeDate(a.tanggal);
+      const rowRegu = (a.reguName || '').trim().toLowerCase();
+      const targetRegu = (absData.reguName || '').trim().toLowerCase();
+      return rowDate === targetDate && rowRegu === targetRegu;
+    });
 
     let finalAbs: Absensi;
 

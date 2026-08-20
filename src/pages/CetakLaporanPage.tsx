@@ -9,6 +9,7 @@ import { useToast } from '../hooks/useToast';
 import { MapReportCapture, MapReportCaptureRef } from '../components/MapReportCapture';
 import { MapPreviewModal } from '../components/MapPreviewModal';
 import { formatDateTime, formatDateOnly, formatExecutionDateTime } from '../utils/dateFormatter';
+import { formatDateDisplay } from '../utils/dateUtils';
 import {
   generateLaporanPetaPDF,
   exportWorkOrdersToExcel,
@@ -1041,7 +1042,7 @@ export const CetakLaporanPage: React.FC = () => {
                     <tr key={`${wo.id}-${i}`} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                       <td className="p-2 border font-bold text-center">{i + 1}</td>
                       <td className="p-2 border font-bold text-sky-700">{wo.nomorWO}</td>
-                      <td className="p-2 border">{wo.tanggal}</td>
+                      <td className="p-2 border">{formatDateDisplay(wo.tanggal)}</td>
                       <td className="p-2 border">{wo.ulpName}</td>
                       <td className="p-2 border font-semibold">{wo.penyulangName}</td>
                       <td className="p-2 border max-w-xs truncate">{wo.lokasi}</td>

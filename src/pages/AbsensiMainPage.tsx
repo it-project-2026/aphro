@@ -184,6 +184,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         nip: currentUser?.nip,
         petugasList: todayAbsensi?.petugasList || [],
         fotoMasuk: todayAbsensi?.fotoMasuk || '',
+        timestampMasuk: todayAbsensi?.timestampMasuk || '',
         fotoKeluar: fotoKeluar || todayAbsensi?.fotoKeluar || '',
       });
 

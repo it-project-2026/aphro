@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { GASApiService } from '../services/gasApiService';
 import { addToOfflineQueue } from '../services/offlineSyncQueue';
 import { formatDriveViewUrl } from '../utils/driveUtils';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 
 interface RealisasiContextType {
   realisasiList: Realisasi[];
@@ -25,7 +26,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     const newRel: Realisasi = {
       ...relData,
       id: 'REL-' + Date.now(),
-      createdAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      createdAt: getLocalDateTimeString(),
     };
     
     // Always update local state optimistically so data is immediately saved on device

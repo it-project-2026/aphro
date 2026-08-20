@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { generateWatermarkedImage } from '../utils/watermark';
 import { AbsensiPetugas } from '../types';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 
 interface AbsensiKerjaPageProps {
   onSuccess: () => void;
@@ -37,7 +38,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateTimeString().slice(0, 10);
   const reguName = currentUser?.reguName || currentUser?.reguId || (currentUser?.role === 'SuperAdmin' || currentUser?.role === 'Admin' ? 'Manajemen/Admin' : 'Belum Ada Regu');
   const ulpName = currentUser?.ulpName || currentUser?.ulpId || 'Belum Ada ULP';
 

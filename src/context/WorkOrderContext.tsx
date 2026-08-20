@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
-import { WorkOrder } from '../types';
+import { WorkOrder, WOStatus } from '../types';
 import { INITIAL_WORK_ORDERS } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { GASApiService } from '../services/gasApiService';
 import { addToOfflineQueue } from '../services/offlineSyncQueue';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 
 interface WorkOrderContextType {
   workOrders: WorkOrder[];
@@ -92,11 +93,12 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   }, [workOrders, user]);
 
   const addWorkOrder = React.useCallback((woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const nowStr = getLocalDateTimeString();
     const newWo: WorkOrder = {
       ...woData,
       id: 'WO-' + Date.now(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowStr,
+      updatedAt: nowStr,
     };
     setWorkOrders(prev => [newWo, ...prev]);
 
@@ -125,9 +127,10 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
   const updateWorkOrder = React.useCallback((id: string, updates: Partial<WorkOrder>) => {
     let updatedWo: WorkOrder | undefined;
+    const nowStr = getLocalDateTimeString();
     setWorkOrders(prev => prev.map(wo => {
       if (wo.id === id) {
-        updatedWo = { ...wo, ...updates, updatedAt: new Date().toISOString() };
+        updatedWo = { ...wo, ...updates, updatedAt: nowStr };
         return updatedWo;
       }
       return wo;

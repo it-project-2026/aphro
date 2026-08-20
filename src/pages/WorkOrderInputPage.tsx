@@ -8,6 +8,7 @@ import { useGASSync } from '../hooks/useGASSync';
 import { GASApiService } from '../services/gasApiService';
 import { Save, ArrowLeft, FilePlus, Database, CheckCircle2, Sparkles, Layers, AlertTriangle } from 'lucide-react';
 import { WOStatus } from '../types';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 
 const INDO_MONTHS = [
   'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
@@ -25,7 +26,7 @@ export const WorkOrderInputPage: React.FC = () => {
 
   // 1. Initial State Definition
   const [pekerjaan, setPekerjaan] = useState<'NORMAL' | 'GOROW'>('NORMAL');
-  const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10));
+  const [tanggal, setTanggal] = useState(getLocalDateTimeString().slice(0, 10));
   
   const [ulpName, setUlpName] = useState(ulpList[0]?.namaULP || 'ULP Kuranji');
   const [reguName, setReguName] = useState(reguList[0]?.namaRegu || 'Regu ROW Alpha');

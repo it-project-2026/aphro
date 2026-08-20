@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import { formatDateDisplay } from '../utils/dateUtils';
 
 interface UserWelcomePageProps {
   onStartAbsensi: () => void;
@@ -172,7 +173,8 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   // Today's Work Orders (or active assigned work orders if none specifically dated today)
   const todaysWorkOrders = useMemo(() => {
     const todayMatches = userMatchedWorkOrders.filter((wo) => {
-      const isToday = wo.tanggal === todayIso || wo.createdAt?.startsWith(todayIso);
+      const woDate = formatDateDisplay(wo.tanggal);
+      const isToday = woDate === todayIso || wo.createdAt?.startsWith(todayIso);
       const isActive = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
       return isToday || isActive;
     });
@@ -401,7 +403,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
 
                       <div className="flex items-center space-x-1.5 truncate">
                         <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span className="truncate">Tanggal: {wo.tanggal}</span>
+                        <span className="truncate">Tanggal: {formatDateDisplay(wo.tanggal)}</span>
                       </div>
 
                       {wo.volumePekerjaan ? (

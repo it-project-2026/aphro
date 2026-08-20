@@ -310,11 +310,25 @@ export class RekapHarianService {
     // 1. ISO format YYYY-MM-DD (optionally with T and time)
     const isoMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (isoMatch) {
-      return { 
-        y: parseInt(isoMatch[1], 10), 
-        m: parseInt(isoMatch[2], 10), 
-        d: parseInt(isoMatch[3], 10) 
-      };
+      const year = parseInt(isoMatch[1], 10);
+      const month = parseInt(isoMatch[2], 10);
+      const day = parseInt(isoMatch[3], 10);
+      
+      // If it has a T and ends with Z, it's a UTC ISO string from Google Apps Script
+      // e.g. 2026-08-19T17:00:00.000Z
+      if (s.includes('T') && s.endsWith('Z')) {
+        const dt = new Date(s);
+        // We know these dates usually represent local midnight but were shifted to UTC
+        // If it's 17:00 of the previous day, it means it was midnight of the next day in WIB (+7)
+        if (dt.getUTCHours() >= 12) {
+          const nextDay = new Date(dt);
+          nextDay.setUTCDate(dt.getUTCDate() + 1);
+          return { y: nextDay.getUTCFullYear(), m: nextDay.getUTCMonth() + 1, d: nextDay.getUTCDate() };
+        }
+        return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+      }
+
+      return { y: year, m: month, d: day };
     }
 
     // 2. Indo format DD-MM-YYYY or DD/MM/YYYY
@@ -327,15 +341,16 @@ export class RekapHarianService {
       };
     }
 
-    // 3. Fallback for strings like "Aug 19, 2026" or "08/19/2026"
+    // 3. Fallback for other formats
     const dt = new Date(s);
     if (!isNaN(dt.getTime())) {
-      // If the input string starts with something that looks like an ISO date (YYYY-MM-DD),
-      // JS Date parses it as UTC midnight. We MUST use UTC getters to stay on the correct day.
-      if (/^\d{4}-\d{1,2}-\d{1,2}/.test(s)) {
+      // For ISO-like strings (YYYY-MM-DD...), use UTC to avoid local timezone shifts
+      // which often push midnight dates to the previous day
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
         return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
       }
-      // Otherwise, assume local parsing
+      
+      // If it looks like a time-only or partial, use local getters
       return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
     }
 

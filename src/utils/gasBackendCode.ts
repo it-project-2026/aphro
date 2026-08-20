@@ -49,7 +49,7 @@ function setupDatabase() {
   // List of required Sheets and Header Columns
   var sheetsSchema = {
     "USERS": ["UserID", "Username", "Password", "NamaRegu", "Role", "ULP", "Status", "Last Login", "Created At"],
-    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "STATUS", "Created_At"],
+    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "STATUS", "Total_Realisasi", "Satuan_Realisasi", "Created_At"],
     "REALISASI": ["WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Timestamp"],
     "ULP": ["ID", "Kode_ULP", "Nama_ULP", "Manajer", "Kontak", "Alamat", "Status"],
     "PENYULANG": ["ID", "Nama_Penyulang", "ULP", "Panjang_Kms", "Jumlah_Trafo", "Status"],
@@ -145,7 +145,15 @@ function sheetToObjects(sheetName) {
     var row = data[r];
     var obj = {};
     for (var c = 0; c < headers.length; c++) {
-      obj[headers[c]] = row[c];
+      var val = row[c];
+      // Convert Date objects to YYYY-MM-DD string to avoid timezone shifts during JSON stringify
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        var year = val.getFullYear();
+        var month = ("0" + (val.getMonth() + 1)).slice(-2);
+        var day = ("0" + val.getDate()).slice(-2);
+        val = year + "-" + month + "-" + day;
+      }
+      obj[headers[c]] = val;
     }
     results.push(obj);
   }
@@ -387,7 +395,10 @@ function doPost(e) {
       var sheet = ss.getSheetByName("WORK_ORDER") || ss.insertSheet("WORK_ORDER");
 
       var woId = wo.id || ("wo-" + new Date().getTime());
-      var createdTime = wo.createdAt || new Date().toISOString();
+      var now = new Date();
+      var createdTime = wo.createdAt || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+      var tglStr = wo.tanggal ? Utilities.formatDate(new Date(wo.tanggal), "GMT+7", "yyyy-MM-dd") : Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+      
       var volPekerjaan = Number(wo.volumePekerjaan || wo.volume || 0);
       var satuanVal = String(wo.satuan || "KMS").toUpperCase();
 
@@ -395,14 +406,16 @@ function doPost(e) {
         woId,                                 // 1. WO_ID
         wo.pekerjaan || "NORMAL",             // 2. PEKERJAAN
         wo.nomorWO || "",                     // 3. Nomor_WO
-        wo.tanggal || "",                     // 4. Tanggal
+        tglStr,                               // 4. Tanggal
         wo.ulpName || "",                     // 5. ULP
         wo.penyulangName || "",               // 6. Penyulang
         wo.reguName || "",                    // 7. Regu_ROW
         volPekerjaan,                         // 8. VOLUME
         satuanVal,                            // 9. SATUAN
         wo.status || "BELUM SELESAI",         // 10. STATUS
-        createdTime                           // 11. Created_At
+        0,                                    // 11. Total_Realisasi
+        satuanVal,                            // 12. Satuan_Realisasi
+        createdTime                           // 13. Created_At
       ]);
 
       return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO });
@@ -443,7 +456,10 @@ function doPost(e) {
         latLng = (rel.latitude || 0) + ", " + (rel.longitude || 0);
       }
 
-      var timestampStr = rel.timestamp || rel.createdAt || new Date().toISOString();
+      var now = new Date();
+      var timestampStr = rel.timestamp || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+      var tglRelStr = rel.tanggalRealisasi || rel.tanggal || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+      if (tglRelStr.indexOf("T") > 0) tglRelStr = tglRelStr.split("T")[0];
 
       sheet.appendRow([
         woId,                                           // 1. WO_ID (Col A)
@@ -452,7 +468,7 @@ function doPost(e) {
         rel.reguName || "",                             // 4. REGU_ROW (Col D)
         rel.penyulangName || "",                        // 5. PENYULANG (Col E)
         rel.noTiang || "-",                             // 6. NO_TIANG (Col F)
-        rel.tanggalRealisasi || rel.tanggal || new Date().toISOString().slice(0, 10), // 7. TANGGAL (Col G)
+        tglRelStr,                                      // 7. TANGGAL (Col G)
         fotoSebelumLink,                                // 8. Foto_Sebelum (Col H)
         fotoSesudahLink,                                // 9. Foto_Sesudah (Col I)
         rel.jenisTanaman || "-",                        // 10. Jenis_Tanaman (Col J)
@@ -467,10 +483,21 @@ function doPost(e) {
       var woSheet = ss.getSheetByName("WORK_ORDER") || ss.getSheetByName("WORK_ORDERS");
       if (woSheet) {
         var woData = woSheet.getDataRange().getValues();
-        for (var r = 1; r < woData.length; r++) {
-          if (String(woData[r][0]) === String(woId) || String(woData[r][2]) === String(nomorWO)) {
-            woSheet.getRange(r + 1, 10).setValue("SELESAI"); // Status
+        var woHeaders = woData[0];
+        var statusCol = -1;
+        for (var h = 0; h < woHeaders.length; h++) {
+          if (woHeaders[h].toUpperCase() === "STATUS") {
+            statusCol = h + 1;
             break;
+          }
+        }
+        
+        if (statusCol > 0) {
+          for (var r = 1; r < woData.length; r++) {
+            if (String(woData[r][0]) === String(woId) || String(woData[r][2]) === String(nomorWO)) {
+              woSheet.getRange(r + 1, statusCol).setValue("SELESAI"); // Status
+              break;
+            }
           }
         }
       }
@@ -490,9 +517,11 @@ function doPost(e) {
       var sheet = ss.getSheetByName("ABSENSI") || ss.insertSheet("ABSENSI");
       var absId = abs.id || ("abs-" + new Date().getTime());
       var pList = abs.petugasList || [];
-      var tgl = abs.tanggal || new Date().toISOString().slice(0, 10);
+      
+      var now = new Date();
+      var tgl = abs.tanggal || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
       var regu = abs.reguName || "";
-      var nowStr = new Date().toLocaleString("id-ID");
+      var nowStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
 
       var data = sheet.getDataRange().getValues();
       var existingRowIndex = -1;
@@ -541,20 +570,26 @@ function doPost(e) {
       }
 
       if (existingRowIndex > 0) {
-        sheet.getRange(existingRowIndex, 5).setValue(p1_nama);
-        sheet.getRange(existingRowIndex, 6).setValue(p1_ket);
-        sheet.getRange(existingRowIndex, 7).setValue(p2_nama);
-        sheet.getRange(existingRowIndex, 8).setValue(p2_ket);
-        sheet.getRange(existingRowIndex, 9).setValue(p3_nama);
-        sheet.getRange(existingRowIndex, 10).setValue(p3_ket);
-        sheet.getRange(existingRowIndex, 11).setValue(p4_nama);
-        sheet.getRange(existingRowIndex, 12).setValue(p4_ket);
-        sheet.getRange(existingRowIndex, 13).setValue(p5_nama);
-        sheet.getRange(existingRowIndex, 14).setValue(p5_ket);
+        // Update basic info only if provided and not empty
+        if (abs.ulpName) sheet.getRange(existingRowIndex, 4).setValue(abs.ulpName);
+        
+        // Update petugas only if they were provided in the list
+        if (pList.length > 0) {
+          sheet.getRange(existingRowIndex, 5).setValue(p1_nama);
+          sheet.getRange(existingRowIndex, 6).setValue(p1_ket);
+          sheet.getRange(existingRowIndex, 7).setValue(p2_nama);
+          sheet.getRange(existingRowIndex, 8).setValue(p2_ket);
+          sheet.getRange(existingRowIndex, 9).setValue(p3_nama);
+          sheet.getRange(existingRowIndex, 10).setValue(p3_ket);
+          sheet.getRange(existingRowIndex, 11).setValue(p4_nama);
+          sheet.getRange(existingRowIndex, 12).setValue(p4_ket);
+          sheet.getRange(existingRowIndex, 13).setValue(p5_nama);
+          sheet.getRange(existingRowIndex, 14).setValue(p5_ket);
+        }
 
         if (fMasukLink) {
           sheet.getRange(existingRowIndex, 15).setValue(fMasukLink);
-          sheet.getRange(existingRowIndex, 16).setValue(abs.timestampMasuk || nowStr);
+          if (abs.timestampMasuk) sheet.getRange(existingRowIndex, 16).setValue(abs.timestampMasuk);
         }
         if (fKeluarLink) {
           sheet.getRange(existingRowIndex, 17).setValue(fKeluarLink);
@@ -597,19 +632,29 @@ function doPost(e) {
       var ss = getSpreadsheet();
       var sheet = ss.getSheetByName("WORK_ORDER") || ss.getSheetByName("WORK_ORDERS");
       var data = sheet.getDataRange().getValues();
+      var headers = data[0];
       var updated = false;
+
+      // Find column indices
+      var colIdx = {};
+      headers.forEach(function(h, i) {
+        colIdx[h.toUpperCase()] = i + 1;
+      });
 
       for (var r = 1; r < data.length; r++) {
         if (String(data[r][0]) === String(id) || String(data[r][2]) === String(wo.nomorWO)) {
-          if (wo.pekerjaan !== undefined) sheet.getRange(r + 1, 2).setValue(wo.pekerjaan);
-          if (wo.nomorWO !== undefined) sheet.getRange(r + 1, 3).setValue(wo.nomorWO);
-          if (wo.tanggal !== undefined) sheet.getRange(r + 1, 4).setValue(wo.tanggal);
-          if (wo.ulpName !== undefined) sheet.getRange(r + 1, 5).setValue(wo.ulpName);
-          if (wo.penyulangName !== undefined) sheet.getRange(r + 1, 6).setValue(wo.penyulangName);
-          if (wo.reguName !== undefined) sheet.getRange(r + 1, 7).setValue(wo.reguName);
-          if (wo.volumePekerjaan !== undefined) sheet.getRange(r + 1, 8).setValue(wo.volumePekerjaan);
-          if (wo.satuan !== undefined) sheet.getRange(r + 1, 9).setValue(wo.satuan);
-          if (wo.status !== undefined) sheet.getRange(r + 1, 10).setValue(wo.status);
+          var row = r + 1;
+          if (wo.pekerjaan !== undefined && colIdx["PEKERJAAN"]) sheet.getRange(row, colIdx["PEKERJAAN"]).setValue(wo.pekerjaan);
+          if (wo.nomorWO !== undefined && colIdx["NOMOR_WO"]) sheet.getRange(row, colIdx["NOMOR_WO"]).setValue(wo.nomorWO);
+          if (wo.tanggal !== undefined && colIdx["TANGGAL"]) sheet.getRange(row, colIdx["TANGGAL"]).setValue(wo.tanggal);
+          if (wo.ulpName !== undefined && colIdx["ULP"]) sheet.getRange(row, colIdx["ULP"]).setValue(wo.ulpName);
+          if (wo.penyulangName !== undefined && colIdx["PENYULANG"]) sheet.getRange(row, colIdx["PENYULANG"]).setValue(wo.penyulangName);
+          if (wo.reguName !== undefined && colIdx["REGU_ROW"]) sheet.getRange(row, colIdx["REGU_ROW"]).setValue(wo.reguName);
+          if (wo.volumePekerjaan !== undefined && colIdx["VOLUME"]) sheet.getRange(row, colIdx["VOLUME"]).setValue(wo.volumePekerjaan);
+          if (wo.satuan !== undefined && colIdx["SATUAN"]) sheet.getRange(row, colIdx["SATUAN"]).setValue(wo.satuan);
+          if (wo.status !== undefined && colIdx["STATUS"]) sheet.getRange(row, colIdx["STATUS"]).setValue(wo.status);
+          if (wo.totalRealisasi !== undefined && colIdx["TOTAL_REALISASI"]) sheet.getRange(row, colIdx["TOTAL_REALISASI"]).setValue(wo.totalRealisasi);
+          if (wo.satuanTotalRealisasi !== undefined && colIdx["SATUAN_REALISASI"]) sheet.getRange(row, colIdx["SATUAN_REALISASI"]).setValue(wo.satuanTotalRealisasi);
           updated = true;
           break;
         }
@@ -664,11 +709,11 @@ function doPost(e) {
       } else if (sheetName === "PETUGAS") {
         rowValues = [item.id, item.nip || item.id, item.nama, item.reguName || "-", item.ulpName || "-", item.nomorHp || "-", item.role || "User", "Aktif"];
       } else if (sheetName === "USERS") {
-        rowValues = [item.id, item.username || item.nip, hashSHA256(item.password || "user123"), item.reguName || "-", item.role || "User", item.ulpName || "PLN UP3 Padang", "Aktif", new Date().toISOString(), new Date().toISOString()];
+        rowValues = [item.id, item.username || item.nip, hashSHA256(item.password || "user123"), item.reguName || "-", item.role || "User", item.ulpName || "PLN UP3 Padang", "Aktif", Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss"), Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss")];
       } else if (sheetName === "SETTING") {
-        rowValues = [item.namaUnitLayanan, item.logoAplikasiUrl || "", item.themeColor || "sky", item.footerText || "", item.whatsapp || "", item.email || "", new Date().toISOString()];
+        rowValues = [item.namaUnitLayanan, item.logoAplikasiUrl || "", item.themeColor || "sky", item.footerText || "", item.whatsapp || "", item.email || "", Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss")];
       } else if (sheetName === "LOG_ACTIVITY") {
-        rowValues = [new Date().toISOString(), item.actorName || "Sistem", item.action, item.details, "-", "-"];
+        rowValues = [Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss"), item.actorName || "Sistem", item.action, item.details, "-", "-"];
       }
 
       if (existingRow > 0) {

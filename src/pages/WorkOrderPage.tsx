@@ -26,6 +26,7 @@ import {
   UserCheck,
   CheckSquare,
 } from 'lucide-react';
+import { formatDateDisplay } from '../utils/dateUtils';
 
 export const WorkOrderPage: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -213,7 +214,7 @@ export const WorkOrderPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2 text-xs bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700">
                   <div>
                     <span className="text-[10px] text-slate-400 block">TANGGAL</span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300">{wo.tanggal}</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{formatDateDisplay(wo.tanggal)}</span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 block">REGU</span>
@@ -313,7 +314,7 @@ export const WorkOrderPage: React.FC = () => {
                       </p>
                       <p className="text-[11px] text-slate-400 flex items-center mt-0.5">
                         <Calendar className="w-3 h-3 mr-1" />
-                        {wo.tanggal}
+                        {formatDateDisplay(wo.tanggal)}
                       </p>
                       {(wo.volumePekerjaan || wo.woKms || wo.woBatang) && (
                         <div className="flex items-center space-x-1.5 mt-1">
@@ -465,6 +466,12 @@ export const WorkOrderPage: React.FC = () => {
 
             <div className="space-y-3 text-xs sm:text-sm">
               <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div>
+                  <p className="text-[11px] text-slate-400">Tanggal Pelaksanaan</p>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">
+                    {formatDateDisplay(selectedWO.tanggal)}
+                  </p>
+                </div>
                 <div>
                   <p className="text-[11px] text-slate-400">Unit Layanan (ULP)</p>
                   <p className="font-bold text-slate-800 dark:text-slate-200">
