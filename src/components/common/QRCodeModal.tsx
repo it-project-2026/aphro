@@ -33,7 +33,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
       <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-5 animate-in fade-in zoom-in duration-200">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
-          <div className="flex items-center space-x-2 text-sky-600 dark:text-sky-400">
+          <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400">
             <QrCode className="w-5 h-5" />
             <h3 className="font-bold text-slate-900 dark:text-white text-lg">
               QR Code Work Order
@@ -54,7 +54,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
           </div>
 
           <div className="space-y-1">
-            <span className="text-xs font-semibold px-2.5 py-0.5 bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 rounded-full">
+            <span className="text-xs font-semibold px-2.5 py-0.5 bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 rounded-full">
               {workOrder.nomorWO}
             </span>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 pt-1">
@@ -78,7 +78,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
           </button>
           <button
             onClick={handlePrint}
-            className="inline-flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-xs transition-colors"
+            className="inline-flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-xs transition-colors"
           >
             <Printer className="w-4 h-4" />
             <span>Cetak QR</span>

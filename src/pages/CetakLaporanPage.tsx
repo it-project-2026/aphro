@@ -556,7 +556,7 @@ export const CetakLaporanPage: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-2">
-              <FileText className="w-6 h-6 text-sky-600" />
+              <FileText className="w-6 h-6 text-teal-600" />
               <span>Cetak & Export Laporan Operations</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -600,7 +600,7 @@ export const CetakLaporanPage: React.FC = () => {
 
             <button
               onClick={handlePrint}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
               title="Cetak/Print Dokumen"
             >
               <Printer className="w-4 h-4" />
@@ -616,7 +616,7 @@ export const CetakLaporanPage: React.FC = () => {
               onClick={() => setActiveReportTab('foto')}
               className={`flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeReportTab === 'foto'
-                  ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-xs'
+                  ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
@@ -628,7 +628,7 @@ export const CetakLaporanPage: React.FC = () => {
               onClick={() => setActiveReportTab('peta')}
               className={`flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeReportTab === 'peta'
-                  ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-xs'
+                  ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
@@ -705,33 +705,33 @@ export const CetakLaporanPage: React.FC = () => {
               <table className="w-full text-center text-[11px] border-collapse min-w-[1100px]">
                 <thead>
                   {/* Banner Title 1 */}
-                  <tr className="bg-sky-600 text-white font-extrabold text-xs uppercase tracking-wider">
-                    <th colSpan={14} className="p-2 border-b border-sky-700 bg-sky-600 text-center">
+                  <tr className="bg-teal-600 text-white font-extrabold text-xs uppercase tracking-wider">
+                    <th colSpan={14} className="p-2 border-b border-teal-700 bg-teal-600 text-center">
                       REKAP HASIL ROW
                     </th>
                   </tr>
                   {/* Banner Title 2 */}
-                  <tr className="bg-sky-800 text-white font-bold text-[11px] uppercase tracking-wider">
-                    <th colSpan={14} className="p-1.5 border-b border-sky-900 bg-sky-800 text-center">
+                  <tr className="bg-teal-800 text-white font-bold text-[11px] uppercase tracking-wider">
+                    <th colSpan={14} className="p-1.5 border-b border-teal-900 bg-teal-800 text-center">
                       PLN ELECTRICITY SERVICES
                     </th>
                   </tr>
                   {/* Columns */}
-                  <tr className="bg-sky-900 text-white font-bold text-[10px] uppercase">
-                    <th className="p-2 border border-sky-950 min-w-[120px]">NO WO</th>
-                    <th className="p-2 border border-sky-950">AREA</th>
-                    <th className="p-2 border border-sky-950">ULP</th>
-                    <th className="p-2 border border-sky-950 min-w-[120px]">NAMA TIM</th>
-                    <th className="p-2 border border-sky-950">FEEDER</th>
-                    <th className="p-2 border border-sky-950">NO TIANG</th>
-                    <th className="p-2 border border-sky-950">TANGGAL EKSEKUSI</th>
-                    <th className="p-2 border border-sky-950 min-w-[110px]">FOTO SEBELUM</th>
-                    <th className="p-2 border border-sky-950 min-w-[110px]">FOTO SESUDAH</th>
-                    <th className="p-2 border border-sky-950 min-w-[130px]">JENIS TANAMAN</th>
-                    <th className="p-2 border border-sky-950">KETERANGAN</th>
-                    <th className="p-2 border border-sky-950 min-w-[110px]">PERTUMBUHAN TANAMAN</th>
-                    <th className="p-2 border border-sky-950">KENDALA</th>
-                    <th className="p-2 border border-sky-950 min-w-[130px]">LOKASI</th>
+                  <tr className="bg-teal-900 text-white font-bold text-[10px] uppercase">
+                    <th className="p-2 border border-teal-950 min-w-[120px]">NO WO</th>
+                    <th className="p-2 border border-teal-950">AREA</th>
+                    <th className="p-2 border border-teal-950">ULP</th>
+                    <th className="p-2 border border-teal-950 min-w-[120px]">NAMA TIM</th>
+                    <th className="p-2 border border-teal-950">FEEDER</th>
+                    <th className="p-2 border border-teal-950">NO TIANG</th>
+                    <th className="p-2 border border-teal-950">TANGGAL EKSEKUSI</th>
+                    <th className="p-2 border border-teal-950 min-w-[110px]">FOTO SEBELUM</th>
+                    <th className="p-2 border border-teal-950 min-w-[110px]">FOTO SESUDAH</th>
+                    <th className="p-2 border border-teal-950 min-w-[130px]">JENIS TANAMAN</th>
+                    <th className="p-2 border border-teal-950">KETERANGAN</th>
+                    <th className="p-2 border border-teal-950 min-w-[110px]">PERTUMBUHAN TANAMAN</th>
+                    <th className="p-2 border border-teal-950">KENDALA</th>
+                    <th className="p-2 border border-teal-950 min-w-[130px]">LOKASI</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
@@ -748,8 +748,8 @@ export const CetakLaporanPage: React.FC = () => {
                       const lng = rel.longitude || wo?.longitude || 100.449261;
 
                       return (
-                        <tr key={`cetak-photo-${rel.id}-${idx}`} className="hover:bg-sky-50/50 transition-colors">
-                          <td className="p-2 border border-slate-200 font-extrabold text-sky-800 text-[10px]">
+                        <tr key={`cetak-photo-${rel.id}-${idx}`} className="hover:bg-teal-50/50 transition-colors">
+                          <td className="p-2 border border-slate-200 font-extrabold text-teal-800 text-[10px]">
                             {rel.nomorWO || wo?.nomorWO || '-'}
                           </td>
                           <td className="p-2 border border-slate-200 uppercase font-semibold text-[10px]">
@@ -836,8 +836,8 @@ export const CetakLaporanPage: React.FC = () => {
                     ⚡
                   </div>
                   <div className="text-left leading-none">
-                    <span className="font-extrabold text-sky-700 text-xs block">PLN</span>
-                    <span className="font-bold text-sky-900 text-[10px]">Electricity Services</span>
+                    <span className="font-extrabold text-teal-700 text-xs block">PLN</span>
+                    <span className="font-bold text-teal-900 text-[10px]">Electricity Services</span>
                   </div>
                 </div>
 
@@ -846,7 +846,7 @@ export const CetakLaporanPage: React.FC = () => {
                   <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 uppercase tracking-wide">
                     GAMBAR PETA POHON (ROW)
                   </h3>
-                  <h4 className="font-bold text-[11px] sm:text-xs text-sky-800 uppercase">
+                  <h4 className="font-bold text-[11px] sm:text-xs text-teal-800 uppercase">
                     FEEDER {selectedPenyulangName}
                   </h4>
                   <p className="font-extrabold text-[10px] sm:text-xs text-slate-800 uppercase">
@@ -920,7 +920,7 @@ export const CetakLaporanPage: React.FC = () => {
                           <Popup>
                             <div className="p-1 space-y-2 max-w-xs font-sans text-xs">
                               <div className="border-b border-slate-200 pb-1 flex items-center justify-between">
-                                <span className="font-black text-sky-800 text-xs">
+                                <span className="font-black text-teal-800 text-xs">
                                   {pt.nomorWO}
                                 </span>
                                 <span className="px-2 py-0.5 text-[9px] font-extrabold bg-emerald-100 text-emerald-800 rounded-full">
@@ -967,7 +967,7 @@ export const CetakLaporanPage: React.FC = () => {
                   <p className="font-extrabold text-slate-900 flex items-center space-x-1">
                     <span>⚡ JARINGAN TR & PETA GIS ROW</span>
                   </p>
-                  <p className="text-slate-600">Total Titik: <span className="font-extrabold text-sky-700">{nonOverlappingMapPoints.length} Lokasi</span></p>
+                  <p className="text-slate-600">Total Titik: <span className="font-extrabold text-teal-700">{nonOverlappingMapPoints.length} Lokasi</span></p>
                   <p className="text-slate-600">Feeder / Penyulang: <span className="font-bold text-slate-800">{selectedPenyulangName}</span></p>
                   <p className="text-slate-600">ULP: <span className="font-bold text-slate-800">{selectedUlpName}</span></p>
                   <p className="text-amber-700 font-extrabold pt-1 border-t border-slate-200 flex items-center justify-between gap-1">
@@ -1032,7 +1032,7 @@ export const CetakLaporanPage: React.FC = () => {
             {/* Rekapitualsi Table below diagram */}
             <div className="overflow-x-auto border border-slate-200 rounded-xl">
               <table className="w-full text-left text-xs border border-slate-200 min-w-[800px]">
-                <thead className="bg-sky-900 text-white font-bold">
+                <thead className="bg-teal-900 text-white font-bold">
                   <tr>
                     <th className="p-2 border">No</th>
                     <th className="p-2 border">Nomor WO</th>
@@ -1049,7 +1049,7 @@ export const CetakLaporanPage: React.FC = () => {
                   {filteredWOs.map((wo, i) => (
                     <tr key={`${wo.id}-${i}`} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                       <td className="p-2 border font-bold text-center">{i + 1}</td>
-                      <td className="p-2 border font-bold text-sky-700">{wo.nomorWO}</td>
+                      <td className="p-2 border font-bold text-teal-700">{wo.nomorWO}</td>
                       <td className="p-2 border">{formatDateDisplay(wo.tanggal)}</td>
                       <td className="p-2 border">{wo.ulpName}</td>
                       <td className="p-2 border font-semibold">{wo.penyulangName}</td>

@@ -61,7 +61,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   const currentHour = new Date().getHours();
   let greeting = 'Selamat Pagi';
   let GreetingIcon = Sunrise;
-  let gradientBg = 'from-amber-500/15 via-sky-500/10 to-blue-600/20';
+  let gradientBg = 'from-amber-500/15 via-teal-500/10 to-teal-600/20';
   let iconColor = 'text-amber-500';
 
   if (currentHour >= 11 && currentHour < 15) {
@@ -77,7 +77,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   } else if (currentHour >= 19 || currentHour < 4) {
     greeting = 'Selamat Malam';
     GreetingIcon = Moon;
-    gradientBg = 'from-indigo-950/40 via-slate-900/30 to-blue-950/40';
+    gradientBg = 'from-indigo-950/40 via-slate-900/30 to-teal-950/40';
     iconColor = 'text-indigo-400';
   }
 
@@ -207,7 +207,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
           </div>
           <div className="flex items-center space-x-3">
             <div className="hidden sm:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60 text-xs text-slate-300">
-              <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+              <Calendar className="w-3.5 h-3.5 text-teal-400" />
               <span>{todayStr}</span>
             </div>
             <button
@@ -242,7 +242,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                     </span>
                   )}
                   {currentUser?.ulpName && (
-                    <span className="px-2.5 py-0.5 rounded-lg bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 font-bold border border-sky-100 dark:border-sky-800/30">
+                    <span className="px-2.5 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 font-bold border border-teal-100 dark:border-teal-800/30">
                       {currentUser.ulpName}
                     </span>
                   )}
@@ -268,15 +268,15 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
           <div className="pt-2">
             <button
               onClick={onStartAbsensi}
-              className="w-full group relative overflow-hidden rounded-2xl bg-sky-600 p-px font-bold shadow-sm transition-all active:scale-[0.99]"
+              className="w-full group relative overflow-hidden rounded-2xl bg-teal-600 p-px font-bold shadow-sm transition-all active:scale-[0.99]"
             >
-              <div className="flex items-center justify-between px-6 py-4 rounded-2xl bg-sky-600 text-white transition-all hover:bg-sky-700">
+              <div className="flex items-center justify-between px-6 py-4 rounded-2xl bg-teal-600 text-white transition-all hover:bg-teal-700">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 rounded-xl bg-white/20">
                     <UserCheck className="w-6 h-6 text-white" />
                   </div>
                   <div className="text-left">
-                    <div className="text-xs font-semibold text-sky-100 uppercase tracking-wider">
+                    <div className="text-xs font-semibold text-teal-100 uppercase tracking-wider">
                       Verifikasi Kehadiran Tim
                     </div>
                     <div className="text-base sm:text-lg font-bold tracking-wide">
@@ -284,7 +284,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                     </div>
                   </div>
                 </div>
-                <ArrowRight className="w-6 h-6 text-sky-100 transition-transform group-hover:translate-x-1" />
+                <ArrowRight className="w-6 h-6 text-teal-100 transition-transform group-hover:translate-x-1" />
               </div>
             </button>
           </div>
@@ -293,7 +293,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
         {/* Today's Work Order Details Table Preview */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div className="flex items-center space-x-2 text-sky-600 dark:text-sky-400">
+            <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400">
               <FileText className="w-5 h-5" />
               <h3 className="text-sm font-bold tracking-wide uppercase text-slate-900 dark:text-white">
                 Detail Work Order Hari Ini ({todaysWorkOrders.length})
@@ -301,13 +301,13 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
             </div>
             <div className="flex items-center space-x-3">
               <span className="text-xs text-slate-500 font-medium truncate">
-                Ditugaskan ke: <strong className="text-sky-600 dark:text-sky-400">{currentUser?.reguName || currentUser?.name || currentUser?.ulpName || 'User Login'}</strong>
+                Ditugaskan ke: <strong className="text-teal-600 dark:text-teal-400">{currentUser?.reguName || currentUser?.name || currentUser?.ulpName || 'User Login'}</strong>
               </span>
               <button
                 type="button"
                 onClick={handleRefreshWO}
                 disabled={isSyncing}
-                className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-sky-600 dark:text-sky-400 border border-slate-200 dark:border-slate-700 transition-all disabled:opacity-50"
+                className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-700 transition-all disabled:opacity-50"
                 title="Refresh Work Order dari Spreadsheet"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -328,7 +328,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                 type="button"
                 onClick={handleRefreshWO}
                 disabled={isSyncing}
-                className="mt-2 px-3 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition-all hover:bg-cyan-500/30 inline-flex items-center space-x-1.5"
+                className="mt-2 px-3 py-1.5 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold transition-all hover:bg-teal-500/30 inline-flex items-center space-x-1.5"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                 <span>Sync Dari Spreadsheet</span>
@@ -343,18 +343,18 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                 return (
                   <div
                     key={`${wo.id}-${index}`}
-                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700 hover:border-sky-300 dark:hover:border-sky-800 transition-all space-y-2.5 group"
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-800 transition-all space-y-2.5 group"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center space-x-2">
-                        <span className="text-xs font-mono font-bold text-sky-600 bg-sky-50 dark:bg-sky-950/80 px-2.5 py-1 rounded-lg border border-sky-100 dark:border-sky-800/60">
+                        <span className="text-xs font-mono font-bold text-teal-600 bg-teal-50 dark:bg-teal-950/80 px-2.5 py-1 rounded-lg border border-teal-100 dark:border-teal-800/60">
                           {wo.nomorWO}
                         </span>
                         {wo.pekerjaan && (
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
                             wo.pekerjaan === 'GOROW'
                               ? 'bg-amber-50 text-amber-600 border border-amber-100'
-                              : 'bg-blue-50 text-blue-600 border border-blue-100'
+                              : 'bg-teal-50 text-teal-600 border border-teal-100'
                           }`}>
                             {wo.pekerjaan}
                           </span>
@@ -365,7 +365,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                         isFinished
                           ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
                           : isProgress
-                          ? 'bg-sky-50 text-sky-600 border-sky-100'
+                          ? 'bg-teal-50 text-teal-600 border-teal-100'
                           : 'bg-amber-50 text-amber-600 border-amber-100'
                       }`}>
                         {isFinished ? (
@@ -378,7 +378,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                     </div>
 
                     <div className="space-y-1">
-                      <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                      <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
                         {wo.jenisPekerjaan || 'Pemangkasan Pohon (ROW)'} {wo.penyulangName ? `• ${wo.penyulangName}` : ''}
                       </p>
                       {wo.deskripsi && (
@@ -400,7 +400,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                       </div>
 
                       {wo.volumePekerjaan ? (
-                        <div className="flex items-center space-x-1.5 sm:justify-end text-sky-600 dark:text-sky-400 font-mono font-bold">
+                        <div className="flex items-center space-x-1.5 sm:justify-end text-teal-600 dark:text-teal-400 font-mono font-bold">
                           <span>Vol: {wo.volumePekerjaan} {wo.satuan || 'KMS'}</span>
                         </div>
                       ) : null}

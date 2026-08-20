@@ -106,7 +106,7 @@ const AppContent: React.FC = () => {
   if (isInitialLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white font-sans relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-tr from-sky-950 via-slate-900 to-cyan-950 opacity-90" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-teal-950 via-slate-900 to-teal-950 opacity-90" />
         <div className="relative z-10 max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
           <div className="relative inline-flex items-center justify-center mx-auto">
             <img
@@ -124,7 +124,7 @@ const AppContent: React.FC = () => {
           </div>
 
           <div className="space-y-1">
-            <p className="text-xs font-extrabold text-cyan-400 tracking-widest uppercase">
+            <p className="text-xs font-extrabold text-teal-400 tracking-widest uppercase">
               {settings.namaUnitLayanan || 'PLN ES UP4 Sumatera Barat UP3 Padang'}
             </p>
           </div>
@@ -135,7 +135,7 @@ const AppContent: React.FC = () => {
               <span>Menghubungkan ke Database Spreadsheet...</span>
             </div>
             <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5">
-              <div className="bg-gradient-to-r from-sky-500 via-cyan-400 to-emerald-400 h-1.5 rounded-full animate-pulse w-3/4 mx-auto" />
+              <div className="bg-gradient-to-r from-teal-500 via-teal-400 to-emerald-400 h-1.5 rounded-full animate-pulse w-3/4 mx-auto" />
             </div>
             <p className="text-[11px] text-slate-400">
               Memuat data pengguna USERS, Work Order & Realisasi...

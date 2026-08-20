@@ -9,6 +9,7 @@ import { useGASSync } from '../hooks/useGASSync';
 import { useToast } from '../hooks/useToast';
 import { StatCard } from '../components/common/StatCard';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { RealisasiTargetDashboard } from '../components/dashboard/RealisasiTargetDashboard';
 import {
   ClipboardList,
   CheckCircle2,
@@ -124,6 +125,21 @@ export const DashboardPage: React.FC = () => {
   const totalULP = ulpList.length;
   const totalPenyulang = penyulangList.length;
 
+  // Prepare data for the new RealisasiTargetDashboard (now based on Regu/Teams)
+  const reguDashboardData = React.useMemo(() => {
+    return reguList.map((r, idx) => {
+      const reguWOs = filteredWOs.filter(w => w.reguId === r.id || w.reguName === r.namaRegu);
+      const realisasi = reguWOs.reduce((sum, wo) => sum + (wo.totalRealisasi || 0), 0);
+      
+      return {
+        id: r.id,
+        name: `TIN: ROW ${String(idx + 1).padStart(2, '0')} ${ (r.namaRegu || '').toUpperCase() }`,
+        realisasi: Number(realisasi.toFixed(1)),
+        target: 50.2
+      };
+    });
+  }, [reguList, filteredWOs]);
+
   // Chart Colors based on dark mode
   const textColor = isDarkMode ? '#cbd5e1' : '#475569';
   const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
@@ -179,7 +195,7 @@ export const DashboardPage: React.FC = () => {
       {
         label: 'Persentase Penyelesaian ULP (%)',
         data: ulpProgressData,
-        backgroundColor: ['#0284c7', '#06b6d4', '#10b981', '#6366f1'],
+        backgroundColor: ['#0d9488', '#0891b2', '#10b981', '#6366f1'],
         borderRadius: 8,
       },
     ],
@@ -223,19 +239,21 @@ export const DashboardPage: React.FC = () => {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
         {/* Top Welcome Banner */}
-        <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 sm:p-8 text-slate-900 shadow-sm">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-teal-700 to-teal-800 p-6 sm:p-8 text-white shadow-lg">
           <div className="relative z-10 space-y-2 max-w-2xl">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800/30 text-xs font-bold text-emerald-700 dark:text-emerald-400">
-              <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold text-teal-50">
+              <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
               <span>Dashboard Petugas ROW - {currentUser?.reguName || 'Tim Lapangan'}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight font-display text-slate-900 dark:text-white">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight font-display text-white">
               Selamat Datang, {currentUser?.name || 'Petugas'}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+            <p className="text-xs sm:text-sm text-teal-50/80 leading-relaxed font-medium">
               Pantau progres pekerjaan harian dan pencapaian bulanan penugasan pemeliharaan ROW jaringan listrik Anda.
             </p>
           </div>
+          {/* Decorative background shape */}
+          <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-white/10 to-transparent pointer-events-none" />
         </div>
 
         {/* Two Required Sections for User Role */}
@@ -260,24 +278,12 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Progress Pekerjaan per Bulan */}
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                  Progress Pekerjaan per Bulan
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Tren akumulasi penyelesaian Work Order sepanjang tahun
-                </p>
-              </div>
-              <span className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-900/30 text-sky-600">
-                <TrendingUp className="w-5 h-5" />
-              </span>
-            </div>
-            <div className="h-72">
-              <Line data={monthlyData} options={chartOptions} />
-            </div>
+          <div className="lg:col-span-2">
+            <RealisasiTargetDashboard 
+              data={reguDashboardData} 
+              title="PROGRESS PENYELESAIAN ROW"
+              subtitle={`Tim: ${currentUser?.reguName || 'Lapangan'}`}
+            />
           </div>
         </div>
       </div>
@@ -287,47 +293,48 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 sm:p-8 text-slate-900 shadow-sm">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-teal-800 to-teal-900 p-6 sm:p-8 text-white shadow-xl border border-teal-700/50">
         <div className="relative z-10 space-y-2 max-w-2xl">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800/30 text-xs font-bold text-sky-700 dark:text-sky-400">
-              <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold text-teal-50">
+              <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
               <span>Operational Asset Protection Dashboard</span>
             </div>
 
-            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 text-xs font-bold text-emerald-700 dark:text-emerald-400">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-500/30 text-xs font-bold text-emerald-100">
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>Spreadsheet DB: {isGasConnected ? 'Terhubung (Online)' : 'Aktif (Connected)'}</span>
             </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight font-display text-slate-900 dark:text-white uppercase">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight font-display text-white uppercase pt-1">
             Monitoring Maintenance & Response ROW
           </h1>
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+          <p className="text-xs sm:text-sm text-teal-50/70 leading-relaxed font-medium">
             Sistem terintegrasi untuk pemantauan Work Order, eksekusi tim lapangan, mitigasi hazard jaringan listrik, dan pelaporan realisasi foto terverifikasi.
           </p>
 
-          <div className="pt-2 flex flex-wrap gap-3">
+          <div className="pt-4 flex flex-wrap gap-3">
             <button
               onClick={() => setActiveTab('input_wo')}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-white text-teal-900 hover:bg-teal-50 font-black text-xs rounded-xl shadow-lg transition-all active:scale-95"
             >
-              <PlusCircle className="w-4 h-4 text-white" />
+              <PlusCircle className="w-4 h-4" />
               <span>Input Work Order Baru</span>
             </button>
             <button
               onClick={() => setActiveTab('monitoring')}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-600 transition-all active:scale-95 shadow-sm"
+              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-teal-950/40 backdrop-blur-sm border border-teal-500/30 text-white hover:bg-teal-950/60 font-black text-xs rounded-xl transition-all active:scale-95 shadow-sm"
             >
-              <FileCheck2 className="w-4 h-4 text-sky-600" />
+              <FileCheck2 className="w-4 h-4 text-emerald-400" />
               <span>Lihat Peta Operations</span>
             </button>
           </div>
         </div>
 
         {/* Decorative background shape */}
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-cyan-500/20 to-transparent pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-gradient-to-l from-white/10 to-transparent pointer-events-none" />
+        <div className="absolute -right-20 -top-20 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
       </div>
 
       {/* Dashboard Filters */}
@@ -340,7 +347,7 @@ export const DashboardPage: React.FC = () => {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 transition-all"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
           />
         </div>
         <div className="flex-1 min-w-[150px]">
@@ -351,7 +358,7 @@ export const DashboardPage: React.FC = () => {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 transition-all"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
           />
         </div>
         <div className="flex-1 min-w-[150px]">
@@ -361,7 +368,7 @@ export const DashboardPage: React.FC = () => {
           <select
             value={filterUlp}
             onChange={(e) => setFilterUlp(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 transition-all"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
           >
             <option value="ALL">Semua ULP</option>
             {ulpList.map((ulp) => (
@@ -396,14 +403,14 @@ export const DashboardPage: React.FC = () => {
                 {totalWO}
               </h3>
             </div>
-            <div className="p-2 rounded-lg bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400">
+            <div className="p-2 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400">
               <ClipboardList className="w-4 h-4" />
             </div>
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
-              <span className="text-3xl sm:text-4xl font-black text-sky-500/20 dark:text-sky-400/10">
+              <span className="text-3xl sm:text-4xl font-black text-teal-500/20 dark:text-teal-400/10">
                 {Math.round((woSelesai / (totalWO || 1)) * 100)}%
               </span>
             </div>
@@ -414,12 +421,12 @@ export const DashboardPage: React.FC = () => {
               <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
                 WO Selesai
               </p>
-              <h3 className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">
+              <h3 className="text-lg sm:text-xl font-black text-teal-600 dark:text-teal-400">
                 {woSelesai}
               </h3>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-sky-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-teal-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </div>
 
         {/* Custom Redesigned KMS Card */}
@@ -501,9 +508,9 @@ export const DashboardPage: React.FC = () => {
           value={uniqueRealizedPenyulangs}
           subtitle="Berdasarkan realisasi unik"
           icon={Building2}
-          iconBgColor="bg-indigo-50 dark:bg-indigo-900/30"
-          iconColor="text-indigo-600 dark:text-indigo-400"
-          borderColor="border-indigo-200 dark:border-indigo-900/50"
+          iconBgColor="bg-emerald-50 dark:bg-emerald-900/30"
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          borderColor="border-emerald-200 dark:border-emerald-900/50"
         />
 
         <StatCard
@@ -519,8 +526,8 @@ export const DashboardPage: React.FC = () => {
           value={totalRegu}
           subtitle="Tim eksekusi lapangan"
           icon={ShieldAlert}
-          iconBgColor="bg-cyan-50 dark:bg-cyan-900/30"
-          iconColor="text-cyan-600 dark:text-cyan-400"
+          iconBgColor="bg-teal-50 dark:bg-teal-900/30"
+          iconColor="text-teal-600 dark:text-teal-400"
         />
         <StatCard
           title="Jumlah ULP"
@@ -540,29 +547,18 @@ export const DashboardPage: React.FC = () => {
         />
       </div>
 
-      {/* Chart Visualizations Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Line / Area Chart - Monthly Progress */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                Progress Pekerjaan per Bulan
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Tren penyelesaian WO dan status progress sepanjang tahun
-              </p>
-            </div>
-            <span className="p-2 rounded-xl bg-sky-50 dark:bg-sky-900/30 text-sky-600">
-              <TrendingUp className="w-5 h-5" />
-            </span>
-          </div>
-          <div className="h-64">
-            <Line data={monthlyData} options={chartOptions} />
-          </div>
-        </div>
+      {/* Chart Visualizations Row 1 - Replaced with Realisasi & Target Dashboard */}
+      <div className="grid grid-cols-1 gap-6">
+        <RealisasiTargetDashboard 
+          data={reguDashboardData} 
+          title="REALISASI & TARGET PROGRAM"
+          subtitle="UP3 BUKITTINGGI"
+        />
+      </div>
 
-        {/* Doughnut Chart - Status Distribution */}
+      {/* Chart Visualizations & Metrics Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Donut Chart - Status Distribution */}
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
           <div>
             <h3 className="font-bold text-slate-900 dark:text-white text-base">
@@ -588,10 +584,7 @@ export const DashboardPage: React.FC = () => {
             />
           </div>
         </div>
-      </div>
 
-      {/* Chart Visualizations Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Bar Chart - Progress per ULP */}
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
           <h3 className="font-bold text-slate-900 dark:text-white text-base">
@@ -602,7 +595,7 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Top Performers & High Priority List */}
+        {/* Top Performers & Tim ROW - Moved inside the grid */}
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
             <div className="flex items-center space-x-2 text-amber-500">
@@ -613,7 +606,7 @@ export const DashboardPage: React.FC = () => {
             </div>
             <button
               onClick={() => setActiveTab('master_data')}
-              className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center"
+              className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center"
             >
               <span>Lihat Tim</span>
               <ArrowRight className="w-3.5 h-3.5 ml-1" />
@@ -627,7 +620,7 @@ export const DashboardPage: React.FC = () => {
                 className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60"
               >
                 <div className="flex items-center space-x-3">
-                  <span className="w-7 h-7 rounded-lg bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300 text-xs font-black flex items-center justify-center">
+                  <span className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 text-xs font-black flex items-center justify-center">
                     #{idx + 1}
                   </span>
                   <div>
@@ -661,7 +654,7 @@ export const DashboardPage: React.FC = () => {
           </div>
           <button
             onClick={() => setActiveTab('work_orders')}
-            className="text-xs font-bold px-3 py-1.5 bg-sky-50 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 rounded-xl hover:bg-sky-100 transition-colors"
+            className="text-xs font-bold px-3 py-1.5 bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 rounded-xl hover:bg-teal-100 transition-colors"
           >
             Lihat Semua WO
           </button>
@@ -685,7 +678,7 @@ export const DashboardPage: React.FC = () => {
                   key={`${wo.id}-${idx}`}
                   className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
                 >
-                  <td className="p-3.5 pl-5 font-bold text-sky-600 dark:text-sky-400">
+                  <td className="p-3.5 pl-5 font-bold text-teal-600 dark:text-teal-400">
                     {wo.nomorWO}
                   </td>
                   <td className="p-3.5">
@@ -710,7 +703,7 @@ export const DashboardPage: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       <div className="w-20 bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
                         <div
-                          className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                          className="bg-teal-500 h-full rounded-full transition-all duration-300"
                           style={{ width: `${wo.progressPercent}%` }}
                         />
                       </div>

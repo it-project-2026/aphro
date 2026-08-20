@@ -171,11 +171,11 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans relative overflow-x-hidden flex flex-col justify-between selection:bg-sky-500 selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans relative overflow-x-hidden flex flex-col justify-between selection:bg-teal-500 selection:text-white">
       {/* Background Ambience */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-sky-950/30 via-slate-950 to-cyan-950/30 pointer-events-none" />
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-sky-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 -right-32 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-tr from-teal-950/30 via-slate-950 to-teal-950/30 pointer-events-none" />
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-teal-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/2 -right-32 w-96 h-96 bg-teal-600/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Main Container */}
       <div className="relative z-10 w-full max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 flex-1 flex flex-col justify-center">
@@ -185,7 +185,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
           {/* Header Section */}
           <div className="text-center space-y-3 sm:space-y-4">
             <div className="relative inline-flex items-center justify-center mx-auto">
-              <div className="absolute -inset-1 bg-gradient-to-r from-sky-500 to-cyan-500 rounded-3xl blur-md opacity-30 animate-pulse" />
+              <div className="absolute -inset-1 bg-gradient-to-r from-teal-500 to-teal-500 rounded-3xl blur-md opacity-30 animate-pulse" />
               <div className="relative p-3 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl">
                 <img
                   src={APP_LOGO_URL}
@@ -203,7 +203,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-black uppercase tracking-widest">
+              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-black uppercase tracking-widest">
                 <Building2 className="w-3.5 h-3.5" />
                 <span>Inisiasi Sistem APHRO</span>
               </div>
@@ -220,7 +220,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   href={DEFAULT_INISIASI_SPREADSHEET_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-teal-500/50 text-[11px] text-slate-400 hover:text-teal-300 transition-colors"
                   title="Buka Master Google Spreadsheet Inisiasi"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
@@ -239,7 +239,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   htmlFor="ul-scrolldown-select"
                   className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center space-x-2"
                 >
-                  <Building2 className="w-4 h-4 text-sky-400" />
+                  <Building2 className="w-4 h-4 text-teal-400" />
                   <span>Daftar Unit Layanan (UL)</span>
                 </label>
 
@@ -247,7 +247,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   type="button"
                   onClick={loadInisiasiData}
                   disabled={isLoading}
-                  className="text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center space-x-1 transition-colors cursor-pointer disabled:opacity-50"
+                  className="text-[11px] font-bold text-teal-400 hover:text-teal-300 flex items-center space-x-1 transition-colors cursor-pointer disabled:opacity-50"
                   title="Muat ulang data dari Master Spreadsheet"
                 >
                   <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
@@ -264,7 +264,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   disabled={isLoading || isApplying}
                   className={`w-full appearance-none pl-4 pr-10 py-4 bg-slate-950 border-2 rounded-2xl text-white font-bold text-sm sm:text-base tracking-tight shadow-inner focus:outline-none focus:ring-2 transition-all cursor-pointer disabled:opacity-50 ${
                     isConfigured
-                      ? 'border-sky-500/50 hover:border-sky-400 focus:border-sky-400 focus:ring-sky-500/30'
+                      ? 'border-teal-500/50 hover:border-teal-400 focus:border-teal-400 focus:ring-teal-500/30'
                       : 'border-rose-500/60 hover:border-rose-400 focus:border-rose-400 focus:ring-rose-500/30'
                   }`}
                 >
@@ -282,7 +282,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   })}
                 </select>
 
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-sky-400">
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-teal-400">
                   <ChevronDown className="w-5 h-5 stroke-[2.5]" />
                 </div>
               </div>
@@ -309,7 +309,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                     <div className="p-3 rounded-xl bg-slate-950/70 border border-emerald-900/40 space-y-2 text-[11px] text-slate-300">
                       <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                         <span className="text-slate-400 flex items-center gap-1.5">
-                          <Database className="w-3.5 h-3.5 text-sky-400" />
+                          <Database className="w-3.5 h-3.5 text-teal-400" />
                           ID Spreadsheet:
                         </span>
                         <span className="font-mono text-white text-[11px] font-bold">
@@ -330,7 +330,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
 
                       <div className="flex items-center justify-between">
                         <span className="text-slate-400 flex items-center gap-1.5">
-                          <FolderTree className="w-3.5 h-3.5 text-cyan-400" />
+                          <FolderTree className="w-3.5 h-3.5 text-teal-400" />
                           Folder Drive:
                         </span>
                         <span className="text-slate-300 font-mono text-[10px]">
@@ -390,7 +390,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                 type="button"
                 onClick={handleApplyConnection}
                 disabled={isApplying || isLoading || !selectedUnit}
-                className="w-full py-4 rounded-2xl font-black text-sm sm:text-base text-white bg-gradient-to-r from-sky-600 via-sky-500 to-cyan-500 hover:from-sky-500 hover:to-cyan-400 shadow-xl shadow-sky-600/30 flex items-center justify-center space-x-3 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                className="w-full py-4 rounded-2xl font-black text-sm sm:text-base text-white bg-gradient-to-r from-teal-600 via-teal-500 to-teal-500 hover:from-teal-500 hover:to-teal-400 shadow-xl shadow-teal-600/30 flex items-center justify-center space-x-3 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
               >
                 <Sparkles className="w-5 h-5 text-amber-300" />
                 <span className="uppercase tracking-wider">

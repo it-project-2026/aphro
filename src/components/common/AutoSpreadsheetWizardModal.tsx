@@ -82,9 +82,9 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-sky-200 dark:border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-teal-200 dark:border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-sky-700 via-sky-600 to-cyan-600 p-6 text-white flex items-center justify-between">
+        <div className="bg-gradient-to-r from-teal-700 via-teal-600 to-teal-600 p-6 text-white flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 bg-white/10 rounded-2xl backdrop-blur-md">
               <Sparkles className="w-6 h-6 text-amber-300" />
@@ -93,7 +93,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
               <h2 className="text-xl font-black font-display tracking-tight">
                 Wizard Auto-Spreadsheet Generator
               </h2>
-              <p className="text-xs text-sky-100">
+              <p className="text-xs text-teal-100">
                 Membuat Google Spreadsheet 'APHRO_DATABASE_ENTERPRISE' + 10 Sheet Otomatis
               </p>
             </div>
@@ -110,24 +110,24 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
         <div className="p-6 space-y-6 overflow-y-auto">
           {/* Target Folders Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div className="p-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 space-y-1">
-              <div className="flex items-center justify-between font-bold text-sky-900 dark:text-sky-300">
+            <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 space-y-1">
+              <div className="flex items-center justify-between font-bold text-teal-900 dark:text-teal-300">
                 <span className="flex items-center space-x-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-sky-600" />
+                  <FileSpreadsheet className="w-4 h-4 text-teal-600" />
                   <span>Folder Spreadsheet DB</span>
                 </span>
                 <a
                   href="https://drive.google.com/drive/folders/1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sky-600 hover:underline flex items-center space-x-0.5 text-[11px]"
+                  className="text-teal-600 hover:underline flex items-center space-x-0.5 text-[11px]"
                 >
                   <span>Drive</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                ID Folder: <code className="font-mono text-sky-700 dark:text-sky-300">1boNO8nAA...</code>
+                ID Folder: <code className="font-mono text-teal-700 dark:text-teal-300">1boNO8nAA...</code>
               </p>
             </div>
 
@@ -161,7 +161,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
 
             {/* Step 1 */}
             <div className="flex items-start space-x-3.5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-              <div className="w-7 h-7 rounded-xl bg-sky-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-xl bg-teal-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
                 1
               </div>
               <div className="space-y-2 flex-1">
@@ -178,7 +178,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
                   <button
                     type="button"
                     onClick={handleCopyCode}
-                    className="inline-flex items-center space-x-2 px-4 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl transition-all shadow-xs cursor-pointer"
+                    className="inline-flex items-center space-x-2 px-4 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-all shadow-xs cursor-pointer"
                   >
                     {isCopied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
                     <span>{isCopied ? 'Kode Disalin ke Clipboard!' : 'Salin Kode Backend Code.gs'}</span>
@@ -188,7 +188,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
                     download="Code.gs"
                     className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-xl transition-all"
                   >
-                    <FileSpreadsheet className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                    <FileSpreadsheet className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                     <span>Unduh File Code.gs</span>
                   </a>
                 </div>
@@ -197,7 +197,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
 
             {/* Step 2 */}
             <div className="flex items-start space-x-3.5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-              <div className="w-7 h-7 rounded-xl bg-sky-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-xl bg-teal-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
                 2
               </div>
               <div className="space-y-2 flex-1">
@@ -205,7 +205,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
                   Paste & Deploy di Google Apps Script
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  1. Buka <a href="https://script.google.com/home/start" target="_blank" rel="noreferrer" className="text-sky-600 font-bold underline inline-flex items-center space-x-0.5"><span>script.google.com</span><ExternalLink className="w-3 h-3"/></a> &gt; Klik <b>New Project</b>.<br />
+                  1. Buka <a href="https://script.google.com/home/start" target="_blank" rel="noreferrer" className="text-teal-600 font-bold underline inline-flex items-center space-x-0.5"><span>script.google.com</span><ExternalLink className="w-3 h-3"/></a> &gt; Klik <b>New Project</b>.<br />
                   2. Paste kode yang disalin ke <code className="font-mono bg-slate-200 dark:bg-slate-700 px-1 rounded">Code.gs</code>.<br />
                   3. Klik <b>Deploy</b> &gt; <b>New Deployment</b> &gt; Jenis: <b>Web App</b>.<br />
                   4. Set <i>Execute as</i>: <b>Me</b>, <i>Who has access</i>: <b>Anyone (Siapa Saja)</b>.<br />
@@ -215,12 +215,12 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
             </div>
 
             {/* Step 3 */}
-            <div className="flex items-start space-x-3.5 p-4 rounded-2xl bg-sky-50/80 dark:bg-sky-950/40 border border-sky-300 dark:border-sky-800">
+            <div className="flex items-start space-x-3.5 p-4 rounded-2xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-300 dark:border-teal-800">
               <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
                 3
               </div>
               <div className="space-y-3 flex-1">
-                <p className="text-xs font-bold text-sky-950 dark:text-sky-200">
+                <p className="text-xs font-bold text-teal-950 dark:text-teal-200">
                   Paste Web App URL & Jalankan Auto-Inisialisasi
                 </p>
                 <div className="space-y-2">
@@ -229,7 +229,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
                     placeholder="https://script.google.com/macros/s/AKfycb.../exec"
                     value={gasUrlInput}
                     onChange={(e) => setGasUrlInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border border-sky-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-600"
+                    className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border border-teal-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-600"
                   />
                   <button
                     type="button"

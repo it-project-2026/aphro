@@ -158,7 +158,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               <select
                 value={pekerjaan}
                 onChange={(e) => handlePekerjaanChange(e.target.value as 'NORMAL' | 'GOROW')}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
               >
                 <option value="NORMAL">NORMAL (Per ULP)</option>
                 <option value="GOROW">GOROW (Lintas ULP)</option>
@@ -171,7 +171,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
                 required
                 value={tanggal}
                 onChange={(e) => setTanggal(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
               />
             </div>
             <div>
@@ -184,7 +184,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
                 className={`w-full px-3 py-2 text-sm rounded-xl border transition-colors ${
                   existingDuplicateWO
                     ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-sky-500'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500'
                 } focus:outline-none`}
               />
             </div>
@@ -193,7 +193,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               <select
                 value={ulpName}
                 onChange={(e) => handleUlpChange(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
               >
                 {ulpList.map((u, i) => (
                   <option key={i} value={u.namaULP}>{u.namaULP}</option>
@@ -208,7 +208,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
                 className={`w-full px-3 py-2 text-sm rounded-xl border transition-colors ${
                   existingDuplicateWO
                     ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-sky-500'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500'
                 } focus:outline-none`}
               >
                 {availablePenyulang.map((p, i) => (
@@ -221,7 +221,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               <select
                 value={reguName}
                 onChange={(e) => setReguName(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
               >
                 {availableRegu.map((r, i) => (
                   <option key={i} value={r.namaRegu}>{r.namaRegu}</option>
@@ -237,7 +237,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
                 required
                 value={volumePekerjaan}
                 onChange={(e) => setVolumePekerjaan(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
               />
             </div>
             <div>
@@ -245,7 +245,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               <select
                 value={satuan}
                 onChange={(e) => setSatuan(e.target.value as 'KMS' | 'GAWANG')}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
               >
                 <option value="KMS">KMS</option>
                 <option value="GAWANG">GAWANG</option>
@@ -256,7 +256,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as WOStatus)}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
               >
                 <option value="BELUM SELESAI">BELUM SELESAI</option>
                 <option value="Sedang Dikerjakan">Sedang Dikerjakan</option>
@@ -291,7 +291,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             <button
               type="submit"
               disabled={Boolean(existingDuplicateWO)}
-              className="inline-flex items-center space-x-2 px-5 py-2 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-sky-600/25 transition-all"
+              className="inline-flex items-center space-x-2 px-5 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-teal-600/25 transition-all"
             >
               <Save className="w-4 h-4" />
               <span>Simpan Perubahan</span>

@@ -367,7 +367,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">ULP Kerja</span>
                 <div className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
-                  <Building2 className="w-4 h-4 text-blue-500" />
+                  <Building2 className="w-4 h-4 text-teal-500" />
                   <span>{ulpName}</span>
                 </div>
               </div>
@@ -557,22 +557,22 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700">ULP</th>
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700">Penyulang</th>
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700">Nama Regu</th>
-                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-sky-50 dark:bg-sky-950/40">
+                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-teal-50 dark:bg-teal-950/40">
                     Nama Petugas 1
                   </th>
-                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-sky-50 dark:bg-sky-950/40">
+                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-teal-50 dark:bg-teal-950/40">
                     Keterangan
                   </th>
-                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-cyan-50 dark:bg-cyan-950/40">
+                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-teal-50 dark:bg-teal-950/40">
                     Nama Petugas 2
                   </th>
-                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-cyan-50 dark:bg-cyan-950/40">
+                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-teal-50 dark:bg-teal-950/40">
                     Keterangan
                   </th>
-                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-blue-50 dark:bg-blue-950/40">
+                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-teal-50 dark:bg-teal-950/40">
                     Nama Petugas 3
                   </th>
-                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-blue-50 dark:bg-blue-950/40">
+                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-teal-50 dark:bg-teal-950/40">
                     Keterangan
                   </th>
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-indigo-50 dark:bg-indigo-950/40">
@@ -663,7 +663,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                       if (!ket || ket === '-') return <span className="text-slate-400 text-[10px]">-</span>;
                       let badgeClass = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300';
                       if (ket === 'SAKIT') badgeClass = 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
-                      if (ket === 'IZIN') badgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300';
+                      if (ket === 'IZIN') badgeClass = 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300';
                       if (ket === 'TIDAK HADIR') badgeClass = 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
 
                       return (
@@ -760,7 +760,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                                 href={formatDriveViewUrl(item.fotoMasuk)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-1 rounded-lg text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950 transition-colors"
+                                className="p-1 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
                                 title="Buka di Google Drive"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
@@ -829,7 +829,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-4">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <ImageIcon className="w-4 h-4 text-cyan-400" />
+                <ImageIcon className="w-4 h-4 text-teal-400" />
                 <h4 className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
                   {previewImage.title}
                 </h4>
@@ -856,7 +856,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 href={previewImage.driveUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Buka Full di Google Drive</span>

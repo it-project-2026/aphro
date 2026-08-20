@@ -97,15 +97,15 @@ export const MobileBottomNav: React.FC = () => {
                 <div
                   className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 ${
                     isActive
-                      ? 'bg-gradient-to-tr from-sky-600 via-cyan-500 to-emerald-500 text-white ring-4 ring-sky-100 dark:ring-sky-950 scale-105'
-                      : 'bg-gradient-to-tr from-sky-500 to-cyan-500 text-white shadow-sky-500/30'
+                      ? 'bg-gradient-to-tr from-teal-600 via-teal-500 to-emerald-500 text-white ring-4 ring-teal-100 dark:ring-teal-950 scale-105'
+                      : 'bg-gradient-to-tr from-teal-500 to-teal-500 text-white shadow-teal-500/30'
                   }`}
                 >
                   <Camera className="w-7 h-7" />
                 </div>
                 <span
                   className={`text-[10px] font-extrabold mt-0.5 ${
-                    isActive ? 'text-sky-600 dark:text-sky-400' : 'text-slate-500 dark:text-slate-400'
+                    isActive ? 'text-teal-600 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400'
                   }`}
                 >
                   {tab.label}
@@ -120,7 +120,7 @@ export const MobileBottomNav: React.FC = () => {
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 flex flex-col items-center justify-center h-full transition-colors active:scale-95 ${
                 isActive
-                  ? 'text-sky-600 dark:text-sky-400 font-black'
+                  ? 'text-teal-600 dark:text-teal-400 font-black'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium'
               }`}
             >

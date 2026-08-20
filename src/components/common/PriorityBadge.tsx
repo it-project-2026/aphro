@@ -16,7 +16,7 @@ export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => {
       break;
     case 'Rendah':
     default:
-      colorStyle = 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 border-sky-200 dark:border-sky-800';
+      colorStyle = 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 border-teal-200 dark:border-teal-800';
       break;
   }
 

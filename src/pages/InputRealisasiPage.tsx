@@ -364,7 +364,7 @@ export const InputRealisasiPage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto py-12 animate-in zoom-in duration-300">
         <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 text-center shadow-xl space-y-6">
-          <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-50 dark:border-emerald-900/20">
+          <div className="w-20 h-20 bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-teal-50 dark:border-teal-900/20">
             <CheckCircle2 className="w-10 h-10" />
           </div>
           <div className="space-y-2">
@@ -376,7 +376,7 @@ export const InputRealisasiPage: React.FC = () => {
             <button
               type="button"
               onClick={handleResetForNewRealisasi}
-              className="flex items-center justify-center space-x-2 py-4 px-6 bg-sky-100 hover:bg-sky-200 dark:bg-sky-900/30 dark:hover:bg-sky-900/50 text-sky-700 dark:text-sky-400 font-black rounded-2xl transition-all border border-sky-200 dark:border-sky-800 shadow-sm"
+              className="flex items-center justify-center space-x-2 py-4 px-6 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/30 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-400 font-black rounded-2xl transition-all border border-teal-200 dark:border-teal-800 shadow-sm"
             >
               <Camera className="w-5 h-5" />
               <span>TAMBAH REALISASI</span>
@@ -384,7 +384,7 @@ export const InputRealisasiPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setSubmissionStatus('finalizing')}
-              className="flex items-center justify-center space-x-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-emerald-600/25"
+              className="flex items-center justify-center space-x-2 py-4 px-6 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-teal-600/25"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>PEKERJAAN SELESAI</span>
@@ -399,7 +399,7 @@ export const InputRealisasiPage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto py-12 animate-in slide-in-from-bottom-10 duration-300">
         <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 shadow-xl space-y-6">
-          <div className="flex items-center space-x-3 text-emerald-600 dark:text-emerald-400 border-b border-slate-100 dark:border-slate-700 pb-4">
+          <div className="flex items-center space-x-3 text-teal-600 dark:text-teal-400 border-b border-slate-100 dark:border-slate-700 pb-4">
             <FileCheck2 className="w-7 h-7" />
             <h2 className="text-xl font-black text-slate-900 dark:text-white font-display">Penyelesaian Pekerjaan (Final)</h2>
           </div>
@@ -420,7 +420,7 @@ export const InputRealisasiPage: React.FC = () => {
                   placeholder="Titik mulai..."
                   value={lokasiStart}
                   onChange={(e) => setLokasiStart(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-sky-500 outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500 outline-none transition-all"
                 />
               </div>
               <div className="space-y-1.5">
@@ -432,7 +432,7 @@ export const InputRealisasiPage: React.FC = () => {
                   placeholder="Titik selesai..."
                   value={lokasiFinish}
                   onChange={(e) => setLokasiFinish(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-sky-500 outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500 outline-none transition-all"
                 />
               </div>
             </div>
@@ -447,7 +447,7 @@ export const InputRealisasiPage: React.FC = () => {
                 placeholder="0.00"
                 value={totalVolume || ''}
                 onChange={(e) => setTotalVolume(Number(e.target.value))}
-                className="w-full px-5 py-4 text-2xl font-black rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-emerald-500 outline-none transition-all shadow-inner"
+                className="w-full px-5 py-4 text-2xl font-black rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500 outline-none transition-all shadow-inner"
               />
             </div>
 
@@ -461,7 +461,7 @@ export const InputRealisasiPage: React.FC = () => {
                   onClick={() => setFinalSatuan('KMS')}
                   className={`py-4 rounded-2xl font-black text-sm border-2 transition-all ${
                     finalSatuan === 'KMS'
-                      ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      ? 'bg-teal-50 border-teal-500 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400'
                       : 'bg-white border-slate-100 text-slate-400 dark:bg-slate-900 dark:border-slate-800'
                   }`}
                 >
@@ -472,7 +472,7 @@ export const InputRealisasiPage: React.FC = () => {
                   onClick={() => setFinalSatuan('GAWANG')}
                   className={`py-4 rounded-2xl font-black text-sm border-2 transition-all ${
                     finalSatuan === 'GAWANG'
-                      ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      ? 'bg-teal-50 border-teal-500 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400'
                       : 'bg-white border-slate-100 text-slate-400 dark:bg-slate-900 dark:border-slate-800'
                   }`}
                 >
@@ -494,7 +494,7 @@ export const InputRealisasiPage: React.FC = () => {
               type="button"
               onClick={handleFinalizeWorkOrder}
               disabled={isProcessing || totalVolume <= 0}
-              className="flex-[2] py-4 px-6 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2"
+              className="flex-[2] py-4 px-6 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all shadow-lg shadow-teal-600/25 flex items-center justify-center space-x-2"
             >
               {isProcessing ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -514,7 +514,7 @@ export const InputRealisasiPage: React.FC = () => {
       <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 shadow-sm space-y-6">
         <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
           <div className="flex items-center space-x-3 text-slate-900 dark:text-white">
-            <Camera className="w-6 h-6 text-sky-600" />
+            <Camera className="w-6 h-6 text-teal-600" />
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-display uppercase tracking-tight">
               Input Realisasi & Watermark Foto Lapangan
             </h1>
@@ -533,7 +533,7 @@ export const InputRealisasiPage: React.FC = () => {
             <select
               value={selectedWoId || ''}
               onChange={(e) => handleWoChange(e.target.value)}
-              className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-sky-500"
+              className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-teal-500"
             >
               {availableWorkOrders.map((wo, wIdx) => (
                 <option key={`${wo.id}-${wIdx}`} value={wo.id}>
@@ -558,7 +558,7 @@ export const InputRealisasiPage: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-bold uppercase">Progress Sekarang:</span>
-                  <span className="font-semibold text-sky-600 dark:text-sky-400">{selectedWO.progressPercent}%</span>
+                  <span className="font-semibold text-teal-600 dark:text-teal-400">{selectedWO.progressPercent}%</span>
                 </div>
               </div>
             )}
@@ -723,13 +723,13 @@ export const InputRealisasiPage: React.FC = () => {
             <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/80">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-sky-500" />
+                    <MapPin className="w-3.5 h-3.5 text-teal-500" />
                     <span>LATITUDE LONGITUDE (Otomatis)</span>
                   </span>
                   <button
                     type="button"
                     onClick={handleFetchGPS}
-                    className="inline-flex items-center space-x-1 px-2.5 py-1 text-[10px] font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-2xs"
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 text-[10px] font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors shadow-2xs"
                   >
                     <Navigation className="w-3 h-3" />
                     <span>Ambil GPS</span>
@@ -772,7 +772,7 @@ export const InputRealisasiPage: React.FC = () => {
                 return (
                   <div
                     key={`sebelum-${slot}`}
-                    className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-center bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center min-h-[160px] hover:border-sky-500 transition-colors"
+                    className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-center bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center min-h-[160px] hover:border-teal-500 transition-colors"
                   >
                     {existing ? (
                       <div className="space-y-2 w-full">
@@ -789,7 +789,7 @@ export const InputRealisasiPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setPreviewPhoto(existing)}
-                              className="p-1 text-slate-500 hover:text-sky-600"
+                              className="p-1 text-slate-500 hover:text-teal-600"
                               title="Lihat Foto"
                             >
                               <Eye className="w-4 h-4" />
@@ -849,7 +849,7 @@ export const InputRealisasiPage: React.FC = () => {
 
           {/* Upload Foto Sesudah (After) Section */}
           <div className="space-y-3 pt-2">
-            <div className="flex items-center space-x-2 text-emerald-600 dark:text-emerald-400 border-b border-emerald-100 dark:border-emerald-900/40 pb-2">
+            <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400 border-b border-teal-100 dark:border-teal-900/40 pb-2">
               <ImageIcon className="w-5 h-5" />
               <h3 className="font-bold text-sm uppercase tracking-wider">
                 FOTO SESUDAH {noTiang ? `- NO TIANG: ${noTiang}` : ''}
@@ -863,7 +863,7 @@ export const InputRealisasiPage: React.FC = () => {
                 return (
                   <div
                     key={`sesudah-${slot}`}
-                    className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-center bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center min-h-[160px] hover:border-emerald-500 transition-colors"
+                    className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-center bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center min-h-[160px] hover:border-teal-500 transition-colors"
                   >
                     {existing ? (
                       <div className="space-y-2 w-full">
@@ -873,14 +873,14 @@ export const InputRealisasiPage: React.FC = () => {
                           className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-2xs"
                         />
                         <div className="flex items-center justify-between px-1">
-                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400">
                             ✓ Watermarked
                           </span>
                           <div className="flex space-x-1">
                             <button
                               type="button"
                               onClick={() => setPreviewPhoto(existing)}
-                              className="p-1 text-slate-500 hover:text-sky-600"
+                              className="p-1 text-slate-500 hover:text-teal-600"
                               title="Lihat Foto"
                             >
                               <Eye className="w-4 h-4" />
@@ -898,7 +898,7 @@ export const InputRealisasiPage: React.FC = () => {
                       </div>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center p-3 space-y-3">
-                        <div className="flex items-center space-x-2 text-emerald-600 dark:text-emerald-400">
+                        <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400">
                           <Camera className="w-6 h-6 animate-pulse" />
                           <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                             Upload Foto Sesudah {noTiang ? `(Tiang ${noTiang})` : ''}
@@ -908,7 +908,7 @@ export const InputRealisasiPage: React.FC = () => {
                           Otomatis Watermark GPS, Waktu & Identitas Petugas
                         </p>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 w-full max-w-xs">
-                          <label className="w-full cursor-pointer py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 shadow-sm transition-all active:scale-95">
+                          <label className="w-full cursor-pointer py-2.5 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 shadow-sm transition-all active:scale-95">
                             <Camera className="w-4 h-4" />
                             <span>Kamera HP (Direct)</span>
                             <input
@@ -939,7 +939,7 @@ export const InputRealisasiPage: React.FC = () => {
           </div>
 
           {/* Submit Action */}
-          <div className="pt-6 border-t border-emerald-200 dark:border-slate-700 flex justify-end">
+          <div className="pt-6 border-t border-teal-200 dark:border-slate-700 flex justify-end">
             <button
               type="submit"
               disabled={isProcessing}
@@ -959,7 +959,7 @@ export const InputRealisasiPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs">
           <div className="bg-slate-900 rounded-3xl max-w-3xl w-full p-4 border border-slate-700 space-y-3">
             <div className="flex items-center justify-between text-white border-b border-slate-800 pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-sky-400">
+              <span className="text-xs font-bold uppercase tracking-wider text-teal-400">
                 Preview Watermark Foto - {previewPhoto.type.toUpperCase()}
               </span>
               <button

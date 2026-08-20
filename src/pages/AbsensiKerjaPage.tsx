@@ -299,7 +299,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         <div className="border-b border-slate-200 dark:border-slate-800 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center space-x-3 text-slate-900 dark:text-white">
-              <UserCheck className="w-7 h-7 text-sky-600" />
+              <UserCheck className="w-7 h-7 text-teal-600" />
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-display uppercase tracking-tight">
                 {!hasDoneAbsensiMasuk ? 'Form Absensi Masuk Regu Kerja' : 'Form Absensi Keluar (Jam Pulang)'}
               </h1>
@@ -312,7 +312,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           </div>
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm uppercase tracking-wider">
-              <Calendar className="w-4 h-4 text-sky-500" />
+              <Calendar className="w-4 h-4 text-teal-500" />
               <span>Tanggal: {todayStr}</span>
             </div>
             <button
@@ -369,7 +369,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Nama Regu (Otomatis)</span>
               <div className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
-                <Users className="w-4 h-4 text-cyan-500" />
+                <Users className="w-4 h-4 text-teal-500" />
                 <span>{reguName}</span>
               </div>
             </div>
@@ -377,7 +377,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Unit Layanan Pelanggan (ULP)</span>
               <div className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
-                <Building2 className="w-4 h-4 text-blue-500" />
+                <Building2 className="w-4 h-4 text-teal-500" />
                 <span>{ulpName}</span>
               </div>
             </div>
@@ -388,7 +388,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                  <Users className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                   <span>Daftar Kehadiran Anggota Regu ({petugasRows.length} Petugas)</span>
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -402,7 +402,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                 <button
                   type="button"
                   onClick={handleAddPetugas}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 border border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 text-xs font-bold flex items-center space-x-1.5 transition-all self-start sm:self-auto cursor-pointer shadow-xs"
+                  className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center space-x-1.5 transition-all self-start sm:self-auto cursor-pointer shadow-xs"
                   title="Tambah baris anggota regu baru"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -418,11 +418,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                   className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 transition-all ${
                     hasDoneAbsensiMasuk 
                       ? 'bg-slate-100 dark:bg-slate-800/20 border-slate-200 dark:border-slate-800 opacity-80' 
-                      : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-cyan-300 dark:hover:border-cyan-800'
+                      : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-800'
                   }`}
                 >
                   <div className="flex items-center space-x-3 flex-1">
-                    <span className="w-7 h-7 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-black text-xs shrink-0">
+                    <span className="w-7 h-7 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-xs shrink-0">
                       #{idx + 1}
                     </span>
                     <input
@@ -431,7 +431,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                       disabled={hasDoneAbsensiMasuk}
                       onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
                       placeholder={`Nama Petugas #${idx + 1}`}
-                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-cyan-500 focus:outline-none disabled:bg-transparent disabled:border-transparent disabled:font-bold"
+                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-teal-500 focus:outline-none disabled:bg-transparent disabled:border-transparent disabled:font-bold"
                     />
                   </div>
 
@@ -444,7 +444,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
                       let activeStyle = 'bg-emerald-500 text-white border-emerald-600 shadow-sm';
                       if (status === 'SAKIT') activeStyle = 'bg-amber-500 text-white border-amber-600 shadow-sm';
-                      if (status === 'IZIN') activeStyle = 'bg-blue-500 text-white border-blue-600 shadow-sm';
+                      if (status === 'IZIN') activeStyle = 'bg-teal-500 text-white border-teal-600 shadow-sm';
                       if (status === 'TIDAK HADIR') activeStyle = 'bg-rose-500 text-white border-rose-600 shadow-sm';
 
                       return (
@@ -484,11 +484,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           <div className="space-y-4 pt-2">
             {!hasDoneAbsensiMasuk ? (
               /* FOTO MASUK ONLY (When Absensi Masuk has not been completed) */
-              <div className="p-5 rounded-3xl bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800/60 space-y-3">
+              <div className="p-5 rounded-3xl bg-teal-50/50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800/60 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
-                      <Camera className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                      <Camera className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                       <span>Input Foto Masuk *</span>
                     </label>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -521,7 +521,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                           href={formatDriveViewUrl(fotoMasuk)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-100 dark:bg-cyan-900/60 text-cyan-800 dark:text-cyan-200 font-bold text-xs"
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold text-xs"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                           <span>Link URL Foto Masuk</span>
@@ -530,8 +530,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                     )}
                   </div>
                 ) : (
-                  <label className="border-2 border-dashed border-cyan-300 dark:border-cyan-700 hover:border-cyan-500 dark:hover:border-cyan-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
-                    <div className="p-3.5 rounded-2xl bg-cyan-100 dark:bg-cyan-950/80 text-cyan-600 dark:text-cyan-400 group-hover:scale-110 transition-transform mb-2">
+                  <label className="border-2 border-dashed border-teal-300 dark:border-teal-700 hover:border-teal-500 dark:hover:border-teal-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
+                    <div className="p-3.5 rounded-2xl bg-teal-100 dark:bg-teal-950/80 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform mb-2">
                       <Camera className="w-7 h-7" />
                     </div>
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -632,7 +632,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center space-x-3 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
+              className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center space-x-3 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>
@@ -652,7 +652,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-md space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
-              <Clock className="w-4 h-4 text-cyan-500" />
+              <Clock className="w-4 h-4 text-teal-500" />
               <span>Riwayat Absensi Regu {reguName} ({reguAbsensiHistory.length})</span>
             </h3>
             <span className="text-xs text-slate-400">Daftar riwayat absensi & link foto khusus untuk {reguName}</span>
@@ -718,7 +718,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                             href={formatDriveViewUrl(item.fotoMasuk)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
                             title="Buka di Google Drive"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -783,7 +783,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-4">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <ImageIcon className="w-4 h-4 text-cyan-400" />
+                <ImageIcon className="w-4 h-4 text-teal-400" />
                 <h4 className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
                   {previewImage.title}
                 </h4>
@@ -810,7 +810,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                 href={previewImage.driveUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Buka Full di Google Drive</span>

@@ -28,9 +28,9 @@ export const Footer: React.FC = () => {
 
           <a
             href={`mailto:${settings.kontakAdmin.email}`}
-            className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 hover:bg-sky-100 transition-colors"
+            className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 hover:bg-teal-100 transition-colors"
           >
-            <Mail className="w-3 h-3 text-sky-500 shrink-0" />
+            <Mail className="w-3 h-3 text-teal-500 shrink-0" />
             <span className="truncate max-w-[140px] sm:max-w-none">{settings.kontakAdmin.email}</span>
           </a>
 

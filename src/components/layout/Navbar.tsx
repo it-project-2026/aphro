@@ -90,9 +90,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
             {/* Dynamic Unit Name Header Tag */}
-            <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-full min-w-0">
-              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-sky-500 animate-pulse shrink-0" />
-              <span className="text-[11px] sm:text-xs font-bold text-sky-900 dark:text-sky-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs uppercase">
+            <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full min-w-0">
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-[11px] sm:text-xs font-bold text-emerald-900 dark:text-emerald-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs uppercase">
                 {settings.namaUnitLayanan}
               </span>
             </div>
@@ -240,7 +240,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                     type="button"
                     onClick={handleManualSync}
                     disabled={isSyncing}
-                    className="flex-1 py-2 px-3 bg-gradient-to-r from-sky-600 via-sky-500 to-cyan-500 hover:from-sky-700 hover:to-cyan-600 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all shadow-md disabled:opacity-50"
+                    className="flex-1 py-2 px-3 bg-gradient-to-r from-teal-600 via-teal-500 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all shadow-md disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                     <span>{isSyncing ? 'Menyinkronkan...' : pendingCount > 0 ? `Sync ${pendingCount} Data Offline` : 'Sync / Refresh Data'}</span>
@@ -300,7 +300,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                         Hapus Semua
                       </button>
                     )}
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
                       {unreadCount} Baru
                     </span>
                   </div>
@@ -316,7 +316,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                         key={`${n.id}-${idx}`}
                         onClick={() => markNotificationAsRead(n.id)}
                         className={`p-3 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${
-                          !n.read ? 'bg-sky-50/40 dark:bg-sky-950/20 font-medium' : 'opacity-75'
+                          !n.read ? 'bg-teal-50/40 dark:bg-teal-950/20 font-medium' : 'opacity-75'
                         }`}
                       >
                         <p className="font-semibold text-slate-900 dark:text-slate-100">
@@ -341,7 +341,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
             <img
               src={currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'}
               alt={currentUser?.name}
-              className="w-8 h-8 rounded-full object-cover ring-2 ring-sky-500/30"
+              className="w-8 h-8 rounded-full object-cover ring-2 ring-teal-500/30"
             />
             <div className="hidden xl:block text-left">
               <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">

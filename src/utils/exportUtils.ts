@@ -118,7 +118,7 @@ export async function exportCetakPhotoToExcel(
     { key: 'lokasi', width: 28 },
   ];
 
-  // Row 1: REKAP HASIL ROW (bg-sky-600)
+  // Row 1: REKAP HASIL ROW (bg-teal-600)
   const row1 = worksheet.addRow(['REKAP HASIL ROW']);
   row1.height = 28;
   worksheet.mergeCells('A1:N1');
@@ -133,7 +133,7 @@ export async function exportCetakPhotoToExcel(
     right: { style: 'thin', color: { argb: 'FF0369A1' } },
   };
 
-  // Row 2: PLN ELECTRICITY SERVICES (bg-sky-800)
+  // Row 2: PLN ELECTRICITY SERVICES (bg-teal-800)
   const row2 = worksheet.addRow(['PLN ELECTRICITY SERVICES']);
   row2.height = 24;
   worksheet.mergeCells('A2:N2');
@@ -148,7 +148,7 @@ export async function exportCetakPhotoToExcel(
     right: { style: 'thin', color: { argb: 'FF0C4A6E' } },
   };
 
-  // Row 3: Column Titles (bg-sky-900)
+  // Row 3: Column Titles (bg-teal-900)
   const headers = [
     'NO WO',
     'AREA',
@@ -767,10 +767,10 @@ export function generateLaporanPetaPDF(
   doc.text('⚡', 13.5, 19.5);
 
   doc.setFontSize(11);
-  doc.setTextColor(3, 105, 161); // sky-700
+  doc.setTextColor(3, 105, 161); // teal-700
   doc.text('PLN', 21, 16);
   doc.setFontSize(8);
-  doc.setTextColor(30, 58, 138); // sky-900
+  doc.setTextColor(30, 58, 138); // teal-900
   doc.text('Electricity Services', 21, 22);
 
   // Middle Section: GAMBAR PETA POHON (ROW) Title Box

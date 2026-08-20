@@ -20,8 +20,8 @@ export const StatCard: React.FC<StatCardProps> = ({
   value,
   subtitle,
   icon: Icon,
-  iconBgColor = 'bg-sky-50 dark:bg-sky-900/30',
-  iconColor = 'text-sky-600 dark:text-sky-400',
+  iconBgColor = 'bg-teal-50 dark:bg-teal-900/30',
+  iconColor = 'text-teal-600 dark:text-teal-400',
   borderColor = 'border-slate-200 dark:border-slate-800',
   trend,
 }) => {
@@ -62,7 +62,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <Icon className="w-6 h-6" />
         </div>
       </div>
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-teal-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
     </div>
   );
 };
