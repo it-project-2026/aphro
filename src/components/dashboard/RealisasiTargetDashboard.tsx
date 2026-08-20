@@ -56,20 +56,20 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
   return (
     <div className="bg-[#f8fafc] rounded-[2rem] border border-blue-100 shadow-2xl overflow-hidden font-display">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-[#003594] via-[#0047bb] to-[#005cda] p-6 text-white relative">
+      <div className="bg-gradient-to-r from-[#003594] via-[#0047bb] to-[#005cda] p-5 text-white relative">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md border border-white/30">
-              <Zap className="w-8 h-8 text-yellow-400 fill-yellow-400" />
+            <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-md border border-white/30">
+              <Zap className="w-6 h-6 text-yellow-400 fill-yellow-400" />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-black tracking-tight leading-none">{title}</h1>
-              <p className="text-blue-100/80 text-sm mt-1 font-semibold uppercase tracking-wider">{subtitle}</p>
+              <h1 className="text-xl md:text-2xl font-black tracking-tight leading-none">{title}</h1>
+              <p className="text-blue-100/80 text-[11px] md:text-xs mt-1 font-semibold uppercase tracking-wider">{subtitle}</p>
             </div>
           </div>
-          <div className="bg-[#002874] px-4 py-2 rounded-xl border border-blue-400/30 flex items-center gap-3">
-            <Calendar className="w-4 h-4 text-blue-300" />
-            <span className="text-sm font-bold tracking-tight">
+          <div className="bg-[#002874] px-3 py-1.5 rounded-lg border border-blue-400/30 flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5 text-blue-300" />
+            <span className="text-xs font-bold tracking-tight">
               {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
             </span>
           </div>
@@ -93,23 +93,23 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
               </div>
             </div>
             
-            <div className="p-2 flex flex-col gap-1 max-h-[600px] overflow-y-auto">
+            <div className="p-2 flex flex-col gap-0.5">
               {data.map((item, idx) => (
-                <div key={item.id} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-blue-50 transition-colors group">
-                  <div className="p-2 rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-200">
-                    <CheckCircle2 className="w-4 h-4" />
+                <div key={item.id} className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-blue-50 transition-colors group">
+                  <div className="p-1.5 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-200">
+                    <CheckCircle2 className="w-3 h-3" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-black text-slate-800 uppercase truncate">
+                    <div className="flex justify-between items-center mb-0.5">
+                      <span className="text-[10px] font-black text-slate-800 uppercase truncate">
                         {item.name}
                       </span>
-                      <div className="flex gap-10 text-xs font-black">
-                        <span className="text-[#0047bb] w-12 text-right">{item.realisasi}</span>
-                        <span className="text-slate-400 w-12 text-right">{item.target}</span>
+                      <div className="flex gap-8 text-[10px] font-black">
+                        <span className="text-[#0047bb] w-10 text-right">{item.realisasi}</span>
+                        <span className="text-slate-400 w-10 text-right">{item.target}</span>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000"
                         style={{ width: `${Math.min(100, (item.realisasi / (item.target || 1)) * 100)}%` }}
