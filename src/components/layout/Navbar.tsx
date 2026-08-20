@@ -32,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
   const { user: currentUser, logout, loginAsRole } = useAuth();
   const { settings } = useSettings();
   const { isDarkMode, toggleDarkMode } = useUI();
-  const { notifications, markNotificationAsRead } = useNotifications();
+  const { notifications, markNotificationAsRead, clearNotifications } = useNotifications();
   const { isGasConnected, isOnline, pendingCount, syncWithGAS, processPendingQueue } = useGASSync();
   const { showToast } = useToast();
 
@@ -291,30 +291,46 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                     Notifikasi Operations
                   </h4>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300">
-                    {unreadCount} Baru
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    {notifications.length > 0 && (
+                      <button 
+                        onClick={() => clearNotifications()}
+                        className="text-[10px] text-rose-600 dark:text-rose-400 hover:underline font-bold"
+                      >
+                        Hapus Semua
+                      </button>
+                    )}
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300">
+                      {unreadCount} Baru
+                    </span>
+                  </div>
                 </div>
                 <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50">
-                  {notifications.map((n, idx) => (
-                    <div
-                      key={`${n.id}-${idx}`}
-                      onClick={() => markNotificationAsRead(n.id)}
-                      className={`p-3 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${
-                        !n.read ? 'bg-sky-50/40 dark:bg-sky-950/20 font-medium' : 'opacity-75'
-                      }`}
-                    >
-                      <p className="font-semibold text-slate-900 dark:text-slate-100">
-                        {n.title}
-                      </p>
-                      <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
-                        {n.message}
-                      </p>
-                      <span className="text-[10px] text-slate-400 block mt-1">
-                        {n.timestamp}
-                      </span>
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <p className="text-xs text-slate-400">Tidak ada notifikasi</p>
                     </div>
-                  ))}
+                  ) : (
+                    notifications.map((n, idx) => (
+                      <div
+                        key={`${n.id}-${idx}`}
+                        onClick={() => markNotificationAsRead(n.id)}
+                        className={`p-3 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${
+                          !n.read ? 'bg-sky-50/40 dark:bg-sky-950/20 font-medium' : 'opacity-75'
+                        }`}
+                      >
+                        <p className="font-semibold text-slate-900 dark:text-slate-100">
+                          {n.title}
+                        </p>
+                        <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
+                          {n.message}
+                        </p>
+                        <span className="text-[10px] text-slate-400 block mt-1">
+                          {new Date(n.timestamp).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

@@ -8,6 +8,8 @@ interface NotificationContextType {
   notifications: NotificationItem[];
   logActivity: (action: string, details: string) => void;
   markNotificationAsRead: (id: string) => void;
+  clearNotifications: () => void;
+  addNotification: (notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => void;
 }
 
 const NotificationContext = React.createContext<NotificationContextType | undefined>(undefined);
@@ -27,12 +29,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setAuditLogs(prev => [newLog, ...prev].slice(0, 100)); // Keep last 100
   }, [setAuditLogs]);
 
+  const addNotification = React.useCallback((notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => {
+    const newNotification: NotificationItem = {
+      ...notification,
+      id: 'notif-' + Date.now(),
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Keep last 50
+  }, [setNotifications]);
+
   const markNotificationAsRead = React.useCallback((id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }, [setNotifications]);
+
+  const clearNotifications = React.useCallback(() => {
+    setNotifications([]);
   }, [setNotifications]);
 
   return (
-    <NotificationContext.Provider value={{ auditLogs, notifications, logActivity, markNotificationAsRead }}>
+    <NotificationContext.Provider value={{ auditLogs, notifications, logActivity, markNotificationAsRead, clearNotifications, addNotification }}>
       {children}
     </NotificationContext.Provider>
   );

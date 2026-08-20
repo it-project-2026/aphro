@@ -13,6 +13,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { MobileBottomNav } from './components/layout/MobileBottomNav';
 import { Footer } from './components/layout/Footer';
 import { ToastContainer } from './components/common/ToastContainer';
+import { NotificationListener } from './components/layout/NotificationListener';
 import { FileSpreadsheet } from 'lucide-react';
 
 import { LoginPage } from './pages/LoginPage';
@@ -91,7 +92,9 @@ const AppContent: React.FC = () => {
       case 'monitoring_absensi': return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
       case 'monitoring': return <MonitoringPage />;
       case 'cetak_laporan': return <CetakLaporanPage />;
-      case 'rekap_harian': return <RekapPekerjaanHarianPage />;
+      case 'rekap_harian': 
+        if ((user?.role || '').toUpperCase() === 'USER') return <DashboardPage />;
+        return <RekapPekerjaanHarianPage />;
       case 'master_data': return <MasterDataPage />;
       case 'settings':
       case 'logs': return <SettingAplikasiPage />;
@@ -149,6 +152,7 @@ const AppContent: React.FC = () => {
     if (isUserRole && !isAdmRole && !hasCheckedInToday) {
       return (
         <>
+          <NotificationListener />
           {showAbsensiForm ? (
             <AbsensiKerjaPage onSuccess={() => {
               setShowAbsensiForm(false);
@@ -164,6 +168,7 @@ const AppContent: React.FC = () => {
 
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 pb-20 lg:pb-0">
+        <NotificationListener />
         <Navbar onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} />
 
         <div className="flex-1 flex max-w-[1600px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 gap-6">

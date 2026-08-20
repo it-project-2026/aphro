@@ -232,7 +232,6 @@ export interface NotificationItem {
   title: string;
   message: string;
   timestamp: string;
-  read?: boolean;
-  isRead?: boolean;
+  read: boolean;
   type: 'info' | 'success' | 'warning' | 'danger';
 }

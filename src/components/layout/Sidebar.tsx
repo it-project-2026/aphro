@@ -114,7 +114,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       id: 'rekap_harian',
       label: 'Rekap Pekerjaan Harian',
       icon: CalendarRange,
-      roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
+      roles: ['SuperAdmin', 'Admin', 'Adm'],
     },
     {
       id: 'master_data',
