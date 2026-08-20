@@ -72,12 +72,12 @@ export const WorkOrderPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-emerald-50 border-2 border-emerald-100 p-6 rounded-3xl shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 rounded-3xl shadow-sm">
         <div>
-          <h1 className="text-2xl font-black text-black font-display uppercase tracking-tighter">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white font-display">
             {role === 'User' ? 'Work Order Saya (Penugasan)' : 'Daftar Seluruh Work Order'}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-700 font-bold mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
             Kelola data instruksi kerja, lokasi tapak tiang, status progress, dan pelimpahan tugas.
           </p>
         </div>
@@ -86,7 +86,7 @@ export const WorkOrderPage: React.FC = () => {
           {role !== 'User' && (
             <button
               onClick={() => exportWorkOrdersToExcel(filteredWOs, settings.namaUnitLayanan)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-white border border-emerald-300 text-emerald-900 font-black text-xs rounded-xl shadow-sm hover:bg-emerald-100 transition-all active:scale-95"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600 transition-all active:scale-95"
             >
               <Download className="w-4 h-4 text-emerald-600" />
               <span>Export Excel</span>
@@ -96,7 +96,7 @@ export const WorkOrderPage: React.FC = () => {
           {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
             <button
               onClick={() => setActiveTab('input_wo')}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-black via-slate-900 to-red-600 text-white font-black text-xs rounded-xl shadow-lg shadow-black/20 transition-all active:scale-95"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
             >
               <PlusCircle className="w-4 h-4 text-white" />
               <span>Tambah Work Order</span>
@@ -195,18 +195,18 @@ export const WorkOrderPage: React.FC = () => {
                 className="p-4 rounded-2xl bg-white dark:bg-slate-900/60 border border-emerald-100 dark:border-slate-700/80 space-y-3 shadow-2xs"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono font-black text-xs text-black dark:text-sky-400 bg-emerald-50 dark:bg-sky-950/80 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-sky-800">
+                  <span className="font-mono font-bold text-xs text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/80 px-2.5 py-1 rounded-lg border border-sky-200 dark:border-sky-800">
                     {wo.nomorWO}
                   </span>
                   <StatusBadge status={wo.status} size="sm" />
                 </div>
 
                 <div>
-                  <h4 className="font-black text-black dark:text-white text-sm uppercase">
+                  <h4 className="font-bold text-slate-900 dark:text-white text-sm uppercase">
                     {wo.penyulangName}
                   </h4>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 font-bold flex items-center mt-0.5">
-                    <MapPin className="w-3.5 h-3.5 mr-1 text-red-600 shrink-0" />
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0" />
                     <span className="truncate">{wo.lokasi} ({wo.ulpName})</span>
                   </p>
                 </div>
@@ -288,7 +288,7 @@ export const WorkOrderPage: React.FC = () => {
         {/* Desktop View: Table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs sm:text-sm">
-            <thead className="bg-emerald-50 dark:bg-slate-900/90 text-black dark:text-slate-400 font-black border-b border-emerald-100 dark:border-slate-700 uppercase tracking-tighter text-[11px]">
+            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800 uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="p-3.5 pl-5">No WO & Tanggal</th>
                 <th className="p-3.5">ULP / Penyulang</th>
@@ -300,7 +300,7 @@ export const WorkOrderPage: React.FC = () => {
                 <th className="p-3.5 pr-5 text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredWOs.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-slate-400">
@@ -311,28 +311,28 @@ export const WorkOrderPage: React.FC = () => {
                 filteredWOs.map((wo, idx) => (
                   <tr
                     key={`${wo.id}-${idx}`}
-                    className="hover:bg-emerald-50/30 dark:hover:bg-slate-700/30 transition-colors"
+                    className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
                   >
                     <td className="p-3.5 pl-5">
-                      <p className="font-black text-black dark:text-sky-400">
+                      <p className="font-bold text-sky-600 dark:text-sky-400">
                         {wo.nomorWO}
                       </p>
-                      <p className="text-[11px] text-slate-500 font-bold flex items-center mt-0.5">
-                        <Calendar className="w-3 h-3 mr-1 text-red-500" />
+                      <p className="text-[11px] text-slate-500 font-medium flex items-center mt-0.5">
+                        <Calendar className="w-3 h-3 mr-1 text-slate-400" />
                         {formatDateDisplay(wo.tanggal)}
                       </p>
                       {(wo.volumePekerjaan || wo.woKms || wo.woBatang) && (
                         <div className="flex items-center space-x-1.5 mt-1">
                           {wo.satuan ? (
-                            <span className="px-2 py-0.5 text-[10px] font-black bg-white text-black dark:bg-sky-950/80 dark:text-sky-300 rounded-md border border-emerald-200 dark:border-sky-700 shadow-sm">
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-600">
                               Vol: {wo.volumePekerjaan} {wo.satuan}
                             </span>
                           ) : wo.woKms ? (
-                            <span className="px-2 py-0.5 text-[10px] font-black bg-white text-black dark:bg-sky-950/80 dark:text-sky-300 rounded-md border border-emerald-200 dark:border-sky-700 shadow-sm">
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-600">
                               Vol: {wo.woKms} KMS
                             </span>
                           ) : wo.woBatang ? (
-                            <span className="px-2 py-0.5 text-[10px] font-black bg-white text-black dark:bg-sky-950/80 dark:text-sky-300 rounded-md border border-emerald-200 dark:border-sky-700 shadow-sm">
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-600">
                               Vol: {wo.woBatang} GAWANG
                             </span>
                           ) : null}
@@ -341,24 +341,24 @@ export const WorkOrderPage: React.FC = () => {
                     </td>
 
                     <td className="p-3.5">
-                      <p className="font-black text-black dark:text-white uppercase">
+                      <p className="font-bold text-slate-900 dark:text-white uppercase">
                         {wo.penyulangName}
                       </p>
-                      <p className="text-[11px] text-slate-500 font-bold">{wo.ulpName}</p>
+                      <p className="text-[11px] text-slate-500 font-medium">{wo.ulpName}</p>
                     </td>
 
                     <td className="p-3.5 max-w-xs">
-                      <p className="font-bold text-black dark:text-slate-200 truncate">
+                      <p className="font-medium text-slate-900 dark:text-slate-200 truncate">
                         {wo.lokasi}
                       </p>
-                      <p className="text-[10px] text-slate-600 font-medium truncate">{wo.alamat}</p>
+                      <p className="text-[10px] text-slate-500 font-medium truncate">{wo.alamat}</p>
                     </td>
 
                     <td className="p-3.5">
-                      <p className="font-black text-black dark:text-white">
+                      <p className="font-bold text-slate-900 dark:text-white">
                         {wo.petugasName}
                       </p>
-                      <p className="text-[11px] text-slate-500 font-bold">{wo.reguName}</p>
+                      <p className="text-[11px] text-slate-500 font-medium">{wo.reguName}</p>
                     </td>
 
                     <td className="p-3.5">

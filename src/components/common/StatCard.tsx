@@ -31,11 +31,11 @@ export const StatCard: React.FC<StatCardProps> = ({
     >
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <p className="text-xs sm:text-sm font-black text-black/60 dark:text-slate-400 uppercase tracking-tight">
+          <p className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
             {title}
           </p>
           <div className="flex items-baseline space-x-2">
-            <h3 className="text-2xl sm:text-3xl font-black text-black dark:text-white tracking-tight">
+            <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
               {value}
             </h3>
             {trend && (

@@ -167,16 +167,7 @@ const AppContent: React.FC = () => {
     }
 
     return (
-      <div className="min-h-screen text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 pb-20 lg:pb-0 relative">
-        {/* Global Background Image Layer */}
-        <div 
-          className="fixed inset-0 z-[-1] bg-cover bg-center bg-no-repeat opacity-40 dark:opacity-20 transition-opacity duration-700"
-          style={{ 
-            backgroundImage: `url('https://lh3.googleusercontent.com/d/1GdbvOn9MIRGeyhdzjpdIeM68Ka0giF_K')`,
-            backgroundAttachment: 'fixed'
-          }}
-        />
-        
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 pb-20 lg:pb-0">
         <NotificationListener />
         <Navbar onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} />
 

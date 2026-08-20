@@ -64,20 +64,20 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
   const html = `
     <div style="
       position: relative;
-      width: 110px;
-      height: 55px;
+      width: 130px;
+      height: 60px;
       font-family: system-ui, -apple-system, sans-serif;
     ">
       <!-- Leader Line from coordinate dot to box -->
-      <svg width="110" height="55" style="position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible;">
-        <line x1="55" y1="50" x2="55" y2="28" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" />
+      <svg width="130" height="60" style="position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible;">
+        <line x1="65" y1="52" x2="65" y2="30" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" />
       </svg>
 
       <!-- Coordinate Dot at exact lat/lng anchor -->
       <div style="
         position: absolute;
-        left: 51px;
-        top: 47px;
+        left: 61px;
+        top: 49px;
         width: 8px;
         height: 8px;
         background: ${badgeColor};
@@ -90,18 +90,18 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
       <!-- Description Box -->
       <div style="
         position: absolute;
-        left: 4px;
+        left: 0px;
         top: 0px;
-        width: 102px;
+        width: 130px;
         display: inline-flex;
         align-items: center;
         background: rgba(255, 255, 255, 0.95);
         border: 1.2px solid #0f172a;
         border-radius: 8px;
-        padding: 2px 4px 2px 2px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        padding: 3px 5px 3px 3px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
         white-space: nowrap;
-        gap: 4px;
+        gap: 5px;
         backdrop-filter: blur(4px);
         z-index: 3;
       ">
@@ -109,9 +109,9 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
           background: ${badgeColor};
           color: #0f172a;
           font-weight: 900;
-          font-size: 8px;
-          width: 16px;
-          height: 16px;
+          font-size: 9px;
+          width: 18px;
+          height: 18px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -122,14 +122,14 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
           ${seqNo}
         </div>
         <div style="display: flex; flex-direction: column; text-align: left; overflow: hidden; width: 100%;">
-          <span style="color: #0f172a; font-weight: 800; font-size: 8px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block;">
+          <span style="color: #0f172a; font-weight: 800; font-size: 8.5px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block;">
             📌 ${noTiang || `T#${seqNo}`}
           </span>
-          <span style="color: #0f172a; font-weight: 800; font-size: 7.5px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block;">
+          <span style="color: #0f172a; font-weight: 800; font-size: 8px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block;">
             🌳 ${name}
           </span>
           ${lokasiKerja ? `
-          <span style="color: #ef4444; font-weight: 900; font-size: 7px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 1px; border-top: 0.5px solid #e2e8f0; padding-top: 1px;">
+          <span style="color: #ef4444; font-weight: 900; font-size: 8px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 1px; border-top: 0.5px solid #e2e8f0; padding-top: 1px;">
             🏠 ${lokasiKerja}
           </span>
           ` : ''}
@@ -141,8 +141,8 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
   return L.divIcon({
     className: 'custom-plant-leaflet-marker',
     html: html,
-    iconSize: [110, 55],
-    iconAnchor: [55, 50],
+    iconSize: [130, 60],
+    iconAnchor: [65, 52],
     popupAnchor: [0, -40],
   });
 }

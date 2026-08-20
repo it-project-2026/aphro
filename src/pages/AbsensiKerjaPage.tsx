@@ -257,7 +257,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     setIsSubmitting(true);
 
     try {
-      await addAbsensi({
+      // When doing "Absen Pulang" (Keluar), we only need to update the existing record
+      const absensiPayload = {
         tanggal: todayStr,
         reguName: todayAbsensi?.reguName || reguName,
         penyulangName: todayAbsensi?.penyulangName || (currentUser as any)?.penyulangName || 'Penyulang Pauh Utama',
@@ -265,12 +266,14 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         userName: currentUser?.userName || currentUser?.nip || currentUser?.id,
         namaPetugas: currentUser?.name,
         nip: currentUser?.nip,
-        petugasList: petugasRows,
-        fotoMasuk: fotoMasuk || todayAbsensi?.fotoMasuk || '',
-        fotoKeluar: fotoKeluar || todayAbsensi?.fotoKeluar || '',
+        petugasList: hasDoneAbsensiMasuk ? (todayAbsensi?.petugasList || petugasRows) : petugasRows,
+        fotoMasuk: hasDoneAbsensiMasuk ? (todayAbsensi?.fotoMasuk || '') : fotoMasuk,
+        fotoKeluar: hasDoneAbsensiMasuk ? fotoKeluar : '',
         latitude: currentCoords?.lat || todayAbsensi?.latitude,
         longitude: currentCoords?.lon || todayAbsensi?.longitude,
-      });
+      };
+
+      await addAbsensi(absensiPayload);
 
       showToast(
         !hasDoneAbsensiMasuk 
@@ -289,36 +292,27 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   };
 
   return (
-    <div className="min-h-screen relative py-4 sm:py-6 lg:py-8 px-4 font-sans overflow-hidden">
-      {/* Global Background Image Layer */}
-      <div 
-        className="fixed inset-0 z-[-1] bg-cover bg-center bg-no-repeat opacity-40 dark:opacity-20 transition-opacity duration-700"
-        style={{ 
-          backgroundImage: `url('https://lh3.googleusercontent.com/d/1GdbvOn9MIRGeyhdzjpdIeM68Ka0giF_K')`,
-          backgroundAttachment: 'fixed'
-        }}
-      />
-      
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 sm:pb-10">
       <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
-      <div className="bg-emerald-50 dark:bg-slate-900 rounded-3xl border-2 border-emerald-100 p-6 sm:p-8 shadow-xl space-y-6">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-sm space-y-6">
         {/* Header */}
-        <div className="border-b border-emerald-200 dark:border-slate-800 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="border-b border-slate-200 dark:border-slate-800 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-3 text-black dark:text-cyan-400">
-              <UserCheck className="w-7 h-7 text-red-600" />
-              <h1 className="text-xl sm:text-2xl font-black text-black dark:text-white font-display uppercase tracking-tighter">
+            <div className="flex items-center space-x-3 text-slate-900 dark:text-white">
+              <UserCheck className="w-7 h-7 text-sky-600" />
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-display uppercase tracking-tight">
                 {!hasDoneAbsensiMasuk ? 'Form Absensi Masuk Regu Kerja' : 'Form Absensi Keluar (Jam Pulang)'}
               </h1>
             </div>
-            <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-400 mt-1 font-bold">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
               {!hasDoneAbsensiMasuk
-                ? 'Regu belum melakukan Absensi Masuk hari ini. Mohon lengkapi daftar hadir dan unggah Foto Masuk.'
+                ? 'Regu belum melakukan Absensi Masuk hari ini. Mohon lengkapi daftar hadir and unggah Foto Masuk.'
                 : 'Absensi Masuk untuk hari ini sudah selesai. Gunakan form ini untuk mencatat Foto Keluar (Jam Pulang).'}
             </p>
           </div>
           <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2 bg-white dark:bg-cyan-950/50 px-3.5 py-2 rounded-2xl border border-emerald-200 dark:border-cyan-800 text-xs font-black text-black dark:text-cyan-300 shadow-sm uppercase tracking-tighter">
-              <Calendar className="w-4 h-4 text-red-500" />
+            <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm uppercase tracking-wider">
+              <Calendar className="w-4 h-4 text-sky-500" />
               <span>Tanggal: {todayStr}</span>
             </div>
             <button
@@ -328,7 +322,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
               title="Kembali ke Menu Login"
             >
               <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline text-xs font-black">LOGOUT</span>
+              <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">Logout</span>
             </button>
           </div>
         </div>
@@ -398,26 +392,34 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                   <span>Daftar Kehadiran Anggota Regu ({petugasRows.length} Petugas)</span>
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Daftar anggota untuk <span className="font-bold text-cyan-600 dark:text-cyan-400">{reguName}</span>.
+                  {hasDoneAbsensiMasuk 
+                    ? 'Daftar kehadiran sudah dikunci setelah Absensi Masuk.' 
+                    : `Daftar anggota untuk ${reguName}.`}
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleAddPetugas}
-                className="px-3 py-1.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 border border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 text-xs font-bold flex items-center space-x-1.5 transition-all self-start sm:self-auto cursor-pointer shadow-xs"
-                title="Tambah baris anggota regu baru"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Petugas</span>
-              </button>
+              {!hasDoneAbsensiMasuk && (
+                <button
+                  type="button"
+                  onClick={handleAddPetugas}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 border border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 text-xs font-bold flex items-center space-x-1.5 transition-all self-start sm:self-auto cursor-pointer shadow-xs"
+                  title="Tambah baris anggota regu baru"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Petugas</span>
+                </button>
+              )}
             </div>
 
             <div className="space-y-3">
               {petugasRows.map((petugas, idx) => (
                 <div
                   key={idx}
-                  className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 transition-all hover:border-cyan-300 dark:hover:border-cyan-800"
+                  className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 transition-all ${
+                    hasDoneAbsensiMasuk 
+                      ? 'bg-slate-100 dark:bg-slate-800/20 border-slate-200 dark:border-slate-800 opacity-80' 
+                      : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-cyan-300 dark:hover:border-cyan-800'
+                  }`}
                 >
                   <div className="flex items-center space-x-3 flex-1">
                     <span className="w-7 h-7 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-black text-xs shrink-0">
@@ -426,15 +428,20 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                     <input
                       type="text"
                       value={petugas.nama}
+                      disabled={hasDoneAbsensiMasuk}
                       onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
                       placeholder={`Nama Petugas #${idx + 1}`}
-                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-cyan-500 focus:outline-none"
+                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-cyan-500 focus:outline-none disabled:bg-transparent disabled:border-transparent disabled:font-bold"
                     />
                   </div>
 
                   <div className="flex items-center space-x-2 shrink-0">
                     {(['HADIR', 'SAKIT', 'IZIN', 'TIDAK HADIR'] as const).map((status) => {
                       const isSelected = petugas.keterangan === status;
+                      
+                      // If locked and not selected, don't show the button at all on mobile to save space
+                      if (hasDoneAbsensiMasuk && !isSelected) return null;
+
                       let activeStyle = 'bg-emerald-500 text-white border-emerald-600 shadow-sm';
                       if (status === 'SAKIT') activeStyle = 'bg-amber-500 text-white border-amber-600 shadow-sm';
                       if (status === 'IZIN') activeStyle = 'bg-blue-500 text-white border-blue-600 shadow-sm';
@@ -444,19 +451,20 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                         <button
                           key={status}
                           type="button"
+                          disabled={hasDoneAbsensiMasuk}
                           onClick={() => handlePetugasStatusChange(idx, status)}
                           className={`px-3 py-1.5 text-[11px] font-bold rounded-xl border transition-all cursor-pointer ${
                             isSelected
                               ? activeStyle
                               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
-                          }`}
+                          } disabled:opacity-100 disabled:shadow-none`}
                         >
                           {status}
                         </button>
                       );
                     })}
 
-                    {petugasRows.length > 1 && (
+                    {petugasRows.length > 1 && !hasDoneAbsensiMasuk && (
                       <button
                         type="button"
                         onClick={() => handleRemovePetugas(idx)}
@@ -620,11 +628,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           </div>
 
           {/* Submit Action Button */}
-          <div className="pt-6 border-t border-emerald-200 dark:border-slate-800 flex items-center justify-end">
+          <div className="pt-6 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end">
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-gradient-to-r from-black via-slate-900 to-red-600 text-white font-black text-sm shadow-xl shadow-black/25 hover:shadow-black/40 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center space-x-3 disabled:opacity-50 cursor-pointer uppercase tracking-widest"
+              className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center space-x-3 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>

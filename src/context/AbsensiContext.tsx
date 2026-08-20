@@ -57,14 +57,30 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
     if (existingIndex >= 0) {
       const existing = absensiList[existingIndex];
-      finalAbs = {
-        ...existing,
-        ...absData,
-        fotoMasuk: absData.fotoMasuk || existing.fotoMasuk,
-        timestampMasuk: existing.timestampMasuk || (absData.fotoMasuk ? nowStr : undefined),
-        fotoKeluar: absData.fotoKeluar || existing.fotoKeluar,
-        timestampKeluar: absData.fotoKeluar ? (absData.timestampKeluar || nowStr) : existing.timestampKeluar,
-      };
+      const isClockingOut = Boolean(absData.fotoKeluar);
+      
+      if (isClockingOut) {
+        // Strict clock-out update: only update clock-out fields and metadata
+        finalAbs = {
+          ...existing,
+          fotoKeluar: absData.fotoKeluar,
+          timestampKeluar: absData.timestampKeluar || nowStr,
+          latitude: absData.latitude || existing.latitude,
+          longitude: absData.longitude || existing.longitude,
+          updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+        };
+      } else {
+        // Normal update or re-clock-in (though usually shouldn't happen same day)
+        finalAbs = {
+          ...existing,
+          ...absData,
+          fotoMasuk: absData.fotoMasuk || existing.fotoMasuk,
+          timestampMasuk: existing.timestampMasuk || (absData.fotoMasuk ? nowStr : undefined),
+          fotoKeluar: absData.fotoKeluar || existing.fotoKeluar,
+          timestampKeluar: absData.fotoKeluar ? (absData.timestampKeluar || nowStr) : existing.timestampKeluar,
+          updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+        };
+      }
     } else {
       finalAbs = {
         ...absData,
@@ -87,6 +103,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     // Sync to GAS if URL exists
     const payloadToSave = {
       ...finalAbs,
+      isAbsenPulang: Boolean(absData.fotoKeluar),
       folderId: settings.absensiFolderId || '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5',
     };
 
