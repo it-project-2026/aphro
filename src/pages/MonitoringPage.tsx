@@ -71,11 +71,10 @@ export const MonitoringPage: React.FC = () => {
     isUserRole ? 'table' : 'table'
   );
 
-  const [filterUlp, setFilterUlp] = useState(
-    currentUser?.role === 'Admin' ? settings.namaUnitLayanan : 'ALL'
-  );
+  const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterDate, setFilterDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   // 1. Deduplicate Work Orders to ensure each Nomor WO only appears once
@@ -117,6 +116,7 @@ export const MonitoringPage: React.FC = () => {
       const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
       const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
       const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
+      const matchesDate = !filterDate || (wo.tanggal && wo.tanggal.includes(filterDate));
       
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -126,9 +126,9 @@ export const MonitoringPage: React.FC = () => {
         (wo.penyulangName || '').toLowerCase().includes(query) ||
         (wo.jenisPekerjaan || '').toLowerCase().includes(query);
 
-      return matchesUlp && matchesPenyulang && matchesStatus && matchesSearch;
+      return matchesUlp && matchesPenyulang && matchesStatus && matchesDate && matchesSearch;
     });
-  }, [uniqueWorkOrders, filterUlp, filterPenyulang, filterStatus, searchQuery]);
+  }, [uniqueWorkOrders, filterUlp, filterPenyulang, filterStatus, filterDate, searchQuery]);
 
   // 3. Calculate totals across filtered WOs with deduplicated realisasi items
   const woMonitoringRows = useMemo(() => {
@@ -381,9 +381,9 @@ export const MonitoringPage: React.FC = () => {
 
       {/* Filter Bar */}
       <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
-            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Cari Work Order / ULP</label>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Cari Work Order</label>
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
@@ -397,12 +397,24 @@ export const MonitoringPage: React.FC = () => {
           </div>
 
           <div>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Filter Tanggal</label>
+            <div className="relative">
+              <Calendar className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
+          </div>
+
+          <div>
             <label className="block text-[11px] font-semibold text-slate-400 mb-1">Filter ULP</label>
             <select
               value={filterUlp}
               onChange={(e) => setFilterUlp(e.target.value)}
-              disabled={currentUser?.role === 'Admin'}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 disabled:opacity-60"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
             >
               <option value="ALL">Semua ULP</option>
               {ulpList.map((u, idx) => (

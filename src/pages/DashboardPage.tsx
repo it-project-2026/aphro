@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
+import { useRealisasi } from '../context/RealisasiContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useUI } from '../context/UIContext';
 import { useGASSync } from '../hooks/useGASSync';
@@ -56,11 +57,16 @@ ChartJS.register(
 export const DashboardPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { workOrders } = useWorkOrders();
+  const { realisasiList } = useRealisasi();
   const { ulpList, penyulangList, reguList, petugasList } = useMasterData();
   const { auditLogs } = useNotifications();
   const { setActiveTab, isDarkMode } = useUI();
   const { isGasConnected, syncWithGAS } = useGASSync();
   const { showToast } = useToast();
+
+  const [startDate, setStartDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
+  const [filterUlp, setFilterUlp] = React.useState('ALL');
 
   const handleSync = async () => {
     await syncWithGAS(showToast);
@@ -68,11 +74,50 @@ export const DashboardPage: React.FC = () => {
 
   const role = currentUser?.role || 'User';
 
-  // Metrics calculations
-  const totalWO = workOrders.length;
-  const woSelesai = workOrders.filter((w) => w.status === 'Selesai').length;
-  const woProgress = workOrders.filter((w) => w.status === 'Sedang Dikerjakan').length;
-  const woBelum = workOrders.filter((w) => w.status === 'Belum Dikerjakan').length;
+  // Apply Filters to Data
+  const filteredWOs = React.useMemo(() => {
+    return workOrders.filter(wo => {
+      const matchesStartDate = !startDate || (wo.tanggal && wo.tanggal >= startDate);
+      const matchesEndDate = !endDate || (wo.tanggal && wo.tanggal <= endDate);
+      const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
+      return matchesStartDate && matchesEndDate && matchesUlp;
+    });
+  }, [workOrders, startDate, endDate, filterUlp]);
+
+  const filteredRealisasi = React.useMemo(() => {
+    return realisasiList.filter(rel => {
+      const matchesStartDate = !startDate || (rel.tanggalRealisasi && rel.tanggalRealisasi >= startDate);
+      const matchesEndDate = !endDate || (rel.tanggalRealisasi && rel.tanggalRealisasi <= endDate);
+      const matchesUlp = filterUlp === 'ALL' || rel.ulpName === filterUlp;
+      return matchesStartDate && matchesEndDate && matchesUlp;
+    });
+  }, [realisasiList, startDate, endDate, filterUlp]);
+
+  // Metrics calculations based on FILTERED data
+  const totalWO = filteredWOs.length;
+  const woSelesai = filteredWOs.filter((w) => w.status === 'Selesai').length;
+  const woProgress = filteredWOs.filter((w) => w.status === 'Sedang Dikerjakan').length;
+  const woBelum = filteredWOs.filter((w) => w.status === 'Belum Dikerjakan').length;
+
+  // New KMS Metrics logic
+  const totalTargetKms = filteredWOs.reduce((sum, wo) => {
+    const vol = wo.volumePekerjaan || 0;
+    const value = wo.satuan === 'GAWANG' ? vol / 20 : vol;
+    return sum + value;
+  }, 0);
+
+  const totalRealisasiKms = filteredWOs.reduce((sum, wo) => sum + (wo.totalRealisasi || 0), 0);
+  const kmsPercentage = totalTargetKms > 0 ? Math.round((totalRealisasiKms / totalTargetKms) * 100) : 0;
+
+  // New Tebang/Pangkas Metrics logic
+  const totalTebang = filteredRealisasi.filter(r => (r.keterangan || '').toUpperCase() === 'TEBANG').length;
+  const totalPangkas = filteredRealisasi.filter(r => (r.keterangan || '').toUpperCase() === 'PANGKAS').length;
+  const totalRealisasiPohon = totalTebang + totalPangkas;
+
+  // New Realisasi Penyulang Metrics logic
+  const targetPenyulangs = Array.from(new Set(filteredWOs.map(w => w.penyulangName).filter(Boolean))).length;
+  const uniqueRealizedPenyulangs = Array.from(new Set(filteredRealisasi.map(r => r.penyulangName).filter(Boolean))).length;
+  const uniqueRealizedWOs = Array.from(new Set(filteredRealisasi.map(r => r.nomorWO).filter(Boolean))).length;
 
   const totalPetugas = petugasList.length;
   const totalRegu = reguList.length;
@@ -122,7 +167,7 @@ export const DashboardPage: React.FC = () => {
   // 2. Progress per ULP Bar Chart Data
   const ulpLabels = ulpList.map((u) => (u.namaULP || '').replace('ULP ', ''));
   const ulpProgressData = ulpList.map((u) => {
-    const ulpWOs = workOrders.filter((w) => w.ulpId === u.id);
+    const ulpWOs = filteredWOs.filter((w) => w.ulpId === u.id || w.ulpName === u.namaULP);
     if (ulpWOs.length === 0) return 0;
     const finished = ulpWOs.filter((w) => w.status === 'Selesai').length;
     return Math.round((finished / ulpWOs.length) * 100);
@@ -285,45 +330,182 @@ export const DashboardPage: React.FC = () => {
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-cyan-500/20 to-transparent pointer-events-none" />
       </div>
 
+      {/* Dashboard Filters */}
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap gap-4 items-end">
+        <div className="flex-1 min-w-[150px]">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+            Tanggal Mulai
+          </label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 transition-all"
+          />
+        </div>
+        <div className="flex-1 min-w-[150px]">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+            Tanggal Akhir
+          </label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 transition-all"
+          />
+        </div>
+        <div className="flex-1 min-w-[150px]">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+            Filter ULP
+          </label>
+          <select
+            value={filterUlp}
+            onChange={(e) => setFilterUlp(e.target.value)}
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 transition-all"
+          >
+            <option value="ALL">Semua ULP</option>
+            {ulpList.map((ulp) => (
+              <option key={ulp.id} value={ulp.namaULP || ulp.id}>
+                {ulp.namaULP}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={() => {
+            setStartDate('');
+            setEndDate('');
+            setFilterUlp('ALL');
+          }}
+          className="px-4 py-2 text-[10px] font-black text-slate-500 hover:text-rose-500 uppercase tracking-widest transition-colors"
+        >
+          Reset Filter
+        </button>
+      </div>
+
       {/* 8 Metric Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Custom Redesigned WO Card */}
+        <div className="relative overflow-hidden bg-white dark:bg-slate-800/90 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col justify-between min-h-[140px]">
+          <div className="flex justify-between items-start">
+            <div className="space-y-0.5">
+              <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
+                Jumlah Work Order
+              </p>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                {totalWO}
+              </h3>
+            </div>
+            <div className="p-2 rounded-lg bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400">
+              <ClipboardList className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center">
+              <span className="text-3xl sm:text-4xl font-black text-sky-500/20 dark:text-sky-400/10">
+                {Math.round((woSelesai / (totalWO || 1)) * 100)}%
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-end items-end">
+            <div className="text-right">
+              <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
+                WO Selesai
+              </p>
+              <h3 className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">
+                {woSelesai}
+              </h3>
+            </div>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-sky-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        </div>
+
+        {/* Custom Redesigned KMS Card */}
+        <div className="relative overflow-hidden bg-white dark:bg-slate-800/90 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col justify-between min-h-[140px]">
+          <div className="flex justify-between items-start">
+            <div className="space-y-0.5">
+              <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
+                Target KMS
+              </p>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                {totalTargetKms.toFixed(2)}
+              </h3>
+            </div>
+            <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center">
+              <span className="text-3xl sm:text-4xl font-black text-emerald-500/20 dark:text-emerald-400/10">
+                {kmsPercentage}%
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-end items-end">
+            <div className="text-right">
+              <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
+                Realisasi KMS
+              </p>
+              <h3 className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">
+                {totalRealisasiKms.toFixed(2)}
+              </h3>
+            </div>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        </div>
+
+        {/* Custom Redesigned Tree Work Card (Tebang/Pangkas) */}
+        <div className="relative overflow-hidden bg-white dark:bg-slate-800/90 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col justify-between min-h-[140px]">
+          <div className="flex justify-between items-start">
+            <div className="space-y-0.5">
+              <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
+                Total Tebang
+              </p>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                {totalTebang}
+              </h3>
+            </div>
+            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+              <Zap className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center">
+              <span className="text-3xl sm:text-4xl font-black text-amber-500/20 dark:text-amber-400/10">
+                {totalRealisasiPohon}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-end items-end">
+            <div className="text-right">
+              <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
+                Total Pangkas
+              </p>
+              <h3 className="text-lg sm:text-xl font-black text-amber-600 dark:text-amber-400">
+                {totalPangkas}
+              </h3>
+            </div>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        </div>
+
         <StatCard
-          title="Jumlah Work Order"
-          value={totalWO}
-          subtitle="Total diterbitkan"
-          icon={ClipboardList}
-          iconBgColor="bg-sky-50 dark:bg-sky-900/30"
-          iconColor="text-sky-600 dark:text-sky-400"
-          trend={{ text: '+12% m/m', isUp: true }}
+          title="TOTAL PENYULANG TERLAYANI"
+          value={uniqueRealizedPenyulangs}
+          subtitle="Berdasarkan realisasi unik"
+          icon={Building2}
+          iconBgColor="bg-indigo-50 dark:bg-indigo-900/30"
+          iconColor="text-indigo-600 dark:text-indigo-400"
+          borderColor="border-indigo-200 dark:border-indigo-900/50"
         />
-        <StatCard
-          title="WO Selesai (Hijau)"
-          value={woSelesai}
-          subtitle="Realisasi 100%"
-          icon={CheckCircle2}
-          iconBgColor="bg-emerald-50 dark:bg-emerald-900/30"
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          borderColor="border-emerald-200 dark:border-emerald-900/50"
-          trend={{ text: `${Math.round((woSelesai / (totalWO || 1)) * 100)}%`, isUp: true }}
-        />
-        <StatCard
-          title="WO Progress (Kuning)"
-          value={woProgress}
-          subtitle="Sedang dikerjakan"
-          icon={Clock}
-          iconBgColor="bg-amber-50 dark:bg-amber-900/30"
-          iconColor="text-amber-600 dark:text-amber-400"
-          borderColor="border-amber-200 dark:border-amber-900/50"
-        />
-        <StatCard
-          title="WO Belum (Merah)"
-          value={woBelum}
-          subtitle="Menunggu antrean"
-          icon={AlertTriangle}
-          iconBgColor="bg-rose-50 dark:bg-rose-900/30"
-          iconColor="text-rose-600 dark:text-rose-400"
-          borderColor="border-rose-200 dark:border-rose-900/50"
-        />
+
         <StatCard
           title="Jumlah Petugas"
           value={totalPetugas}
