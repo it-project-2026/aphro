@@ -10,7 +10,7 @@ import { useUI } from '../context/UIContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { WorkOrder, Realisasi } from '../types';
 import { getLocalDateTimeString, formatDateDisplay } from '../utils/dateUtils';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import {
   MapPin,
@@ -71,7 +71,9 @@ export const MonitoringPage: React.FC = () => {
     isUserRole ? 'table' : 'table'
   );
 
-  const [filterUlp, setFilterUlp] = useState('ALL');
+  const [filterUlp, setFilterUlp] = useState(
+    currentUser?.role === 'Admin' ? settings.namaUnitLayanan : 'ALL'
+  );
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -202,15 +204,37 @@ export const MonitoringPage: React.FC = () => {
     // Sesuai Tanggal saat Login (Today)
     const today = getLocalDateTimeString().slice(0, 10);
     
-    // 1. Get active regu based on today's attendance
+    // For ADMIN, show latest from REALISASI for ALL regus
+    if (currentUser?.role === 'Admin') {
+      const reguNamesFromRealisasi = Array.from(new Set(realisasiList.map(r => r.reguName)));
+      return reguNamesFromRealisasi.map(name => {
+        const latestRel = realisasiList
+          .filter(r => r.reguName === name && r.latitude && r.longitude)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        
+        if (latestRel) {
+          return {
+            name,
+            lat: latestRel.latitude,
+            lon: latestRel.longitude,
+            lastUpdate: latestRel.createdAt,
+            type: 'Realisasi'
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    }
+
+    // For USER/OTHERS: Get active regu based on today's attendance
     let todayAbsensi = absensiList.filter(a => a.tanggal && formatDateDisplay(a.tanggal) === today);
     
-    // 2. Filter by Unit Layanan (Inisiasi)
-    if (filterUlp !== 'ALL') {
+    // Filter by Unit Layanan (Inisiasi)
+    const effectiveUlpFilter = filterUlp;
+
+    if (effectiveUlpFilter !== 'ALL') {
       todayAbsensi = todayAbsensi.filter(a => {
-        // Find ULP for this regu from master data
         const reguInfo = reguList.find(r => r.namaRegu === a.reguName);
-        return reguInfo?.ulpName === filterUlp;
+        return reguInfo?.ulpName === effectiveUlpFilter || a.ulpName === effectiveUlpFilter;
       });
     }
     
@@ -226,22 +250,39 @@ export const MonitoringPage: React.FC = () => {
       const latestRel = reguRealisasi[0];
       const reguAbsen = todayAbsensi.find(a => a.reguName === name);
 
-      // Priority: Latest Realisasi location > Absensi clock-in location
-      const lat = latestRel?.latitude || reguAbsen?.latitude;
-      const lon = latestRel?.longitude || reguAbsen?.longitude;
+      // Explicitly compare timestamps to find the absolute last known location
+      const absTime = reguAbsen ? new Date(reguAbsen.createdAt).getTime() : 0;
+      const relTime = latestRel ? new Date(latestRel.createdAt).getTime() : 0;
 
-      if (lat && lon) {
+      const isRelLatest = latestRel && relTime >= absTime;
+      const latestData = isRelLatest ? latestRel : reguAbsen;
+
+      if (latestData?.latitude && latestData?.longitude) {
         return {
           name,
-          lat,
-          lon,
-          lastUpdate: latestRel?.createdAt || reguAbsen?.createdAt || today,
-          type: latestRel ? 'Realisasi' : 'Absensi'
+          lat: latestData.latitude,
+          lon: latestData.longitude,
+          lastUpdate: latestData.createdAt,
+          type: isRelLatest ? 'Realisasi' : 'Absensi'
         };
       }
       return null;
     }).filter(Boolean);
-  }, [absensiList, realisasiList, filterUlp, reguList]);
+  }, [absensiList, realisasiList, filterUlp, reguList, currentUser, settings.namaUnitLayanan]);
+
+  // Helper component to handle map bounds/zoom
+  const MapBoundsHandler = ({ locations }: { locations: any[] }) => {
+    const map = useMap();
+    
+    useEffect(() => {
+      if (locations.length > 0) {
+        const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lon]));
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+      }
+    }, [locations, map]);
+    
+    return null;
+  };
 
   // Auto-refresh coordinates every 5 minutes when page is active
   useEffect(() => {
@@ -257,7 +298,7 @@ export const MonitoringPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-emerald-50/40 backdrop-blur-sm p-6 rounded-3xl border-2 border-emerald-100 shadow-sm">
         <div>
           <div className="flex items-center space-x-2 text-sky-600 dark:text-sky-400">
             <TableIcon className="w-6 h-6" />
@@ -360,7 +401,8 @@ export const MonitoringPage: React.FC = () => {
             <select
               value={filterUlp}
               onChange={(e) => setFilterUlp(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+              disabled={currentUser?.role === 'Admin'}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 disabled:opacity-60"
             >
               <option value="ALL">Semua ULP</option>
               {ulpList.map((u, idx) => (
@@ -525,6 +567,7 @@ export const MonitoringPage: React.FC = () => {
                 scrollWheelZoom={true}
                 style={{ height: '100%', width: '100%' }}
               >
+                <MapBoundsHandler locations={activeReguLocations} />
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

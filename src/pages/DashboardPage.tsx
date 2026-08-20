@@ -178,16 +178,16 @@ export const DashboardPage: React.FC = () => {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
         {/* Top Welcome Banner */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-900 via-sky-800 to-cyan-900 p-6 sm:p-8 text-white shadow-xl">
+        <div className="relative overflow-hidden rounded-3xl bg-emerald-50 border-2 border-emerald-100 p-6 sm:p-8 text-black shadow-xl">
           <div className="relative z-10 space-y-2 max-w-2xl">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold text-cyan-300">
-              <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-black/5 border border-black/10 text-xs font-black text-emerald-800">
+              <Zap className="w-3.5 h-3.5 text-red-600 fill-red-600" />
               <span>Dashboard Petugas ROW - {currentUser?.reguName || 'Tim Lapangan'}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight font-display">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight font-display text-black">
               Selamat Datang, {currentUser?.name || 'Petugas'}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-bold">
               Pantau progres pekerjaan harian dan pencapaian bulanan penugasan pemeliharaan ROW jaringan listrik Anda.
             </p>
           </div>
@@ -242,40 +242,40 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-900 via-sky-800 to-cyan-900 p-6 sm:p-8 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-3xl bg-emerald-50 border-2 border-emerald-100 p-6 sm:p-8 text-black shadow-xl">
         <div className="relative z-10 space-y-2 max-w-2xl">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold text-cyan-300">
-              <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-black/5 border border-black/10 text-xs font-black text-emerald-800">
+              <Zap className="w-3.5 h-3.5 text-red-600 fill-red-600" />
               <span>Operational Asset Protection Dashboard</span>
             </div>
 
-            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-400/40 text-xs font-bold text-emerald-200">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-xs font-black text-emerald-900">
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Spreadsheet DB: {isGasConnected ? 'Terhubung (Online)' : 'Aktif (Connected)'}</span>
             </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight font-display">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight font-display text-black uppercase">
             Monitoring Maintenance & Response ROW
           </h1>
-          <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-bold">
             Sistem terintegrasi untuk pemantauan Work Order, eksekusi tim lapangan, mitigasi hazard jaringan listrik, dan pelaporan realisasi foto terverifikasi.
           </p>
 
           <div className="pt-2 flex flex-wrap gap-3">
             <button
               onClick={() => setActiveTab('input_wo')}
-              className="inline-flex items-center space-x-2 px-4 py-2 bg-white text-sky-900 hover:bg-sky-50 font-extrabold text-xs rounded-xl shadow-md transition-all"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-black via-slate-900 to-red-600 text-white font-black text-xs rounded-xl shadow-lg transition-all active:scale-95"
             >
-              <PlusCircle className="w-4 h-4 text-sky-600" />
+              <PlusCircle className="w-4 h-4 text-white" />
               <span>Input Work Order Baru</span>
             </button>
             <button
               onClick={() => setActiveTab('monitoring')}
-              className="inline-flex items-center space-x-2 px-4 py-2 bg-sky-800/80 hover:bg-sky-700 text-white font-bold text-xs rounded-xl border border-sky-600/50 transition-all"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-black text-xs rounded-xl border border-emerald-300 transition-all active:scale-95 shadow-md"
             >
-              <FileCheck2 className="w-4 h-4 text-cyan-300" />
+              <FileCheck2 className="w-4 h-4 text-emerald-600" />
               <span>Lihat Peta Operations</span>
             </button>
           </div>
@@ -487,7 +487,7 @@ export const DashboardPage: React.FC = () => {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs sm:text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-emerald-50 dark:bg-slate-900/80 text-black dark:text-slate-400 font-black border-b border-emerald-100 dark:border-slate-700 uppercase tracking-tighter">
               <tr>
                 <th className="p-3.5 pl-5">Nomor WO</th>
                 <th className="p-3.5">Penyulang & ULP</th>
@@ -501,25 +501,25 @@ export const DashboardPage: React.FC = () => {
               {workOrders.slice(0, 5).map((wo, idx) => (
                 <tr
                   key={`${wo.id}-${idx}`}
-                  className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors"
+                  className="hover:bg-emerald-50/30 dark:hover:bg-slate-700/30 transition-colors"
                 >
-                  <td className="p-3.5 pl-5 font-bold text-sky-600 dark:text-sky-400">
+                  <td className="p-3.5 pl-5 font-black text-black dark:text-sky-400">
                     {wo.nomorWO}
                   </td>
                   <td className="p-3.5">
-                    <p className="font-semibold text-slate-900 dark:text-white">
+                    <p className="font-black text-black dark:text-white uppercase">
                       {wo.penyulangName}
                     </p>
-                    <p className="text-[11px] text-slate-400">{wo.ulpName}</p>
+                    <p className="text-[11px] text-slate-500 font-bold">{wo.ulpName}</p>
                   </td>
-                  <td className="p-3.5 max-w-xs truncate text-slate-600 dark:text-slate-300">
+                  <td className="p-3.5 max-w-xs truncate text-slate-900 dark:text-slate-300 font-medium">
                     {wo.lokasi}
                   </td>
                   <td className="p-3.5">
-                    <p className="font-medium text-slate-900 dark:text-white">
+                    <p className="font-black text-black dark:text-white">
                       {wo.petugasName}
                     </p>
-                    <p className="text-[11px] text-slate-400">{wo.reguName}</p>
+                    <p className="text-[11px] text-slate-500 font-bold">{wo.reguName}</p>
                   </td>
                   <td className="p-3.5">
                     <StatusBadge status={wo.status} size="sm" />
@@ -528,11 +528,11 @@ export const DashboardPage: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       <div className="w-20 bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
                         <div
-                          className="bg-sky-500 h-full rounded-full transition-all duration-300"
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
                           style={{ width: `${wo.progressPercent}%` }}
                         />
                       </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <span className="text-xs font-black text-black dark:text-slate-300">
                         {wo.progressPercent}%
                       </span>
                     </div>

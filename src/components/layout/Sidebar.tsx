@@ -187,14 +187,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
 
           {/* User Status Card Badge */}
           <div className="p-4">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-sky-50 to-cyan-50/50 dark:from-slate-800 dark:to-slate-800/60 border border-sky-100 dark:border-slate-700/60 shadow-2xs">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+            <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-slate-800/60 border border-emerald-100 dark:border-slate-700/60 shadow-2xs">
+              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
                 Akses Terotentikasi
               </p>
-              <p className="text-xs font-extrabold text-slate-900 dark:text-white mt-0.5 truncate">
+              <p className="text-xs font-black text-black dark:text-white mt-0.5 truncate">
                 {currentUser?.name}
               </p>
-              <span className="inline-block mt-1.5 px-2 py-0.5 text-[10px] font-bold rounded-full bg-sky-600 text-white shadow-xs">
+              <span className="inline-block mt-1.5 px-2 py-0.5 text-[10px] font-black rounded-full bg-black text-white shadow-xs">
                 {role === 'User' ? 'Petugas ROW' : role}
               </span>
             </div>
@@ -217,15 +217,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                     setActiveTab(item.id);
                     onCloseMobile();
                   }}
-                  className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 group ${
+                  className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 group ${
                     isActive
-                      ? 'bg-gradient-to-r from-sky-700 via-sky-600 to-cyan-600 text-white font-black shadow-md shadow-sky-700/30 ring-1 ring-sky-400/30'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-sky-50/80 dark:hover:bg-slate-800/80 hover:text-sky-900 dark:hover:text-sky-300'
+                      ? 'bg-gradient-to-r from-black via-slate-900 to-red-600 text-white font-black shadow-md shadow-black/30 ring-1 ring-slate-400/30'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-emerald-50/80 dark:hover:bg-slate-800/80 hover:text-black dark:hover:text-emerald-300'
                   }`}
                 >
                   <Icon
                     className={`w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110 ${
-                      isActive ? 'text-white' : 'text-slate-400 dark:text-slate-400 group-hover:text-sky-500'
+                      isActive ? 'text-white' : 'text-slate-400 dark:text-slate-400 group-hover:text-red-500'
                     }`}
                   />
                   <span className="truncate">{item.label}</span>
@@ -256,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                 type="button"
                 onClick={handleSidebarSync}
                 disabled={isSyncing}
-                className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold flex items-center justify-center space-x-1.5 transition-colors disabled:opacity-50"
+                className="w-full py-1.5 px-2 bg-gradient-to-r from-black via-slate-900 to-red-600 hover:from-slate-900 hover:to-red-700 text-white rounded-xl text-[11px] font-black flex items-center justify-center space-x-1.5 transition-all shadow-md disabled:opacity-50"
               >
                 <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
                 <span>{isSyncing ? 'Sinkronisasi...' : 'Sync Data'}</span>

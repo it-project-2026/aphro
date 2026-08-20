@@ -183,11 +183,18 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   }, [userMatchedWorkOrders, todayIso]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-sans">
-      {/* Background ambient lighting */}
-      <div className={`absolute inset-0 bg-gradient-to-tr ${gradientBg} opacity-80 pointer-events-none`} />
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-sans">
+      {/* Global Background Image Layer */}
+      <div 
+        className="fixed inset-0 z-[-1] bg-cover bg-center bg-no-repeat opacity-40 dark:opacity-20 transition-opacity duration-700"
+        style={{ 
+          backgroundImage: `url('https://lh3.googleusercontent.com/d/1GdbvOn9MIRGeyhdzjpdIeM68Ka0giF_K')`,
+          backgroundAttachment: 'fixed'
+        }}
+      />
+      
+      {/* Background ambient lighting overlay */}
+      <div className={`absolute inset-0 bg-gradient-to-tr ${gradientBg} opacity-60 pointer-events-none`} />
 
       <div className="relative z-10 max-w-4xl w-full mx-auto space-y-6">
         {/* Top Header Branding */}

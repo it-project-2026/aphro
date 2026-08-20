@@ -81,7 +81,7 @@ export const MobileBottomNav: React.FC = () => {
       ];
 
   return (
-    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-lg pb-safe">
+    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t-2 border-emerald-100 dark:border-slate-800 shadow-lg pb-safe">
       <div className="flex items-center justify-around h-16 px-2 max-w-md mx-auto relative">
         {mobileTabs.map((tab) => {
           const Icon = tab.icon;
@@ -97,15 +97,15 @@ export const MobileBottomNav: React.FC = () => {
                 <div
                   className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 ${
                     isActive
-                      ? 'bg-gradient-to-tr from-sky-600 via-cyan-500 to-emerald-500 text-white ring-4 ring-sky-100 dark:ring-sky-950 scale-105'
-                      : 'bg-gradient-to-tr from-sky-500 to-cyan-500 text-white shadow-sky-500/30'
+                      ? 'bg-gradient-to-tr from-black via-slate-900 to-red-600 text-white ring-4 ring-emerald-100 dark:ring-sky-950 scale-105'
+                      : 'bg-gradient-to-tr from-slate-800 to-black text-white shadow-black/30'
                   }`}
                 >
                   <Camera className="w-7 h-7" />
                 </div>
                 <span
-                  className={`text-[10px] font-extrabold mt-0.5 ${
-                    isActive ? 'text-sky-600 dark:text-sky-400' : 'text-slate-500 dark:text-slate-400'
+                  className={`text-[10px] font-black mt-1 uppercase tracking-tighter ${
+                    isActive ? 'text-red-600 dark:text-sky-400' : 'text-slate-500 dark:text-slate-400'
                   }`}
                 >
                   {tab.label}
@@ -120,8 +120,8 @@ export const MobileBottomNav: React.FC = () => {
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 flex flex-col items-center justify-center h-full transition-colors active:scale-95 ${
                 isActive
-                  ? 'text-sky-600 dark:text-sky-400 font-black'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium'
+                  ? 'text-red-600 dark:text-sky-400 font-black'
+                  : 'text-slate-400 dark:text-slate-400 hover:text-black dark:hover:text-slate-200 font-bold'
               }`}
             >
               <div className="relative">
@@ -132,7 +132,7 @@ export const MobileBottomNav: React.FC = () => {
                   </span>
                 )}
               </div>
-              <span className="text-[10px] mt-1 font-display truncate max-w-[64px]">
+              <span className="text-[10px] mt-1 font-black uppercase tracking-tighter truncate max-w-[64px]">
                 {tab.label}
               </span>
             </button>

@@ -289,36 +289,46 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300 py-4">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xl space-y-6">
+    <div className="min-h-screen relative py-4 sm:py-6 lg:py-8 px-4 font-sans overflow-hidden">
+      {/* Global Background Image Layer */}
+      <div 
+        className="fixed inset-0 z-[-1] bg-cover bg-center bg-no-repeat opacity-40 dark:opacity-20 transition-opacity duration-700"
+        style={{ 
+          backgroundImage: `url('https://lh3.googleusercontent.com/d/1GdbvOn9MIRGeyhdzjpdIeM68Ka0giF_K')`,
+          backgroundAttachment: 'fixed'
+        }}
+      />
+      
+      <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
+      <div className="bg-emerald-50 dark:bg-slate-900 rounded-3xl border-2 border-emerald-100 p-6 sm:p-8 shadow-xl space-y-6">
         {/* Header */}
-        <div className="border-b border-slate-100 dark:border-slate-800 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="border-b border-emerald-200 dark:border-slate-800 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-3 text-cyan-600 dark:text-cyan-400">
-              <UserCheck className="w-7 h-7" />
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-display">
+            <div className="flex items-center space-x-3 text-black dark:text-cyan-400">
+              <UserCheck className="w-7 h-7 text-red-600" />
+              <h1 className="text-xl sm:text-2xl font-black text-black dark:text-white font-display uppercase tracking-tighter">
                 {!hasDoneAbsensiMasuk ? 'Form Absensi Masuk Regu Kerja' : 'Form Absensi Keluar (Jam Pulang)'}
               </h1>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-400 mt-1 font-bold">
               {!hasDoneAbsensiMasuk
                 ? 'Regu belum melakukan Absensi Masuk hari ini. Mohon lengkapi daftar hadir dan unggah Foto Masuk.'
                 : 'Absensi Masuk untuk hari ini sudah selesai. Gunakan form ini untuk mencatat Foto Keluar (Jam Pulang).'}
             </p>
           </div>
           <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2 bg-cyan-50 dark:bg-cyan-950/50 px-3.5 py-2 rounded-2xl border border-cyan-200 dark:border-cyan-800 text-xs font-bold text-cyan-700 dark:text-cyan-300">
-              <Calendar className="w-4 h-4" />
+            <div className="flex items-center space-x-2 bg-white dark:bg-cyan-950/50 px-3.5 py-2 rounded-2xl border border-emerald-200 dark:border-cyan-800 text-xs font-black text-black dark:text-cyan-300 shadow-sm uppercase tracking-tighter">
+              <Calendar className="w-4 h-4 text-red-500" />
               <span>Tanggal: {todayStr}</span>
             </div>
             <button
               onClick={() => logout()}
               type="button"
-              className="p-2 sm:px-3.5 sm:py-2 flex items-center space-x-2 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl border border-rose-200 dark:border-rose-500/30 transition-all"
+              className="p-2 sm:px-3.5 sm:py-2 flex items-center space-x-2 bg-white dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl border border-rose-200 dark:border-rose-500/30 transition-all shadow-sm"
               title="Kembali ke Menu Login"
             >
               <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline text-xs font-bold">Logout</span>
+              <span className="hidden sm:inline text-xs font-black">LOGOUT</span>
             </button>
           </div>
         </div>
@@ -610,11 +620,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           </div>
 
           {/* Submit Action Button */}
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
+          <div className="pt-6 border-t border-emerald-200 dark:border-slate-800 flex items-center justify-end">
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white font-extrabold text-sm shadow-xl shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center space-x-3 disabled:opacity-50 cursor-pointer"
+              className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-gradient-to-r from-black via-slate-900 to-red-600 text-white font-black text-sm shadow-xl shadow-black/25 hover:shadow-black/40 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center space-x-3 disabled:opacity-50 cursor-pointer uppercase tracking-widest"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>
@@ -809,5 +819,6 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         </div>
       )}
     </div>
-  );
+  </div>
+);
 };

@@ -90,9 +90,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
             {/* Dynamic Unit Name Header Tag */}
-            <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-full min-w-0">
+            <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full min-w-0">
               <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span className="text-[11px] sm:text-xs font-bold text-sky-900 dark:text-sky-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs">
+              <span className="text-[11px] sm:text-xs font-black text-black dark:text-emerald-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs uppercase">
                 {settings.namaUnitLayanan}
               </span>
             </div>
@@ -240,7 +240,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                     type="button"
                     onClick={handleManualSync}
                     disabled={isSyncing}
-                    className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold flex items-center justify-center space-x-2 transition-colors shadow-xs disabled:opacity-50"
+                    className="flex-1 py-2 px-3 bg-gradient-to-r from-black via-slate-900 to-red-600 hover:from-slate-900 hover:to-red-700 text-white rounded-xl text-xs font-black flex items-center justify-center space-x-2 transition-all shadow-md disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                     <span>{isSyncing ? 'Menyinkronkan...' : pendingCount > 0 ? `Sync ${pendingCount} Data Offline` : 'Sync / Refresh Data'}</span>

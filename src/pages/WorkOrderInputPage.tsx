@@ -262,16 +262,16 @@ export const WorkOrderInputPage: React.FC = () => {
       </div>
 
       {/* Main Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 shadow-sm space-y-6">
-        <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
-          <div className="flex items-center space-x-3 text-sky-600 dark:text-sky-400">
-            <FilePlus className="w-6 h-6" />
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white font-display">
+      <div className="bg-emerald-50 dark:bg-slate-800 rounded-3xl border-2 border-emerald-100 p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="border-b border-emerald-200 dark:border-slate-700 pb-4">
+          <div className="flex items-center space-x-3 text-black dark:text-sky-400">
+            <FilePlus className="w-6 h-6 text-red-600" />
+            <h1 className="text-xl sm:text-2xl font-black text-black dark:text-white font-display uppercase tracking-tighter">
               Form Input Work Order Baru
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Inputkan data pekerjaan ROW sesuai dengan format sheet <code className="bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-sky-600 dark:text-sky-400 font-bold">WORK_ORDER</code>.
+          <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-400 mt-1 font-bold">
+            Inputkan data pekerjaan ROW sesuai dengan format sheet <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-black dark:text-sky-400 font-black border border-emerald-100">WORK_ORDER</code>.
           </p>
         </div>
 
@@ -279,8 +279,8 @@ export const WorkOrderInputPage: React.FC = () => {
           {/* Row 1: PEKERJAAN & Tanggal */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                PEKERJAAN <span className="text-rose-500">*</span>
+              <label className="block text-xs font-black text-black dark:text-slate-300 mb-1 uppercase">
+                PEKERJAAN <span className="text-red-600">*</span>
               </label>
               <select
                 value={pekerjaan || 'NORMAL'}
@@ -288,7 +288,7 @@ export const WorkOrderInputPage: React.FC = () => {
                   const newPekerjaan = e.target.value as 'NORMAL' | 'GOROW';
                   setPekerjaan(newPekerjaan);
                 }}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3.5 py-3 text-xs sm:text-sm font-black rounded-xl border border-emerald-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-black dark:text-white focus:outline-none focus:border-black"
               >
                 <option value="NORMAL">NORMAL</option>
                 <option value="GOROW">GOROW</option>
@@ -296,15 +296,15 @@ export const WorkOrderInputPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Tanggal <span className="text-rose-500">*</span>
+              <label className="block text-xs font-black text-black dark:text-slate-300 mb-1 uppercase">
+                Tanggal <span className="text-red-600">*</span>
               </label>
               <input
                 type="date"
                 required
                 value={tanggal || ''}
                 onChange={(e) => handleTanggalChange(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-emerald-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-black dark:text-white font-black focus:outline-none focus:border-black"
               />
             </div>
           </div>
@@ -500,7 +500,7 @@ export const WorkOrderInputPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSaving || Boolean(existingDuplicateWO)}
-              className="inline-flex items-center space-x-2 px-6 py-2.5 text-xs sm:text-sm font-extrabold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-sky-600/25 transition-all"
+              className="inline-flex items-center space-x-2 px-8 py-3.5 text-xs sm:text-sm font-black text-white bg-gradient-to-r from-black via-slate-900 to-red-600 hover:from-slate-900 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xl shadow-black/25 transition-all active:scale-95"
             >
               <Save className="w-4 h-4" />
               <span>{isSaving ? 'Menyimpan...' : 'Simpan & Terbitkan WO'}</span>

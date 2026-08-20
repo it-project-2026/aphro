@@ -511,29 +511,29 @@ export const InputRealisasiPage: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 shadow-sm space-y-6">
-        <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
-          <div className="flex items-center space-x-3 text-sky-600 dark:text-sky-400">
-            <Camera className="w-6 h-6" />
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white font-display">
+      <div className="bg-emerald-50 dark:bg-slate-800 rounded-3xl border-2 border-emerald-100 p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="border-b border-emerald-200/60 dark:border-slate-700 pb-4">
+          <div className="flex items-center space-x-3 text-black dark:text-sky-400">
+            <Camera className="w-6 h-6 text-red-600" />
+            <h1 className="text-xl sm:text-2xl font-black text-black dark:text-white font-display uppercase tracking-tighter">
               Input Realisasi & Watermark Foto Lapangan
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-400 mt-1 font-bold">
             Laporkan progress realisasi, lampirkan foto sebelum & sesudah secara otomatis terstempel timestamp, GPS, dan nama petugas.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* WO Selection Card */}
-          <div className="p-4 rounded-2xl bg-sky-50/60 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-800/80 space-y-3">
-            <label className="block text-xs font-bold text-sky-900 dark:text-sky-300 uppercase tracking-wider">
+          <div className="p-4 rounded-2xl bg-white dark:bg-sky-950/30 border border-emerald-200 dark:border-sky-800/80 space-y-3 shadow-sm">
+            <label className="block text-xs font-black text-black dark:text-sky-300 uppercase tracking-widest">
               Pilih Work Order Yang Dikerjakan
             </label>
             <select
               value={selectedWoId || ''}
               onChange={(e) => handleWoChange(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-sky-200 dark:border-sky-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-sky-500 shadow-2xs"
+              className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-emerald-200 dark:border-sky-700 bg-emerald-50/30 dark:bg-slate-900 text-black dark:text-white font-black focus:outline-none focus:border-black shadow-2xs"
             >
               {availableWorkOrders.map((wo, wIdx) => (
                 <option key={`${wo.id}-${wIdx}`} value={wo.id}>
@@ -543,29 +543,50 @@ export const InputRealisasiPage: React.FC = () => {
             </select>
 
             {selectedWO && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs text-slate-600 dark:text-slate-300 border-t border-sky-200/60 dark:border-sky-800/60">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 text-xs text-slate-700 dark:text-slate-300 border-t border-emerald-100 dark:border-sky-800/60">
                 <div>
-                  <span className="text-[10px] text-slate-400 block">Pekerjaan:</span>
-                  <span className="font-bold">{selectedWO.jenisPekerjaan}</span>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Pekerjaan:</span>
+                  <span className="font-black text-black">{selectedWO.jenisPekerjaan}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block">Lokasi:</span>
-                  <span className="font-bold truncate block">{selectedWO.lokasi}</span>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Lokasi:</span>
+                  <span className="font-black text-black truncate block">{selectedWO.lokasi}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block">Regu Assigned:</span>
-                  <span className="font-bold">{selectedWO.reguName}</span>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Regu Assigned:</span>
+                  <span className="font-black text-black">{selectedWO.reguName}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 block">Progress Sekarang:</span>
-                  <span className="font-bold text-sky-600">{selectedWO.progressPercent}%</span>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Progress Sekarang:</span>
+                  <span className="font-black text-red-600">{selectedWO.progressPercent}%</span>
                 </div>
               </div>
             )}
           </div>
 
           {/* Main Attributes Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {currentUser?.role === 'User' && selectedWO?.status === 'Selesai' ? (
+            <div className="p-10 text-center space-y-4 bg-rose-50 dark:bg-rose-950/20 border-2 border-dashed border-rose-200 dark:border-rose-900/40 rounded-3xl animate-in fade-in zoom-in duration-300">
+              <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto shadow-sm">
+                <X className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-rose-900 dark:text-rose-200 uppercase">Input Terkunci</h3>
+                <p className="text-sm text-rose-700/70 dark:text-rose-400/70 max-w-xs mx-auto">
+                  Work Order ini sudah berstatus <b>SELESAI</b>. User tidak diperbolehkan menambah realisasi baru pada pekerjaan yang sudah tuntas.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('dashboard')}
+                className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-rose-600/20"
+              >
+                Kembali ke Dashboard
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 TANGGAL
@@ -918,16 +939,18 @@ export const InputRealisasiPage: React.FC = () => {
           </div>
 
           {/* Submit Action */}
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-end space-x-3">
+          <div className="pt-6 border-t border-emerald-200 dark:border-slate-700 flex justify-end">
             <button
               type="submit"
               disabled={isProcessing}
-              className="inline-flex items-center space-x-2 px-8 py-3 text-sm font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-lg shadow-emerald-600/25 transition-all"
+              className="w-full sm:w-auto inline-flex items-center space-x-3 px-10 py-4 text-sm font-black text-white bg-gradient-to-r from-black via-slate-900 to-red-600 hover:from-slate-900 hover:to-red-700 rounded-2xl shadow-xl shadow-black/25 transition-all active:scale-95 disabled:opacity-50"
             >
               <Save className="w-5 h-5" />
               <span>Simpan Realisasi Pekerjaan</span>
             </button>
           </div>
+            </>
+          )}
         </form>
       </div>
 
