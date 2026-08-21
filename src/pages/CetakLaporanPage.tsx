@@ -556,7 +556,7 @@ export const CetakLaporanPage: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-2">
-              <FileText className="w-6 h-6 text-teal-600" />
+              <FileText className="w-6 h-6 text-[#00A2B9]" />
               <span>Cetak & Export Laporan Operations</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -591,7 +591,7 @@ export const CetakLaporanPage: React.FC = () => {
             <button
               onClick={handleExportExcel}
               disabled={isGeneratingExcel}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
               title="Download File Spreadsheet Excel (.xlsx)"
             >
               <FileSpreadsheet className={`w-4 h-4 ${isGeneratingExcel ? 'animate-spin' : ''}`} />
@@ -600,7 +600,7 @@ export const CetakLaporanPage: React.FC = () => {
 
             <button
               onClick={handlePrint}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#00A2B9] hover:bg-[#008396] text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
               title="Cetak/Print Dokumen"
             >
               <Printer className="w-4 h-4" />
@@ -616,7 +616,7 @@ export const CetakLaporanPage: React.FC = () => {
               onClick={() => setActiveReportTab('foto')}
               className={`flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeReportTab === 'foto'
-                  ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-xs'
+                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
@@ -628,7 +628,7 @@ export const CetakLaporanPage: React.FC = () => {
               onClick={() => setActiveReportTab('peta')}
               className={`flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeReportTab === 'peta'
-                  ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-xs'
+                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
@@ -705,33 +705,33 @@ export const CetakLaporanPage: React.FC = () => {
               <table className="w-full text-center text-[11px] border-collapse min-w-[1100px]">
                 <thead>
                   {/* Banner Title 1 */}
-                  <tr className="bg-teal-600 text-white font-extrabold text-xs uppercase tracking-wider">
-                    <th colSpan={14} className="p-2 border-b border-teal-700 bg-teal-600 text-center">
+                  <tr className="bg-[#00A2B9] text-white font-extrabold text-xs uppercase tracking-wider">
+                    <th colSpan={14} className="p-2 border-b border-[#008396] bg-[#00A2B9] text-center">
                       REKAP HASIL ROW
                     </th>
                   </tr>
                   {/* Banner Title 2 */}
-                  <tr className="bg-teal-800 text-white font-bold text-[11px] uppercase tracking-wider">
-                    <th colSpan={14} className="p-1.5 border-b border-teal-900 bg-teal-800 text-center">
+                  <tr className="bg-[#008396] text-white font-bold text-[11px] uppercase tracking-wider">
+                    <th colSpan={14} className="p-1.5 border-b border-[#008396] bg-[#008396] text-center">
                       PLN ELECTRICITY SERVICES
                     </th>
                   </tr>
                   {/* Columns */}
-                  <tr className="bg-teal-900 text-white font-bold text-[10px] uppercase">
-                    <th className="p-2 border border-teal-950 min-w-[120px]">NO WO</th>
-                    <th className="p-2 border border-teal-950">AREA</th>
-                    <th className="p-2 border border-teal-950">ULP</th>
-                    <th className="p-2 border border-teal-950 min-w-[120px]">NAMA TIM</th>
-                    <th className="p-2 border border-teal-950">FEEDER</th>
-                    <th className="p-2 border border-teal-950">NO TIANG</th>
-                    <th className="p-2 border border-teal-950">TANGGAL EKSEKUSI</th>
-                    <th className="p-2 border border-teal-950 min-w-[110px]">FOTO SEBELUM</th>
-                    <th className="p-2 border border-teal-950 min-w-[110px]">FOTO SESUDAH</th>
-                    <th className="p-2 border border-teal-950 min-w-[130px]">JENIS TANAMAN</th>
-                    <th className="p-2 border border-teal-950">KETERANGAN</th>
-                    <th className="p-2 border border-teal-950 min-w-[110px]">PERTUMBUHAN TANAMAN</th>
-                    <th className="p-2 border border-teal-950">KENDALA</th>
-                    <th className="p-2 border border-teal-950 min-w-[130px]">LOKASI</th>
+                  <tr className="bg-[#008396] text-white font-bold text-[10px] uppercase">
+                    <th className="p-2 border border-[#008396] min-w-[120px]">NO WO</th>
+                    <th className="p-2 border border-[#008396]">AREA</th>
+                    <th className="p-2 border border-[#008396]">ULP</th>
+                    <th className="p-2 border border-[#008396] min-w-[120px]">NAMA TIM</th>
+                    <th className="p-2 border border-[#008396]">FEEDER</th>
+                    <th className="p-2 border border-[#008396]">NO TIANG</th>
+                    <th className="p-2 border border-[#008396]">TANGGAL EKSEKUSI</th>
+                    <th className="p-2 border border-[#008396] min-w-[110px]">FOTO SEBELUM</th>
+                    <th className="p-2 border border-[#008396] min-w-[110px]">FOTO SESUDAH</th>
+                    <th className="p-2 border border-[#008396] min-w-[130px]">JENIS TANAMAN</th>
+                    <th className="p-2 border border-[#008396]">KETERANGAN</th>
+                    <th className="p-2 border border-[#008396] min-w-[110px]">PERTUMBUHAN TANAMAN</th>
+                    <th className="p-2 border border-[#008396]">KENDALA</th>
+                    <th className="p-2 border border-[#008396] min-w-[130px]">LOKASI</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">

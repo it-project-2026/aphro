@@ -88,7 +88,7 @@ export const WorkOrderPage: React.FC = () => {
               onClick={() => exportWorkOrdersToExcel(filteredWOs, settings.namaUnitLayanan)}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600 transition-all active:scale-95"
             >
-              <Download className="w-4 h-4 text-emerald-600" />
+              <Download className="w-4 h-4 text-[#00A2B9]" />
               <span>Export Excel</span>
             </button>
           )}
@@ -96,7 +96,7 @@ export const WorkOrderPage: React.FC = () => {
           {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
             <button
               onClick={() => setActiveTab('input_wo')}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#00A2B9] hover:bg-[#008396] text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
             >
               <PlusCircle className="w-4 h-4 text-white" />
               <span>Tambah Work Order</span>

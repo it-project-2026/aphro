@@ -171,7 +171,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans relative overflow-x-hidden flex flex-col justify-between selection:bg-teal-500 selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans relative overflow-x-hidden flex flex-col justify-between selection:bg-[#00A2B9] selection:text-white">
       {/* Background Ambience */}
       <div className="absolute inset-0 bg-gradient-to-tr from-teal-950/30 via-slate-950 to-teal-950/30 pointer-events-none" />
       <div className="absolute -top-32 -left-32 w-96 h-96 bg-teal-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -185,7 +185,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
           {/* Header Section */}
           <div className="text-center space-y-3 sm:space-y-4">
             <div className="relative inline-flex items-center justify-center mx-auto">
-              <div className="absolute -inset-1 bg-gradient-to-r from-teal-500 to-teal-500 rounded-3xl blur-md opacity-30 animate-pulse" />
+              <div className="absolute -inset-1 bg-gradient-to-r from-[#00A2B9] to-[#008396] rounded-3xl blur-md opacity-30 animate-pulse" />
               <div className="relative p-3 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl">
                 <img
                   src={APP_LOGO_URL}
@@ -203,7 +203,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-black uppercase tracking-widest">
+              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#00A2B9]/10 border border-[#00A2B9]/20 text-[#00A2B9] text-xs font-black uppercase tracking-widest">
                 <Building2 className="w-3.5 h-3.5" />
                 <span>Inisiasi Sistem APHRO</span>
               </div>
@@ -220,10 +220,10 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   href={DEFAULT_INISIASI_SPREADSHEET_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-teal-500/50 text-[11px] text-slate-400 hover:text-teal-300 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-[#00A2B9]/50 text-[11px] text-slate-400 hover:text-[#00A2B9] transition-colors"
                   title="Buka Master Google Spreadsheet Inisiasi"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-[#00A2B9]" />
                   <span className="font-mono">Master Sheet: inisiasi</span>
                   <ExternalLink className="w-3 h-3 ml-0.5 opacity-60" />
                 </a>
@@ -239,7 +239,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   htmlFor="ul-scrolldown-select"
                   className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center space-x-2"
                 >
-                  <Building2 className="w-4 h-4 text-teal-400" />
+                  <Building2 className="w-4 h-4 text-[#00A2B9]" />
                   <span>Daftar Unit Layanan (UL)</span>
                 </label>
 
@@ -247,7 +247,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   type="button"
                   onClick={loadInisiasiData}
                   disabled={isLoading}
-                  className="text-[11px] font-bold text-teal-400 hover:text-teal-300 flex items-center space-x-1 transition-colors cursor-pointer disabled:opacity-50"
+                  className="text-[11px] font-bold text-[#00A2B9] hover:text-[#008396] flex items-center space-x-1 transition-colors cursor-pointer disabled:opacity-50"
                   title="Muat ulang data dari Master Spreadsheet"
                 >
                   <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
@@ -390,7 +390,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                 type="button"
                 onClick={handleApplyConnection}
                 disabled={isApplying || isLoading || !selectedUnit}
-                className="w-full py-4 rounded-2xl font-black text-sm sm:text-base text-white bg-gradient-to-r from-teal-600 via-teal-500 to-teal-500 hover:from-teal-500 hover:to-teal-400 shadow-xl shadow-teal-600/30 flex items-center justify-center space-x-3 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                className="w-full py-4 rounded-2xl font-black text-sm sm:text-base text-white bg-gradient-to-r from-[#00A2B9] via-[#008396] to-[#00A2B9] shadow-xl shadow-teal-600/30 flex items-center justify-center space-x-3 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
               >
                 <Sparkles className="w-5 h-5 text-amber-300" />
                 <span className="uppercase tracking-wider">

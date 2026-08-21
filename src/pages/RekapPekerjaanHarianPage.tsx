@@ -404,7 +404,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
           
           {/* Title and Identification */}
           <div className="space-y-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800/80 text-teal-600 dark:text-teal-400 text-xs font-black uppercase tracking-wider">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#00A2B9]/10 dark:bg-teal-950/60 border border-[#00A2B9]/20 dark:border-teal-800/80 text-[#00A2B9] dark:text-teal-400 text-xs font-black uppercase tracking-wider">
               <CalendarRange className="w-3.5 h-3.5" />
               <span>Matriks Rekap Pekerjaan Harian</span>
             </div>
@@ -412,7 +412,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
               LAPORAN HARIAN TIM ROW {unitDisplayName.replace(/^UL\s+/i, '')}
             </h1>
-            <p className="text-sm font-bold text-teal-600 dark:text-teal-400 tracking-wide uppercase flex items-center gap-2">
+            <p className="text-sm font-bold text-[#00A2B9] dark:text-teal-400 tracking-wide uppercase flex items-center gap-2">
               <Calendar className="w-4 h-4" />
               <span>PER TANGGAL {monthName} {selectedYear}</span>
             </p>
@@ -422,7 +422,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3">
             {/* UL Selection Dropdown */}
             <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 shadow-sm">
-              <Building2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <Building2 className="w-4 h-4 text-[#00A2B9] dark:text-teal-400" />
               <select
                 value={activeUL}
                 onChange={(e) => {
@@ -502,7 +502,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               type="button"
               onClick={handleSyncData}
               disabled={isLoading || isGASSyncing}
-              className="px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-black flex items-center space-x-2 shadow-lg shadow-teal-600/20 transition-all cursor-pointer disabled:opacity-50"
+              className="px-4 py-2.5 rounded-2xl bg-[#00A2B9] hover:bg-[#008396] text-white text-xs font-black flex items-center space-x-2 shadow-lg shadow-teal-600/20 transition-all cursor-pointer disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading || isGASSyncing ? 'animate-spin' : ''}`} />
               <span>{isGASSyncing ? 'SINKRONISASI GAS...' : 'SINKRONISASI DATA'}</span>
@@ -513,7 +513,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               type="button"
               onClick={handleExportExcel}
               disabled={isExporting}
-              className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black flex items-center space-x-2 shadow-lg shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              className="px-4 py-2.5 rounded-2xl bg-[#008396] hover:bg-[#00A2B9] text-white text-xs sm:text-sm font-black flex items-center space-x-2 shadow-lg shadow-teal-600/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>{isExporting ? 'Mengekspor...' : 'Export Excel (.xlsx)'}</span>
@@ -568,7 +568,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               type="button"
               onClick={handleSyncMasterSpreadsheet}
               disabled={isSyncingMaster}
-              className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-800 text-[#00A2B9] dark:text-teal-300 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer disabled:opacity-50"
               title="Sinkronkan susunan ULP & Tim ROW (Regu) langsung dari Google Spreadsheet"
             >
               <Database className={`w-3.5 h-3.5 ${isSyncingMaster ? 'animate-spin' : ''}`} />
@@ -578,7 +578,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSyncData}
-              className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900 border border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900 border border-teal-200 dark:border-teal-800 text-[#00A2B9] dark:text-teal-400 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
               title="Sinkronkan dengan data Realisasi Lapangan"
             >
               <RefreshCw className="w-3.5 h-3.5" />

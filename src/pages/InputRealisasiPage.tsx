@@ -399,7 +399,7 @@ export const InputRealisasiPage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto py-12 animate-in slide-in-from-bottom-10 duration-300">
         <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 shadow-xl space-y-6">
-          <div className="flex items-center space-x-3 text-teal-600 dark:text-teal-400 border-b border-slate-100 dark:border-slate-700 pb-4">
+            <div className="flex items-center space-x-3 text-[#00A2B9] dark:text-teal-400 border-b border-slate-100 dark:border-slate-700 pb-4">
             <FileCheck2 className="w-7 h-7" />
             <h2 className="text-xl font-black text-slate-900 dark:text-white font-display">Penyelesaian Pekerjaan (Final)</h2>
           </div>
@@ -420,7 +420,7 @@ export const InputRealisasiPage: React.FC = () => {
                   placeholder="Titik mulai..."
                   value={lokasiStart}
                   onChange={(e) => setLokasiStart(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500 outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9] outline-none transition-all"
                 />
               </div>
               <div className="space-y-1.5">
@@ -432,7 +432,7 @@ export const InputRealisasiPage: React.FC = () => {
                   placeholder="Titik selesai..."
                   value={lokasiFinish}
                   onChange={(e) => setLokasiFinish(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500 outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9] outline-none transition-all"
                 />
               </div>
             </div>
@@ -461,7 +461,7 @@ export const InputRealisasiPage: React.FC = () => {
                   onClick={() => setFinalSatuan('KMS')}
                   className={`py-4 rounded-2xl font-black text-sm border-2 transition-all ${
                     finalSatuan === 'KMS'
-                      ? 'bg-teal-50 border-teal-500 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400'
+                      ? 'bg-teal-50 border-[#00A2B9] text-[#008396] dark:bg-teal-900/20 dark:text-teal-400'
                       : 'bg-white border-slate-100 text-slate-400 dark:bg-slate-900 dark:border-slate-800'
                   }`}
                 >
@@ -472,7 +472,7 @@ export const InputRealisasiPage: React.FC = () => {
                   onClick={() => setFinalSatuan('GAWANG')}
                   className={`py-4 rounded-2xl font-black text-sm border-2 transition-all ${
                     finalSatuan === 'GAWANG'
-                      ? 'bg-teal-50 border-teal-500 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400'
+                      ? 'bg-teal-50 border-[#00A2B9] text-[#008396] dark:bg-teal-900/20 dark:text-teal-400'
                       : 'bg-white border-slate-100 text-slate-400 dark:bg-slate-900 dark:border-slate-800'
                   }`}
                 >
@@ -494,7 +494,7 @@ export const InputRealisasiPage: React.FC = () => {
               type="button"
               onClick={handleFinalizeWorkOrder}
               disabled={isProcessing || totalVolume <= 0}
-              className="flex-[2] py-4 px-6 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all shadow-lg shadow-teal-600/25 flex items-center justify-center space-x-2"
+              className="flex-[2] py-4 px-6 bg-[#00A2B9] hover:bg-[#008396] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all shadow-lg shadow-teal-600/25 flex items-center justify-center space-x-2"
             >
               {isProcessing ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -514,7 +514,7 @@ export const InputRealisasiPage: React.FC = () => {
       <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 shadow-sm space-y-6">
         <div className="border-b border-slate-100 dark:border-slate-700 pb-4">
           <div className="flex items-center space-x-3 text-slate-900 dark:text-white">
-            <Camera className="w-6 h-6 text-teal-600" />
+            <Camera className="w-6 h-6 text-[#00A2B9]" />
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-display uppercase tracking-tight">
               Input Realisasi & Watermark Foto Lapangan
             </h1>
@@ -533,7 +533,7 @@ export const InputRealisasiPage: React.FC = () => {
             <select
               value={selectedWoId || ''}
               onChange={(e) => handleWoChange(e.target.value)}
-              className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-teal-500"
+              className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-[#00A2B9]"
             >
               {availableWorkOrders.map((wo, wIdx) => (
                 <option key={`${wo.id}-${wIdx}`} value={wo.id}>
@@ -558,7 +558,7 @@ export const InputRealisasiPage: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-bold uppercase">Progress Sekarang:</span>
-                  <span className="font-semibold text-teal-600 dark:text-teal-400">{selectedWO.progressPercent}%</span>
+                  <span className="font-semibold text-[#00A2B9] dark:text-teal-400">{selectedWO.progressPercent}%</span>
                 </div>
               </div>
             )}

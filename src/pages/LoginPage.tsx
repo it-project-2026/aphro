@@ -221,7 +221,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4 bg-emerald-50 overflow-hidden font-sans">
+    <div className="min-h-screen relative flex items-center justify-center p-4 bg-teal-50 overflow-hidden font-sans">
       {/* Background Image - Clean and Clear */}
       <div
         className="absolute inset-0 bg-cover bg-center transition-all duration-700"
@@ -237,7 +237,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
         {/* Branding Title / Logo */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center mx-auto mb-2 relative">
-            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/10 to-rose-500/10 rounded-full blur-2xl pointer-events-none"></div>
+            <div className="absolute -inset-4 bg-gradient-to-r from-teal-500/10 to-[#00A2B9]/10 rounded-full blur-2xl pointer-events-none"></div>
             <img
               src={APP_LOGO_URL}
               alt="Logo"
@@ -253,7 +253,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           </div>
           <div className="flex flex-col items-center justify-center">
             <div className="flex items-center justify-center space-x-2">
-              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/80 text-black border border-emerald-200 shadow-sm backdrop-blur-sm">
+              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-white/80 text-black border border-teal-200 shadow-sm backdrop-blur-sm">
                 <Building2 className="w-3.5 h-3.5 text-black" />
                 <span>{settings.namaUnitLayanan}</span>
               </span>
@@ -261,7 +261,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 <button
                   type="button"
                   onClick={onOpenInisiasi}
-                  className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-white/60 hover:bg-emerald-50 text-black hover:text-black border border-emerald-200 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer backdrop-blur-sm"
+                  className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-white/60 hover:bg-teal-50 text-black hover:text-black border border-teal-200 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer backdrop-blur-sm"
                   title="Ganti Unit Layanan & Sambungkan ke Spreadsheet Lain"
                 >
                   <span>Ganti Unit</span>
@@ -272,11 +272,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
         </div>
 
         {/* Login Card */}
-        <div className="bg-white/90 backdrop-blur-2xl border border-emerald-100 rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-emerald-900/5 space-y-6">
+        <div className="bg-white/90 backdrop-blur-2xl border border-teal-100 rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-teal-900/5 space-y-6">
           {/* Spreadsheet Connection Indicator Banner */}
-          <div className="p-3.5 rounded-2xl bg-emerald-50/50 border border-emerald-100/50 flex items-center justify-between shadow-inner">
+          <div className="p-3.5 rounded-2xl bg-teal-50/50 border border-teal-100/50 flex items-center justify-between shadow-inner">
             <div className="flex items-center space-x-3 min-w-0 pr-2">
-              <div className={`p-2 rounded-xl shrink-0 ${isSyncing ? 'bg-sky-100 text-sky-600' : isGasConnected ? 'bg-black text-white' : 'bg-rose-100 text-rose-600'}`}>
+              <div className={`p-2 rounded-xl shrink-0 ${isSyncing ? 'bg-sky-100 text-sky-600' : isGasConnected ? 'bg-[#008396] text-white' : 'bg-rose-100 text-rose-600'}`}>
                 <FileSpreadsheet className="w-5 h-5" />
               </div>
               <div className="min-w-0">
@@ -287,7 +287,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                       isSyncing
                         ? 'bg-sky-100 text-sky-600 border border-sky-200'
                         : isGasConnected
-                        ? 'bg-black text-white border border-black'
+                        ? 'bg-[#008396] text-white border border-[#008396]'
                         : 'bg-rose-100 text-rose-600 border border-rose-200'
                     }`}
                   >
@@ -318,7 +318,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 type="button"
                 onClick={handleSyncGAS}
                 disabled={isSyncing}
-                className="p-2.5 rounded-xl bg-white hover:bg-emerald-50 text-black hover:text-black transition-all border border-emerald-100 shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                className="p-2.5 rounded-xl bg-white hover:bg-teal-50 text-black hover:text-black transition-all border border-teal-100 shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                 title="Refresh Connection & Sync Users"
               >
                 <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-sky-500' : ''}`} />
@@ -334,10 +334,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   <UserIcon className="w-3.5 h-3.5 text-black" />
                   <span>USERNAME (Sheet USERS)</span>
                 </label>
-                <span className="text-[9px] text-black font-bold bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">Kolom: Username</span>
+                <span className="text-[9px] text-black font-bold bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded">Kolom: Username</span>
               </div>
               <div className="relative group">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-emerald-50 text-black group-focus-within:text-black transition-colors">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-teal-50 text-black group-focus-within:text-black transition-colors">
                   <UserIcon className="w-4 h-4" />
                 </div>
                 <input
@@ -347,7 +347,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   placeholder="Masukkan Username akun Anda..."
                   required
                   autoFocus
-                  className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white border border-emerald-100 text-black text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
+                  className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white border border-teal-100 text-black text-sm focus:outline-none focus:border-[#00A2B9] focus:ring-1 focus:ring-[#00A2B9]/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
                 />
               </div>
             </div>
@@ -361,7 +361,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 <span className="text-[9px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded">Kolom: Password</span>
               </div>
               <div className="relative group">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-emerald-50 text-black group-focus-within:text-black transition-colors">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-teal-50 text-black group-focus-within:text-black transition-colors">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -370,7 +370,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Masukkan Password Anda..."
                   required
-                  className="w-full pl-12 pr-12 py-3 rounded-2xl bg-white border border-emerald-100 text-black text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
+                  className="w-full pl-12 pr-12 py-3 rounded-2xl bg-white border border-teal-100 text-black text-sm focus:outline-none focus:border-[#00A2B9] focus:ring-1 focus:ring-[#00A2B9]/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
                 />
                 <button
                   type="button"
@@ -385,7 +385,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 px-6 rounded-full text-base font-black text-white bg-gradient-to-r from-black via-slate-900 to-red-600 hover:brightness-110 shadow-xl shadow-red-900/20 flex items-center justify-center space-x-4 transition-all active:scale-[0.98] group mt-6 disabled:opacity-50 cursor-pointer border-b-2 border-black/20"
+              className="w-full py-3.5 px-6 rounded-full text-base font-black text-white bg-gradient-to-r from-[#008396] via-[#00A2B9] to-[#00C2DE] hover:brightness-110 shadow-xl shadow-teal-900/20 flex items-center justify-center space-x-4 transition-all active:scale-[0.98] group mt-6 disabled:opacity-50 cursor-pointer border-b-2 border-black/20"
             >
               <LogIn className="w-6 h-6" />
               <span className="uppercase tracking-[0.2em]">{isSubmitting ? '...' : 'MASUK'}</span>
@@ -411,7 +411,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                     type="button"
                     onClick={handleSyncGAS}
                     disabled={isSyncing}
-                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-emerald-500/5 hover:bg-emerald-500/10 text-black border border-emerald-500/10 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-teal-500/5 hover:bg-teal-500/10 text-black border border-teal-500/10 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
                     title="Refresh Sheet USERS dari Spreadsheet"
                   >
                     <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-black' : ''}`} />
@@ -442,7 +442,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                           className={`p-3 rounded-2xl text-left border transition-all flex items-start justify-between group cursor-pointer ${
                             isSelected
                               ? 'bg-black text-white border-black shadow-sm ring-1 ring-black/20'
-                              : 'bg-white hover:bg-emerald-50 border-emerald-100 text-black hover:border-emerald-300'
+                              : 'bg-white hover:bg-teal-50 border-teal-100 text-black hover:border-teal-300'
                           }`}
                         >
                           <div className="min-w-0 flex-1 pr-2">
@@ -470,8 +470,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                                 : isAdmin
                                 ? 'bg-black text-white border-black'
                                 : isAdm
-                                ? 'bg-blue-100 text-blue-700 border-blue-200'
-                                : 'bg-emerald-100 text-black border-emerald-200'
+                                ? 'bg-[#008396]/10 text-[#008396] border-[#008396]/20'
+                                : 'bg-teal-100 text-black border-teal-200'
                             }`}
                           >
                             {u.role || 'USER'}
@@ -481,7 +481,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                     })}
                   </div>
                 ) : (
-                  <div className="p-6 text-center rounded-2xl bg-emerald-50/50 border border-emerald-100 border-dashed space-y-2">
+                  <div className="p-6 text-center rounded-2xl bg-teal-50/50 border border-teal-100 border-dashed space-y-2">
                     <p className="text-[10px] text-black font-black uppercase tracking-widest opacity-40">Belum ada data user</p>
                     <button
                       type="button"
@@ -505,9 +505,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           </p>
           <div className="flex items-center justify-center space-x-3 text-[9px] text-black/40 font-black uppercase tracking-widest">
             <span>VER {settings.versiAplikasi}</span>
-            <span className="w-1 h-1 rounded-full bg-emerald-200" />
+            <span className="w-1 h-1 rounded-full bg-teal-200" />
             <span className="flex items-center space-x-1">
-               <ShieldCheck className="w-3 h-3 text-emerald-500" />
+               <ShieldCheck className="w-3 h-3 text-[#00A2B9]" />
                <span>Secured Access</span>
             </span>
           </div>
@@ -520,7 +520,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 text-slate-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center space-x-3">
-                <div className="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                <div className="p-2 rounded-xl bg-[#00A2B9]/10 text-[#00A2B9] border border-[#00A2B9]/20">
                   <FileSpreadsheet className="w-5 h-5" />
                 </div>
                 <div>
@@ -547,12 +547,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   onChange={(e) => setTempGasUrl(e.target.value)}
                   placeholder="https://script.google.com/macros/s/.../exec"
                   required
-                  className="w-full px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 text-sky-300 font-mono text-xs focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 text-teal-300 font-mono text-xs focus:outline-none focus:border-[#00A2B9] focus:ring-1 focus:ring-[#00A2B9]"
                 />
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs space-y-1.5 text-slate-400">
-                <div className="flex items-center space-x-2 text-sky-400 font-bold">
+                <div className="flex items-center space-x-2 text-[#00A2B9] font-bold">
                   <Radio className="w-4 h-4 shrink-0" />
                   <span>Status Koneksi Saat Ini:</span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isGasConnected ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
@@ -574,7 +574,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-sky-600 hover:bg-sky-500 transition-colors shadow-lg shadow-sky-900/30 flex items-center space-x-2 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-[#00A2B9] hover:bg-[#008396] transition-colors shadow-lg shadow-teal-900/30 flex items-center space-x-2 cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>Simpan & Hubungkan</span>

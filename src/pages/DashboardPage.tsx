@@ -68,6 +68,7 @@ export const DashboardPage: React.FC = () => {
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [filterUlp, setFilterUlp] = React.useState('ALL');
+  const [filterPenyulang, setFilterPenyulang] = React.useState('ALL');
 
   const handleSync = async () => {
     await syncWithGAS(showToast);
@@ -81,18 +82,20 @@ export const DashboardPage: React.FC = () => {
       const matchesStartDate = !startDate || (wo.tanggal && wo.tanggal >= startDate);
       const matchesEndDate = !endDate || (wo.tanggal && wo.tanggal <= endDate);
       const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
-      return matchesStartDate && matchesEndDate && matchesUlp;
+      const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
+      return matchesStartDate && matchesEndDate && matchesUlp && matchesPenyulang;
     });
-  }, [workOrders, startDate, endDate, filterUlp]);
+  }, [workOrders, startDate, endDate, filterUlp, filterPenyulang]);
 
   const filteredRealisasi = React.useMemo(() => {
     return realisasiList.filter(rel => {
       const matchesStartDate = !startDate || (rel.tanggalRealisasi && rel.tanggalRealisasi >= startDate);
       const matchesEndDate = !endDate || (rel.tanggalRealisasi && rel.tanggalRealisasi <= endDate);
       const matchesUlp = filterUlp === 'ALL' || rel.ulpName === filterUlp;
-      return matchesStartDate && matchesEndDate && matchesUlp;
+      const matchesPenyulang = filterPenyulang === 'ALL' || rel.penyulangName === filterPenyulang;
+      return matchesStartDate && matchesEndDate && matchesUlp && matchesPenyulang;
     });
-  }, [realisasiList, startDate, endDate, filterUlp]);
+  }, [realisasiList, startDate, endDate, filterUlp, filterPenyulang]);
 
   // Metrics calculations based on FILTERED data
   const totalWO = filteredWOs.length;
@@ -367,7 +370,10 @@ export const DashboardPage: React.FC = () => {
           </label>
           <select
             value={filterUlp}
-            onChange={(e) => setFilterUlp(e.target.value)}
+            onChange={(e) => {
+              setFilterUlp(e.target.value);
+              setFilterPenyulang('ALL'); // Reset penyulang when ULP changes
+            }}
             className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
           >
             <option value="ALL">Semua ULP</option>
@@ -378,11 +384,31 @@ export const DashboardPage: React.FC = () => {
             ))}
           </select>
         </div>
+        <div className="flex-1 min-w-[150px]">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+            Filter Penyulang
+          </label>
+          <select
+            value={filterPenyulang}
+            onChange={(e) => setFilterPenyulang(e.target.value)}
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
+          >
+            <option value="ALL">Semua Penyulang</option>
+            {penyulangList
+              .filter(p => filterUlp === 'ALL' || p.ulpName === filterUlp || p.ulpId === filterUlp)
+              .map((p) => (
+                <option key={p.id} value={p.namaPenyulang || p.id}>
+                  {p.namaPenyulang}
+                </option>
+              ))}
+          </select>
+        </div>
         <button
           onClick={() => {
             setStartDate('');
             setEndDate('');
             setFilterUlp('ALL');
+            setFilterPenyulang('ALL');
           }}
           className="px-4 py-2 text-[10px] font-black text-slate-500 hover:text-rose-500 uppercase tracking-widest transition-colors"
         >

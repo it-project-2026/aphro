@@ -90,9 +90,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
             {/* Dynamic Unit Name Header Tag */}
-            <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full min-w-0">
-              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <span className="text-[11px] sm:text-xs font-bold text-emerald-900 dark:text-emerald-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs uppercase">
+            <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded-full min-w-0">
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-teal-500 animate-pulse shrink-0" />
+              <span className="text-[11px] sm:text-xs font-bold text-teal-900 dark:text-teal-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs uppercase">
                 {settings.namaUnitLayanan}
               </span>
             </div>
@@ -240,7 +240,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                     type="button"
                     onClick={handleManualSync}
                     disabled={isSyncing}
-                    className="flex-1 py-2 px-3 bg-gradient-to-r from-teal-600 via-teal-500 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all shadow-md disabled:opacity-50"
+                    className="flex-1 py-2 px-3 bg-gradient-to-r from-[#008396] via-[#00A2B9] to-[#00A2B9] hover:from-[#006e7e] hover:to-[#008396] text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all shadow-md disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                     <span>{isSyncing ? 'Menyinkronkan...' : pendingCount > 0 ? `Sync ${pendingCount} Data Offline` : 'Sync / Refresh Data'}</span>

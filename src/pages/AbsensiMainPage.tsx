@@ -310,7 +310,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               onClick={() => setActiveSubTab('absensi_pulang')}
               className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
                 activeSubTab === 'absensi_pulang'
-                  ? 'bg-indigo-600 text-white shadow-md'
+                  ? 'bg-[#00A2B9] text-white shadow-md'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -322,7 +322,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               onClick={() => setActiveSubTab('monitoring_absensi')}
               className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
                 activeSubTab === 'monitoring_absensi'
-                  ? 'bg-indigo-600 text-white shadow-md'
+                  ? 'bg-[#00A2B9] text-white shadow-md'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -340,7 +340,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
             <div className="border-b border-slate-100 dark:border-slate-700 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-2">
-                  <LogOut className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  <LogOut className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
                   <span>Absensi Pulang (Foto Pulang)</span>
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -348,7 +348,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 </p>
               </div>
 
-              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-xs font-bold text-indigo-700 dark:text-indigo-300 self-start sm:self-center">
+              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-xs font-bold text-[#008396] dark:text-teal-300 self-start sm:self-center">
                 <Calendar className="w-4 h-4" />
                 <span>Tanggal: {todayStr}</span>
               </div>
@@ -359,7 +359,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Nama Regu</span>
                 <div className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-indigo-500" />
+                  <Users className="w-4 h-4 text-[#00A2B9]" />
                   <span>{reguName}</span>
                 </div>
               </div>
@@ -413,11 +413,11 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
             {/* Upload Form for Foto Pulang */}
             <form onSubmit={handleSubmitFotoPulang} className="space-y-6">
-              <div className="p-5 rounded-3xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800/60 space-y-3">
+              <div className="p-5 rounded-3xl bg-teal-50/50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800/60 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
-                      <Camera className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <Camera className="w-4 h-4 text-[#00A2B9] dark:text-teal-400" />
                       <span>Input Foto Pulang *</span>
                     </label>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -444,15 +444,15 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         alt="Foto Pulang"
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-indigo-600/90 text-white text-[10px] font-bold flex items-center space-x-1">
+                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-[#00A2B9]/90 text-white text-[10px] font-bold flex items-center space-x-1">
                         <CheckCircle2 className="w-3 h-3" />
                         <span>Foto Pulang Siap Disimpan</span>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <label className="border-2 border-dashed border-indigo-300 dark:border-indigo-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
-                    <div className="p-3.5 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform mb-2">
+                  <label className="border-2 border-dashed border-teal-300 dark:border-teal-700 hover:border-[#00A2B9] dark:hover:border-teal-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
+                    <div className="p-3.5 rounded-2xl bg-teal-100 dark:bg-teal-950/80 text-[#00A2B9] dark:text-teal-400 group-hover:scale-110 transition-transform mb-2">
                       <Camera className="w-7 h-7" />
                     </div>
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -476,7 +476,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-[#00A2B9] hover:bg-[#008396] text-white font-extrabold text-sm shadow-lg shadow-teal-600/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-5 h-5" />
                   <span>{isSubmitting ? 'Menyimpan Foto Pulang...' : 'Kirim Foto Pulang'}</span>
@@ -493,7 +493,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-700 pb-4">
             <div>
               <h2 className="text-lg font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-2">
-                <Clock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <Clock className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
                 <span>
                   Tabel Monitoring Absensi {isUserRole ? `- ${reguName} ` : ''}({filteredAbsensiList.length})
                 </span>

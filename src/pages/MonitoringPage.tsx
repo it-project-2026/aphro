@@ -30,9 +30,9 @@ import {
 // Custom Marker Icon Generator using SVG
 function createCustomMarkerIcon(status: string) {
   let color = '#64748b'; // Slate Belum
-  if (status === 'Selesai') color = '#0d9488'; // Teal Selesai
+  if (status === 'Selesai') color = '#00A2B9'; // Teal Selesai
   else if (status === 'Sedang Dikerjakan') color = '#10b981'; // Emerald Progress
-  else if (status === 'Regu') color = '#0891b2'; // Cyan for Regu
+  else if (status === 'Regu') color = '#008396'; // Dark Teal for Regu
 
   const svg = status === 'Regu' ? `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="32" height="48">
@@ -299,9 +299,9 @@ export const MonitoringPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-teal-50/40 backdrop-blur-sm p-6 rounded-3xl border-2 border-teal-100 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#00A2B9]/5 backdrop-blur-sm p-6 rounded-3xl border-2 border-[#00A2B9]/10 shadow-sm">
         <div>
-          <div className="flex items-center space-x-2 text-teal-600 dark:text-teal-400">
+          <div className="flex items-center space-x-2 text-[#00A2B9] dark:text-teal-400">
             <TableIcon className="w-6 h-6" />
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white font-display">
               Monitoring Realisasi Work Order
@@ -320,7 +320,7 @@ export const MonitoringPage: React.FC = () => {
               onClick={() => setActiveViewMode('table')}
               className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
                 activeViewMode === 'table'
-                  ? 'bg-teal-600 text-white shadow-md'
+                  ? 'bg-[#00A2B9] text-white shadow-md'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -332,7 +332,7 @@ export const MonitoringPage: React.FC = () => {
               onClick={() => setActiveViewMode('map')}
               className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
                 activeViewMode === 'map'
-                  ? 'bg-teal-600 text-white shadow-md'
+                  ? 'bg-[#00A2B9] text-white shadow-md'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -352,20 +352,20 @@ export const MonitoringPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider">Total Realisasi</span>
+        <div className="p-4 rounded-2xl bg-[#00A2B9]/5 dark:bg-teal-950/40 border border-[#00A2B9]/20 dark:border-teal-800 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold text-[#00A2B9] dark:text-teal-400 uppercase tracking-wider">Total Realisasi</span>
           <div className="text-xl sm:text-2xl font-black text-teal-900 dark:text-teal-200 font-display">
-            {grandTotalRealisasi} <span className="text-xs font-bold text-teal-600 dark:text-teal-400">Titik</span>
+            {grandTotalRealisasi} <span className="text-xs font-bold text-[#00A2B9] dark:text-teal-400">Titik</span>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 shadow-2xs space-y-1">
-          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center space-x-1">
+        <div className="p-4 rounded-2xl bg-[#00A2B9]/5 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold text-[#008396] dark:text-teal-400 uppercase tracking-wider flex items-center space-x-1">
             <TreeDeciduous className="w-3.5 h-3.5" />
             <span>Total Tebang</span>
           </span>
-          <div className="text-xl sm:text-2xl font-black text-emerald-900 dark:text-emerald-200 font-display">
-            {grandTotalTebang} <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Pohon</span>
+          <div className="text-xl sm:text-2xl font-black text-teal-900 dark:text-teal-200 font-display">
+            {grandTotalTebang} <span className="text-xs font-bold text-[#008396] dark:text-teal-400">Pohon</span>
           </div>
         </div>
 
@@ -392,7 +392,7 @@ export const MonitoringPage: React.FC = () => {
                 placeholder="Nomor WO, ULP, Penyulang..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
               />
             </div>
           </div>
@@ -405,7 +405,7 @@ export const MonitoringPage: React.FC = () => {
                 type="date"
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
               />
             </div>
           </div>
@@ -464,7 +464,7 @@ export const MonitoringPage: React.FC = () => {
         <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <TableIcon className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+              <TableIcon className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
               <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
                 Tabel Realisasi per Work Order ({woMonitoringRows.length})
               </h3>
@@ -500,7 +500,7 @@ export const MonitoringPage: React.FC = () => {
                       key={`${row.workOrder.id}-${idx}`}
                       className="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors"
                     >
-                      <td className="py-3.5 px-4 font-bold text-teal-700 dark:text-teal-400">
+                      <td className="py-3.5 px-4 font-bold text-[#008396] dark:text-teal-400">
                         <div className="flex flex-col">
                           <span className="text-xs font-black">{row.nomorWO}</span>
                           <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
@@ -518,12 +518,12 @@ export const MonitoringPage: React.FC = () => {
                         {row.penyulangName}
                       </td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-[#00A2B9]/10 dark:bg-teal-950/80 text-[#008396] dark:text-teal-300 border border-[#00A2B9]/20 dark:border-teal-800">
                           {row.totalRealisasiCount} Titik
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-[#00A2B9]/10 dark:bg-emerald-950/80 text-[#008396] dark:text-teal-300 border border-[#00A2B9]/20 dark:border-teal-800">
                           {row.totalTebang} Pohon
                         </span>
                       </td>
@@ -542,10 +542,10 @@ export const MonitoringPage: React.FC = () => {
                     <td colSpan={4} className="py-3.5 px-4 text-right uppercase tracking-wider text-xs">
                       Total Keseluruhan :
                     </td>
-                    <td className="py-3.5 px-4 text-center text-teal-600 dark:text-teal-400">
+                    <td className="py-3.5 px-4 text-center text-[#00A2B9] dark:text-teal-400">
                       {grandTotalRealisasi} Titik
                     </td>
-                    <td className="py-3.5 px-4 text-center text-emerald-600 dark:text-emerald-400">
+                    <td className="py-3.5 px-4 text-center text-[#008396] dark:text-teal-400">
                       {grandTotalTebang} Pohon
                     </td>
                     <td className="py-3.5 px-4 text-center text-slate-600 dark:text-slate-400">
@@ -567,8 +567,8 @@ export const MonitoringPage: React.FC = () => {
                 <p className="font-extrabold flex items-center space-x-1">
                   <span>⚡ JARINGAN TR & PETA GIS</span>
                 </p>
-                <p className="text-slate-600 dark:text-slate-400">Total Lokasi: <span className="font-extrabold text-teal-600">{filteredWOs.length} Titik</span></p>
-                <p className="text-slate-600 dark:text-slate-400">Regu Aktif: <span className="font-extrabold text-teal-600">{activeReguLocations.length} Regu</span></p>
+                <p className="text-slate-600 dark:text-slate-400">Total Lokasi: <span className="font-extrabold text-[#00A2B9]">{filteredWOs.length} Titik</span></p>
+                <p className="text-slate-600 dark:text-slate-400">Regu Aktif: <span className="font-extrabold text-[#00A2B9]">{activeReguLocations.length} Regu</span></p>
                 <p className="text-amber-600 dark:text-amber-400 font-extrabold pt-1 border-t border-slate-200 dark:border-slate-700">
                   ⚡ Jaringan Listrik TR (Tegangan Rendah) PLN
                 </p>
@@ -619,7 +619,7 @@ export const MonitoringPage: React.FC = () => {
                       <Popup>
                         <div className="p-1 space-y-2 max-w-xs font-sans">
                           <div className="border-b border-slate-200 pb-1 flex items-center justify-between">
-                            <span className="font-extrabold text-teal-700 text-xs">
+                            <span className="font-extrabold text-[#008396] text-xs">
                               {wo.nomorWO}
                             </span>
                             <StatusBadge status={wo.status} size="sm" />
@@ -647,16 +647,16 @@ export const MonitoringPage: React.FC = () => {
                     position={[regu.lat, regu.lon]}
                     icon={createCustomMarkerIcon('Regu')}
                   >
-                    <Tooltip permanent direction="top" offset={[0, -40]} className="bg-teal-600 text-white font-bold border-none rounded-lg px-2 py-1 shadow-md text-[10px]">
+                    <Tooltip permanent direction="top" offset={[0, -40]} className="bg-[#00A2B9] text-white font-bold border-none rounded-lg px-2 py-1 shadow-md text-[10px]">
                       {regu.name}
                     </Tooltip>
                     <Popup>
                       <div className="p-2 space-y-2 min-w-[180px] font-sans">
                         <div className="border-b border-slate-200 pb-1 flex items-center justify-between">
-                          <span className="font-black text-teal-700 text-sm italic">
+                          <span className="font-black text-[#008396] text-sm italic">
                             LIVE TRACKING
                           </span>
-                          <span className="px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 text-[10px] font-black uppercase">
+                          <span className="px-2 py-0.5 rounded-full bg-[#00A2B9]/10 text-[#008396] text-[10px] font-black uppercase">
                             AKTIF
                           </span>
                         </div>

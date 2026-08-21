@@ -130,12 +130,12 @@ const AppContent: React.FC = () => {
           </div>
 
           <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-3">
-            <div className="flex items-center justify-center space-x-2 text-xs font-bold text-emerald-400">
+            <div className="flex items-center justify-center space-x-2 text-xs font-bold text-teal-400">
               <FileSpreadsheet className="w-4 h-4 animate-bounce" />
               <span>Menghubungkan ke Database Spreadsheet...</span>
             </div>
             <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5">
-              <div className="bg-gradient-to-r from-teal-500 via-teal-400 to-emerald-400 h-1.5 rounded-full animate-pulse w-3/4 mx-auto" />
+              <div className="bg-gradient-to-r from-teal-500 via-teal-400 to-[#00A2B9] h-1.5 rounded-full animate-pulse w-3/4 mx-auto" />
             </div>
             <p className="text-[11px] text-slate-400">
               Memuat data pengguna USERS, Work Order & Realisasi...

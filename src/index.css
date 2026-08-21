@@ -12,7 +12,7 @@
 
 /* PLN Theme Custom Utilities */
 .pln-gradient-header {
-  background: linear-gradient(135deg, #003B70 0%, #0082C8 60%, #00A3E0 100%);
+  background: linear-gradient(135deg, #008396 0%, #00A2B9 60%, #00C2DE 100%);
 }
 
 .pln-gradient-accent {
@@ -20,9 +20,9 @@
 }
 
 .pln-badge-primary {
-  background-color: rgba(0, 130, 200, 0.1);
-  color: #0082C8;
-  border: 1px solid rgba(0, 130, 200, 0.25);
+  background-color: rgba(0, 162, 185, 0.1);
+  color: #00A2B9;
+  border: 1px solid rgba(0, 162, 185, 0.25);
 }
 
 .pln-card {
@@ -49,8 +49,8 @@
 }
 .pln-input:focus {
   outline: none;
-  border-color: #0082C8;
-  box-shadow: 0 0 0 3px rgba(0, 130, 200, 0.15);
+  border-color: #00A2B9;
+  box-shadow: 0 0 0 3px rgba(0, 162, 185, 0.15);
   background-color: #ffffff;
 }
 .dark .pln-input {
@@ -59,8 +59,8 @@
   color: #f8fafc;
 }
 .dark .pln-input:focus {
-  border-color: #00A3E0;
-  box-shadow: 0 0 0 3px rgba(0, 163, 224, 0.2);
+  border-color: #00C2DE;
+  box-shadow: 0 0 0 3px rgba(0, 194, 222, 0.2);
 }
 
 /* Custom Scrollbar */
@@ -83,7 +83,7 @@
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #0284c7;
+  background: #00A2B9;
 }
 
 /* Print Styles */

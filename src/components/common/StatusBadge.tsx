@@ -21,9 +21,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   switch (status) {
     case 'Selesai':
     case 'SELESAI':
-      bgColor = 'bg-emerald-500/10 dark:bg-emerald-500/20';
-      textColor = 'text-emerald-700 dark:text-emerald-300';
-      borderColor = 'border-emerald-500/30';
+      bgColor = 'bg-[#00A2B9]/10 dark:bg-[#00A2B9]/20';
+      textColor = 'text-[#00A2B9] dark:text-[#00C2DE]';
+      borderColor = 'border-[#00A2B9]/30';
       IconComponent = CheckCircle2;
       break;
     case 'Sedang Dikerjakan':
