@@ -97,8 +97,8 @@ export const MobileBottomNav: React.FC = () => {
                 <div
                   className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 ${
                     isActive
-                      ? 'bg-gradient-to-tr from-teal-600 via-teal-500 to-emerald-500 text-white ring-4 ring-teal-100 dark:ring-teal-950 scale-105'
-                      : 'bg-gradient-to-tr from-teal-500 to-teal-500 text-white shadow-teal-500/30'
+                      ? 'bg-gradient-to-tr from-[#008396] via-[#00A2B9] to-[#00C2DE] text-white ring-4 ring-teal-100 dark:ring-teal-950 scale-105'
+                      : 'bg-gradient-to-tr from-[#008396] to-[#00A2B9] text-white shadow-[#00A2B9]/30'
                   }`}
                 >
                   <Camera className="w-7 h-7" />

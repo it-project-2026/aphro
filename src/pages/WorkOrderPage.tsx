@@ -110,14 +110,14 @@ export const WorkOrderPage: React.FC = () => {
         <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search Field */}
-          <div className="relative lg:col-span-1">
+            <div className="relative lg:col-span-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Cari WO, Lokasi, Petugas..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
             />
           </div>
 
@@ -126,7 +126,7 @@ export const WorkOrderPage: React.FC = () => {
             <select
               value={filterUlp}
               onChange={(e) => setFilterUlp(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
             >
               <option value="ALL">Semua ULP</option>
               {ulpList.map((u, idx) => (
@@ -142,7 +142,7 @@ export const WorkOrderPage: React.FC = () => {
             <select
               value={filterPenyulang}
               onChange={(e) => setFilterPenyulang(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
             >
               <option value="ALL">Semua Penyulang</option>
               {penyulangList.map((p, idx) => (
@@ -158,7 +158,7 @@ export const WorkOrderPage: React.FC = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
             >
               <option value="ALL">Semua Status</option>
               <option value="Belum Dikerjakan">Belum Dikerjakan (Merah)</option>
@@ -173,7 +173,7 @@ export const WorkOrderPage: React.FC = () => {
               type="date"
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
             />
           </div>
         </div>
@@ -195,7 +195,7 @@ export const WorkOrderPage: React.FC = () => {
                 className="p-4 rounded-2xl bg-white dark:bg-slate-900/60 border border-teal-100 dark:border-slate-700/80 space-y-3 shadow-2xs"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                  <span className="font-mono font-bold text-xs text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/80 px-2.5 py-1 rounded-lg border border-teal-200 dark:border-teal-800">
                     {wo.nomorWO}
                   </span>
                   <StatusBadge status={wo.status} size="sm" />
@@ -223,7 +223,7 @@ export const WorkOrderPage: React.FC = () => {
                   {(wo.volumePekerjaan || wo.woKms || wo.woBatang) && (
                     <div className="col-span-2 pt-1 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
                       <span className="text-[10px] text-slate-400">VOLUME:</span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                      <span className="font-bold text-teal-600 dark:text-teal-400 font-mono">
                         {wo.volumePekerjaan || wo.woKms || wo.woBatang} {wo.satuan || 'KMS'}
                       </span>
                     </div>
@@ -232,13 +232,15 @@ export const WorkOrderPage: React.FC = () => {
 
                 {/* Progress bar */}
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[11px] font-bold">
-                    <span className="text-slate-500">Progress Realisasi:</span>
-                    <span className="text-emerald-600 dark:text-emerald-400">{wo.progressPercent}%</span>
+                  <div>
+                    <span className="text-[11px] font-bold">
+                      <span className="text-slate-500">Progress Realisasi:</span>
+                      <span className="text-teal-600 dark:text-teal-400"> {wo.progressPercent}%</span>
+                    </span>
                   </div>
                   <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-emerald-500"
+                      className="h-full rounded-full bg-[#00A2B9]"
                       style={{ width: `${wo.progressPercent}%` }}
                     />
                   </div>
@@ -257,7 +259,7 @@ export const WorkOrderPage: React.FC = () => {
                     className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-sm active:scale-95 transition-transform ${
                       role === 'User' && wo.status === 'Selesai'
                         ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        : 'bg-[#008396] hover:bg-[#00A2B9] text-white'
                     }`}
                   >
                     <CheckSquare className="w-4 h-4" />
@@ -312,7 +314,7 @@ export const WorkOrderPage: React.FC = () => {
                     className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
                   >
                     <td className="p-3.5 pl-5">
-                      <p className="font-bold text-emerald-600 dark:text-emerald-400">
+                      <p className="font-bold text-[#00A2B9] dark:text-teal-400">
                         {wo.nomorWO}
                       </p>
                       <p className="text-[11px] text-slate-500 font-medium flex items-center mt-0.5">
@@ -373,7 +375,7 @@ export const WorkOrderPage: React.FC = () => {
                           <div
                             className={`h-full rounded-full transition-all duration-300 ${
                               wo.status === 'Selesai'
-                                ? 'bg-emerald-600'
+                                ? 'bg-[#008396]'
                                 : wo.status === 'Sedang Dikerjakan'
                                 ? 'bg-amber-500'
                                 : 'bg-rose-400'
@@ -391,7 +393,7 @@ export const WorkOrderPage: React.FC = () => {
                       <div className="flex items-center justify-end space-x-1">
                         <button
                           onClick={() => setSelectedWO(wo)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-[#008396] hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors"
                           title="Detail Work Order"
                         >
                           <Eye className="w-4 h-4" />
@@ -416,7 +418,7 @@ export const WorkOrderPage: React.FC = () => {
                           className={`p-1.5 rounded-lg transition-colors ${
                             role === 'User' && wo.status === 'Selesai'
                               ? 'text-slate-300 cursor-not-allowed'
-                              : 'text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                              : 'text-slate-500 hover:text-[#008396] hover:bg-teal-50 dark:hover:bg-teal-950/40'
                           }`}
                           title={wo.status === 'Selesai' ? 'Pekerjaan ini sudah selesai' : 'Input Realisasi Work Order Ini'}
                         >
@@ -427,7 +429,7 @@ export const WorkOrderPage: React.FC = () => {
                           <>
                             <button
                               onClick={() => setEditModalWO(wo)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-[#008396] hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors"
                               title="Edit Work Order"
                             >
                               <Edit className="w-4 h-4" />
@@ -457,7 +459,7 @@ export const WorkOrderPage: React.FC = () => {
           <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-5 animate-in fade-in zoom-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
               <div>
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="text-xs font-bold text-[#00A2B9] dark:text-teal-400">
                   {selectedWO.nomorWO}
                 </span>
                 <h3 className="font-bold text-slate-900 dark:text-white text-lg">

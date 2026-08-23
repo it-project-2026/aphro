@@ -856,7 +856,7 @@ export const CetakLaporanPage: React.FC = () => {
 
                 {/* Right Certification Badges */}
                 <div className="col-span-3 sm:col-span-2 p-1.5 bg-slate-50 flex flex-col items-center justify-center text-[9px] font-bold text-slate-600">
-                  <span className="text-emerald-700">Safety First 🛡️</span>
+                  <span className="text-[#008396]">Safety First 🛡️</span>
                   <span className="text-[8px] text-slate-400">YKAN / SK3 Certified</span>
                 </div>
               </div>
@@ -923,7 +923,7 @@ export const CetakLaporanPage: React.FC = () => {
                                 <span className="font-black text-teal-800 text-xs">
                                   {pt.nomorWO}
                                 </span>
-                                <span className="px-2 py-0.5 text-[9px] font-extrabold bg-emerald-100 text-emerald-800 rounded-full">
+                                <span className="px-2 py-0.5 text-[9px] font-extrabold bg-teal-100 text-[#008396] rounded-full">
                                   {pt.status}
                                 </span>
                               </div>
@@ -931,7 +931,7 @@ export const CetakLaporanPage: React.FC = () => {
                               <div className="space-y-1">
                                 <p className="font-extrabold text-slate-900 text-xs flex items-center space-x-1">
                                   <span>🌳 Jenis Tanaman:</span>
-                                  <span className="text-emerald-700">{pt.jenisTanaman}</span>
+                                  <span className="text-[#00A2B9]">{pt.jenisTanaman}</span>
                                 </p>
                                 <p className="font-medium text-slate-700 text-[11px]">
                                   ⚡ Feeder: <span className="font-bold">{pt.penyulangName}</span>
@@ -1014,7 +1014,7 @@ export const CetakLaporanPage: React.FC = () => {
                         <p><span className="font-extrabold">JUMLAH REALISASI:</span> {summaryTotalRealisasi} Titik</p>
                         <p><span className="font-extrabold text-amber-700">JUMLAH REALISASI PANGKAS:</span> {summaryPangkas}</p>
                         <p><span className="font-extrabold text-red-600">JUMLAH REALISASI TEBANG:</span> {summaryTebang}</p>
-                        <p><span className="font-extrabold text-emerald-600">JUMLAH REALISASI POTONG:</span> {summaryPotong}</p>
+                        <p><span className="font-extrabold text-[#008396]">JUMLAH REALISASI POTONG:</span> {summaryPotong}</p>
                       </div>
 
                       {/* Column 3: Mengetahui / Disetujui */}

@@ -42,7 +42,7 @@ export const StatCard: React.FC<StatCardProps> = ({
               <span
                 className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                   trend.isUp
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                    ? 'bg-teal-100 text-[#008396] dark:bg-teal-900/40 dark:text-teal-300'
                     : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
                 }`}
               >
@@ -62,7 +62,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <Icon className="w-6 h-6" />
         </div>
       </div>
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-teal-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00A2B9]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
     </div>
   );
 };

@@ -264,7 +264,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   disabled={isLoading || isApplying}
                   className={`w-full appearance-none pl-4 pr-10 py-4 bg-slate-950 border-2 rounded-2xl text-white font-bold text-sm sm:text-base tracking-tight shadow-inner focus:outline-none focus:ring-2 transition-all cursor-pointer disabled:opacity-50 ${
                     isConfigured
-                      ? 'border-teal-500/50 hover:border-teal-400 focus:border-teal-400 focus:ring-teal-500/30'
+                      ? 'border-[#00A2B9]/50 hover:border-teal-400 focus:border-teal-400 focus:ring-[#00A2B9]/30'
                       : 'border-rose-500/60 hover:border-rose-400 focus:border-rose-400 focus:ring-rose-500/30'
                   }`}
                 >
@@ -297,16 +297,16 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
               <div className="space-y-3">
                 {isConfigured ? (
                   /* KONDISI 1: TERKONFIGURASI DENGAN BAIK */
-                  <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 space-y-3 text-xs animate-in fade-in duration-200">
+                  <div className="p-4 sm:p-5 rounded-2xl bg-teal-950/30 border border-[#00A2B9]/30 space-y-3 text-xs animate-in fade-in duration-200">
                     <div className="flex items-center justify-between">
                       <span className="font-extrabold text-slate-300">Unit Terpilih:</span>
-                      <span className="font-black text-emerald-300 flex items-center space-x-1.5 bg-emerald-900/60 px-3 py-1 rounded-xl border border-emerald-500/40">
-                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <span className="font-black text-teal-300 flex items-center space-x-1.5 bg-teal-900/60 px-3 py-1 rounded-xl border border-[#00A2B9]/40">
+                        <ShieldCheck className="w-4 h-4 text-teal-400" />
                         <span>{selectedUnit.namaUL}</span>
                       </span>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-emerald-900/40 space-y-2 text-[11px] text-slate-300">
+                    <div className="p-3 rounded-xl bg-slate-950/70 border border-teal-900/40 space-y-2 text-[11px] text-slate-300">
                       <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                         <span className="text-slate-400 flex items-center gap-1.5">
                           <Database className="w-3.5 h-3.5 text-teal-400" />
@@ -319,10 +319,10 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
 
                       <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                         <span className="text-slate-400 flex items-center gap-1.5">
-                          <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                          <Zap className="w-3.5 h-3.5 text-teal-400" />
                           Web App GAS:
                         </span>
-                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                        <span className="text-teal-400 font-bold flex items-center gap-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Tersedia & Aktif
                         </span>

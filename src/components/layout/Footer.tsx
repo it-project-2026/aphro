@@ -20,9 +20,9 @@ export const Footer: React.FC = () => {
             href={`https://wa.me/${settings.kontakAdmin.whatsapp}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition-colors"
+            className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-[#008396] dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 hover:bg-teal-100 transition-colors"
           >
-            <Phone className="w-3 h-3 text-emerald-500 shrink-0" />
+            <Phone className="w-3 h-3 text-[#008396] shrink-0" />
             <span>WA: +{settings.kontakAdmin.whatsapp}</span>
           </a>
 
@@ -30,7 +30,7 @@ export const Footer: React.FC = () => {
             href={`mailto:${settings.kontakAdmin.email}`}
             className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 hover:bg-teal-100 transition-colors"
           >
-            <Mail className="w-3 h-3 text-teal-500 shrink-0" />
+            <Mail className="w-3 h-3 text-[#00A2B9] shrink-0" />
             <span className="truncate max-w-[140px] sm:max-w-none">{settings.kontakAdmin.email}</span>
           </a>
 

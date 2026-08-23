@@ -225,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                 >
                   <Icon
                     className={`w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110 ${
-                      isActive ? 'text-white' : 'text-slate-400 dark:text-slate-400 group-hover:text-teal-500'
+                      isActive ? 'text-white' : 'text-slate-400 dark:text-slate-400 group-hover:text-[#00A2B9]'
                     }`}
                   />
                   <span className="truncate">{item.label}</span>
@@ -245,7 +245,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                   </span>
                 </div>
                 <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00A2B9] animate-pulse" />
                   <span>{isGasConnected ? 'ONLINE' : 'ACTIVE'}</span>
                 </span>
               </div>

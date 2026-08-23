@@ -384,7 +384,7 @@ export const InputRealisasiPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setSubmissionStatus('finalizing')}
-              className="flex items-center justify-center space-x-2 py-4 px-6 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-teal-600/25"
+              className="flex items-center justify-center space-x-2 py-4 px-6 bg-[#008396] hover:bg-[#00A2B9] text-white font-black rounded-2xl transition-all shadow-lg shadow-teal-600/25"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>PEKERJAAN SELESAI</span>
@@ -441,13 +441,13 @@ export const InputRealisasiPage: React.FC = () => {
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                 TOTAL VOLUME REALISASI
               </label>
-              <input
+                <input
                 type="number"
                 step="0.01"
                 placeholder="0.00"
                 value={totalVolume || ''}
                 onChange={(e) => setTotalVolume(Number(e.target.value))}
-                className="w-full px-5 py-4 text-2xl font-black rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500 outline-none transition-all shadow-inner"
+                className="w-full px-5 py-4 text-2xl font-black rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9] outline-none transition-all shadow-inner"
               />
             </div>
 
@@ -723,13 +723,13 @@ export const InputRealisasiPage: React.FC = () => {
             <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/80">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-teal-500" />
+                    <MapPin className="w-3.5 h-3.5 text-[#00A2B9]" />
                     <span>LATITUDE LONGITUDE (Otomatis)</span>
                   </span>
                   <button
                     type="button"
                     onClick={handleFetchGPS}
-                    className="inline-flex items-center space-x-1 px-2.5 py-1 text-[10px] font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors shadow-2xs"
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 text-[10px] font-bold text-white bg-[#008396] hover:bg-[#00A2B9] rounded-lg transition-colors shadow-2xs"
                   >
                     <Navigation className="w-3 h-3" />
                     <span>Ambil GPS</span>
@@ -772,7 +772,7 @@ export const InputRealisasiPage: React.FC = () => {
                 return (
                   <div
                     key={`sebelum-${slot}`}
-                    className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-center bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center min-h-[160px] hover:border-teal-500 transition-colors"
+                    className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-center bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center min-h-[160px] hover:border-[#00A2B9] transition-colors"
                   >
                     {existing ? (
                       <div className="space-y-2 w-full">
@@ -782,14 +782,14 @@ export const InputRealisasiPage: React.FC = () => {
                           className="w-full h-48 object-cover rounded-xl border border-slate-200 shadow-2xs"
                         />
                         <div className="flex items-center justify-between px-1">
-                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400">
                             ✓ Watermarked
                           </span>
                           <div className="flex space-x-1">
                             <button
                               type="button"
                               onClick={() => setPreviewPhoto(existing)}
-                              className="p-1 text-slate-500 hover:text-teal-600"
+                              className="p-1 text-slate-500 hover:text-[#00A2B9]"
                               title="Lihat Foto"
                             >
                               <Eye className="w-4 h-4" />
@@ -863,7 +863,7 @@ export const InputRealisasiPage: React.FC = () => {
                 return (
                   <div
                     key={`sesudah-${slot}`}
-                    className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-center bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center min-h-[160px] hover:border-teal-500 transition-colors"
+                    className="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-center bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center min-h-[160px] hover:border-[#00A2B9] transition-colors"
                   >
                     {existing ? (
                       <div className="space-y-2 w-full">
@@ -880,7 +880,7 @@ export const InputRealisasiPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setPreviewPhoto(existing)}
-                              className="p-1 text-slate-500 hover:text-teal-600"
+                              className="p-1 text-slate-500 hover:text-[#00A2B9]"
                               title="Lihat Foto"
                             >
                               <Eye className="w-4 h-4" />
@@ -908,7 +908,7 @@ export const InputRealisasiPage: React.FC = () => {
                           Otomatis Watermark GPS, Waktu & Identitas Petugas
                         </p>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 w-full max-w-xs">
-                          <label className="w-full cursor-pointer py-2.5 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 shadow-sm transition-all active:scale-95">
+                          <label className="w-full cursor-pointer py-2.5 px-3 bg-[#008396] hover:bg-[#00A2B9] text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 shadow-sm transition-all active:scale-95">
                             <Camera className="w-4 h-4" />
                             <span>Kamera HP (Direct)</span>
                             <input

@@ -55,7 +55,7 @@ export const MapPreviewModal: React.FC<MapPreviewModalProps> = ({
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-teal-500/10 text-teal-600 rounded-2xl">
+            <div className="p-2.5 bg-[#00A2B9]/10 text-teal-600 rounded-2xl">
               <MapPin className="w-5 h-5" />
             </div>
             <div>
@@ -139,7 +139,7 @@ export const MapPreviewModal: React.FC<MapPreviewModalProps> = ({
             type="button"
             onClick={handleConfirmClick}
             disabled={isDownloading}
-            className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm shadow-lg shadow-teal-500/25 flex items-center gap-2 transition disabled:opacity-50"
+            className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm shadow-lg shadow-[#00A2B9]/25 flex items-center gap-2 transition disabled:opacity-50"
           >
             {isDownloading ? (
               <>

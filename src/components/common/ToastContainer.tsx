@@ -14,7 +14,7 @@ export const ToastContainer: React.FC = () => {
         let Icon = Info;
 
         if (toast.type === 'success') {
-          bgClass = 'bg-emerald-600 text-white shadow-emerald-500/20';
+          bgClass = 'bg-[#00A2B9] text-white shadow-[#00A2B9]/20';
           Icon = CheckCircle;
         } else if (toast.type === 'error') {
           bgClass = 'bg-rose-600 text-white shadow-rose-500/20';

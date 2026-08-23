@@ -176,7 +176,7 @@ export const SettingAplikasiPage: React.FC = () => {
             </div>
             <div className="flex items-center space-x-2">
               {isGasConnected ? (
-                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-400 border border-teal-300 dark:border-teal-800">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>GAS Connected</span>
                 </span>
@@ -236,39 +236,39 @@ export const SettingAplikasiPage: React.FC = () => {
             </div>
 
             {/* Photo Storage Folder Info */}
-            <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 space-y-2">
-              <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200 font-bold">
+            <div className="p-4 rounded-2xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-800/60 space-y-2">
+              <div className="flex items-center justify-between text-[#008396] dark:text-teal-200 font-bold">
                 <span className="flex items-center space-x-1.5">
-                  <Folder className="w-4 h-4 text-emerald-600" />
+                  <Folder className="w-4 h-4 text-[#00A2B9]" />
                   <span>Folder Media Foto Google Drive</span>
                 </span>
                 <a
                   href="https://drive.google.com/drive/folders/1idu8U3COKEqdcCewdWntu9X06ZMnzskr?usp=drive_link"
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center space-x-1 text-emerald-600 hover:underline font-semibold"
+                  className="inline-flex items-center space-x-1 text-[#00A2B9] hover:underline font-semibold"
                 >
                   <span>Buka Drive</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Struktur hirarki otomatis: <code className="font-mono text-emerald-700 dark:text-emerald-300 font-bold">FOTO/Tahun/Bulan/WO_ID/</code> dengan format penamaan <code className="font-mono font-bold">WOID_JenisFoto_Timestamp.jpg</code>.
+                Struktur hirarki otomatis: <code className="font-mono text-[#008396] dark:text-teal-300 font-bold">FOTO/Tahun/Bulan/WO_ID/</code> dengan format penamaan <code className="font-mono font-bold">WOID_JenisFoto_Timestamp.jpg</code>.
               </p>
             </div>
 
             {/* FOTO_ABSENSI Folder Info */}
-            <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 space-y-2 md:col-span-2">
-              <div className="flex items-center justify-between text-indigo-900 dark:text-indigo-200 font-bold">
+            <div className="p-4 rounded-2xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-800/60 space-y-2 md:col-span-2">
+              <div className="flex items-center justify-between text-teal-900 dark:text-teal-200 font-bold">
                 <span className="flex items-center space-x-1.5">
-                  <Folder className="w-4 h-4 text-indigo-600" />
+                  <Folder className="w-4 h-4 text-teal-600" />
                   <span>Folder FOTO_ABSENSI Google Drive</span>
                 </span>
                 <a
                   href="https://drive.google.com/drive/folders/1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5?usp=sharing"
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center space-x-1 text-indigo-600 hover:underline font-semibold"
+                  className="inline-flex items-center space-x-1 text-teal-600 hover:underline font-semibold"
                 >
                   <span>Buka Drive</span>
                   <ExternalLink className="w-3 h-3" />
@@ -321,7 +321,7 @@ export const SettingAplikasiPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleEmbedGasConfig}
-                  className="inline-flex items-center space-x-1.5 px-3.5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-2xs whitespace-nowrap"
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2.5 text-xs font-bold text-white bg-[#00A2B9] hover:bg-[#008396] rounded-xl transition-colors shadow-2xs whitespace-nowrap"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                   <span>Tanamkan URL di Aplikasi</span>
@@ -371,7 +371,7 @@ export const SettingAplikasiPage: React.FC = () => {
                 <div key={`${sheet.name}-${idx}`} className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-extrabold text-[10px] text-teal-600 dark:text-teal-400">{sheet.name}</span>
-                    <span className={`w-2 h-2 rounded-full ${isGasConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                    <span className={`w-2 h-2 rounded-full ${isGasConnected ? 'bg-[#00A2B9] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   </div>
                   <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mt-1 truncate">{sheet.label}</span>
                   <span className="text-xs font-black text-slate-900 dark:text-white mt-0.5">{sheet.count} data</span>
@@ -393,14 +393,14 @@ export const SettingAplikasiPage: React.FC = () => {
                 onClick={() => setShowGasScriptModal(true)}
                 className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl transition-colors"
               >
-                <Code2 className="w-3.5 h-3.5 text-teal-500" />
+                <Code2 className="w-3.5 h-3.5 text-[#00A2B9]" />
                 <span>Lihat Script Code.gs</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleCopyGasCode}
-                className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-2xs"
+                className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-[#008396] hover:bg-[#00A2B9] rounded-xl transition-colors shadow-2xs"
               >
                 {isCopiedGasCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{isCopiedGasCode ? 'Tersalin!' : 'Salin Script GAS'}</span>
@@ -661,7 +661,7 @@ export const SettingAplikasiPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCopyGasCode}
-                  className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-2xs cursor-pointer"
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-bold text-white bg-[#008396] hover:bg-[#00A2B9] rounded-xl transition-colors shadow-2xs cursor-pointer"
                 >
                   {isCopiedGasCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   <span>{isCopiedGasCode ? 'Tersalin!' : 'Salin Semua Kode'}</span>

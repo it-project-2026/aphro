@@ -31,7 +31,7 @@ import {
 function createCustomMarkerIcon(status: string) {
   let color = '#64748b'; // Slate Belum
   if (status === 'Selesai') color = '#00A2B9'; // Teal Selesai
-  else if (status === 'Sedang Dikerjakan') color = '#10b981'; // Emerald Progress
+  else if (status === 'Sedang Dikerjakan') color = '#00C2DE'; // Teal Progress
   else if (status === 'Regu') color = '#008396'; // Dark Teal for Regu
 
   const svg = status === 'Regu' ? `
@@ -414,8 +414,11 @@ export const MonitoringPage: React.FC = () => {
             <label className="block text-[11px] font-semibold text-slate-400 mb-1">Filter ULP</label>
             <select
               value={filterUlp}
-              onChange={(e) => setFilterUlp(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+              onChange={(e) => {
+                setFilterUlp(e.target.value);
+                setFilterPenyulang('ALL');
+              }}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
             >
               <option value="ALL">Semua ULP</option>
               {ulpList.map((u, idx) => (
@@ -431,10 +434,12 @@ export const MonitoringPage: React.FC = () => {
             <select
               value={filterPenyulang}
               onChange={(e) => setFilterPenyulang(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
             >
               <option value="ALL">Semua Penyulang</option>
-              {penyulangList.map((p, idx) => (
+              {penyulangList
+                .filter(p => filterUlp === 'ALL' || p.ulpName === filterUlp || p.ulpId === filterUlp)
+                .map((p, idx) => (
                 <option key={`${p.id}-${idx}`} value={p.namaPenyulang || p.id}>
                   {p.namaPenyulang}
                 </option>
@@ -447,7 +452,7 @@ export const MonitoringPage: React.FC = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
             >
               <option value="ALL">Semua Status WO</option>
               <option value="Selesai">Selesai</option>
@@ -523,7 +528,7 @@ export const MonitoringPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-[#00A2B9]/10 dark:bg-emerald-950/80 text-[#008396] dark:text-teal-300 border border-[#00A2B9]/20 dark:border-teal-800">
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-[#00A2B9]/10 dark:bg-teal-950/80 text-[#008396] dark:text-teal-300 border border-[#00A2B9]/20 dark:border-teal-800">
                           {row.totalTebang} Pohon
                         </span>
                       </td>

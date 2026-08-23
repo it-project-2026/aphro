@@ -312,7 +312,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           </div>
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm uppercase tracking-wider">
-              <Calendar className="w-4 h-4 text-teal-500" />
+              <Calendar className="w-4 h-4 text-[#00A2B9]" />
               <span>Tanggal: {todayStr}</span>
             </div>
             <button
@@ -329,16 +329,16 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
         {/* Existing Absensi Masuk Status Banner if already checked in */}
         {hasDoneAbsensiMasuk && todayAbsensi && (
-          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="p-4 rounded-2xl bg-teal-50/50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-xl bg-emerald-500 text-white shrink-0 mt-0.5">
+              <div className="p-2 rounded-xl bg-[#00A2B9] text-white shrink-0 mt-0.5">
                 <CheckCircle2 className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-200">
+                <h4 className="text-sm font-extrabold text-[#008396] dark:text-teal-200">
                   Absensi Masuk Hari Ini Sudah Tercatat
                 </h4>
-                <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                <p className="text-xs text-[#00A2B9] dark:text-teal-400 mt-0.5">
                   Waktu Masuk: {todayAbsensi.timestampMasuk || todayAbsensi.createdAt}
                 </p>
               </div>
@@ -346,14 +346,14 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
             {todayAbsensi.fotoMasuk && (
               <div className="flex items-center space-x-3 self-end sm:self-center shrink-0">
-                <div className="w-12 h-12 rounded-xl overflow-hidden border border-emerald-300 dark:border-emerald-700 bg-black">
+                <div className="w-12 h-12 rounded-xl overflow-hidden border border-teal-300 dark:border-teal-700 bg-black">
                   <img src={formatDriveImageUrl(todayAbsensi.fotoMasuk)} alt="Foto Masuk" className="w-full h-full object-cover" />
                 </div>
                 <a
                   href={formatDriveViewUrl(todayAbsensi.fotoMasuk)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs shadow-xs transition-all"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>Buka Link Foto Masuk</span>
@@ -369,7 +369,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Nama Regu (Otomatis)</span>
               <div className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
-                <Users className="w-4 h-4 text-teal-500" />
+                <Users className="w-4 h-4 text-[#00A2B9]" />
                 <span>{reguName}</span>
               </div>
             </div>
@@ -377,7 +377,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-1">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Unit Layanan Pelanggan (ULP)</span>
               <div className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
-                <Building2 className="w-4 h-4 text-teal-500" />
+                <Building2 className="w-4 h-4 text-[#00A2B9]" />
                 <span>{ulpName}</span>
               </div>
             </div>
@@ -422,7 +422,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                   }`}
                 >
                   <div className="flex items-center space-x-3 flex-1">
-                    <span className="w-7 h-7 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-xs shrink-0">
+                    <span className="w-7 h-7 rounded-xl bg-[#00A2B9]/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-xs shrink-0">
                       #{idx + 1}
                     </span>
                     <input
@@ -431,7 +431,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                       disabled={hasDoneAbsensiMasuk}
                       onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
                       placeholder={`Nama Petugas #${idx + 1}`}
-                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-teal-500 focus:outline-none disabled:bg-transparent disabled:border-transparent disabled:font-bold"
+                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-[#00A2B9] focus:outline-none disabled:bg-transparent disabled:border-transparent disabled:font-bold"
                     />
                   </div>
 
@@ -442,9 +442,9 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                       // If locked and not selected, don't show the button at all on mobile to save space
                       if (hasDoneAbsensiMasuk && !isSelected) return null;
 
-                      let activeStyle = 'bg-emerald-500 text-white border-emerald-600 shadow-sm';
+                      let activeStyle = 'bg-[#008396] text-white border-[#006e7e] shadow-sm';
                       if (status === 'SAKIT') activeStyle = 'bg-amber-500 text-white border-amber-600 shadow-sm';
-                      if (status === 'IZIN') activeStyle = 'bg-teal-500 text-white border-teal-600 shadow-sm';
+                      if (status === 'IZIN') activeStyle = 'bg-[#00A2B9] text-white border-teal-600 shadow-sm';
                       if (status === 'TIDAK HADIR') activeStyle = 'bg-rose-500 text-white border-rose-600 shadow-sm';
 
                       return (
@@ -511,7 +511,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                   <div className="space-y-3">
                     <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video bg-black max-w-md mx-auto">
                       <img src={formatDriveImageUrl(fotoMasuk)} alt="Foto Masuk" className="w-full h-full object-cover" />
-                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-emerald-600/90 text-white text-[10px] font-bold">
+                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-[#008396]/90 text-white text-[10px] font-bold">
                         Terunggah (Foto Masuk)
                       </div>
                     </div>
@@ -530,7 +530,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                     )}
                   </div>
                 ) : (
-                  <label className="border-2 border-dashed border-teal-300 dark:border-teal-700 hover:border-teal-500 dark:hover:border-teal-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
+                  <label className="border-2 border-dashed border-teal-300 dark:border-teal-700 hover:border-[#00A2B9] dark:hover:border-teal-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
                     <div className="p-3.5 rounded-2xl bg-teal-100 dark:bg-teal-950/80 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform mb-2">
                       <Camera className="w-7 h-7" />
                     </div>
@@ -552,11 +552,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
               </div>
             ) : (
               /* FOTO KELUAR ONLY (When Absensi Masuk has already been completed) */
-              <div className="p-5 rounded-3xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800/60 space-y-3">
+              <div className="p-5 rounded-3xl bg-teal-50/50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800/60 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
-                      <Camera className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <Camera className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                       <span>Input Foto Keluar (Absensi Pulang) *</span>
                     </label>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -583,7 +583,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                         alt="Foto Keluar"
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-indigo-600/90 text-white text-[10px] font-bold flex items-center space-x-1">
+                      <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-[#008396]/90 text-white text-[10px] font-bold flex items-center space-x-1">
                         <CheckCircle2 className="w-3 h-3" />
                         <span>Foto Keluar Terunggah</span>
                       </div>
@@ -595,7 +595,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                           href={fotoKeluar || todayAbsensi?.fotoKeluar}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200 font-bold text-xs shadow-xs"
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-100 dark:bg-teal-900/60 text-[#008396] dark:text-teal-200 font-bold text-xs shadow-xs"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                           <span>Link URL Foto Keluar</span>
@@ -604,8 +604,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                     )}
                   </div>
                 ) : (
-                  <label className="border-2 border-dashed border-indigo-300 dark:border-indigo-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
-                    <div className="p-3.5 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform mb-2">
+                  <label className="border-2 border-dashed border-teal-300 dark:border-teal-700 hover:border-[#00A2B9] dark:hover:border-teal-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
+                    <div className="p-3.5 rounded-2xl bg-teal-100 dark:bg-teal-950/80 text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform mb-2">
                       <Camera className="w-7 h-7" />
                     </div>
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -652,7 +652,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-md space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center space-x-2">
-              <Clock className="w-4 h-4 text-teal-500" />
+              <Clock className="w-4 h-4 text-[#00A2B9]" />
               <span>Riwayat Absensi Regu {reguName} ({reguAbsensiHistory.length})</span>
             </h3>
             <span className="text-xs text-slate-400">Daftar riwayat absensi & link foto khusus untuk {reguName}</span>
@@ -759,7 +759,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                             href={formatDriveViewUrl(item.fotoKeluar)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#008396] dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
                             title="Buka di Google Drive"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -810,7 +810,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                 href={previewImage.driveUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-[#00A2B9] text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Buka Full di Google Drive</span>

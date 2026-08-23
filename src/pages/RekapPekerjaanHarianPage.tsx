@@ -867,7 +867,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                       return (
                         <React.Fragment key={`cell-${row.id}-${d.dayFormatted}`}>
                           <td
-                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-emerald-600 dark:text-emerald-400 font-bold text-[10px]"
+                            className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-[#008396] dark:text-teal-400 font-bold text-[10px]"
                           >
                             {val.targetKms > 0 ? val.targetKms.toFixed(2) : ''}
                           </td>
@@ -915,7 +915,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                         <span
                           className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
                             percent >= 100
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                              ? 'bg-teal-100 text-[#008396] dark:bg-teal-950 dark:text-teal-300'
                               : percent >= 75
                               ? 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300'
                               : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
@@ -953,7 +953,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                   const daySum = grandTotalPerDay[d.dayFormatted] || { targetKms: 0, realisasiKms: 0, tebang1: 0, pangkas: 0, tebang2: 0, total: 0 };
                   return (
                     <React.Fragment key={`sum-${d.dayFormatted}`}>
-                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[9px] text-emerald-600 dark:text-emerald-400 font-bold">
+                      <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[9px] text-[#008396] dark:text-teal-400 font-bold">
                         {daySum.targetKms > 0 ? daySum.targetKms.toFixed(2) : '0'}
                       </td>
                       <td className="px-1 py-1.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono text-[9px] text-teal-600 dark:text-teal-400 font-bold">
@@ -979,7 +979,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-bold text-xs text-slate-700 dark:text-slate-300">
                   {grandTotalsSummary.sisa}
                 </td>
-                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-emerald-700 dark:text-emerald-400">
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-[#008396] dark:text-teal-400">
                   {grandTotalsSummary.percent}%
                 </td>
                 <td className="px-3 py-2.5 text-center text-[10px] text-slate-600 dark:text-slate-400 uppercase tracking-widest font-black">
@@ -1030,7 +1030,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                     })
                   }
                   placeholder="200"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
                 />
               </div>
 
@@ -1048,7 +1048,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                     })
                   }
                   placeholder="Catatan kendala, area khusus atau status..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
                 />
               </div>
             </div>
@@ -1077,7 +1077,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveRowConfig}
-                  className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-black flex items-center space-x-1.5 shadow-lg shadow-teal-600/20 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-[#00A2B9] text-white text-xs font-black flex items-center space-x-1.5 shadow-lg shadow-teal-600/20 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Simpan</span>
@@ -1117,7 +1117,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                     onChange={(e) => setNewRowData({ ...newRowData, namaUlp: e.target.value })}
                     placeholder="Contoh: ULP BUKITTINGGI"
                     list="ulp-suggestions"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 uppercase"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-[#00A2B9] uppercase"
                   />
                   <datalist id="ulp-suggestions">
                     {availableUlps.map((u) => (
@@ -1136,7 +1136,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                   value={newRowData.timRow}
                   onChange={(e) => setNewRowData({ ...newRowData, timRow: e.target.value })}
                   placeholder="Contoh: TIM ROW 12 / Regu ROW Echo"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
                 />
               </div>
 
@@ -1150,7 +1150,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                   value={newRowData.target}
                   onChange={(e) => setNewRowData({ ...newRowData, target: Number(e.target.value) || 0 })}
                   placeholder="200"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
                 />
               </div>
             </div>
@@ -1166,7 +1166,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAddRow}
-                className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-black flex items-center space-x-1.5 shadow-lg shadow-teal-600/20 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-[#00A2B9] text-white text-xs font-black flex items-center space-x-1.5 shadow-lg shadow-teal-600/20 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Tambahkan</span>

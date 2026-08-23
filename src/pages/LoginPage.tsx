@@ -237,7 +237,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
         {/* Branding Title / Logo */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center mx-auto mb-2 relative">
-            <div className="absolute -inset-4 bg-gradient-to-r from-teal-500/10 to-[#00A2B9]/10 rounded-full blur-2xl pointer-events-none"></div>
+            <div className="absolute -inset-4 bg-gradient-to-r from-[#00A2B9]/10 to-[#00A2B9]/10 rounded-full blur-2xl pointer-events-none"></div>
             <img
               src={APP_LOGO_URL}
               alt="Logo"
@@ -276,7 +276,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           {/* Spreadsheet Connection Indicator Banner */}
           <div className="p-3.5 rounded-2xl bg-teal-50/50 border border-teal-100/50 flex items-center justify-between shadow-inner">
             <div className="flex items-center space-x-3 min-w-0 pr-2">
-              <div className={`p-2 rounded-xl shrink-0 ${isSyncing ? 'bg-sky-100 text-sky-600' : isGasConnected ? 'bg-[#008396] text-white' : 'bg-rose-100 text-rose-600'}`}>
+              <div className={`p-2 rounded-xl shrink-0 ${isSyncing ? 'bg-teal-100 text-[#008396]' : isGasConnected ? 'bg-[#008396] text-white' : 'bg-rose-100 text-rose-600'}`}>
                 <FileSpreadsheet className="w-5 h-5" />
               </div>
               <div className="min-w-0">
@@ -285,7 +285,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                   <span
                     className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black ${
                       isSyncing
-                        ? 'bg-sky-100 text-sky-600 border border-sky-200'
+                        ? 'bg-teal-100 text-[#008396] border border-teal-200'
                         : isGasConnected
                         ? 'bg-[#008396] text-white border border-[#008396]'
                         : 'bg-rose-100 text-rose-600 border border-rose-200'
@@ -294,7 +294,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                     <span
                       className={`w-1.5 h-1.5 rounded-full ${
                         isSyncing
-                          ? 'bg-sky-500 animate-ping'
+                          ? 'bg-[#00A2B9] animate-ping'
                           : isGasConnected
                           ? 'bg-white animate-pulse'
                           : 'bg-rose-500'
@@ -321,7 +321,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 className="p-2.5 rounded-xl bg-white hover:bg-teal-50 text-black hover:text-black transition-all border border-teal-100 shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                 title="Refresh Connection & Sync Users"
               >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-sky-500' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-[#00A2B9]' : ''}`} />
               </button>
             </div>
           </div>
@@ -411,7 +411,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                     type="button"
                     onClick={handleSyncGAS}
                     disabled={isSyncing}
-                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-teal-500/5 hover:bg-teal-500/10 text-black border border-teal-500/10 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-[#00A2B9]/5 hover:bg-[#00A2B9]/10 text-black border border-[#00A2B9]/10 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
                     title="Refresh Sheet USERS dari Spreadsheet"
                   >
                     <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-black' : ''}`} />
@@ -555,7 +555,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 <div className="flex items-center space-x-2 text-[#00A2B9] font-bold">
                   <Radio className="w-4 h-4 shrink-0" />
                   <span>Status Koneksi Saat Ini:</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isGasConnected ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isGasConnected ? 'bg-[#00A2B9]/20 text-teal-300' : 'bg-amber-500/20 text-amber-300'}`}>
                     {isGasConnected ? 'TERHUBUNG' : 'STANDBY'}
                   </span>
                 </div>

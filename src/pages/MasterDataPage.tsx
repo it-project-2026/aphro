@@ -321,7 +321,7 @@ export const MasterDataPage: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
-          {activeTab === 'regu' && (
+            {activeTab === 'regu' && (
             <button
               onClick={() => {
                 setEditingRegu(null);
@@ -330,7 +330,7 @@ export const MasterDataPage: React.FC = () => {
                 setReguPj('');
                 setShowReguModal(true);
               }}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Regu ROW</span>
@@ -345,7 +345,7 @@ export const MasterDataPage: React.FC = () => {
                 setPtgNip('');
                 setShowPetugasModal(true);
               }}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Petugas</span>
@@ -360,7 +360,7 @@ export const MasterDataPage: React.FC = () => {
                 setUlpKode('');
                 setShowUlpModal(true);
               }}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah ULP Baru</span>
@@ -375,7 +375,7 @@ export const MasterDataPage: React.FC = () => {
                 setPenyKode('');
                 setShowPenyulangModal(true);
               }}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Penyulang</span>
@@ -396,7 +396,7 @@ export const MasterDataPage: React.FC = () => {
                 setShowPasswordInForm(false);
                 setShowUserModal(true);
               }}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
             >
               <UserPlus className="w-4 h-4" />
               <span>Tambah User & Password</span>
@@ -412,7 +412,7 @@ export const MasterDataPage: React.FC = () => {
             onClick={() => setActiveTab('regu')}
             className={`inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'regu'
-                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25'
+                ? 'bg-[#008396] text-white shadow-md shadow-teal-600/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -424,7 +424,7 @@ export const MasterDataPage: React.FC = () => {
             onClick={() => setActiveTab('petugas')}
             className={`inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'petugas'
-                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25'
+                ? 'bg-[#008396] text-white shadow-md shadow-teal-600/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -436,7 +436,7 @@ export const MasterDataPage: React.FC = () => {
             onClick={() => setActiveTab('ulp')}
             className={`inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'ulp'
-                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25'
+                ? 'bg-[#008396] text-white shadow-md shadow-teal-600/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -448,7 +448,7 @@ export const MasterDataPage: React.FC = () => {
             onClick={() => setActiveTab('penyulang')}
             className={`inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'penyulang'
-                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25'
+                ? 'bg-[#008396] text-white shadow-md shadow-teal-600/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -460,7 +460,7 @@ export const MasterDataPage: React.FC = () => {
             onClick={() => setActiveTab('users')}
             className={`inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'users'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+                ? 'bg-[#008396] text-white shadow-md shadow-teal-600/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -501,7 +501,7 @@ export const MasterDataPage: React.FC = () => {
                 .filter((r) => (r.namaRegu || '').toLowerCase().includes(searchTerm.toLowerCase()))
                 .map((regu, idx) => (
                   <tr key={`${regu.id}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
-                    <td className="p-3.5 pl-5 font-bold text-teal-600">{regu.kodeRegu}</td>
+                    <td className="p-3.5 font-bold text-[#00A2B9]">{regu.kodeRegu}</td>
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">
                       {regu.namaRegu}
                     </td>
@@ -513,24 +513,24 @@ export const MasterDataPage: React.FC = () => {
                     </td>
                     <td className="p-3.5 text-slate-500">{regu.kontak}</td>
                     <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-teal-100 text-[#008396] dark:bg-teal-900/40 dark:text-teal-300">
                         {regu.status}
                       </span>
                     </td>
                     <td className="p-3.5 pr-5 text-right">
                       <div className="flex items-center justify-end space-x-1">
-                        <button
-                          onClick={() => {
-                            setEditingRegu(regu);
-                            setReguKode(regu.kodeRegu);
-                            setReguName(regu.namaRegu);
-                            setReguPj(regu.penanggungJawab);
-                            setReguAnggota(regu.jumlahAnggota);
-                            setReguKontak(regu.kontak);
-                            setShowReguModal(true);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-teal-50"
-                        >
+                          <button
+                            onClick={() => {
+                              setEditingRegu(regu);
+                              setReguKode(regu.kodeRegu);
+                              setReguName(regu.namaRegu);
+                              setReguPj(regu.penanggungJawab);
+                              setReguAnggota(regu.jumlahAnggota);
+                              setReguKontak(regu.kontak);
+                              setShowReguModal(true);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-[#008396] rounded-lg hover:bg-teal-50"
+                          >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
@@ -568,31 +568,31 @@ export const MasterDataPage: React.FC = () => {
                 .filter((p) => (p.nama || '').toLowerCase().includes(searchTerm.toLowerCase()))
                 .map((ptg, idx) => (
                   <tr key={`${ptg.id}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
-                    <td className="p-3.5 pl-5 font-bold text-teal-600">{ptg.nip}</td>
+                    <td className="p-3.5 pl-5 font-bold text-[#00A2B9]">{ptg.nip}</td>
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">{ptg.nama}</td>
                     <td className="p-3.5 text-slate-700 dark:text-slate-300">{ptg.reguName}</td>
                     <td className="p-3.5 text-slate-500">{ptg.ulpName}</td>
                     <td className="p-3.5 text-slate-500">{ptg.noHp}</td>
                     <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-teal-100 text-[#008396] dark:bg-teal-900/40 dark:text-teal-300">
                         {ptg.role}
                       </span>
                     </td>
                     <td className="p-3.5 pr-5 text-right">
                       <div className="flex items-center justify-end space-x-1">
-                        <button
-                          onClick={() => {
-                            setEditingPetugas(ptg);
-                            setPtgNip(ptg.nip);
-                            setPtgNama(ptg.nama);
-                            setPtgReguId(ptg.reguId);
-                            setPtgUlpId(ptg.ulpId);
-                            setPtgNoHp(ptg.noHp);
-                            setPtgRole(ptg.role);
-                            setShowPetugasModal(true);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-teal-50"
-                        >
+                          <button
+                            onClick={() => {
+                              setEditingPetugas(ptg);
+                              setPtgNip(ptg.nip);
+                              setPtgNama(ptg.nama);
+                              setPtgReguId(ptg.reguId);
+                              setPtgUlpId(ptg.ulpId);
+                              setPtgNoHp(ptg.noHp);
+                              setPtgRole(ptg.role);
+                              setShowPetugasModal(true);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-[#008396] rounded-lg hover:bg-teal-50"
+                          >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
@@ -629,31 +629,31 @@ export const MasterDataPage: React.FC = () => {
                 .filter((u) => (u.namaULP || '').toLowerCase().includes(searchTerm.toLowerCase()))
                 .map((ulp, idx) => (
                   <tr key={`${ulp.id}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
-                    <td className="p-3.5 pl-5 font-bold text-teal-600">{ulp.kodeULP}</td>
+                    <td className="p-3.5 pl-5 font-bold text-[#00A2B9]">{ulp.kodeULP}</td>
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">
                       {ulp.namaULP}
                     </td>
                     <td className="p-3.5 text-slate-700 dark:text-slate-300">{ulp.manajer}</td>
                     <td className="p-3.5 text-slate-500 max-w-xs truncate">{ulp.alamat}</td>
                     <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-teal-100 text-[#008396]">
                         {ulp.status}
                       </span>
                     </td>
                     <td className="p-3.5 pr-5 text-right">
                       <div className="flex items-center justify-end space-x-1">
-                        <button
-                          onClick={() => {
-                            setEditingUlp(ulp);
-                            setUlpKode(ulp.kodeULP);
-                            setUlpNama(ulp.namaULP);
-                            setUlpManajer(ulp.manajer);
-                            setUlpKontak(ulp.kontak);
-                            setUlpAlamat(ulp.alamat);
-                            setShowUlpModal(true);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-teal-50"
-                        >
+                          <button
+                            onClick={() => {
+                              setEditingUlp(ulp);
+                              setUlpKode(ulp.kodeULP);
+                              setUlpNama(ulp.namaULP);
+                              setUlpManajer(ulp.manajer);
+                              setUlpKontak(ulp.kontak);
+                              setUlpAlamat(ulp.alamat);
+                              setShowUlpModal(true);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-[#008396] rounded-lg hover:bg-teal-50"
+                          >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
@@ -691,7 +691,7 @@ export const MasterDataPage: React.FC = () => {
                 .filter((p) => (p.namaPenyulang || '').toLowerCase().includes(searchTerm.toLowerCase()))
                 .map((p, idx) => (
                   <tr key={`${p.id}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
-                    <td className="p-3.5 pl-5 font-bold text-teal-600">{p.kodePenyulang}</td>
+                    <td className="p-3.5 pl-5 font-bold text-[#00A2B9]">{p.kodePenyulang}</td>
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">
                       {p.namaPenyulang}
                     </td>
@@ -709,7 +709,7 @@ export const MasterDataPage: React.FC = () => {
                             ? 'bg-rose-100 text-rose-800'
                             : p.status === 'Maintenance'
                             ? 'bg-amber-100 text-amber-800'
-                            : 'bg-emerald-100 text-emerald-800'
+                            : 'bg-teal-100 text-[#008396]'
                         }`}
                       >
                         {p.status}
@@ -717,18 +717,18 @@ export const MasterDataPage: React.FC = () => {
                     </td>
                     <td className="p-3.5 pr-5 text-right">
                       <div className="flex items-center justify-end space-x-1">
-                        <button
-                          onClick={() => {
-                            setEditingPenyulang(p);
-                            setPenyKode(p.kodePenyulang);
-                            setPenyNama(p.namaPenyulang);
-                            setPenyUlpId(p.ulpId);
-                            setPenyPanjang(p.panjangKms);
-                            setPenyTrafo(p.jumlahTrafo);
-                            setShowPenyulangModal(true);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-teal-50"
-                        >
+                          <button
+                            onClick={() => {
+                              setEditingPenyulang(p);
+                              setPenyKode(p.kodePenyulang);
+                              setPenyNama(p.namaPenyulang);
+                              setPenyUlpId(p.ulpId);
+                              setPenyPanjang(p.panjangKms);
+                              setPenyTrafo(p.jumlahTrafo);
+                              setShowPenyulangModal(true);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-[#008396] rounded-lg hover:bg-teal-50"
+                          >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
@@ -779,7 +779,7 @@ export const MasterDataPage: React.FC = () => {
                   const displayPassword = u.password || 'user123';
                   return (
                     <tr key={`${u.id}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
-                      <td className="p-3.5 pl-5 font-bold text-teal-600">
+                      <td className="p-3.5 pl-5 font-bold text-[#00A2B9]">
                         <div>{u.nip || u.id}</div>
                         {u.userName && u.userName !== u.nip && (
                           <div className="text-[11px] text-slate-400 font-normal">@{u.userName}</div>
@@ -795,10 +795,10 @@ export const MasterDataPage: React.FC = () => {
                             u.role === 'SuperAdmin'
                               ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
                               : u.role === 'Admin'
-                              ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+                              ? 'bg-teal-100 text-[#008396] dark:bg-teal-900/40 dark:text-teal-300'
                               : u.role === 'Adm'
-                              ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
-                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                              ? 'bg-teal-100 text-[#008396] dark:bg-teal-900/40 dark:text-teal-300'
+                              : 'bg-teal-100 text-[#008396] dark:bg-teal-900/40 dark:text-teal-300'
                           }`}
                         >
                           <ShieldCheck className="w-3.5 h-3.5 mr-1" />
@@ -814,7 +814,7 @@ export const MasterDataPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => togglePasswordVisibility(u.id)}
-                            className="p-1 hover:text-teal-600 text-slate-400 rounded transition-colors"
+                            className="p-1 hover:text-[#00A2B9] text-slate-400 rounded transition-colors"
                             title={isVisible ? 'Sembunyikan Kata Sandi' : 'Tampilkan Kata Sandi'}
                           >
                             {isVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -844,7 +844,7 @@ export const MasterDataPage: React.FC = () => {
                               setShowPasswordInForm(false);
                               setShowUserModal(true);
                             }}
-                            className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-teal-50 dark:hover:bg-slate-700 transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-[#00A2B9] rounded-lg hover:bg-teal-50 dark:hover:bg-slate-700 transition-colors"
                             title="Edit User & Password"
                           >
                             <Edit className="w-4 h-4" />
@@ -909,7 +909,7 @@ export const MasterDataPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-[#008396] text-white"
                 >
                   Simpan
                 </button>
@@ -961,7 +961,7 @@ export const MasterDataPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-[#008396] text-white"
                 >
                   Simpan
                 </button>
@@ -1004,7 +1004,7 @@ export const MasterDataPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-[#008396] text-white"
                 >
                   Simpan
                 </button>
@@ -1047,7 +1047,7 @@ export const MasterDataPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-[#008396] text-white"
                 >
                   Simpan
                 </button>
@@ -1231,7 +1231,7 @@ export const MasterDataPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-md transition-all flex items-center space-x-1"
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-[#008396] text-white hover:bg-[#00A2B9] shadow-md transition-all flex items-center space-x-1"
                 >
                   <Check className="w-4 h-4" />
                   <span>Simpan Data User</span>

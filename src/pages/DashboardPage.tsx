@@ -123,10 +123,12 @@ export const DashboardPage: React.FC = () => {
   const uniqueRealizedPenyulangs = Array.from(new Set(filteredRealisasi.map(r => r.penyulangName).filter(Boolean))).length;
   const uniqueRealizedWOs = Array.from(new Set(filteredRealisasi.map(r => r.nomorWO).filter(Boolean))).length;
 
-  const totalPetugas = petugasList.length;
-  const totalRegu = reguList.length;
-  const totalULP = ulpList.length;
-  const totalPenyulang = penyulangList.length;
+  const totalPetugas = Array.from(new Set(filteredWOs.map(w => w.petugasId).filter(Boolean))).length || petugasList.length;
+  const totalRegu = Array.from(new Set(filteredWOs.map(w => w.reguId).filter(Boolean))).length || reguList.length;
+  const totalULP = filterUlp === 'ALL' ? ulpList.length : 1;
+  const totalPenyulangFiltered = filterPenyulang === 'ALL' 
+    ? (filterUlp === 'ALL' ? penyulangList.length : penyulangList.filter(p => p.ulpName === filterUlp || p.ulpId === filterUlp).length)
+    : 1;
 
   // Prepare data for the new RealisasiTargetDashboard (now based on Regu/Teams)
   const reguDashboardData = React.useMemo(() => {
@@ -154,7 +156,7 @@ export const DashboardPage: React.FC = () => {
       {
         label: 'Volume Realisasi Harian',
         data: [1.2, 2.5, 1.8, 3.0, 2.2, 1.5, woSelesai > 0 ? woSelesai * 0.8 : 2.0],
-        backgroundColor: '#10b981',
+        backgroundColor: '#00A2B9',
         borderRadius: 8,
       },
     ],
@@ -167,8 +169,8 @@ export const DashboardPage: React.FC = () => {
       {
         label: 'WO Selesai',
         data: [12, 19, 15, 25, 22, 30, 28, woSelesai],
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        borderColor: '#00A2B9',
+        backgroundColor: 'rgba(0, 162, 185, 0.15)',
         fill: true,
         tension: 0.4,
       },
@@ -198,7 +200,7 @@ export const DashboardPage: React.FC = () => {
       {
         label: 'Persentase Penyelesaian ULP (%)',
         data: ulpProgressData,
-        backgroundColor: ['#0d9488', '#0891b2', '#10b981', '#6366f1'],
+        backgroundColor: ['#008396', '#00A2B9', '#0d9488', '#0891b2'],
         borderRadius: 8,
       },
     ],
@@ -210,7 +212,7 @@ export const DashboardPage: React.FC = () => {
     datasets: [
       {
         data: [woSelesai, woProgress, woBelum],
-        backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'],
+        backgroundColor: ['#00A2B9', '#f59e0b', '#f43f5e'],
         borderWidth: 0,
       },
     ],
@@ -242,7 +244,7 @@ export const DashboardPage: React.FC = () => {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
         {/* Top Welcome Banner */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-teal-700 to-teal-800 p-6 sm:p-8 text-white shadow-lg">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#008396] to-[#00A2B9] p-6 sm:p-8 text-white shadow-lg">
           <div className="relative z-10 space-y-2 max-w-2xl">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold text-teal-50">
               <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
@@ -272,7 +274,7 @@ export const DashboardPage: React.FC = () => {
                   Grafik volume penyelesaian pekerjaan harian minggu ini
                 </p>
               </div>
-              <span className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600">
+              <span className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-600">
                 <CheckCircle2 className="w-5 h-5" />
               </span>
             </div>
@@ -296,7 +298,7 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-teal-800 to-teal-900 p-6 sm:p-8 text-white shadow-xl border border-teal-700/50">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#006E7D] to-[#008396] p-6 sm:p-8 text-white shadow-xl border border-teal-700/50">
         <div className="relative z-10 space-y-2 max-w-2xl">
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold text-teal-50">
@@ -304,9 +306,9 @@ export const DashboardPage: React.FC = () => {
               <span>Operational Asset Protection Dashboard</span>
             </div>
 
-            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-500/30 text-xs font-bold text-emerald-100">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#00A2B9]/20 backdrop-blur-md border border-[#00A2B9]/30 text-xs font-bold text-teal-100">
+              <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" />
+              <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
               <span>Spreadsheet DB: {isGasConnected ? 'Terhubung (Online)' : 'Aktif (Connected)'}</span>
             </div>
           </div>
@@ -327,9 +329,9 @@ export const DashboardPage: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('monitoring')}
-              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-teal-950/40 backdrop-blur-sm border border-teal-500/30 text-white hover:bg-teal-950/60 font-black text-xs rounded-xl transition-all active:scale-95 shadow-sm"
+              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-teal-950/40 backdrop-blur-sm border border-[#00A2B9]/30 text-white hover:bg-teal-950/60 font-black text-xs rounded-xl transition-all active:scale-95 shadow-sm"
             >
-              <FileCheck2 className="w-4 h-4 text-emerald-400" />
+              <FileCheck2 className="w-4 h-4 text-teal-400" />
               <span>Lihat Peta Operations</span>
             </button>
           </div>
@@ -337,7 +339,7 @@ export const DashboardPage: React.FC = () => {
 
         {/* Decorative background shape */}
         <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-gradient-to-l from-white/10 to-transparent pointer-events-none" />
-        <div className="absolute -right-20 -top-20 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#00A2B9]/10 rounded-full blur-3xl pointer-events-none" />
       </div>
 
       {/* Dashboard Filters */}
@@ -350,7 +352,7 @@ export const DashboardPage: React.FC = () => {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           />
         </div>
         <div className="flex-1 min-w-[150px]">
@@ -361,7 +363,7 @@ export const DashboardPage: React.FC = () => {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           />
         </div>
         <div className="flex-1 min-w-[150px]">
@@ -374,7 +376,7 @@ export const DashboardPage: React.FC = () => {
               setFilterUlp(e.target.value);
               setFilterPenyulang('ALL'); // Reset penyulang when ULP changes
             }}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           >
             <option value="ALL">Semua ULP</option>
             {ulpList.map((ulp) => (
@@ -391,7 +393,7 @@ export const DashboardPage: React.FC = () => {
           <select
             value={filterPenyulang}
             onChange={(e) => setFilterPenyulang(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
+            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           >
             <option value="ALL">Semua Penyulang</option>
             {penyulangList
@@ -436,7 +438,7 @@ export const DashboardPage: React.FC = () => {
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
-              <span className="text-3xl sm:text-4xl font-black text-teal-500/20 dark:text-teal-400/10">
+              <span className="text-3xl sm:text-4xl font-black text-[#00A2B9]/20 dark:text-teal-400/10">
                 {Math.round((woSelesai / (totalWO || 1)) * 100)}%
               </span>
             </div>
@@ -452,7 +454,7 @@ export const DashboardPage: React.FC = () => {
               </h3>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-teal-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00A2B9]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </div>
 
         {/* Custom Redesigned KMS Card */}
@@ -466,14 +468,14 @@ export const DashboardPage: React.FC = () => {
                 {totalTargetKms.toFixed(2)}
               </h3>
             </div>
-            <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+            <div className="p-2 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
-              <span className="text-3xl sm:text-4xl font-black text-emerald-500/20 dark:text-emerald-400/10">
+              <span className="text-3xl sm:text-4xl font-black text-[#00A2B9]/20 dark:text-teal-400/10">
                 {kmsPercentage}%
               </span>
             </div>
@@ -484,12 +486,12 @@ export const DashboardPage: React.FC = () => {
               <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">
                 Realisasi KMS
               </p>
-              <h3 className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">
+              <h3 className="text-lg sm:text-xl font-black text-teal-600 dark:text-teal-400">
                 {totalRealisasiKms.toFixed(2)}
               </h3>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00A2B9]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </div>
 
         {/* Custom Redesigned Tree Work Card (Tebang/Pangkas) */}
@@ -534,9 +536,9 @@ export const DashboardPage: React.FC = () => {
           value={uniqueRealizedPenyulangs}
           subtitle="Berdasarkan realisasi unik"
           icon={Building2}
-          iconBgColor="bg-emerald-50 dark:bg-emerald-900/30"
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          borderColor="border-emerald-200 dark:border-emerald-900/50"
+          iconBgColor="bg-teal-50 dark:bg-teal-900/30"
+          iconColor="text-teal-600 dark:text-teal-400"
+          borderColor="border-teal-200 dark:border-teal-900/50"
         />
 
         <StatCard
@@ -565,8 +567,8 @@ export const DashboardPage: React.FC = () => {
         />
         <StatCard
           title="Penyulang / Feeder"
-          value={totalPenyulang}
-          subtitle="Jaringan distribusi"
+          value={totalPenyulangFiltered}
+          subtitle={filterPenyulang !== 'ALL' ? "Penyulang Terpilih" : "Jaringan distribusi"}
           icon={Zap}
           iconBgColor="bg-yellow-50 dark:bg-yellow-900/30"
           iconColor="text-yellow-600 dark:text-yellow-400"
@@ -658,7 +660,7 @@ export const DashboardPage: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
                   Aktif Siaga
                 </span>
               </div>
@@ -729,7 +731,7 @@ export const DashboardPage: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       <div className="w-20 bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
                         <div
-                          className="bg-teal-500 h-full rounded-full transition-all duration-300"
+                          className="bg-[#00A2B9] h-full rounded-full transition-all duration-300"
                           style={{ width: `${wo.progressPercent}%` }}
                         />
                       </div>

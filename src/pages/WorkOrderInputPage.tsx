@@ -249,8 +249,8 @@ export const WorkOrderInputPage: React.FC = () => {
         </button>
 
         {isGasConnected ? (
-          <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold rounded-full">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+          <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-bold rounded-full">
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#00A2B9]" />
             <span>Tersinkron ke Spreadsheet</span>
           </span>
         ) : (
@@ -262,16 +262,16 @@ export const WorkOrderInputPage: React.FC = () => {
       </div>
 
       {/* Main Card */}
-      <div className="bg-emerald-50 dark:bg-slate-800 rounded-3xl border-2 border-emerald-100 p-6 sm:p-8 shadow-sm space-y-6">
-        <div className="border-b border-emerald-200 dark:border-slate-700 pb-4">
+      <div className="bg-teal-50 dark:bg-slate-800 rounded-3xl border-2 border-teal-100 p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="border-b border-teal-200 dark:border-slate-700 pb-4">
           <div className="flex items-center space-x-3 text-black dark:text-teal-400">
-            <FilePlus className="w-6 h-6 text-emerald-600" />
+            <FilePlus className="w-6 h-6 text-[#00A2B9]" />
             <h1 className="text-xl sm:text-2xl font-black text-black dark:text-white font-display uppercase tracking-tighter">
               Form Input Work Order Baru
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-400 mt-1 font-bold">
-            Inputkan data pekerjaan ROW sesuai dengan format sheet <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-black dark:text-teal-400 font-black border border-emerald-100">WORK_ORDER</code>.
+            Inputkan data pekerjaan ROW sesuai dengan format sheet <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-black dark:text-teal-400 font-black border border-teal-100">WORK_ORDER</code>.
           </p>
         </div>
 
@@ -288,7 +288,7 @@ export const WorkOrderInputPage: React.FC = () => {
                   const newPekerjaan = e.target.value as 'NORMAL' | 'GOROW';
                   setPekerjaan(newPekerjaan);
                 }}
-                className="w-full px-3.5 py-3 text-xs sm:text-sm font-black rounded-xl border border-emerald-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-black dark:text-white focus:outline-none focus:border-black"
+                className="w-full px-3.5 py-3 text-xs sm:text-sm font-black rounded-xl border border-teal-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-black dark:text-white focus:outline-none focus:border-[#00A2B9]"
               >
                 <option value="NORMAL">NORMAL</option>
                 <option value="GOROW">GOROW</option>
@@ -304,7 +304,7 @@ export const WorkOrderInputPage: React.FC = () => {
                 required
                 value={tanggal || ''}
                 onChange={(e) => handleTanggalChange(e.target.value)}
-                className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-emerald-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-black dark:text-white font-black focus:outline-none focus:border-black"
+                className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-teal-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-black dark:text-white font-black focus:outline-none focus:border-[#00A2B9]"
               />
             </div>
           </div>
@@ -333,7 +333,7 @@ export const WorkOrderInputPage: React.FC = () => {
               className={`w-full px-3.5 py-2.5 text-xs sm:text-sm font-mono font-bold rounded-xl border transition-colors ${
                 existingDuplicateWO
                   ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500'
+                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9]'
               } focus:outline-none`}
             />
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center space-x-1">
@@ -351,7 +351,7 @@ export const WorkOrderInputPage: React.FC = () => {
               <select
                 value={ulpName || ''}
                 onChange={(e) => handleUlpChange(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
+                className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
               >
                 {ulpList.map((u, uIdx) => (
                   <option key={`${u.id}-${uIdx}`} value={u.namaULP}>
@@ -372,7 +372,7 @@ export const WorkOrderInputPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border transition-colors ${
                   existingDuplicateWO
                     ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-teal-500'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9]'
                 } focus:outline-none`}
               >
                 {filteredPenyulang.length > 0 ? (
@@ -420,7 +420,7 @@ export const WorkOrderInputPage: React.FC = () => {
             <select
               value={reguName || ''}
               onChange={(e) => handleReguChange(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
+              className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
             >
               {availableRegu.map((r, rIdx) => (
                 <option key={`${r.id}-${rIdx}`} value={r.namaRegu}>
@@ -452,7 +452,7 @@ export const WorkOrderInputPage: React.FC = () => {
                   placeholder="Contoh: 2.5"
                   value={volumePekerjaan || ''}
                   onChange={(e) => setVolumePekerjaan(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
+                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
                 />
               </div>
 
@@ -463,7 +463,7 @@ export const WorkOrderInputPage: React.FC = () => {
                 <select
                   value={satuan || 'KMS'}
                   onChange={(e) => setSatuan(e.target.value as 'KMS' | 'GAWANG')}
-                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
+                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
                 >
                   <option value="KMS">KMS (Kilometer Sirkit)</option>
                   <option value="GAWANG">GAWANG (Jumlah Gawang/Span)</option>
@@ -480,7 +480,7 @@ export const WorkOrderInputPage: React.FC = () => {
             <select
               value={status || 'BELUM SELESAI'}
               onChange={(e) => setStatus(e.target.value as WOStatus)}
-              className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-teal-500"
+              className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
             >
               <option value="BELUM SELESAI">BELUM SELESAI</option>
               <option value="SELESAI">SELESAI</option>
@@ -500,7 +500,7 @@ export const WorkOrderInputPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSaving || Boolean(existingDuplicateWO)}
-              className="inline-flex items-center space-x-2 px-8 py-3.5 text-xs sm:text-sm font-black text-white bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xl shadow-teal-900/25 transition-all active:scale-95"
+              className="inline-flex items-center space-x-2 px-8 py-3.5 text-xs sm:text-sm font-black text-white bg-gradient-to-r from-[#008396] via-[#00A2B9] to-[#00C2DE] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xl shadow-teal-900/25 transition-all active:scale-95"
             >
               <Save className="w-4 h-4" />
               <span>{isSaving ? 'Menyimpan...' : 'Simpan & Terbitkan WO'}</span>

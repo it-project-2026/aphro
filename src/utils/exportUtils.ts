@@ -788,7 +788,7 @@ export function generateLaporanPetaPDF(
   // Right Section: Safety First & Certification Box
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(4, 120, 87); // emerald-700
+  doc.setTextColor(0, 162, 185);
   doc.text('Safety First 🛡️', 265, 15, { align: 'center' });
   doc.setFontSize(6.5);
   doc.setTextColor(100, 116, 139);

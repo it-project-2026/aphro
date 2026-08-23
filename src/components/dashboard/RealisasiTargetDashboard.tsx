@@ -54,7 +54,7 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
   };
 
   return (
-    <div className="bg-[#f8fafc] rounded-[2rem] border border-blue-100 shadow-2xl overflow-hidden font-display">
+    <div className="bg-[#f8fafc] rounded-[2rem] border border-teal-100 shadow-2xl overflow-hidden font-display">
       {/* Header Section */}
       <div className="bg-gradient-to-r from-[#008396] via-[#00A2B9] to-[#00C2DE] p-3 text-white relative">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -149,7 +149,7 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
             <div className="grid grid-cols-3 gap-2">
               <div className="text-center space-y-1">
                 <div className="flex justify-center mb-2">
-                  <Activity className="w-5 h-5 text-teal-500" />
+                  <Activity className="w-5 h-5 text-[#00A2B9]" />
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">TOTAL<br/>REALISASI</p>
                 <p className="text-xl font-black text-teal-700">{totalRealisasi}</p>
@@ -163,12 +163,12 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
               </div>
               <div className="text-center space-y-1">
                 <div className="flex justify-center mb-2">
-                  <div className="w-5 h-5 rounded-full border-2 border-emerald-500 flex items-center justify-center">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                  <div className="w-5 h-5 rounded-full border-2 border-[#00A2B9] flex items-center justify-center">
+                    <div className="w-2 h-2 bg-[#00A2B9] rounded-full" />
                   </div>
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">PERSENTASE</p>
-                <p className="text-xl font-black text-emerald-600">{percentage}%</p>
+                <p className="text-xl font-black text-[#008396]">{percentage}%</p>
               </div>
             </div>
 

@@ -131,24 +131,24 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
               </p>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-1">
-              <div className="flex items-center justify-between font-bold text-emerald-900 dark:text-emerald-300">
+            <div className="p-3.5 rounded-2xl bg-teal-50/50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 space-y-1">
+              <div className="flex items-center justify-between font-bold text-[#008396] dark:text-teal-300">
                 <span className="flex items-center space-x-1.5">
-                  <Folder className="w-4 h-4 text-emerald-600" />
+                  <Folder className="w-4 h-4 text-[#00A2B9]" />
                   <span>Folder Storage Foto Drive</span>
                 </span>
                 <a
                   href="https://drive.google.com/drive/folders/1idu8U3COKEqdcCewdWntu9X06ZMnzskr"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-emerald-600 hover:underline flex items-center space-x-0.5 text-[11px]"
+                  className="text-[#00A2B9] hover:underline flex items-center space-x-0.5 text-[11px]"
                 >
                   <span>Drive</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                ID Folder: <code className="font-mono text-emerald-700 dark:text-emerald-300">1idu8U3C...</code>
+                ID Folder: <code className="font-mono text-[#00A2B9] dark:text-teal-300">1idu8U3C...</code>
               </p>
             </div>
           </div>
@@ -180,7 +180,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
                     onClick={handleCopyCode}
                     className="inline-flex items-center space-x-2 px-4 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-all shadow-xs cursor-pointer"
                   >
-                    {isCopied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                    {isCopied ? <Check className="w-4 h-4 text-teal-300" /> : <Copy className="w-4 h-4" />}
                     <span>{isCopied ? 'Kode Disalin ke Clipboard!' : 'Salin Kode Backend Code.gs'}</span>
                   </button>
                   <a
@@ -216,7 +216,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
 
             {/* Step 3 */}
             <div className="flex items-start space-x-3.5 p-4 rounded-2xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-300 dark:border-teal-800">
-              <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-xl bg-teal-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
                 3
               </div>
               <div className="space-y-3 flex-1">
@@ -235,7 +235,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
                     type="button"
                     onClick={handleRunAutoInit}
                     disabled={isInitializing}
-                    className="w-full py-3 px-4 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-md flex items-center justify-center space-x-2 disabled:opacity-50"
+                    className="w-full py-3 px-4 rounded-xl text-xs font-extrabold text-white bg-[#008396] hover:bg-[#00A2B9] transition-all shadow-md flex items-center justify-center space-x-2 disabled:opacity-50"
                   >
                     {isInitializing ? (
                       <RefreshCw className="w-4 h-4 animate-spin" />
@@ -255,13 +255,13 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
 
           {/* Success Box */}
           {createdSsId && (
-            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 space-y-2 animate-in zoom-in-95">
-              <div className="flex items-center space-x-2 font-bold text-xs text-emerald-700 dark:text-emerald-400">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <div className="p-4 rounded-2xl bg-teal-50/80 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-800 text-[#008396] dark:text-teal-200 space-y-2 animate-in zoom-in-95">
+              <div className="flex items-center space-x-2 font-bold text-xs text-[#00A2B9] dark:text-teal-400">
+                <CheckCircle2 className="w-5 h-5 text-teal-600" />
                 <span>Spreadsheet Database Berhasil Dibuat dan Terhubung!</span>
               </div>
               <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                File <code className="font-mono font-bold text-emerald-800 dark:text-emerald-300">APHRO_DATABASE_ENTERPRISE</code> telah otomatis disimpan di Folder Google Drive ID: <code className="font-mono font-bold">1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv</code>.
+                File <code className="font-mono font-bold text-[#00A2B9] dark:text-teal-300">APHRO_DATABASE_ENTERPRISE</code> telah otomatis disimpan di Folder Google Drive ID: <code className="font-mono font-bold">1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv</code>.
               </p>
             </div>
           )}
@@ -271,7 +271,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
         <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs">
           <div className="flex items-center space-x-2">
             {isGasConnected ? (
-              <span className="flex items-center space-x-1 text-emerald-600 font-bold">
+              <span className="flex items-center space-x-1 text-teal-600 font-bold">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Status: Terhubung</span>
               </span>

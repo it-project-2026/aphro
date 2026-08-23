@@ -91,7 +91,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
 
             {/* Dynamic Unit Name Header Tag */}
             <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded-full min-w-0">
-              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-teal-500 animate-pulse shrink-0" />
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#00A2B9] animate-pulse shrink-0" />
               <span className="text-[11px] sm:text-xs font-bold text-teal-900 dark:text-teal-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs uppercase">
                 {settings.namaUnitLayanan}
               </span>
@@ -112,12 +112,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                   : pendingCount > 0
                   ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
                   : isGasConnected
-                  ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100'
+                  ? 'bg-teal-50 dark:bg-teal-950/50 border-teal-300 dark:border-teal-800 text-[#008396] dark:text-teal-300 hover:bg-teal-100'
                   : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
               }`}
               title="Status Koneksi & Offline Sync"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#008396] dark:text-teal-400 shrink-0" />
               <span className="relative flex h-2 w-2 shrink-0">
                 <span
                   className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
@@ -126,7 +126,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                       : pendingCount > 0
                       ? 'bg-amber-400'
                       : isGasConnected
-                      ? 'bg-emerald-400'
+                      ? 'bg-teal-400'
                       : 'bg-slate-400'
                   }`}
                 />
@@ -137,7 +137,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                       : pendingCount > 0
                       ? 'bg-amber-500'
                       : isGasConnected
-                      ? 'bg-emerald-500'
+                      ? 'bg-[#00A2B9]'
                       : 'bg-slate-500'
                   }`}
                 />
@@ -162,7 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-2.5">
                   <div className="flex items-center space-x-2">
-                    <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    <FileSpreadsheet className="w-5 h-5 text-[#008396] dark:text-teal-400" />
                     <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider font-display">
                       Status Koneksi & Database
                     </h4>
@@ -174,7 +174,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                         : pendingCount > 0
                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                         : isGasConnected
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                        ? 'bg-teal-100 text-[#008396] dark:bg-teal-950 dark:text-teal-300'
                         : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
                     }`}
                   >
@@ -186,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                   <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 space-y-1">
                     <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">
                       <span>Koneksi Internet:</span>
-                      <span className={`font-bold ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      <span className={`font-bold ${isOnline ? 'text-[#008396] dark:text-teal-400' : 'text-rose-600 dark:text-rose-400'}`}>
                         {isOnline ? 'Aktif / Terhubung' : 'Terputus (Offline)'}
                       </span>
                     </div>
@@ -198,7 +198,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                     </div>
                     <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">
                       <span>Driver Backend:</span>
-                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span className="font-mono text-[#008396] dark:text-teal-400 font-bold">
                         Google Apps Script
                       </span>
                     </div>
@@ -219,8 +219,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                       </span>
                     </div>
                   ) : isGasConnected ? (
-                    <div className="flex items-start space-x-2 text-emerald-700 dark:text-emerald-300 text-[11px] bg-emerald-50/80 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                    <div className="flex items-start space-x-2 text-[#008396] dark:text-teal-300 text-[11px] bg-teal-50/80 dark:bg-teal-950/40 p-2.5 rounded-xl border border-teal-200 dark:border-teal-800">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[#008396]" />
                       <span>
                         Aplikasi terhubung ke Google Spreadsheet. Data Work Order, Absensi, & Realisasi telah tersinkronisasi.
                       </span>
@@ -341,7 +341,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
             <img
               src={currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'}
               alt={currentUser?.name}
-              className="w-8 h-8 rounded-full object-cover ring-2 ring-teal-500/30"
+              className="w-8 h-8 rounded-full object-cover ring-2 ring-[#00A2B9]/30"
             />
             <div className="hidden xl:block text-left">
               <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">

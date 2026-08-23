@@ -61,7 +61,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   const currentHour = new Date().getHours();
   let greeting = 'Selamat Pagi';
   let GreetingIcon = Sunrise;
-  let gradientBg = 'from-amber-500/15 via-teal-500/10 to-teal-600/20';
+  let gradientBg = 'from-amber-500/15 via-[#00A2B9]/10 to-teal-600/20';
   let iconColor = 'text-amber-500';
 
   if (currentHour >= 11 && currentHour < 15) {
@@ -77,8 +77,8 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   } else if (currentHour >= 19 || currentHour < 4) {
     greeting = 'Selamat Malam';
     GreetingIcon = Moon;
-    gradientBg = 'from-indigo-950/40 via-slate-900/30 to-teal-950/40';
-    iconColor = 'text-indigo-400';
+    gradientBg = 'from-[#008396]/20 via-slate-900/30 to-teal-950/40';
+    iconColor = 'text-[#00A2B9]';
   }
 
   // Today's date string
@@ -237,7 +237,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs">
                   {currentUser?.reguName && (
-                    <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-100 dark:border-emerald-800/30">
+                    <span className="px-2.5 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-[#008396] dark:text-teal-400 font-bold border border-teal-100 dark:border-teal-800/30">
                       {currentUser.reguName}
                     </span>
                   )}
@@ -328,7 +328,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                 type="button"
                 onClick={handleRefreshWO}
                 disabled={isSyncing}
-                className="mt-2 px-3 py-1.5 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold transition-all hover:bg-teal-500/30 inline-flex items-center space-x-1.5"
+                className="mt-2 px-3 py-1.5 rounded-xl bg-[#00A2B9]/20 text-teal-300 border border-[#00A2B9]/30 text-xs font-bold transition-all hover:bg-[#00A2B9]/30 inline-flex items-center space-x-1.5"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                 <span>Sync Dari Spreadsheet</span>
@@ -363,7 +363,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
 
                       <span className={`text-[11px] font-bold px-3 py-1 rounded-full border flex items-center space-x-1 ${
                         isFinished
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          ? 'bg-teal-50 text-[#008396] border-teal-100'
                           : isProgress
                           ? 'bg-teal-50 text-teal-600 border-teal-100'
                           : 'bg-amber-50 text-amber-600 border-amber-100'
