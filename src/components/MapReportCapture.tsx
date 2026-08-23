@@ -170,11 +170,7 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
         ctx.stroke();
       }
 
-      // 3. Grid Coordinates & Scale
-      ctx.fillStyle = '#64748b';
-      ctx.font = '10px monospace';
-      ctx.fillText('0.9200° S, 100.4000° E (PLN GIS Region)', 20, height - 15);
-      ctx.fillText('SCALE 1:2000 - JARINGAN TR & ROW POHON PLN', width - 300, height - 15);
+      // 3. Grid Coordinates & Scale removed as per user request
 
       // 4. Points & Route projection
       const activePoints = points.length > 0 ? points : [
@@ -305,22 +301,7 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
         ctx.fillText(labelText.replace(/^\d+\.\s*/, ''), boxX + 22, boxY + boxHeight / 2);
       });
 
-      // 6. Header Badge
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.fillRect(20, 20, 310, 60);
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(20, 20, 310, 60);
-
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 13px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText('⚡ JARINGAN TR & PETA GIS ROW POHON', 32, 42);
-      ctx.font = '11px sans-serif';
-      ctx.fillStyle = '#334155';
-      ctx.fillText(`Feeder: ${feederName} | ULP: ${ulpName}`, 32, 60);
-      ctx.fillText(`Total Titik Koordinat: ${activePoints.length} Lokasi`, 32, 75);
+      // 6. Header Badge removed as per user request
 
       const dataUrl = canvas.toDataURL('image/png');
       setCapturedImage(dataUrl);

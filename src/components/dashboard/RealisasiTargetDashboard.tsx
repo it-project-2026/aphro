@@ -109,11 +109,24 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
                         <span className="text-slate-400 w-8 text-right">{item.target}</span>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative">
                       <div 
-                        className="h-full bg-gradient-to-r from-teal-400 to-teal-600 rounded-full transition-all duration-1000"
+                        className="h-full bg-gradient-to-r from-teal-400 to-teal-600 rounded-full transition-all duration-1000 flex items-center justify-end pr-2"
                         style={{ width: `${Math.min(100, (item.realisasi / (item.target || 1)) * 100)}%` }}
-                      />
+                      >
+                        {item.realisasi > 5 && (
+                          <span className="text-[8px] font-black text-white leading-none">
+                            {item.realisasi}
+                          </span>
+                        )}
+                      </div>
+                      {item.realisasi <= 5 && (
+                        <div className="absolute inset-0 flex items-center pl-2">
+                           <span className="text-[8px] font-black text-teal-700 leading-none">
+                            {item.realisasi}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

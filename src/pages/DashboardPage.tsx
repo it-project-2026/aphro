@@ -104,11 +104,16 @@ export const DashboardPage: React.FC = () => {
   const woBelum = filteredWOs.filter((w) => w.status === 'Belum Dikerjakan').length;
 
   // New KMS Metrics logic
-  const totalTargetKms = filteredWOs.reduce((sum, wo) => {
-    const vol = wo.volumePekerjaan || 0;
-    const value = wo.satuan === 'GAWANG' ? vol / 20 : vol;
-    return sum + value;
-  }, 0);
+  const totalTargetKms = React.useMemo(() => {
+    const activeUlps = filterUlp === 'ALL' 
+      ? ulpList 
+      : ulpList.filter(u => u.id === filterUlp || u.namaULP === filterUlp);
+      
+    return activeUlps.reduce((sum, u) => {
+      const reguInUlpCount = reguList.filter(r => r.ulpId === u.id || r.ulpName === u.namaULP).length;
+      return sum + (reguInUlpCount * 50.20);
+    }, 0);
+  }, [ulpList, reguList, filterUlp]);
 
   const totalRealisasiKms = filteredWOs.reduce((sum, wo) => sum + (wo.totalRealisasi || 0), 0);
   const kmsPercentage = totalTargetKms > 0 ? Math.round((totalRealisasiKms / totalTargetKms) * 100) : 0;
@@ -189,9 +194,15 @@ export const DashboardPage: React.FC = () => {
   const ulpLabels = ulpList.map((u) => (u.namaULP || '').replace('ULP ', ''));
   const ulpProgressData = ulpList.map((u) => {
     const ulpWOs = filteredWOs.filter((w) => w.ulpId === u.id || w.ulpName === u.namaULP);
-    if (ulpWOs.length === 0) return 0;
-    const finished = ulpWOs.filter((w) => w.status === 'Selesai').length;
-    return Math.round((finished / ulpWOs.length) * 100);
+    const ulpRealisasiKms = ulpWOs.reduce((sum, wo) => sum + (wo.totalRealisasi || 0), 0);
+    
+    const reguInUlp = reguList.filter(r => r.ulpId === u.id || r.ulpName === u.namaULP);
+    const reguCount = reguInUlp.length;
+    
+    const ulpTargetKms = reguCount * 50.20;
+    
+    if (ulpTargetKms === 0) return 0;
+    return Math.round((ulpRealisasiKms / ulpTargetKms) * 100);
   });
 
   const ulpBarData = {
@@ -585,86 +596,88 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Chart Visualizations & Metrics Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Donut Chart - Status Distribution */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <div>
-            <h3 className="font-bold text-slate-900 dark:text-white text-base">
-              Distribusi Status Work Order
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Persentase penyelesaian WO aktif
-            </p>
+      <div className="grid grid-cols-1 gap-6">
+        {/* Bar Chart - Progress per ULP */}
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                Persentase Realisasi Pekerjaan per ULP
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Berdasarkan Realisasi KMS / Total Target KMS
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-600">
+              <TrendingUp className="w-5 h-5" />
+            </div>
           </div>
-          <div className="h-56 relative flex items-center justify-center">
-            <Doughnut
-              data={statusDoughnutData}
+          <div className="h-72">
+            <Bar 
+              data={ulpBarData} 
               options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'bottom',
-                    labels: { color: textColor, font: { size: 10 } },
-                  },
-                },
-              }}
+                ...chartOptions,
+                scales: {
+                  ...chartOptions.scales,
+                  y: {
+                    ...chartOptions.scales.y,
+                    min: 0,
+                    max: 100,
+                    ticks: {
+                      ...chartOptions.scales.y.ticks,
+                      callback: (value) => `${value}%`
+                    }
+                  }
+                }
+              }} 
             />
           </div>
         </div>
 
-        {/* Bar Chart - Progress per ULP */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-          <h3 className="font-bold text-slate-900 dark:text-white text-base">
-            Persentase Realisasi Pekerjaan per ULP
-          </h3>
-          <div className="h-60">
-            <Bar data={ulpBarData} options={chartOptions} />
-          </div>
-        </div>
-
-        {/* Top Performers & Tim ROW - Moved inside the grid */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
-            <div className="flex items-center space-x-2 text-amber-500">
-              <Award className="w-5 h-5" />
-              <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                Top Performers & Tim ROW
-              </h3>
-            </div>
-            <button
-              onClick={() => setActiveTab('master_data')}
-              className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center"
-            >
-              <span>Lihat Tim</span>
-              <ArrowRight className="w-3.5 h-3.5 ml-1" />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {reguList.slice(0, 3).map((regu, idx) => (
-              <div
-                key={`${regu.id}-${idx}`}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60"
-              >
-                <div className="flex items-center space-x-3">
-                  <span className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 text-xs font-black flex items-center justify-center">
-                    #{idx + 1}
-                  </span>
-                  <div>
-                    <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
-                      {regu.namaRegu}
-                    </h4>
-                    <p className="text-[11px] text-slate-500">
-                      PJ: {regu.penanggungJawab} ({regu.jumlahAnggota} Personel)
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
-                  Aktif Siaga
-                </span>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Top Performers & Tim ROW */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
+              <div className="flex items-center space-x-2 text-amber-500">
+                <Award className="w-5 h-5" />
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                  Top Performers & Tim ROW
+                </h3>
               </div>
-            ))}
+              <button
+                onClick={() => setActiveTab('master_data')}
+                className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center"
+              >
+                <span>Lihat Tim</span>
+                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {reguList.slice(0, 3).map((regu, idx) => (
+                <div
+                  key={`${regu.id}-${idx}`}
+                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60"
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 text-xs font-black flex items-center justify-center">
+                      #{idx + 1}
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                        {regu.namaRegu}
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        PJ: {regu.penanggungJawab} ({regu.jumlahAnggota} Personel)
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
+                    Aktif Siaga
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
