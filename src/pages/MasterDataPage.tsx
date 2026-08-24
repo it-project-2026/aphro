@@ -81,6 +81,8 @@ export const MasterDataPage: React.FC = () => {
   const [reguPj, setReguPj] = useState('');
   const [reguAnggota, setReguAnggota] = useState(5);
   const [reguKontak, setReguKontak] = useState('');
+  const [reguUlpId, setReguUlpId] = useState(ulpList[0]?.id || '');
+  const [reguStatus, setReguStatus] = useState<'Aktif' | 'Non-Aktif'>('Aktif');
 
   // Form states for PETUGAS
   const [ptgNip, setPtgNip] = useState('');
@@ -89,6 +91,7 @@ export const MasterDataPage: React.FC = () => {
   const [ptgUlpId, setPtgUlpId] = useState(ulpList[0]?.id || '');
   const [ptgNoHp, setPtgNoHp] = useState('');
   const [ptgRole, setPtgRole] = useState<UserRole>('User');
+  const [ptgStatus, setPtgStatus] = useState<'Aktif' | 'Non-Aktif'>('Aktif');
 
   // Form states for ULP
   const [ulpKode, setUlpKode] = useState('');
@@ -96,6 +99,7 @@ export const MasterDataPage: React.FC = () => {
   const [ulpManajer, setUlpManajer] = useState('');
   const [ulpKontak, setUlpKontak] = useState('');
   const [ulpAlamat, setUlpAlamat] = useState('');
+  const [ulpStatus, setUlpStatus] = useState<'Aktif' | 'Non-Aktif'>('Aktif');
 
   // Form states for PENYULANG
   const [penyKode, setPenyKode] = useState('');
@@ -103,6 +107,7 @@ export const MasterDataPage: React.FC = () => {
   const [penyUlpId, setPenyUlpId] = useState(ulpList[0]?.id || '');
   const [penyPanjang, setPenyPanjang] = useState(30);
   const [penyTrafo, setPenyTrafo] = useState(100);
+  const [penyStatus, setPenyStatus] = useState<'Normal' | 'Rawan Hazard' | 'Maintenance'>('Normal');
 
   // Form states for USER & PASSWORD (sesuai kolom Spreadsheet Sheet USERS)
   const [usrNip, setUsrNip] = useState('');
@@ -119,6 +124,7 @@ export const MasterDataPage: React.FC = () => {
   // Submit Regu
   const handleSaveRegu = (e: React.FormEvent) => {
     e.preventDefault();
+    const selUlp = ulpList.find((u) => u.id === reguUlpId);
     if (editingRegu) {
       updateRegu(editingRegu.id, {
         kodeRegu: reguKode,
@@ -126,6 +132,9 @@ export const MasterDataPage: React.FC = () => {
         penanggungJawab: reguPj,
         jumlahAnggota: Number(reguAnggota),
         kontak: reguKontak,
+        ulpId: reguUlpId,
+        ulpName: selUlp?.namaULP || '-',
+        status: reguStatus,
       });
     } else {
       addRegu({
@@ -134,7 +143,9 @@ export const MasterDataPage: React.FC = () => {
         penanggungJawab: reguPj,
         jumlahAnggota: Number(reguAnggota),
         kontak: reguKontak,
-        status: 'Aktif',
+        ulpId: reguUlpId,
+        ulpName: selUlp?.namaULP || '-',
+        status: reguStatus,
       });
     }
     setShowReguModal(false);
@@ -151,23 +162,24 @@ export const MasterDataPage: React.FC = () => {
         nip: ptgNip,
         nama: ptgNama,
         reguId: ptgReguId,
-        reguName: selRegu?.namaRegu || 'Regu ROW Alpha',
+        reguName: selRegu?.namaRegu || '-',
         ulpId: ptgUlpId,
-        ulpName: selUlp?.namaULP || 'ULP Padang Barat',
+        ulpName: selUlp?.namaULP || '-',
         noHp: ptgNoHp,
         role: ptgRole,
+        status: ptgStatus,
       });
     } else {
       addPetugas({
         nip: ptgNip || '19980000000',
         nama: ptgNama,
         reguId: ptgReguId,
-        reguName: selRegu?.namaRegu || 'Regu ROW Alpha',
+        reguName: selRegu?.namaRegu || '-',
         ulpId: ptgUlpId,
-        ulpName: selUlp?.namaULP || 'ULP Padang Barat',
+        ulpName: selUlp?.namaULP || '-',
         noHp: ptgNoHp,
         role: ptgRole,
-        status: 'Aktif',
+        status: ptgStatus,
       });
     }
     setShowPetugasModal(false);
@@ -183,6 +195,7 @@ export const MasterDataPage: React.FC = () => {
         manajer: ulpManajer,
         kontak: ulpKontak,
         alamat: ulpAlamat,
+        status: ulpStatus,
       });
     } else {
       addULP({
@@ -191,7 +204,7 @@ export const MasterDataPage: React.FC = () => {
         manajer: ulpManajer,
         kontak: ulpKontak,
         alamat: ulpAlamat,
-        status: 'Aktif',
+        status: ulpStatus,
       });
     }
     setShowUlpModal(false);
@@ -207,19 +220,20 @@ export const MasterDataPage: React.FC = () => {
         kodePenyulang: penyKode,
         namaPenyulang: penyNama,
         ulpId: penyUlpId,
-        ulpName: selUlp?.namaULP || 'ULP Padang Barat',
+        ulpName: selUlp?.namaULP || '-',
         panjangKms: Number(penyPanjang),
         jumlahTrafo: Number(penyTrafo),
+        status: penyStatus,
       });
     } else {
       addPenyulang({
         kodePenyulang: penyKode || `PENY-${Date.now().toString().slice(-2)}`,
         namaPenyulang: penyNama,
         ulpId: penyUlpId,
-        ulpName: selUlp?.namaULP || 'ULP Padang Barat',
+        ulpName: selUlp?.namaULP || '-',
         panjangKms: Number(penyPanjang),
         jumlahTrafo: Number(penyTrafo),
-        status: 'Normal',
+        status: penyStatus,
       });
     }
     setShowPenyulangModal(false);
@@ -330,6 +344,10 @@ export const MasterDataPage: React.FC = () => {
                 setReguKode('');
                 setReguName('');
                 setReguPj('');
+                setReguAnggota(5);
+                setReguKontak('');
+                setReguUlpId(ulpList[0]?.id || '');
+                setReguStatus('Aktif');
                 setShowReguModal(true);
               }}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
@@ -345,6 +363,11 @@ export const MasterDataPage: React.FC = () => {
                 setEditingPetugas(null);
                 setPtgNama('');
                 setPtgNip('');
+                setPtgReguId(reguList[0]?.id || '');
+                setPtgUlpId(ulpList[0]?.id || '');
+                setPtgNoHp('');
+                setPtgRole('User');
+                setPtgStatus('Aktif');
                 setShowPetugasModal(true);
               }}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
@@ -360,6 +383,10 @@ export const MasterDataPage: React.FC = () => {
                 setEditingUlp(null);
                 setUlpNama('');
                 setUlpKode('');
+                setUlpManajer('');
+                setUlpKontak('');
+                setUlpAlamat('');
+                setUlpStatus('Aktif');
                 setShowUlpModal(true);
               }}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
@@ -375,6 +402,10 @@ export const MasterDataPage: React.FC = () => {
                 setEditingPenyulang(null);
                 setPenyNama('');
                 setPenyKode('');
+                setPenyUlpId(ulpList[0]?.id || '');
+                setPenyPanjang(30);
+                setPenyTrafo(100);
+                setPenyStatus('Normal');
                 setShowPenyulangModal(true);
               }}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all"
@@ -537,6 +568,8 @@ export const MasterDataPage: React.FC = () => {
                               setReguPj(regu.penanggungJawab);
                               setReguAnggota(regu.jumlahAnggota);
                               setReguKontak(regu.kontak);
+                              setReguUlpId(regu.ulpId || ulpList[0]?.id || '');
+                              setReguStatus(regu.status || 'Aktif');
                               setShowReguModal(true);
                             }}
                             className="p-1.5 text-slate-400 hover:text-[#008396] rounded-lg hover:bg-teal-50"
@@ -607,6 +640,7 @@ export const MasterDataPage: React.FC = () => {
                               setPtgUlpId(ptg.ulpId);
                               setPtgNoHp(ptg.noHp);
                               setPtgRole(ptg.role);
+                              setPtgStatus(ptg.status || 'Aktif');
                               setShowPetugasModal(true);
                             }}
                             className="p-1.5 text-slate-400 hover:text-[#008396] rounded-lg hover:bg-teal-50"
@@ -676,6 +710,7 @@ export const MasterDataPage: React.FC = () => {
                               setUlpManajer(ulp.manajer);
                               setUlpKontak(ulp.kontak);
                               setUlpAlamat(ulp.alamat);
+                              setUlpStatus(ulp.status || 'Aktif');
                               setShowUlpModal(true);
                             }}
                             className="p-1.5 text-slate-400 hover:text-[#008396] rounded-lg hover:bg-teal-50"
@@ -759,6 +794,7 @@ export const MasterDataPage: React.FC = () => {
                               setPenyUlpId(p.ulpId);
                               setPenyPanjang(p.panjangKms);
                               setPenyTrafo(p.jumlahTrafo);
+                              setPenyStatus(p.status || 'Normal');
                               setShowPenyulangModal(true);
                             }}
                             className="p-1.5 text-slate-400 hover:text-[#008396] rounded-lg hover:bg-teal-50"
@@ -921,26 +957,94 @@ export const MasterDataPage: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSaveRegu} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kode Regu</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: ROW-01"
+                    value={reguKode}
+                    onChange={(e) => setReguKode(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nama Regu</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Regu Alpha"
+                    value={reguName}
+                    onChange={(e) => setReguName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Penanggung Jawab</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nama Koordinator"
+                    value={reguPj}
+                    onChange={(e) => setReguPj(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Jumlah Anggota</label>
+                  <input
+                    type="number"
+                    required
+                    value={reguAnggota}
+                    onChange={(e) => setReguAnggota(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nama Regu</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kontak / No HP</label>
                 <input
                   type="text"
-                  required
-                  value={reguName}
-                  onChange={(e) => setReguName(e.target.value)}
+                  placeholder="0812..."
+                  value={reguKontak}
+                  onChange={(e) => setReguKontak(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
                 />
               </div>
+
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Penanggung Jawab</label>
-                <input
-                  type="text"
-                  required
-                  value={reguPj}
-                  onChange={(e) => setReguPj(e.target.value)}
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unit ULP Base</label>
+                <select
+                  value={reguUlpId}
+                  onChange={(e) => setReguUlpId(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
-                />
+                >
+                  <option value="">-- Pilih ULP --</option>
+                  {ulpList.map((ulp) => (
+                    <option key={ulp.id} value={ulp.id}>
+                      {ulp.namaULP}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Status Operasional</label>
+                <select
+                  value={reguStatus}
+                  onChange={(e) => setReguStatus(e.target.value as 'Aktif' | 'Non-Aktif')}
+                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                >
+                  <option value="Aktif">Aktif</option>
+                  <option value="Non-Aktif">Non-Aktif</option>
+                </select>
+              </div>
+
               <div className="flex justify-end space-x-2 pt-2">
                 <button
                   type="button"
@@ -974,25 +1078,101 @@ export const MasterDataPage: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSavePetugas} className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nama Petugas</label>
-                <input
-                  type="text"
-                  required
-                  value={ptgNama}
-                  onChange={(e) => setPtgNama(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">NIP / ID</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="NIP Petugas"
+                    value={ptgNip}
+                    onChange={(e) => setPtgNip(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nama Lengkap</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nama Petugas"
+                    value={ptgNama}
+                    onChange={(e) => setPtgNama(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">NIP / ID</label>
-                <input
-                  type="text"
-                  value={ptgNip}
-                  onChange={(e) => setPtgNip(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Regu ROW Assigned</label>
+                  <select
+                    value={ptgReguId}
+                    onChange={(e) => setPtgReguId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  >
+                    <option value="">-- Pilih Regu --</option>
+                    {reguList.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.namaRegu}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unit ULP Base</label>
+                  <select
+                    value={ptgUlpId}
+                    onChange={(e) => setPtgUlpId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  >
+                    <option value="">-- Pilih ULP --</option>
+                    {ulpList.map((ulp) => (
+                      <option key={ulp.id} value={ulp.id}>
+                        {ulp.namaULP}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">No HP / WA</label>
+                  <input
+                    type="text"
+                    placeholder="0812..."
+                    value={ptgNoHp}
+                    onChange={(e) => setPtgNoHp(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Role</label>
+                  <select
+                    value={ptgRole}
+                    onChange={(e) => setPtgRole(e.target.value as UserRole)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  >
+                    <option value="User">User / Petugas</option>
+                    <option value="Admin">Admin</option>
+                    <option value="SuperAdmin">SuperAdmin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Status</label>
+                <select
+                  value={ptgStatus}
+                  onChange={(e) => setPtgStatus(e.target.value as 'Aktif' | 'Non-Aktif')}
+                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                >
+                  <option value="Aktif">Aktif</option>
+                  <option value="Non-Aktif">Non-Aktif</option>
+                </select>
+              </div>
+
               <div className="flex justify-end space-x-2 pt-2">
                 <button
                   type="button"
@@ -1026,16 +1206,75 @@ export const MasterDataPage: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSaveUlp} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kode ULP</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: 123"
+                    value={ulpKode}
+                    onChange={(e) => setUlpKode(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nama ULP</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nama Unit"
+                    value={ulpNama}
+                    onChange={(e) => setUlpNama(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Manajer ULP</label>
+                  <input
+                    type="text"
+                    placeholder="Nama Manajer"
+                    value={ulpManajer}
+                    onChange={(e) => setUlpManajer(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kontak</label>
+                  <input
+                    type="text"
+                    placeholder="No Telp"
+                    value={ulpKontak}
+                    onChange={(e) => setUlpKontak(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nama ULP</label>
-                <input
-                  type="text"
-                  required
-                  value={ulpNama}
-                  onChange={(e) => setUlpNama(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Alamat Office</label>
+                <textarea
+                  value={ulpAlamat}
+                  onChange={(e) => setUlpAlamat(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900 min-h-[60px]"
                 />
               </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Status</label>
+                <select
+                  value={ulpStatus}
+                  onChange={(e) => setUlpStatus(e.target.value as 'Aktif' | 'Non-Aktif')}
+                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                >
+                  <option value="Aktif">Aktif</option>
+                  <option value="Non-Aktif">Non-Aktif</option>
+                </select>
+              </div>
+
               <div className="flex justify-end space-x-2 pt-2">
                 <button
                   type="button"
@@ -1069,16 +1308,84 @@ export const MasterDataPage: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSavePenyulang} className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nama Penyulang</label>
-                <input
-                  type="text"
-                  required
-                  value={penyNama}
-                  onChange={(e) => setPenyNama(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kode Feeder</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: FDR-01"
+                    value={penyKode}
+                    onChange={(e) => setPenyKode(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nama Penyulang</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nama Penyulang"
+                    value={penyNama}
+                    onChange={(e) => setPenyNama(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
               </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unit ULP Induk</label>
+                <select
+                  value={penyUlpId}
+                  onChange={(e) => setPenyUlpId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                >
+                  <option value="">-- Pilih ULP --</option>
+                  {ulpList.map((ulp) => (
+                    <option key={ulp.id} value={ulp.id}>
+                      {ulp.namaULP}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Panjang (KMS)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={penyPanjang}
+                    onChange={(e) => setPenyPanjang(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Jumlah Trafo</label>
+                  <input
+                    type="number"
+                    required
+                    value={penyTrafo}
+                    onChange={(e) => setPenyTrafo(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kondisi Jaringan / Status</label>
+                <select
+                  value={penyStatus}
+                  onChange={(e) => setPenyStatus(e.target.value as 'Normal' | 'Rawan Hazard' | 'Maintenance')}
+                  className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
+                >
+                  <option value="Normal">Normal</option>
+                  <option value="Rawan Hazard">Rawan Hazard</option>
+                  <option value="Maintenance">Maintenance</option>
+                </select>
+              </div>
+
               <div className="flex justify-end space-x-2 pt-2">
                 <button
                   type="button"
