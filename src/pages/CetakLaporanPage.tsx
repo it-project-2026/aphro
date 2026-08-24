@@ -17,6 +17,8 @@ import {
   exportCetakPhotoToExcel,
   exportCetakPetaToExcel,
 } from '../utils/exportUtils';
+import { generateEnhancedLaporanPetaPDF } from '../utils/pdfExportService';
+import { MapPoint } from '../utils/pdfExportTypes';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -146,6 +148,36 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
     popupAnchor: [0, -40],
   });
 }
+
+// Helper component for robust logo rendering with multiple fallbacks
+const LogoComponent = () => {
+  const [imgStatus, setImgStatus] = React.useState<'local' | 'remote' | 'fallback'>('local');
+  const logoUrl = "https://www.plnes.co.id/_next/image?url=https%3A%2F%2Fcms.plnes.co.id%2Fuploads%2FLogo_HP_New_Temporary_09a9c5a521.png&w=750&q=75";
+
+  if (imgStatus === 'fallback') {
+    return (
+      <div className="flex items-center space-x-2">
+        <div className="w-5 h-6 bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center rounded-2xs">⚡</div>
+        <div className="text-left leading-none">
+          <span className="font-extrabold text-teal-700 text-xs block">PLN</span>
+          <span className="font-bold text-teal-900 text-[10px]">Electricity Services</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={imgStatus === 'local' ? '/logo_plnes.png' : logoUrl} 
+      alt="PLN Logo" 
+      className="h-10 w-auto object-contain"
+      onError={() => {
+        if (imgStatus === 'local') setImgStatus('remote');
+        else setImgStatus('fallback');
+      }}
+    />
+  );
+};
 
 export const CetakLaporanPage: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -465,45 +497,46 @@ export const CetakLaporanPage: React.FC = () => {
     } else {
       setIsGeneratingPDF(true);
       try {
-        let mapImageDataUrl: string | null = null;
-        if (mapCaptureRef.current) {
-          mapImageDataUrl = await mapCaptureRef.current.capture();
-        }
-        if (!mapImageDataUrl) {
-          mapImageDataUrl = latestMapImage || null;
-        }
+        // Map current points to the export type
+        const exportPoints: MapPoint[] = nonOverlappingMapPoints.map((pt, idx) => ({
+          id: pt.id,
+          nomorWO: pt.nomorWO,
+          noTiang: pt.noTiang,
+          jenisTanaman: pt.jenisTanaman,
+          lat: pt.lat,
+          lng: pt.lng,
+          keterangan: pt.keterangan,
+          lokasiKerja: pt.lokasiKerja,
+          status: pt.status,
+          seqNo: idx + 1,
+          ulpName: pt.ulpName,
+          penyulangName: pt.penyulangName
+        }));
 
-        const safeUlp = (selectedUlpName || 'BASO').replace(/[^a-zA-Z0-9]/g, '_');
-        const safeFeeder = (selectedPenyulangName || 'F_MATUR').replace(/[^a-zA-Z0-9]/g, '_');
-        const dateStr = new Date().toISOString().slice(0, 10);
-        const customFilename = `Peta_Pohon_ROW_${safeUlp}_${safeFeeder}_${dateStr}.pdf`;
-
-        generateLaporanPetaPDF(
+        await generateEnhancedLaporanPetaPDF(
           filteredWOs,
           settings,
           selectedUlpName,
           selectedPenyulangName,
           filteredRealisasi,
-          mapImageDataUrl || latestMapImage || undefined,
-          nonOverlappingMapPoints,
-          customFilename
+          exportPoints,
+          activePolylinePositions // Pass the route data here
         );
+        
+        showToast('PDF Laporan Peta Berhasil Dibuat', 'success');
       } catch (error) {
-        console.error('Failed to capture map for PDF download:', error);
-        const safeUlp = (selectedUlpName || 'BASO').replace(/[^a-zA-Z0-9]/g, '_');
-        const safeFeeder = (selectedPenyulangName || 'F_MATUR').replace(/[^a-zA-Z0-9]/g, '_');
-        const dateStr = new Date().toISOString().slice(0, 10);
-        const customFilename = `Peta_Pohon_ROW_${safeUlp}_${safeFeeder}_${dateStr}.pdf`;
-
+        console.error('Failed to generate enhanced PDF:', error);
+        showToast('Gagal membuat PDF Laporan Peta', 'error');
+        
+        // Fallback to old method if new one fails
         generateLaporanPetaPDF(
           filteredWOs,
           settings,
           selectedUlpName,
           selectedPenyulangName,
           filteredRealisasi,
-          latestMapImage || undefined,
-          nonOverlappingMapPoints,
-          customFilename
+          undefined,
+          nonOverlappingMapPoints
         );
       } finally {
         setIsGeneratingPDF(false);
@@ -831,14 +864,8 @@ export const CetakLaporanPage: React.FC = () => {
               {/* Header Box */}
               <div className="grid grid-cols-12 border border-slate-900 rounded-lg overflow-hidden text-center divide-x divide-slate-900">
                 {/* Left Logo */}
-                <div className="col-span-3 sm:col-span-2 p-2 bg-slate-50 flex items-center justify-center space-x-2">
-                  <div className="w-5 h-6 bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center rounded-2xs">
-                    ⚡
-                  </div>
-                  <div className="text-left leading-none">
-                    <span className="font-extrabold text-teal-700 text-xs block">PLN</span>
-                    <span className="font-bold text-teal-900 text-[10px]">Electricity Services</span>
-                  </div>
+                <div className="col-span-3 sm:col-span-2 p-2 bg-white flex items-center justify-center">
+                  <LogoComponent />
                 </div>
 
                 {/* Center Title */}

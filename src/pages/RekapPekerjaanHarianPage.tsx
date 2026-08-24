@@ -374,12 +374,16 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
   const grandTotalsSummary = useMemo(() => {
     let grandVolume = 0;
     let grandTarget = 0;
+    let grandTargetKms = 0;
+    let grandRealisasiKms = 0;
 
     filteredRows.forEach((row) => {
       let rowTot = 0;
       daysInMonth.forEach((d) => {
-        const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
-        rowTot += (v.tebang1 || 0) + (v.pangkas || 0) + (v.tebang2 || 0);
+        const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, targetKms: 0, realisasiKms: 0 };
+        rowTot += (v.tebang1 || 0) + (v.pangkas || 0);
+        grandTargetKms += v.targetKms || 0;
+        grandRealisasiKms += v.realisasiKms || 0;
       });
       grandVolume += rowTot;
       grandTarget += row.target || 0;
@@ -391,6 +395,8 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     return {
       volume: grandVolume,
       target: grandTarget,
+      targetKms: grandTargetKms,
+      realisasiKms: grandRealisasiKms,
       sisa,
       percent,
     };
@@ -660,7 +666,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 {daysInMonth.map((d) => (
                   <th
                     key={`header-dayname-${d.dayFormatted}`}
-                    colSpan={6}
+                    colSpan={5}
                     className={`px-1 py-1.5 border-r border-b text-center font-black uppercase text-[11px] tracking-wider ${
                       d.isRedDay
                         ? 'bg-red-600 text-white border-red-700'
@@ -776,8 +782,8 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 // Calculate Total for this row
                 let rowVolumeSum = 0;
                 daysInMonth.forEach((d) => {
-                  const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0 };
-                  rowVolumeSum += (val.tebang1 || 0) + (val.pangkas || 0) + (val.tebang2 || 0);
+                  const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0 };
+                  rowVolumeSum += (val.tebang1 || 0) + (val.pangkas || 0);
                 });
 
                 const target = row.target || 0;
@@ -880,7 +886,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                                   : 'text-slate-400'
                             }`}
                           >
-                            {val.realisasiKms > 0 ? val.realisasiKms.toFixed(2) : '0.00'}
+                            {val.realisasiKms > 0 ? val.realisasiKms.toFixed(2) : (val.targetKms > 0 ? '0.00' : '')}
                           </td>
                           <td
                             className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200"
@@ -973,11 +979,17 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 })}
 
                 {/* Grand Summary Columns */}
-                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-sm text-teal-700 dark:text-teal-300">
-                  {grandTotalsSummary.volume}
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-teal-700 dark:text-teal-300">
+                  <div className="flex flex-col">
+                    <span>{grandTotalsSummary.volume} BTG</span>
+                    <span className="text-[9px] text-[#00A2B9] opacity-70">({grandTotalsSummary.realisasiKms.toFixed(2)} KMS)</span>
+                  </div>
                 </td>
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-bold text-xs text-slate-700 dark:text-slate-300">
-                  {grandTotalsSummary.sisa}
+                  <div className="flex flex-col">
+                    <span>{grandTotalsSummary.sisa} BTG</span>
+                    <span className="text-[9px] text-slate-400">({grandTotalsSummary.targetKms.toFixed(2)} KMS)</span>
+                  </div>
                 </td>
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-[#008396] dark:text-teal-400">
                   {grandTotalsSummary.percent}%

@@ -24,13 +24,13 @@ export const UL_PRESETS: Record<string, ULConfigPreset> = {
     rows: [
       { namaUlp: 'ULP BUKITTINGGI', timRow: 'TIM ROW 3', target: 200, kodeUnit: '13221' },
       { namaUlp: 'ULP PADANG PANJANG', timRow: 'TIM ROW 4', target: 200, kodeUnit: '13222' },
-      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 7', target: 150, kodeUnit: '13223' },
-      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 8', target: 150, kodeUnit: '13223' },
-      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 5', target: 180, kodeUnit: '13224' },
-      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 6', target: 180, kodeUnit: '13224' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 9', target: 150, kodeUnit: '13225' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 10', target: 150, kodeUnit: '13225' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 11', target: 150, kodeUnit: '13225' },
+      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 7', target: 50.20, kodeUnit: '13223' },
+      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 8', target: 50.20, kodeUnit: '13223' },
+      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 5', target: 50.20, kodeUnit: '13224' },
+      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 6', target: 50.20, kodeUnit: '13224' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 9', target: 50.20, kodeUnit: '13225' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 10', target: 50.20, kodeUnit: '13225' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 11', target: 50.20, kodeUnit: '13225' },
       { namaUlp: 'ULP BASO', timRow: 'TIM ROW 2', target: 200, kodeUnit: '13226' },
       { namaUlp: 'ULP KOTO TUO', timRow: 'TIM ROW 1', target: 200, kodeUnit: '13227' },
     ],
@@ -39,8 +39,8 @@ export const UL_PRESETS: Record<string, ULConfigPreset> = {
     kodeUL: 'PDG',
     namaUL: 'UL PADANG',
     rows: [
-      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Alpha (Tim Utama)', target: 200, kodeUnit: '13211' },
-      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Charlie (Rapid Response)', target: 200, kodeUnit: '13211' },
+      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Alpha (Tim Utama)', target: 50.20, kodeUnit: '13211' },
+      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Charlie (Rapid Response)', target: 50.20, kodeUnit: '13211' },
       { namaUlp: 'ULP INDARUNG', timRow: 'Regu ROW Bravo (Tim Indarung)', target: 200, kodeUnit: '13212' },
       { namaUlp: 'ULP KURANJI', timRow: 'Regu ROW Alpha (Tim Utama)', target: 200, kodeUnit: '13213' },
       { namaUlp: 'ULP TABING', timRow: 'Regu ROW Delta (Tim Tabing)', target: 200, kodeUnit: '13214' },
@@ -50,21 +50,21 @@ export const UL_PRESETS: Record<string, ULConfigPreset> = {
     kodeUL: 'PYK',
     namaUL: 'UL PAYAKUMBUH',
     rows: [
-      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 1', target: 200, kodeUnit: '13231' },
-      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 2', target: 200, kodeUnit: '13231' },
-      { namaUlp: 'ULP LIMA PULUH KOTA', timRow: 'TIM ROW 3', target: 180, kodeUnit: '13232' },
-      { namaUlp: 'ULP SULIKI', timRow: 'TIM ROW 4', target: 180, kodeUnit: '13233' },
+      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 1', target: 50.20, kodeUnit: '13231' },
+      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 2', target: 50.20, kodeUnit: '13231' },
+      { namaUlp: 'ULP LIMA PULUH KOTA', timRow: 'TIM ROW 3', target: 200, kodeUnit: '13232' },
+      { namaUlp: 'ULP SULIKI', timRow: 'TIM ROW 4', target: 200, kodeUnit: '13233' },
     ],
   },
   SOLOK: {
     kodeUL: 'SLK',
     namaUL: 'UL SOLOK',
     rows: [
-      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 1', target: 200, kodeUnit: '13241' },
-      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 2', target: 200, kodeUnit: '13241' },
-      { namaUlp: 'ULP SAWAHLUNTO', timRow: 'TIM ROW 3', target: 180, kodeUnit: '13242' },
-      { namaUlp: 'ULP SIJUNJUNG', timRow: 'TIM ROW 4', target: 180, kodeUnit: '13243' },
-      { namaUlp: 'ULP MUARA LABUH', timRow: 'TIM ROW 5', target: 180, kodeUnit: '13244' },
+      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 1', target: 50.20, kodeUnit: '13241' },
+      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 2', target: 50.20, kodeUnit: '13241' },
+      { namaUlp: 'ULP SAWAHLUNTO', timRow: 'TIM ROW 3', target: 200, kodeUnit: '13242' },
+      { namaUlp: 'ULP SIJUNJUNG', timRow: 'TIM ROW 4', target: 200, kodeUnit: '13243' },
+      { namaUlp: 'ULP MUARA LABUH', timRow: 'TIM ROW 5', target: 200, kodeUnit: '13244' },
     ],
   },
 };
@@ -314,17 +314,17 @@ export class RekapHarianService {
       const month = parseInt(isoMatch[2], 10);
       const day = parseInt(isoMatch[3], 10);
       
-      // If it has a T and ends with Z, it's a UTC ISO string from Google Apps Script
-      // e.g. 2026-08-19T17:00:00.000Z
+      // Handle UTC ISO strings from Google Apps Script (e.g. 2026-08-19T17:00:00.000Z)
+      // We assume these are local midnight shifted to UTC. 
+      // 17:00 UTC of previous day = 00:00 local of current day (WIB +7)
       if (s.includes('T') && s.endsWith('Z')) {
         const dt = new Date(s);
-        // We know these dates usually represent local midnight but were shifted to UTC
-        // If it's 17:00 of the previous day, it means it was midnight of the next day in WIB (+7)
+        // If hours is late (17..23), it's likely midnight of the NEXT day in local time
         if (dt.getUTCHours() >= 12) {
-          const nextDay = new Date(dt);
-          nextDay.setUTCDate(dt.getUTCDate() + 1);
-          return { y: nextDay.getUTCFullYear(), m: nextDay.getUTCMonth() + 1, d: nextDay.getUTCDate() };
+          const localDt = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
+          return { y: localDt.getUTCFullYear(), m: localDt.getUTCMonth() + 1, d: localDt.getUTCDate() };
         }
+        // If hours is early, it stays on the same UTC day which is also same local day
         return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
       }
 
@@ -341,16 +341,9 @@ export class RekapHarianService {
       };
     }
 
-    // 3. Fallback for other formats
+    // 3. Fallback
     const dt = new Date(s);
     if (!isNaN(dt.getTime())) {
-      // For ISO-like strings (YYYY-MM-DD...), use UTC to avoid local timezone shifts
-      // which often push midnight dates to the previous day
-      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-        return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
-      }
-      
-      // If it looks like a time-only or partial, use local getters
       return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
     }
 
@@ -377,7 +370,7 @@ export class RekapHarianService {
     return currentRows.map((row) => {
       const updatedDaily = { ...row.dailyValues };
       
-      // Reset ALL days for the current month being synced to avoid stale data
+      // Reset ALL days for the current month
       for (let i = 1; i <= 31; i++) {
         const dayKey = String(i).padStart(2, '0');
         updatedDaily[dayKey] = {
@@ -392,52 +385,9 @@ export class RekapHarianService {
       const rowUlpClean = normalizeNumbers(stripPrefix(row.namaUlp));
       const rowTimClean = normalizeNumbers(stripPrefix(row.timRow));
 
-      // 1. Data KMS from Work Order
-      if (Array.isArray(workOrders)) {
-        workOrders.forEach((wo) => {
-          if (!wo) return;
-          const parts = this.parseDateParts(wo.tanggal);
-          if (!parts) return;
+      // 1. Data Pohon from Realisasi (Process this first to get dates of activity)
+      const activityDatesByPenyulang: Record<string, Set<string>> = {};
 
-          // Strict matching for year and month
-          if (parts.y === year && parts.m === monthIndex + 1) {
-            const woUlp = normalizeNumbers(stripPrefix(wo.ulpName || ''));
-            const woTimFull = normalizeNumbers(normalize(wo.reguName || ''));
-            const woTimClean = normalizeNumbers(stripPrefix(wo.reguName || ''));
-            
-            // Precise matching for team numbers
-            const rowNumMatch = rowTimClean.match(/\d+/);
-            const woNumMatch = woTimClean.match(/\d+/);
-            
-            let matchTim = false;
-            if (rowNumMatch && woNumMatch) {
-              matchTim = rowNumMatch[0] === woNumMatch[0];
-            } else {
-              matchTim = woTimFull.includes(rowTimClean) || rowTimClean.includes(woTimClean);
-            }
-
-            const matchUlp = woUlp.includes(rowUlpClean) || rowUlpClean.includes(woUlp) || woTimFull.includes(rowUlpClean);
-
-            if (matchUlp && matchTim) {
-              const dayKey = String(parts.d).padStart(2, '0');
-              if (!updatedDaily[dayKey]) {
-                updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
-              }
-
-              let targetKms = Number(wo.volumePekerjaan) || 0;
-              if (wo.satuan?.toUpperCase() === 'GAWANG') targetKms = targetKms / 20;
-
-              let realisasiKms = Number(wo.totalRealisasi) || 0;
-              if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') realisasiKms = realisasiKms / 20;
-
-              updatedDaily[dayKey].targetKms += targetKms;
-              updatedDaily[dayKey].realisasiKms += realisasiKms;
-            }
-          }
-        });
-      }
-
-      // 2. Data Pohon from Realisasi
       if (Array.isArray(realisasiList)) {
         realisasiList.forEach((rel) => {
           if (!rel) return;
@@ -473,6 +423,65 @@ export class RekapHarianService {
               } else if (ket.includes('PANGKAS') || ket.includes('POTONG')) {
                 updatedDaily[dayKey].pangkas++;
               }
+
+              // Track dates of activity for each Penyulang to help align KMS
+              const penyClean = normalize(rel.penyulangName || 'GENERAL');
+              if (!activityDatesByPenyulang[penyClean]) activityDatesByPenyulang[penyClean] = new Set();
+              activityDatesByPenyulang[penyClean].add(dayKey);
+            }
+          }
+        });
+      }
+
+      // 2. Data KMS from Work Order
+      if (Array.isArray(workOrders)) {
+        workOrders.forEach((wo) => {
+          if (!wo) return;
+          const parts = this.parseDateParts(wo.tanggal);
+          if (!parts) return;
+
+          if (parts.y === year && parts.m === monthIndex + 1) {
+            const woUlp = normalizeNumbers(stripPrefix(wo.ulpName || ''));
+            const woTimFull = normalizeNumbers(normalize(wo.reguName || ''));
+            const woTimClean = normalizeNumbers(stripPrefix(wo.reguName || ''));
+            
+            const rowNumMatch = rowTimClean.match(/\d+/);
+            const woNumMatch = woTimClean.match(/\d+/);
+            
+            let matchTim = false;
+            if (rowNumMatch && woNumMatch) {
+              matchTim = rowNumMatch[0] === woNumMatch[0];
+            } else {
+              matchTim = woTimFull.includes(rowTimClean) || rowTimClean.includes(woTimClean);
+            }
+
+            const matchUlp = woUlp.includes(rowUlpClean) || rowUlpClean.includes(woUlp) || woTimFull.includes(rowUlpClean);
+
+            if (matchUlp && matchTim) {
+              // SMART ALIGNMENT: 
+              // Try to find if this WO has trees cut on a specific day.
+              // If so, we move the KMS to that day to align with trees.
+              const penyClean = normalize(wo.penyulangName || 'GENERAL');
+              let targetDayKey = String(parts.d).padStart(2, '0');
+              
+              if (activityDatesByPenyulang[penyClean] && activityDatesByPenyulang[penyClean].size > 0) {
+                // Use the first day of activity found for this penyulang in this month
+                const dates = Array.from(activityDatesByPenyulang[penyClean]).sort();
+                targetDayKey = dates[0];
+              }
+
+              if (!updatedDaily[targetDayKey]) {
+                updatedDaily[targetDayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
+              }
+
+              let targetKms = Number(wo.volumePekerjaan) || 0;
+              if (wo.satuan?.toUpperCase() === 'GAWANG') targetKms = targetKms / 20;
+
+              let realisasiKms = Number(wo.totalRealisasi) || 0;
+              if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') realisasiKms = realisasiKms / 20;
+
+              updatedDaily[targetDayKey].targetKms += targetKms;
+              updatedDaily[targetDayKey].realisasiKms += realisasiKms;
             }
           }
         });
