@@ -23,10 +23,22 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 
-export const InputRealisasiPage: React.FC = () => {
+interface InputRealisasiPageProps {
+  editMode?: boolean;
+  initialData?: any;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}
+
+export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({ 
+  editMode = false, 
+  initialData, 
+  onSuccess,
+  onCancel 
+}) => {
   const { user: currentUser } = useAuth();
   const { workOrders, updateWorkOrder } = useWorkOrders();
-  const { addRealisasi } = useRealisasi();
+  const { addRealisasi, updateRealisasi } = useRealisasi();
   const { settings } = useSettings();
   const { setActiveTab, selectedWoIdForRealisasi, setSelectedWoIdForRealisasi } = useUI();
   const { showToast } = useToast();
@@ -34,6 +46,7 @@ export const InputRealisasiPage: React.FC = () => {
   // Filter Work Orders for the current user's regu, unless admin
   const availableWorkOrders = workOrders
     .filter((wo) => {
+      if (editMode && initialData && wo.id === initialData.workOrderId) return true;
       if (currentUser?.role !== 'User') return true;
       if (!currentUser) return false;
       
@@ -64,6 +77,7 @@ export const InputRealisasiPage: React.FC = () => {
     });
 
   const [selectedWoId, setSelectedWoId] = React.useState<string>(() => {
+    if (editMode && initialData) return initialData.workOrderId;
     if (selectedWoIdForRealisasi) return selectedWoIdForRealisasi;
     const defaultWo = availableWorkOrders.find((w) => w.status !== 'Selesai') || availableWorkOrders[0];
     return defaultWo?.id || '';
@@ -72,24 +86,32 @@ export const InputRealisasiPage: React.FC = () => {
   const selectedWO = availableWorkOrders.find((w) => w.id === selectedWoId);
 
   const [tanggalRealisasi, setTanggalRealisasi] = React.useState(
-    new Date().toISOString().slice(0, 10)
+    editMode && initialData ? initialData.tanggalRealisasi : new Date().toISOString().slice(0, 10)
   );
-  const [petugasName, setPetugasName] = React.useState(currentUser?.name || 'Rahmat Hidayat');
-  const [latitude, setLatitude] = React.useState(-0.9142);
-  const [longitude, setLongitude] = React.useState(100.4631);
-  const [keterangan, setKeterangan] = React.useState('TEBANG');
-  const [noTiang, setNoTiang] = React.useState('');
-  const [jenisTanaman, setJenisTanaman] = React.useState('Kelapa Sawit');
-  const [pertumbuhanTanaman, setPertumbuhanTanaman] = React.useState('CEPAT');
-  const [kendala, setKendala] = React.useState('Tidak Ada Kendala');
-  const [lokasiKerja, setLokasiKerja] = React.useState('');
+  const [petugasName, setPetugasName] = React.useState(editMode && initialData ? initialData.petugasName : (currentUser?.name || 'Rahmat Hidayat'));
+  const [latitude, setLatitude] = React.useState(editMode && initialData ? initialData.latitude : -0.9142);
+  const [longitude, setLongitude] = React.useState(editMode && initialData ? initialData.longitude : 100.4631);
+  const [keterangan, setKeterangan] = React.useState(editMode && initialData ? initialData.keterangan : 'TEBANG');
+  const [noTiang, setNoTiang] = React.useState(editMode && initialData ? initialData.noTiang : '');
+  const [jenisTanaman, setJenisTanaman] = React.useState(editMode && initialData ? initialData.jenisTanaman : 'Kelapa Sawit');
+  const [pertumbuhanTanaman, setPertumbuhanTanaman] = React.useState(editMode && initialData ? initialData.pertumbuhanTanaman : 'CEPAT');
+  const [kendala, setKendala] = React.useState(editMode && initialData ? initialData.kendala : 'Tidak Ada Kendala');
+  const [lokasiKerja, setLokasiKerja] = React.useState(editMode && initialData ? initialData.lokasiKerja : '');
+
+  // Photo slots
+  const [photosSebelum, setPhotosSebelum] = React.useState<WatermarkedPhoto[]>(
+    editMode && initialData ? (initialData.photosSebelum || []) : []
+  );
+  const [photosSesudah, setPhotosSesudah] = React.useState<WatermarkedPhoto[]>(
+    editMode && initialData ? (initialData.photosSesudah || []) : []
+  );
 
   // Handle direct selection from external tabs or after Spreadsheet sync
   // When work orders change (e.g. loaded asynchronously), ensure selectedWoId is valid
   React.useEffect(() => {
     if (availableWorkOrders.length === 0) return;
 
-    if (selectedWoIdForRealisasi) {
+    if (!editMode && selectedWoIdForRealisasi) {
       const wo = availableWorkOrders.find((w) => w.id === selectedWoIdForRealisasi);
       if (wo) {
         setSelectedWoId(wo.id);
@@ -109,19 +131,20 @@ export const InputRealisasiPage: React.FC = () => {
         if (defaultWo.longitude) setLongitude(defaultWo.longitude);
       }
     }
-  }, [availableWorkOrders.length, selectedWoIdForRealisasi]);
+  }, [availableWorkOrders.length, selectedWoIdForRealisasi, editMode]);
 
-  // Sync WO details when selectedWO changes
+  // Sync WO details when selectedWO changes (only if not in edit mode or initial mount)
+  const isFirstMount = React.useRef(true);
   React.useEffect(() => {
-    if (selectedWO) {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    if (selectedWO && !editMode) {
       setLatitude(selectedWO.latitude);
       setLongitude(selectedWO.longitude);
     }
   }, [selectedWoId]);
-
-  // Photo slots
-  const [photosSebelum, setPhotosSebelum] = React.useState<WatermarkedPhoto[]>([]);
-  const [photosSesudah, setPhotosSesudah] = React.useState<WatermarkedPhoto[]>([]);
 
   // Preview Modal
   const [previewPhoto, setPreviewPhoto] = React.useState<WatermarkedPhoto | null>(null);
@@ -283,44 +306,70 @@ export const InputRealisasiPage: React.FC = () => {
       const fotoSebelumUrl = photosSebelum[0]?.fileUrl ? formatDriveViewUrl(photosSebelum[0].fileUrl) : fotoSebelumRaw;
       const fotoSesudahUrl = photosSesudah[0]?.fileUrl ? formatDriveViewUrl(photosSesudah[0].fileUrl) : fotoSesudahRaw;
 
-      await addRealisasi({
-        workOrderId: selectedWO.id,
-        nomorWO: selectedWO.nomorWO,
-        ulpName: selectedWO.ulpName,
-        reguName: selectedWO.reguName,
-        penyulangName: selectedWO.penyulangName,
-        noTiang,
-        tanggalRealisasi,
-        petugasId: currentUser?.id || 'usr-3',
-        fotoSebelumUrl,
-        fotoSesudahUrl,
-        photosSebelum,
-        photosSesudah,
-        petugasName,
-        jenisTanaman,
-        lokasiKerja,
-        keterangan,
-        pertumbuhanTanaman,
-        kendala,
-        latitude,
-        longitude,
-        progressPercent: 100,
-        status: 'Selesai',
-      });
+      if (editMode && initialData) {
+        updateRealisasi(initialData.id, {
+          workOrderId: selectedWO.id,
+          nomorWO: selectedWO.nomorWO,
+          ulpName: selectedWO.ulpName,
+          reguName: selectedWO.reguName,
+          penyulangName: selectedWO.penyulangName,
+          noTiang,
+          tanggalRealisasi,
+          fotoSebelumUrl,
+          fotoSesudahUrl,
+          photosSebelum,
+          photosSesudah,
+          petugasName,
+          jenisTanaman,
+          lokasiKerja,
+          keterangan,
+          pertumbuhanTanaman,
+          kendala,
+          latitude,
+          longitude,
+        });
+        showToast('Perubahan Realisasi berhasil disimpan.', 'success');
+        if (onSuccess) onSuccess();
+      } else {
+        await addRealisasi({
+          workOrderId: selectedWO.id,
+          nomorWO: selectedWO.nomorWO,
+          ulpName: selectedWO.ulpName,
+          reguName: selectedWO.reguName,
+          penyulangName: selectedWO.penyulangName,
+          noTiang,
+          tanggalRealisasi,
+          petugasId: currentUser?.id || 'usr-3',
+          fotoSebelumUrl,
+          fotoSesudahUrl,
+          photosSebelum,
+          photosSesudah,
+          petugasName,
+          jenisTanaman,
+          lokasiKerja,
+          keterangan,
+          pertumbuhanTanaman,
+          kendala,
+          latitude,
+          longitude,
+          progressPercent: 100,
+          status: 'Selesai',
+        });
 
-      // Reset Form to empty values for the same WO
-      setNoTiang('');
-      setKeterangan('TEBANG');
-      setPertumbuhanTanaman('CEPAT');
-      setJenisTanaman('Kelapa Sawit');
-      setKendala('Tidak Ada Kendala');
-      setLokasiKerja('');
-      setPhotosSebelum([]);
-      setPhotosSesudah([]);
-      setTanggalRealisasi(new Date().toISOString().slice(0, 10));
+        // Reset Form to empty values for the same WO
+        setNoTiang('');
+        setKeterangan('TEBANG');
+        setPertumbuhanTanaman('CEPAT');
+        setJenisTanaman('Kelapa Sawit');
+        setKendala('Tidak Ada Kendala');
+        setLokasiKerja('');
+        setPhotosSebelum([]);
+        setPhotosSesudah([]);
+        setTanggalRealisasi(new Date().toISOString().slice(0, 10));
 
-      setSubmissionStatus('success');
-      showToast('Realisasi berhasil diinput.', 'success');
+        setSubmissionStatus('success');
+        showToast('Realisasi berhasil diinput.', 'success');
+      }
     } catch (err: any) {
       showToast(`Gagal menyimpan realisasi: ${err.message || 'Terjadi kesalahan'}`, 'error');
     } finally {

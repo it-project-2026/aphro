@@ -15,9 +15,19 @@ const INDO_MONTHS = [
   'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'
 ];
 
-export const WorkOrderInputPage: React.FC = () => {
+interface WorkOrderInputPageProps {
+  onBack?: () => void;
+  editMode?: boolean;
+  initialData?: any;
+}
+
+export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({ 
+  onBack,
+  editMode = false,
+  initialData
+}) => {
   const { ulpList, penyulangList, reguList } = useMasterData();
-  const { workOrders, addWorkOrder } = useWorkOrders();
+  const { workOrders, addWorkOrder, updateWorkOrder } = useWorkOrders();
   const { settings } = useSettings();
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
@@ -25,12 +35,41 @@ export const WorkOrderInputPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // 1. Initial State Definition
-  const [pekerjaan, setPekerjaan] = useState<'NORMAL' | 'GOROW'>('NORMAL');
-  const [tanggal, setTanggal] = useState(getLocalDateTimeString().slice(0, 10));
+  const [pekerjaan, setPekerjaan] = useState<'NORMAL' | 'GOROW'>(
+    editMode && initialData ? initialData.pekerjaan : 'NORMAL'
+  );
+  const [tanggal, setTanggal] = useState(
+    editMode && initialData ? initialData.tanggal : getLocalDateTimeString().slice(0, 10)
+  );
   
-  const [ulpName, setUlpName] = useState(ulpList[0]?.namaULP || 'ULP Kuranji');
-  const [reguName, setReguName] = useState(reguList[0]?.namaRegu || 'Regu ROW Alpha');
-  const [status, setStatus] = useState<WOStatus>('BELUM SELESAI');
+  const [ulpName, setUlpName] = useState(
+    editMode && initialData ? initialData.ulpName : (ulpList[0]?.namaULP || 'ULP Kuranji')
+  );
+  const [reguName, setReguName] = useState(
+    editMode && initialData ? initialData.reguName : (reguList[0]?.namaRegu || 'Regu ROW Alpha')
+  );
+  const [status, setStatus] = useState<WOStatus>(
+    editMode && initialData ? initialData.status : 'BELUM SELESAI'
+  );
+
+  // Target Volume: VOLUME PEKERJAAN & SATUAN (KMS / GAWANG)
+  const [volumePekerjaan, setVolumePekerjaan] = useState<string>(
+    editMode && initialData ? String(initialData.volumePekerjaan) : ''
+  );
+  const [satuan, setSatuan] = useState<'KMS' | 'GAWANG'>(
+    editMode && initialData ? initialData.satuan : 'KMS'
+  );
+
+  const [nomorWO, setNomorWO] = useState(
+    editMode && initialData ? initialData.nomorWO : ''
+  );
+
+  // Only auto-generate if not in edit mode or no initial data
+  useEffect(() => {
+    if (!editMode && !nomorWO) {
+      setNomorWO(generateFormattedNomorWO(tanggal, reguName, ulpName));
+    }
+  }, []);
 
   // Filter Penyulang based on selected ULP
   const matchedUlp = ulpList.find((u) => u.namaULP === ulpName);
@@ -45,7 +84,7 @@ export const WorkOrderInputPage: React.FC = () => {
   }
 
   const [penyulangName, setPenyulangName] = useState(
-    filteredPenyulang[0]?.namaPenyulang || penyulangList[0]?.namaPenyulang || 'Penyulang Kuranji'
+    editMode && initialData ? initialData.penyulangName : (filteredPenyulang[0]?.namaPenyulang || penyulangList[0]?.namaPenyulang || 'Penyulang Kuranji')
   );
 
   const cleanStr = (s: any) => String(s || '').trim().toUpperCase();
@@ -64,6 +103,8 @@ export const WorkOrderInputPage: React.FC = () => {
 
   // Auto-update Penyulang & Regu when ULP or Pekerjaan changes
   useEffect(() => {
+    if (editMode) return; // Skip auto-updates in edit mode to preserve manual changes
+
     if (filteredPenyulang.length > 0) {
       const isCurrentValid = filteredPenyulang.some((p) => p.namaPenyulang === penyulangName);
       if (!isCurrentValid) {
@@ -83,11 +124,10 @@ export const WorkOrderInputPage: React.FC = () => {
     } else {
       setReguName('');
     }
-  }, [ulpName, pekerjaan]);
+  }, [ulpName, pekerjaan, editMode]);
 
   // Target Volume: VOLUME PEKERJAAN & SATUAN (KMS / GAWANG)
-  const [volumePekerjaan, setVolumePekerjaan] = useState<string>('');
-  const [satuan, setSatuan] = useState<'KMS' | 'GAWANG'>('KMS');
+  // (Moved up for initialization)
 
   // Auto-generate formatted Nomor_WO helper function: (Format: M1/05/AGUSTUS/2026/KTO/01)
   // ket : M[Minggu] / [Tanggal] / [Bulan] / [Tahun] / [ULP] / [No. Tim ROW]
@@ -133,14 +173,6 @@ export const WorkOrderInputPage: React.FC = () => {
     return `${weekStr}/${dayStr}/${monthName}/${year}/${ulpCode}/${teamNum}`;
   };
 
-  const [nomorWO, setNomorWO] = useState(() =>
-    generateFormattedNomorWO(
-      new Date().toISOString().slice(0, 10),
-      reguList[0]?.namaRegu || 'Regu ROW Alpha',
-      ulpList[0]?.namaULP || 'ULP Kuranji'
-    )
-  );
-
   // Helper: Detect duplicate Work Order with the same Nomor_WO AND same Penyulang
   const existingDuplicateWO = useMemo(() => {
     const currentNoWoClean = cleanStr(nomorWO);
@@ -149,25 +181,27 @@ export const WorkOrderInputPage: React.FC = () => {
 
     return (
       workOrders.find((wo) => {
+        // If editing, don't flag itself as a duplicate
+        if (editMode && initialData && wo.id === initialData.id) return false;
         return cleanStr(wo.nomorWO) === currentNoWoClean && cleanStr(wo.penyulangName) === currentPenyulangClean;
       }) || null
     );
-  }, [workOrders, nomorWO, penyulangName]);
+  }, [workOrders, nomorWO, penyulangName, editMode, initialData]);
 
   // Update Nomor_WO automatically when date, team, or ULP changes
   const handleTanggalChange = (newDate: string) => {
     setTanggal(newDate);
-    setNomorWO(generateFormattedNomorWO(newDate, reguName, ulpName));
+    if (!editMode) setNomorWO(generateFormattedNomorWO(newDate, reguName, ulpName));
   };
 
   const handleUlpChange = (newUlp: string) => {
     setUlpName(newUlp);
-    setNomorWO(generateFormattedNomorWO(tanggal, reguName, newUlp));
+    if (!editMode) setNomorWO(generateFormattedNomorWO(tanggal, reguName, newUlp));
   };
 
   const handleReguChange = (newRegu: string) => {
     setReguName(newRegu);
-    setNomorWO(generateFormattedNomorWO(tanggal, newRegu, ulpName));
+    if (!editMode) setNomorWO(generateFormattedNomorWO(tanggal, newRegu, ulpName));
   };
 
   const handleAutoFormatNomorWO = () => {
@@ -207,7 +241,7 @@ export const WorkOrderInputPage: React.FC = () => {
       const currentPenyulangObj = penyulangList.find((p) => p.namaPenyulang === penyulangName) || penyulangList[0];
       const currentReguObj = reguList.find((r) => r.namaRegu === reguName) || reguList[0];
 
-      const newWoData = {
+      const woData = {
         pekerjaan: pekerjaan,
         nomorWO: (nomorWO || '').trim() || generateFormattedNomorWO(tanggal, reguName, ulpName),
         tanggal,
@@ -220,14 +254,20 @@ export const WorkOrderInputPage: React.FC = () => {
         volumePekerjaan: numVolume,
         satuan: satuan,
         status: status,
-        progressPercent: status === 'SELESAI' ? 100 : 0,
+        progressPercent: status === 'SELESAI' ? 100 : (editMode && initialData ? initialData.progressPercent : 0),
       };
 
-      // addWorkOrder already handles both local state and GAS API synchronization
-      addWorkOrder(newWoData);
+      if (editMode && initialData) {
+        updateWorkOrder(initialData.id, woData);
+        showToast(`Work Order "${nomorWO}" Berhasil Diperbarui!`, 'success');
+      } else {
+        // addWorkOrder already handles both local state and GAS API synchronization
+        addWorkOrder(woData);
+        showToast(`Work Order Baru (${numVolume} ${satuan}) Berhasil Disimpan!`, 'success');
+      }
       
-      showToast(`Work Order Baru (${numVolume} ${satuan}) Berhasil Disimpan!`, 'success');
-      setActiveTab('work_orders');
+      if (onBack) onBack();
+      else setActiveTab('work_orders');
     } catch (err: any) {
       console.error('Error saving Work Order:', err);
       showToast(`Terjadi kesalahan saat menyimpan Work Order`, 'error');
@@ -241,7 +281,7 @@ export const WorkOrderInputPage: React.FC = () => {
       {/* Header bar */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => setActiveTab('work_orders')}
+          onClick={() => onBack ? onBack() : setActiveTab('work_orders')}
           className="inline-flex items-center space-x-2 text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -267,11 +307,13 @@ export const WorkOrderInputPage: React.FC = () => {
           <div className="flex items-center space-x-3 text-black dark:text-teal-400">
             <FilePlus className="w-6 h-6 text-[#00A2B9]" />
             <h1 className="text-xl sm:text-2xl font-black text-black dark:text-white font-display uppercase tracking-tighter">
-              Form Input Work Order Baru
+              {editMode ? `Edit Work Order ${nomorWO}` : 'Form Input Work Order Baru'}
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-400 mt-1 font-bold">
-            Inputkan data pekerjaan ROW sesuai dengan format sheet <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-black dark:text-teal-400 font-black border border-teal-100">WORK_ORDER</code>.
+            {editMode 
+              ? 'Perbarui data pekerjaan ROW sesuai dengan kebutuhan di lapangan.'
+              : 'Inputkan data pekerjaan ROW sesuai dengan format sheet WORK_ORDER.'}
           </p>
         </div>
 
@@ -491,7 +533,7 @@ export const WorkOrderInputPage: React.FC = () => {
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-700">
             <button
               type="button"
-              onClick={() => setActiveTab('work_orders')}
+              onClick={() => onBack ? onBack() : setActiveTab('work_orders')}
               className="px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
             >
               Batal

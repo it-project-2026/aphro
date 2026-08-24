@@ -13,6 +13,8 @@ interface RealisasiContextType {
   realisasiList: Realisasi[];
   setRealisasiList: (list: Realisasi[]) => void;
   addRealisasi: (rel: Omit<Realisasi, 'id' | 'createdAt'>) => Promise<Realisasi>;
+  updateRealisasi: (id: string, updates: Partial<Realisasi>) => void;
+  deleteRealisasi: (id: string) => void;
 }
 
 const RealisasiContext = React.createContext<RealisasiContextType | undefined>(undefined);
@@ -73,8 +75,23 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     return newRel;
   }, [setRealisasiList, settings.gasWebAppUrl, settings.photoFolderId, settings.driveFolderId, showToast]);
 
+  const updateRealisasi = React.useCallback((id: string, updates: Partial<Realisasi>) => {
+    setRealisasiList(prev => prev.map(rel => {
+      if (rel.id === id) {
+        return { ...rel, ...updates };
+      }
+      return rel;
+    }));
+    showToast('Realisasi berhasil diperbarui', 'success');
+  }, [setRealisasiList, showToast]);
+
+  const deleteRealisasi = React.useCallback((id: string) => {
+    setRealisasiList(prev => prev.filter(rel => rel.id !== id));
+    showToast('Realisasi berhasil dihapus', 'info');
+  }, [setRealisasiList, showToast]);
+
   return (
-    <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi }}>
+    <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, deleteRealisasi }}>
       {children}
     </RealisasiContext.Provider>
   );

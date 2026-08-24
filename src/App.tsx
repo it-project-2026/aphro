@@ -30,6 +30,8 @@ import { AbsensiKerjaPage } from './pages/AbsensiKerjaPage';
 import { AbsensiMainPage } from './pages/AbsensiMainPage';
 import { InisiasiPage } from './pages/InisiasiPage';
 import { RekapPekerjaanHarianPage } from './pages/RekapPekerjaanHarianPage';
+import { WorkOrderMainPage } from './pages/WorkOrderMainPage';
+import { RealisasiMainPage } from './pages/RealisasiMainPage';
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
@@ -81,12 +83,13 @@ const AppContent: React.FC = () => {
     switch (activeTab) {
       case 'dashboard': 
         if ((user?.role || '').toUpperCase() === 'USER') {
-          return <WorkOrderPage />;
+          return <WorkOrderMainPage />;
         }
         return <DashboardPage />;
-      case 'work_orders': return <WorkOrderPage />;
-      case 'input_wo': return <WorkOrderInputPage />;
-      case 'input_realisasi': return <InputRealisasiPage />;
+      case 'work_orders': return <WorkOrderMainPage initialSubTab="list" />;
+      case 'input_wo': return <WorkOrderMainPage initialSubTab="input" />;
+      case 'realisasi_main':
+      case 'input_realisasi': return <RealisasiMainPage initialSubTab="input" />;
       case 'absensi':
       case 'absensi_pulang': return <AbsensiMainPage initialSubTab="absensi_pulang" />;
       case 'monitoring_absensi': return <AbsensiMainPage initialSubTab="monitoring_absensi" />;

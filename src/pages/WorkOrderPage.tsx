@@ -28,7 +28,12 @@ import {
 } from 'lucide-react';
 import { formatDateDisplay } from '../utils/dateUtils';
 
-export const WorkOrderPage: React.FC = () => {
+interface WorkOrderPageProps {
+  onAdd?: () => void;
+  onEdit?: (wo: any) => void;
+}
+
+export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) => {
   const { user: currentUser } = useAuth();
   const { workOrders, deleteWorkOrder } = useWorkOrders();
   const { ulpList, penyulangList } = useMasterData();
@@ -95,7 +100,7 @@ export const WorkOrderPage: React.FC = () => {
 
           {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
             <button
-              onClick={() => setActiveTab('input_wo')}
+              onClick={() => onAdd ? onAdd() : setActiveTab('input_wo')}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#00A2B9] hover:bg-[#008396] text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
             >
               <PlusCircle className="w-4 h-4 text-white" />
@@ -279,6 +284,32 @@ export const WorkOrderPage: React.FC = () => {
                   >
                     <QrCode className="w-4 h-4" />
                   </button>
+
+                  {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (onEdit) onEdit(wo);
+                          else setEditModalWO(wo);
+                        }}
+                        className="py-2.5 px-3 bg-teal-100 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 active:scale-95"
+                        title="Edit"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Hapus Work Order ini?')) {
+                            deleteWorkOrder(wo.id);
+                          }
+                        }}
+                        className="py-2.5 px-3 bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 active:scale-95"
+                        title="Hapus"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))
@@ -428,7 +459,10 @@ export const WorkOrderPage: React.FC = () => {
                         {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
                           <>
                             <button
-                              onClick={() => setEditModalWO(wo)}
+                              onClick={() => {
+                                if (onEdit) onEdit(wo);
+                                else setEditModalWO(wo);
+                              }}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-[#008396] hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors"
                               title="Edit Work Order"
                             >

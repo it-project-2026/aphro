@@ -70,19 +70,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
     },
     {
       id: 'work_orders',
-      label: role === 'User' ? 'Work Order Saya' : 'Daftar Work Order',
+      label: 'Manajemen Work Order',
       icon: ClipboardList,
       roles: ['SuperAdmin', 'Admin', 'User'],
     },
     {
-      id: 'input_wo',
-      label: 'Input Work Order',
-      icon: FilePlus,
-      roles: ['SuperAdmin', 'Admin'],
-    },
-    {
       id: 'input_realisasi',
-      label: 'Input Realisasi',
+      label: 'Manajemen Realisasi',
       icon: CheckSquare,
       roles: ['SuperAdmin', 'Admin', 'User'],
     },
