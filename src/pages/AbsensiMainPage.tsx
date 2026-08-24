@@ -687,7 +687,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                       'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
                     ][rekapMonth - 1]} {rekapYear})
                   </th>
-                  <th colSpan={3} className="p-2 border border-slate-300 dark:border-slate-600 text-center">Rekapitulasi</th>
+                  <th colSpan={4} className="p-2 border border-slate-300 dark:border-slate-600 text-center">Rekapitulasi</th>
                 </tr>
                 <tr className="bg-[#0070C0] text-white">
                   {rekapData.days.map(d => {
@@ -703,6 +703,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                   <th className="p-1 border border-slate-300 dark:border-slate-600 text-center w-12 bg-teal-600">Hadir</th>
                   <th className="p-1 border border-slate-300 dark:border-slate-600 text-center w-12 bg-amber-600">Izin</th>
                   <th className="p-1 border border-slate-300 dark:border-slate-600 text-center w-12 bg-rose-600">Sakit</th>
+                  <th className="p-1 border border-slate-300 dark:border-slate-600 text-center w-12 bg-slate-600">Alfa</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-900">
@@ -717,6 +718,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                     let totalHadir = 0;
                     let totalIzin = 0;
                     let totalSakit = 0;
+                    let totalAlfa = 0;
 
                     return (
                       <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
@@ -743,9 +745,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                             cellText = 'S';
                             cellClass = 'text-rose-600 dark:text-rose-400 font-black';
                             totalSakit++;
-                          } else if (status === 'TIDAK HADIR') {
+                          } else if (status === 'TIDAK HADIR' || status === 'ALPHA' || status === 'ALFA') {
                             cellText = 'A';
                             cellClass = 'text-slate-400 dark:text-slate-500 font-black';
+                            totalAlfa++;
                           }
 
                           return (
@@ -758,6 +761,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         <td className="p-2 border border-slate-200 dark:border-slate-700 text-center font-bold text-teal-600">{totalHadir}</td>
                         <td className="p-2 border border-slate-200 dark:border-slate-700 text-center font-bold text-amber-600">{totalIzin}</td>
                         <td className="p-2 border border-slate-200 dark:border-slate-700 text-center font-bold text-rose-600">{totalSakit}</td>
+                        <td className="p-2 border border-slate-200 dark:border-slate-700 text-center font-bold text-slate-500">{totalAlfa}</td>
                       </tr>
                     );
                   })

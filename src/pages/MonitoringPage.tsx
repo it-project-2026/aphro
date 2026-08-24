@@ -945,7 +945,7 @@ export const MonitoringPage: React.FC = () => {
                             cellText = 'S';
                             cellClass = 'text-rose-600 dark:text-rose-400 font-black';
                             totalSakit++;
-                          } else if (status === 'TIDAK HADIR' || status === 'ALPHA') {
+                          } else if (status === 'TIDAK HADIR' || status === 'ALPHA' || status === 'ALFA') {
                             cellText = 'A';
                             cellClass = 'text-slate-400 dark:text-slate-500 font-black';
                             totalAlfa++;
