@@ -168,7 +168,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     setPetugasRows(updated);
   };
 
-  const handlePetugasStatusChange = (index: number, status: 'HADIR' | 'TIDAK HADIR' | 'SAKIT' | 'IZIN') => {
+  const handlePetugasStatusChange = (index: number, status: string) => {
     const updated = [...petugasRows];
     updated[index] = { ...updated[index], keterangan: status };
     setPetugasRows(updated);
@@ -423,21 +423,34 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                       : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-800'
                   }`}
                 >
-                  <div className="flex items-center space-x-3 flex-1">
-                    <span className="w-7 h-7 rounded-xl bg-[#00A2B9]/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-xs shrink-0">
-                      #{idx + 1}
-                    </span>
-                    <input
-                      type="text"
-                      value={petugas.nama}
-                      disabled={hasDoneAbsensiMasuk}
-                      onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
-                      placeholder={`Nama Petugas #${idx + 1}`}
-                      className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-[#00A2B9] focus:outline-none disabled:bg-transparent disabled:border-transparent disabled:font-bold"
-                    />
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <span className="w-7 h-7 rounded-xl bg-[#00A2B9]/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-xs shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={petugas.nama}
+                        disabled={hasDoneAbsensiMasuk}
+                        onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
+                        placeholder={`Nama Petugas #${idx + 1}`}
+                        className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-[#00A2B9] focus:outline-none disabled:bg-transparent disabled:border-transparent disabled:font-bold"
+                      />
+                    </div>
+                    
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={petugas.keterangan}
+                        disabled={hasDoneAbsensiMasuk}
+                        onChange={(e) => handlePetugasStatusChange(idx, e.target.value)}
+                        placeholder="Keterangan (HADIR, IZIN, dll)"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9] focus:outline-none disabled:bg-transparent disabled:border-transparent italic"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center space-x-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {(['HADIR', 'SAKIT', 'IZIN', 'TIDAK HADIR'] as const).map((status) => {
                       const isSelected = petugas.keterangan === status;
                       

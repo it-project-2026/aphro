@@ -81,7 +81,7 @@ export interface WatermarkedPhoto {
 
 export interface AbsensiPetugas {
   nama: string;
-  keterangan: 'HADIR' | 'TIDAK HADIR' | 'SAKIT' | 'IZIN';
+  keterangan: string; // Allow status or custom notes
 }
 
 export interface Absensi {

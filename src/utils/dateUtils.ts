@@ -45,3 +45,78 @@ export const getLocalDateTimeString = (): string => {
   
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
+
+/**
+ * Normalizes various date string formats (ISO, DD-MM-YYYY, DD/MM/YYYY, or Numbers)
+ * into a standard YYYY-MM-DD string for comparison.
+ * Optimized for accuracy in local timezones (like WIB).
+ */
+export const normalizeDateISO = (dateVal: any): string => {
+  if (!dateVal) return '';
+
+  // If it's already a Date object, use local parts
+  if (dateVal instanceof Date) {
+    const year = dateVal.getFullYear();
+    const month = String(dateVal.getMonth() + 1).padStart(2, '0');
+    const day = String(dateVal.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  const s = String(dateVal).trim();
+  if (!s) return '';
+
+  // 1. Handle full ISO strings (contains 'T')
+  // We MUST use local parts for these absolute times to correctly interpret the day
+  // relative to the user's timezone (e.g. 17:00 UTC 19th -> 00:00 WIB 20th)
+  if (s.includes('T')) {
+    try {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    } catch (e) {}
+  }
+
+  // 2. Check for YYYY-MM-DD plain string pattern
+  // Prioritize this for naive strings to avoid any timezone shifts
+  const ymdMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymdMatch) {
+    return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
+  }
+  
+  // 3. Check for DD-MM-YYYY or DD/MM/YYYY (Common Indonesian format)
+  const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // 4. Handle numerical timestamps (milliseconds)
+  if (/^\d{10,}$/.test(s)) {
+    const d = new Date(Number(s));
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+  
+  // 5. Final fallback attempt with native parsing
+  try {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {}
+
+  return s.slice(0, 10);
+};

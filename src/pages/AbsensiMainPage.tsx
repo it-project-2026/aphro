@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
+import { normalizeDateISO } from '../utils/dateUtils';
 import {
   UserCheck,
   Calendar,
@@ -124,7 +125,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       
       if (!matchesUlp || !matchesRegu) return;
 
-      const dateStr = String(abs.tanggal || '').slice(0, 10);
+      const dateStr = normalizeDateISO(abs.tanggal);
       if (dateStr.startsWith(`${rekapYear}-${String(rekapMonth).padStart(2, '0')}`)) {
         if (!presenceMap.has(dateStr)) {
           presenceMap.set(dateStr, new Map());
@@ -161,7 +162,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       
       if (!matchesUlp || !matchesRegu) return;
 
-      const dateStr = String(abs.tanggal || '').slice(0, 10);
+      const dateStr = normalizeDateISO(abs.tanggal);
       if (dateStr.startsWith(`${rekapYear}-${String(rekapMonth).padStart(2, '0')}`)) {
         if (Array.isArray(abs.petugasList)) {
           abs.petugasList.forEach(p => {
@@ -292,6 +293,8 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     const baseList = absensiList.filter((item) => {
       if (!item) return false;
 
+      const itemDateNormalized = normalizeDateISO(item.tanggal);
+
       // Role-based user filter: if role === 'USER', only show entries for the logged-in user's Regu / account
       if (isUserRole) {
         const itemReguClean = cleanStr(item.reguName);
@@ -324,6 +327,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !query ||
+        itemDateNormalized.includes(query) ||
         (item.tanggal || '').toLowerCase().includes(query) ||
         (item.ulpName || '').toLowerCase().includes(query) ||
         (item.reguName || '').toLowerCase().includes(query) ||
@@ -345,7 +349,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     });
 
     for (const item of sorted) {
-      const datePart = (item.tanggal || '').slice(0, 10);
+      const datePart = normalizeDateISO(item.tanggal);
       const reguPart = cleanStr(item.reguName);
       const key = `${datePart}_${reguPart}`;
       
@@ -745,19 +749,21 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                           let cellText = '-';
                           let cellClass = 'text-slate-300 dark:text-slate-600';
                           
-                          if (status === 'HADIR') {
+                          const statusUpper = (status || '').toUpperCase();
+
+                          if (statusUpper.startsWith('HADIR')) {
                             cellText = 'H';
                             cellClass = 'text-teal-600 dark:text-teal-400 font-black';
                             totalHadir++;
-                          } else if (status === 'IZIN') {
+                          } else if (statusUpper.startsWith('IZIN')) {
                             cellText = 'I';
                             cellClass = 'text-amber-600 dark:text-amber-400 font-black';
                             totalIzin++;
-                          } else if (status === 'SAKIT') {
+                          } else if (statusUpper.startsWith('SAKIT')) {
                             cellText = 'S';
                             cellClass = 'text-rose-600 dark:text-rose-400 font-black';
                             totalSakit++;
-                          } else if (status === 'TIDAK HADIR' || status === 'ALPHA' || status === 'ALFA') {
+                          } else if (statusUpper.includes('TIDAK HADIR') || statusUpper.includes('ALPHA') || statusUpper.includes('ALFA')) {
                             cellText = 'A';
                             cellClass = 'text-slate-400 dark:text-slate-500 font-black';
                             totalAlfa++;
