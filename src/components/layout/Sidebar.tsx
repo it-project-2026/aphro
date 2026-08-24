@@ -84,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       id: 'absensi_pulang',
       label: 'Absensi Pulang',
       icon: LogOut,
-      roles: ['SuperAdmin', 'Admin', 'User'],
+      roles: ['User'], // Hide from Admin and SuperAdmin
     },
     {
       id: 'monitoring_absensi',

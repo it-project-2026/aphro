@@ -80,10 +80,19 @@ export const MobileBottomNav: React.FC = () => {
         },
       ];
 
+  // Extra filter to explicitly remove absensi_pulang for Admin even in non-isAdmRole branch
+  const finalTabs = mobileTabs.filter(tab => {
+    if (tab.id === 'absensi_pulang') {
+      const uRole = (user?.role || '').toUpperCase();
+      return uRole !== 'ADMIN' && uRole !== 'ADM';
+    }
+    return true;
+  });
+
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-lg pb-safe">
       <div className="flex items-center justify-around h-16 px-2 max-w-md mx-auto relative">
-        {mobileTabs.map((tab) => {
+        {finalTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
 

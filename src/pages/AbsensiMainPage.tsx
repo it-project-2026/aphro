@@ -428,7 +428,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       </div>
 
       {/* VIEW 1: ABSENSI PULANG */}
-      {activeSubTab === 'absensi_pulang' && (
+      {activeSubTab === 'absensi_pulang' && !isAdmRole && (
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 shadow-xl space-y-6">
             <div className="border-b border-slate-100 dark:border-slate-700 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
