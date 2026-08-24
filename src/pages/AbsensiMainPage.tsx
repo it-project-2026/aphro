@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 interface AbsensiMainPageProps {
-  initialSubTab?: 'absensi_pulang' | 'monitoring_absensi';
+  initialSubTab?: 'absensi_pulang' | 'monitoring_absensi' | 'rekap_absensi';
 }
 
 function formatHariTanggal(dateStr: string) {
@@ -46,13 +46,13 @@ function formatHariTanggal(dateStr: string) {
 export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab = 'absensi_pulang' }) => {
   const { user: currentUser } = useAuth();
   const { absensiList, addAbsensi } = useAbsensi();
-  const { ulpList, reguList } = useMasterData();
+  const { ulpList, reguList, petugasList } = useMasterData();
   const { showToast } = useToast();
 
-  const isAdmRole = (currentUser?.role || '').toUpperCase() === 'ADM' || (currentUser?.userName || '').toLowerCase() === 'admbkt';
+  const isAdmRole = (currentUser?.role || '').toUpperCase() === 'ADM' || (currentUser?.role || '').toUpperCase() === 'ADMIN' || (currentUser?.userName || '').toLowerCase() === 'admbkt';
 
-  const [activeSubTab, setActiveSubTab] = useState<'absensi_pulang' | 'monitoring_absensi'>(
-    isAdmRole ? 'monitoring_absensi' : initialSubTab
+  const [activeSubTab, setActiveSubTab] = useState<'absensi_pulang' | 'monitoring_absensi' | 'rekap_absensi'>(
+    initialSubTab !== 'absensi_pulang' ? initialSubTab : (isAdmRole ? 'monitoring_absensi' : 'absensi_pulang')
   );
 
   useEffect(() => {
@@ -95,10 +95,90 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveUrl: string } | null>(null);
 
-  // Filters for Monitoring Absensi Table
+  // State for Rekap Absensi
+  const [rekapMonth, setRekapMonth] = useState(new Date().getMonth() + 1); // 1-12
+  const [rekapYear, setRekapYear] = useState(new Date().getFullYear());
+
+  // Filters for Monitoring & Rekap Absensi Table
   const [searchQuery, setSearchQuery] = useState('');
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
+
+  // Logic to calculate days and presence for Rekap Absensi
+  const rekapData = useMemo(() => {
+    const daysInMonth = new Date(rekapYear, rekapMonth, 0).getDate();
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    // Group absensi by date and officer
+    // Map: YYYY-MM-DD -> OfficerName -> Status
+    const presenceMap = new Map<string, Map<string, string>>();
+
+    absensiList.forEach((abs) => {
+      // Filter by ULP/Regu if needed
+      const matchesUlp = filterUlp === 'ALL' || abs.ulpName === filterUlp;
+      const matchesRegu = filterRegu === 'ALL' || abs.reguName === filterRegu;
+      
+      if (!matchesUlp || !matchesRegu) return;
+
+      const dateStr = String(abs.tanggal || '').slice(0, 10);
+      if (dateStr.startsWith(`${rekapYear}-${String(rekapMonth).padStart(2, '0')}`)) {
+        if (!presenceMap.has(dateStr)) {
+          presenceMap.set(dateStr, new Map());
+        }
+        const officerStatuses = presenceMap.get(dateStr)!;
+        
+        if (Array.isArray(abs.petugasList)) {
+          abs.petugasList.forEach((p) => {
+            if (p.nama && p.nama !== '-') {
+              officerStatuses.set(p.nama.trim().toLowerCase(), p.keterangan || 'HADIR');
+            }
+          });
+        }
+      }
+    });
+
+    // Get unique officers
+    const officerSet = new Map<string, { nama: string; reguName: string }>();
+    
+    // Add from master data
+    petugasList.forEach(p => {
+      const matchesUlp = filterUlp === 'ALL' || p.ulpName === filterUlp;
+      const matchesRegu = filterRegu === 'ALL' || p.reguName === filterRegu;
+      
+      if (p.status === 'Aktif' && matchesUlp && matchesRegu) {
+        officerSet.set(p.nama.trim().toLowerCase(), { nama: p.nama, reguName: p.reguName });
+      }
+    });
+
+    // Add from attendance logs (in case some officers are not in master or filtered differently)
+    absensiList.forEach(abs => {
+      const matchesUlp = filterUlp === 'ALL' || abs.ulpName === filterUlp;
+      const matchesRegu = filterRegu === 'ALL' || abs.reguName === filterRegu;
+      
+      if (!matchesUlp || !matchesRegu) return;
+
+      const dateStr = String(abs.tanggal || '').slice(0, 10);
+      if (dateStr.startsWith(`${rekapYear}-${String(rekapMonth).padStart(2, '0')}`)) {
+        if (Array.isArray(abs.petugasList)) {
+          abs.petugasList.forEach(p => {
+            if (p.nama && p.nama !== '-' && !officerSet.has(p.nama.trim().toLowerCase())) {
+              officerSet.set(p.nama.trim().toLowerCase(), { nama: p.nama, reguName: abs.reguName });
+            }
+          });
+        }
+      }
+    });
+
+    const officers = Array.from(officerSet.values()).sort((a, b) => {
+      const reguComp = a.reguName.localeCompare(b.reguName);
+      if (reguComp !== 0) return reguComp;
+      return a.nama.localeCompare(b.nama);
+    });
+
+    return { days, officers, presenceMap };
+  }, [absensiList, petugasList, rekapMonth, rekapYear, filterUlp, filterRegu]);
+
+  // Filters for Monitoring Absensi Table (Already declared above now)
 
   // Dynamic unique regu options
   const allReguOptions = useMemo(() => {
@@ -302,9 +382,9 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
           </p>
         </div>
 
-        {/* Tab Buttons (hidden if isAdmRole to ensure exclusive access to Monitoring) */}
-        {!isAdmRole && (
-          <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+        {/* Tab Buttons */}
+        <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+          {!isAdmRole && (
             <button
               type="button"
               onClick={() => setActiveSubTab('absensi_pulang')}
@@ -317,20 +397,34 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               <LogOut className="w-4 h-4" />
               <span>ABSENSI PULANG</span>
             </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('monitoring_absensi')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+              activeSubTab === 'monitoring_absensi'
+                ? 'bg-[#00A2B9] text-white shadow-md'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>MONITORING ABSENSI</span>
+          </button>
+          {isAdmRole && (
             <button
               type="button"
-              onClick={() => setActiveSubTab('monitoring_absensi')}
+              onClick={() => setActiveSubTab('rekap_absensi')}
               className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
-                activeSubTab === 'monitoring_absensi'
+                activeSubTab === 'rekap_absensi'
                   ? 'bg-[#00A2B9] text-white shadow-md'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Clock className="w-4 h-4" />
-              <span>MONITORING ABSENSI</span>
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>REKAP ABSENSI</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* VIEW 1: ABSENSI PULANG */}
@@ -483,6 +577,212 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 3: REKAP ABSENSI MONTHLY GRID */}
+      {activeSubTab === 'rekap_absensi' && (
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden p-6 space-y-6 print:p-0 print:border-none print:shadow-none print-content">
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              .no-print { display: none !important; }
+              body { background: white !important; }
+              table { border-collapse: collapse !important; width: 100% !important; }
+              th, td { border: 1px solid black !important; color: black !important; }
+              .bg-[#0070C0] { background-color: #0070C0 !important; color: white !important; -webkit-print-color-adjust: exact; }
+              .bg-[#005a9c] { background-color: #005a9c !important; color: white !important; -webkit-print-color-adjust: exact; }
+            }
+          ` }} />
+          
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-700 pb-4 no-print">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-2">
+                <FileSpreadsheet className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
+                <span>Rekap Absensi Bulanan</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Rekapitulasi kehadiran personil regu dalam satu bulan penuh.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <select
+                  value={filterUlp}
+                  onChange={(e) => setFilterUlp(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold"
+                >
+                  <option value="ALL">Semua ULP</option>
+                  {ulpList.map(u => (
+                    <option key={u.id} value={u.namaULP}>{u.namaULP}</option>
+                  ))}
+                </select>
+                <select
+                  value={filterRegu}
+                  onChange={(e) => setFilterRegu(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold"
+                >
+                  <option value="ALL">Semua Regu</option>
+                  {reguList.filter(r => filterUlp === 'ALL' || r.ulpName === filterUlp).map(r => (
+                    <option key={r.id} value={r.namaRegu}>{r.namaRegu}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <select
+                  value={rekapMonth}
+                  onChange={(e) => setRekapMonth(Number(e.target.value))}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold"
+                >
+                  {[
+                    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+                  ].map((m, i) => (
+                    <option key={i} value={i + 1}>{m}</option>
+                  ))}
+                </select>
+                <select
+                  value={rekapYear}
+                  onChange={(e) => setRekapYear(Number(e.target.value))}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold"
+                >
+                  {[2024, 2025, 2026].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <button 
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-xl bg-[#00A2B9] text-white hover:bg-[#008396] shadow-md flex items-center space-x-2 transition-all text-xs font-bold"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Cetak Laporan</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Print Header */}
+          <div className="hidden print:block text-center mb-6 border-b-2 border-slate-900 pb-4">
+            <h1 className="text-xl font-bold uppercase">REKAPITULASI ABSENSI PERSONIL</h1>
+            <h2 className="text-lg font-bold uppercase">BULAN: {[
+              'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+              'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+            ][rekapMonth - 1]} {rekapYear}</h2>
+            {filterUlp !== 'ALL' && <p className="text-sm font-bold uppercase">UNIT: {filterUlp}</p>}
+          </div>
+
+          <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl print:border-none">
+            <table className="w-full text-[10px] border-collapse min-w-[1200px] print:min-w-full">
+              <thead>
+                <tr className="bg-[#0070C0] text-white">
+                  <th rowSpan={2} className="p-2 border border-slate-300 dark:border-slate-600 text-center w-10">No. Urut</th>
+                  <th rowSpan={2} className="p-2 border border-slate-300 dark:border-slate-600 text-center min-w-[120px]">Nama Regu</th>
+                  <th rowSpan={2} className="p-2 border border-slate-300 dark:border-slate-600 text-center min-w-[150px]">Nama Petugas</th>
+                  <th colSpan={rekapData.days.length} className="p-1 border border-slate-300 dark:border-slate-600 text-center bg-[#005a9c]">
+                    Tanggal Pekerjaan (Bulan: {[
+                      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+                    ][rekapMonth - 1]} {rekapYear})
+                  </th>
+                  <th colSpan={3} className="p-2 border border-slate-300 dark:border-slate-600 text-center">Rekapitulasi</th>
+                </tr>
+                <tr className="bg-[#0070C0] text-white">
+                  {rekapData.days.map(d => {
+                    const date = new Date(rekapYear, rekapMonth - 1, d);
+                    const dayName = date.toLocaleDateString('id-ID', { weekday: 'short' });
+                    return (
+                      <th key={d} className="p-1 border border-slate-300 dark:border-slate-600 text-center w-8">
+                        <div className="text-[8px] opacity-80 uppercase">{dayName.slice(0, 3)}</div>
+                        <div>{d}</div>
+                      </th>
+                    );
+                  })}
+                  <th className="p-1 border border-slate-300 dark:border-slate-600 text-center w-12 bg-teal-600">Hadir</th>
+                  <th className="p-1 border border-slate-300 dark:border-slate-600 text-center w-12 bg-amber-600">Izin</th>
+                  <th className="p-1 border border-slate-300 dark:border-slate-600 text-center w-12 bg-rose-600">Sakit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-900">
+                {rekapData.officers.length === 0 ? (
+                  <tr>
+                    <td colSpan={rekapData.days.length + 6} className="p-8 text-center text-slate-400 italic">
+                      Data petugas tidak ditemukan untuk periode ini.
+                    </td>
+                  </tr>
+                ) : (
+                  rekapData.officers.map((officer, idx) => {
+                    let totalHadir = 0;
+                    let totalIzin = 0;
+                    let totalSakit = 0;
+
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-2 border border-slate-200 dark:border-slate-700 text-center font-bold text-slate-500">{idx + 1}</td>
+                        <td className="p-2 border border-slate-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-300">{officer.reguName}</td>
+                        <td className="p-2 border border-slate-200 dark:border-slate-700 font-extrabold text-slate-900 dark:text-white sticky left-0 bg-inherit shadow-sm">{officer.nama}</td>
+                        
+                        {rekapData.days.map(d => {
+                          const dateKey = `${rekapYear}-${String(rekapMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                          const status = rekapData.presenceMap.get(dateKey)?.get(officer.nama.trim().toLowerCase());
+                          
+                          let cellText = '-';
+                          let cellClass = 'text-slate-300 dark:text-slate-600';
+                          
+                          if (status === 'HADIR') {
+                            cellText = 'H';
+                            cellClass = 'text-teal-600 dark:text-teal-400 font-black';
+                            totalHadir++;
+                          } else if (status === 'IZIN') {
+                            cellText = 'I';
+                            cellClass = 'text-amber-600 dark:text-amber-400 font-black';
+                            totalIzin++;
+                          } else if (status === 'SAKIT') {
+                            cellText = 'S';
+                            cellClass = 'text-rose-600 dark:text-rose-400 font-black';
+                            totalSakit++;
+                          } else if (status === 'TIDAK HADIR') {
+                            cellText = 'A';
+                            cellClass = 'text-slate-400 dark:text-slate-500 font-black';
+                          }
+
+                          return (
+                            <td key={d} className={`p-1 border border-slate-200 dark:border-slate-700 text-center ${cellClass}`}>
+                              {cellText}
+                            </td>
+                          );
+                        })}
+
+                        <td className="p-2 border border-slate-200 dark:border-slate-700 text-center font-bold text-teal-600">{totalHadir}</td>
+                        <td className="p-2 border border-slate-200 dark:border-slate-700 text-center font-bold text-amber-600">{totalIzin}</td>
+                        <td className="p-2 border border-slate-200 dark:border-slate-700 text-center font-bold text-rose-600">{totalSakit}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold text-slate-500">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 bg-teal-100 dark:bg-teal-900 border border-teal-600 rounded-xs flex items-center justify-center text-teal-600 font-black">H</div>
+              <span>Hadir</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 bg-amber-100 dark:bg-amber-900 border border-amber-600 rounded-xs flex items-center justify-center text-amber-600 font-black">I</div>
+              <span>Izin</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 bg-rose-100 dark:bg-rose-900 border border-rose-600 rounded-xs flex items-center justify-center text-rose-600 font-black">S</div>
+              <span>Sakit</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 bg-slate-100 dark:bg-slate-800 border border-slate-400 rounded-xs flex items-center justify-center text-slate-400 font-black">A</div>
+              <span>Alpha / Tidak Hadir</span>
+            </div>
           </div>
         </div>
       )}
