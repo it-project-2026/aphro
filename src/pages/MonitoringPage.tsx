@@ -7,6 +7,7 @@ import { useMasterData } from '../context/MasterDataContext';
 import { useSettings } from '../context/SettingsContext';
 import { useGASSync } from '../context/GASSyncContext';
 import { useUI } from '../context/UIContext';
+import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { WorkOrder, Realisasi } from '../types';
 import { getLocalDateTimeString, formatDateDisplay } from '../utils/dateUtils';
@@ -58,6 +59,9 @@ function createCustomMarkerIcon(status: string) {
 }
 
 export const MonitoringPage: React.FC = () => {
+  const draggable1 = useDraggableScroll();
+  const draggable2 = useDraggableScroll();
+  
   const { user: currentUser } = useAuth();
   const { workOrders, displayedWorkOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
@@ -572,7 +576,15 @@ export const MonitoringPage: React.FC = () => {
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
+              <div 
+                ref={draggable1.ref}
+                onMouseDown={draggable1.onMouseDown}
+                onMouseUp={draggable1.onMouseUp}
+                onMouseLeave={draggable1.onMouseLeave}
+                onMouseMove={draggable1.onMouseMove}
+                className="overflow-x-auto"
+                style={draggable1.style}
+              >
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 font-extrabold uppercase tracking-wider">
@@ -874,7 +886,15 @@ export const MonitoringPage: React.FC = () => {
             {filterUlp !== 'ALL' && <p className="text-sm font-bold uppercase">UNIT: {filterUlp}</p>}
           </div>
 
-          <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl print:border-none">
+          <div 
+            ref={draggable2.ref}
+            onMouseDown={draggable2.onMouseDown}
+            onMouseUp={draggable2.onMouseUp}
+            onMouseLeave={draggable2.onMouseLeave}
+            onMouseMove={draggable2.onMouseMove}
+            className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl print:border-none"
+            style={draggable2.style}
+          >
             <table className="w-full text-[10px] border-collapse min-w-[1200px] print:min-w-full">
               <thead>
                 <tr className="bg-[#0070C0] text-white">

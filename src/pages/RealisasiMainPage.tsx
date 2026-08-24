@@ -7,6 +7,7 @@ import {
   Filter,
   Search
 } from 'lucide-react';
+import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { useAuth } from '../context/AuthContext';
 import { useRealisasi } from '../context/RealisasiContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
@@ -25,6 +26,8 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   const { workOrders } = useWorkOrders();
   const { ulpList, penyulangList } = useMasterData();
   const { settings } = useSettings();
+
+  const draggable = useDraggableScroll();
 
   const [activeSubTab, setActiveSubTab] = useState<'input' | 'history'>(initialSubTab);
   
@@ -227,7 +230,15 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                 <div>ULP {selectedUlpName}</div>
               </div>
 
-              <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+              <div 
+                ref={draggable.ref}
+                onMouseDown={draggable.onMouseDown}
+                onMouseUp={draggable.onMouseUp}
+                onMouseLeave={draggable.onMouseLeave}
+                onMouseMove={draggable.onMouseMove}
+                className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl"
+                style={draggable.style}
+              >
                 <table className="w-full text-center text-[10px] border-collapse min-w-[1200px]">
                   <thead>
                     <tr className="bg-[#00A2B9] text-white font-extrabold text-xs uppercase">

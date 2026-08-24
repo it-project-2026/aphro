@@ -4,6 +4,7 @@ import { useMasterData } from '../context/MasterDataContext';
 import { useAbsensi } from '../context/AbsensiContext';
 import { useUI } from '../context/UIContext';
 import { useToast } from '../hooks/useToast';
+import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
 import {
@@ -44,6 +45,9 @@ function formatHariTanggal(dateStr: string) {
 }
 
 export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab = 'absensi_pulang' }) => {
+  const draggable1 = useDraggableScroll();
+  const draggable2 = useDraggableScroll();
+
   const { user: currentUser } = useAuth();
   const { absensiList, addAbsensi } = useAbsensi();
   const { ulpList, reguList, petugasList } = useMasterData();
@@ -674,7 +678,15 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
             {filterUlp !== 'ALL' && <p className="text-sm font-bold uppercase">UNIT: {filterUlp}</p>}
           </div>
 
-          <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl print:border-none">
+          <div 
+            ref={draggable1.ref}
+            onMouseDown={draggable1.onMouseDown}
+            onMouseUp={draggable1.onMouseUp}
+            onMouseLeave={draggable1.onMouseLeave}
+            onMouseMove={draggable1.onMouseMove}
+            className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl print:border-none"
+            style={draggable1.style}
+          >
             <table className="w-full text-[10px] border-collapse min-w-[1200px] print:min-w-full">
               <thead>
                 <tr className="bg-[#0070C0] text-white">
@@ -853,7 +865,15 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
           </div>
 
           {/* Table Container with Horizontal Scroll */}
-          <div className="overflow-x-auto">
+          <div 
+            ref={draggable2.ref}
+            onMouseDown={draggable2.onMouseDown}
+            onMouseUp={draggable2.onMouseUp}
+            onMouseLeave={draggable2.onMouseLeave}
+            onMouseMove={draggable2.onMouseMove}
+            className="overflow-x-auto"
+            style={draggable2.style}
+          >
             <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
               <thead>
                 <tr className="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-extrabold border-b border-slate-200 dark:border-slate-700 uppercase tracking-wider text-[11px]">

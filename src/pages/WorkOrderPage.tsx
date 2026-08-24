@@ -11,6 +11,7 @@ import { PriorityBadge } from '../components/common/PriorityBadge';
 import { QRCodeModal } from '../components/common/QRCodeModal';
 import { EditWorkOrderModal } from '../components/common/EditWorkOrderModal';
 import { exportWorkOrdersToExcel } from '../utils/exportUtils';
+import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import {
   Search,
   Filter,
@@ -40,6 +41,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
   const { settings } = useSettings();
   const { setActiveTab, setSelectedWoIdForRealisasi } = useUI();
   const { showToast } = useToast();
+  const draggable = useDraggableScroll();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUlp, setFilterUlp] = useState('ALL');
@@ -317,7 +319,15 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
         </div>
 
         {/* Desktop View: Table */}
-        <div className="hidden md:block overflow-x-auto">
+        <div 
+          ref={draggable.ref}
+          onMouseDown={draggable.onMouseDown}
+          onMouseUp={draggable.onMouseUp}
+          onMouseLeave={draggable.onMouseLeave}
+          onMouseMove={draggable.onMouseMove}
+          className="hidden md:block overflow-x-auto"
+          style={draggable.style}
+        >
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800 uppercase tracking-wider text-[11px]">
               <tr>

@@ -7,6 +7,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useUI } from '../context/UIContext';
 import { useGASSync } from '../hooks/useGASSync';
 import { useToast } from '../hooks/useToast';
+import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { StatCard } from '../components/common/StatCard';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { RealisasiTargetDashboard } from '../components/dashboard/RealisasiTargetDashboard';
@@ -56,6 +57,7 @@ ChartJS.register(
 );
 
 export const DashboardPage: React.FC = () => {
+  const draggable = useDraggableScroll();
   const { user: currentUser } = useAuth();
   const { workOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
@@ -701,7 +703,15 @@ export const DashboardPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div 
+          ref={draggable.ref}
+          onMouseDown={draggable.onMouseDown}
+          onMouseUp={draggable.onMouseUp}
+          onMouseLeave={draggable.onMouseLeave}
+          onMouseMove={draggable.onMouseMove}
+          className="overflow-x-auto"
+          style={draggable.style}
+        >
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800 uppercase tracking-wider text-[11px]">
               <tr>

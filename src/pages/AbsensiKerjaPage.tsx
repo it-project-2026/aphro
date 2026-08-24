@@ -4,6 +4,7 @@ import { useMasterData } from '../context/MasterDataContext';
 import { useAbsensi } from '../context/AbsensiContext';
 import { useUI } from '../context/UIContext';
 import { useToast } from '../hooks/useToast';
+import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { 
   UserCheck, 
@@ -32,6 +33,7 @@ interface AbsensiKerjaPageProps {
 }
 
 export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess }) => {
+  const draggable = useDraggableScroll();
   const { user: currentUser, logout } = useAuth();
   const { petugasList, users } = useMasterData();
   const { absensiList, addAbsensi } = useAbsensi();
@@ -658,7 +660,15 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
             <span className="text-xs text-slate-400">Daftar riwayat absensi & link foto khusus untuk {reguName}</span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div 
+            ref={draggable.ref}
+            onMouseDown={draggable.onMouseDown}
+            onMouseUp={draggable.onMouseUp}
+            onMouseLeave={draggable.onMouseLeave}
+            onMouseMove={draggable.onMouseMove}
+            className="overflow-x-auto"
+            style={draggable.style}
+          >
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 border-b border-slate-200 dark:border-slate-700">

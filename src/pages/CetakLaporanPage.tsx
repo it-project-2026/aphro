@@ -6,6 +6,7 @@ import { useMasterData } from '../context/MasterDataContext';
 import { useSettings } from '../context/SettingsContext';
 import { useGASSync } from '../context/GASSyncContext';
 import { useToast } from '../hooks/useToast';
+import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { MapReportCapture, MapReportCaptureRef } from '../components/MapReportCapture';
 import { MapPreviewModal } from '../components/MapPreviewModal';
 import { formatDateTime, formatDateOnly, formatExecutionDateTime } from '../utils/dateFormatter';
@@ -180,6 +181,10 @@ const LogoComponent = () => {
 };
 
 export const CetakLaporanPage: React.FC = () => {
+  const draggable1 = useDraggableScroll();
+  const draggable2 = useDraggableScroll();
+  const draggable3 = useDraggableScroll();
+
   const { user: currentUser } = useAuth();
   const { realisasiList } = useRealisasi();
   const { workOrders } = useWorkOrders();
@@ -734,7 +739,15 @@ export const CetakLaporanPage: React.FC = () => {
             </div>
 
             {/* Rekap Hasil ROW Table View matching exact uploaded image */}
-            <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-2xs bg-white">
+            <div 
+              ref={draggable1.ref}
+              onMouseDown={draggable1.onMouseDown}
+              onMouseUp={draggable1.onMouseUp}
+              onMouseLeave={draggable1.onMouseLeave}
+              onMouseMove={draggable1.onMouseMove}
+              className="overflow-x-auto border border-slate-300 rounded-xl shadow-2xs bg-white"
+              style={draggable1.style}
+            >
               <table className="w-full text-center text-[11px] border-collapse min-w-[1100px]">
                 <thead>
                   {/* Banner Title 1 */}
@@ -860,7 +873,15 @@ export const CetakLaporanPage: React.FC = () => {
         {activeReportTab === 'peta' && (
           <div className="space-y-6">
             {/* Diagram Schematic Frame - GAMBAR PETA POHON (ROW) matching attached image */}
-            <div className="border-2 border-slate-900 rounded-2xl p-4 sm:p-6 bg-white space-y-4 shadow-sm overflow-x-auto">
+            <div 
+              ref={draggable2.ref}
+              onMouseDown={draggable2.onMouseDown}
+              onMouseUp={draggable2.onMouseUp}
+              onMouseLeave={draggable2.onMouseLeave}
+              onMouseMove={draggable2.onMouseMove}
+              className="border-2 border-slate-900 rounded-2xl p-4 sm:p-6 bg-white space-y-4 shadow-sm overflow-x-auto"
+              style={draggable2.style}
+            >
               {/* Header Box */}
               <div className="grid grid-cols-12 border border-slate-900 rounded-lg overflow-hidden text-center divide-x divide-slate-900">
                 {/* Left Logo */}
@@ -1057,7 +1078,15 @@ export const CetakLaporanPage: React.FC = () => {
             </div>
 
             {/* Rekapitualsi Table below diagram */}
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <div 
+              ref={draggable3.ref}
+              onMouseDown={draggable3.onMouseDown}
+              onMouseUp={draggable3.onMouseUp}
+              onMouseLeave={draggable3.onMouseLeave}
+              onMouseMove={draggable3.onMouseMove}
+              className="overflow-x-auto border border-slate-200 rounded-xl"
+              style={draggable3.style}
+            >
               <table className="w-full text-left text-xs border border-slate-200 min-w-[800px]">
                 <thead className="bg-teal-900 text-white font-bold">
                   <tr>

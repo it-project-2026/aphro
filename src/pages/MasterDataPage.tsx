@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMasterData } from '../context/MasterDataContext';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../hooks/useToast';
+import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { GASApiService } from '../services/gasApiService';
 import { ULP, Penyulang, ReguROW, Petugas, User, UserRole } from '../types';
 import {
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react';
 
 export const MasterDataPage: React.FC = () => {
+  const draggable = useDraggableScroll();
   const {
     ulpList,
     addULP,
@@ -483,8 +485,16 @@ export const MasterDataPage: React.FC = () => {
 
       {/* Tab 1: REGU ROW Table */}
       {activeTab === 'regu' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs sm:text-sm">
+        <div 
+          ref={draggable.ref}
+          onMouseDown={draggable.onMouseDown}
+          onMouseUp={draggable.onMouseUp}
+          onMouseLeave={draggable.onMouseLeave}
+          onMouseMove={draggable.onMouseMove}
+          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-x-auto"
+          style={draggable.style}
+        >
+          <table className="w-full text-left text-xs sm:text-sm min-w-[800px]">
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="p-3.5 pl-5">Kode Regu</th>
@@ -550,8 +560,16 @@ export const MasterDataPage: React.FC = () => {
 
       {/* Tab 2: PETUGAS Table */}
       {activeTab === 'petugas' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs sm:text-sm">
+        <div 
+          ref={draggable.ref}
+          onMouseDown={draggable.onMouseDown}
+          onMouseUp={draggable.onMouseUp}
+          onMouseLeave={draggable.onMouseLeave}
+          onMouseMove={draggable.onMouseMove}
+          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-x-auto"
+          style={draggable.style}
+        >
+          <table className="w-full text-left text-xs sm:text-sm min-w-[800px]">
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="p-3.5 pl-5">NIP / ID</th>
@@ -612,8 +630,16 @@ export const MasterDataPage: React.FC = () => {
 
       {/* Tab 3: ULP Table */}
       {activeTab === 'ulp' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs sm:text-sm">
+        <div 
+          ref={draggable.ref}
+          onMouseDown={draggable.onMouseDown}
+          onMouseUp={draggable.onMouseUp}
+          onMouseLeave={draggable.onMouseLeave}
+          onMouseMove={draggable.onMouseMove}
+          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-x-auto"
+          style={draggable.style}
+        >
+          <table className="w-full text-left text-xs sm:text-sm min-w-[600px]">
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="p-3.5 pl-5">Kode ULP</th>
@@ -673,8 +699,16 @@ export const MasterDataPage: React.FC = () => {
 
       {/* Tab 4: PENYULANG Table */}
       {activeTab === 'penyulang' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs sm:text-sm">
+        <div 
+          ref={draggable.ref}
+          onMouseDown={draggable.onMouseDown}
+          onMouseUp={draggable.onMouseUp}
+          onMouseLeave={draggable.onMouseLeave}
+          onMouseMove={draggable.onMouseMove}
+          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-x-auto"
+          style={draggable.style}
+        >
+          <table className="w-full text-left text-xs sm:text-sm min-w-[600px]">
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="p-3.5 pl-5">Kode Feeder</th>
@@ -748,8 +782,16 @@ export const MasterDataPage: React.FC = () => {
 
       {/* Tab 5: USER & PASSWORD Table */}
       {activeTab === 'users' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs sm:text-sm">
+        <div 
+          ref={draggable.ref}
+          onMouseDown={draggable.onMouseDown}
+          onMouseUp={draggable.onMouseUp}
+          onMouseLeave={draggable.onMouseLeave}
+          onMouseMove={draggable.onMouseMove}
+          className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-x-auto"
+          style={draggable.style}
+        >
+          <table className="w-full text-left text-xs sm:text-sm min-w-[800px]">
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="p-3.5 pl-5">USERID / Username</th>
