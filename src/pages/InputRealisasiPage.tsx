@@ -50,25 +50,17 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       if (currentUser?.role !== 'User') return true;
       if (!currentUser) return false;
       
-      const matchReguId = wo.reguId && currentUser.reguId && wo.reguId === currentUser.reguId;
-      let matchReguName = false;
+      let matchRegu = false;
       if (wo.reguName && currentUser.reguName) {
-        const woName = (wo.reguName || '').toLowerCase().trim();
-        const uName = (currentUser.reguName || '').toLowerCase().trim();
-        matchReguName = woName === uName || uName.includes(woName) || woName.includes(uName);
+        const woRegu = (wo.reguName || '').toLowerCase().trim();
+        const userRegu = (currentUser.reguName || '').toLowerCase().trim();
+        matchRegu = woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(woRegu);
       }
 
-      let matchPetugas = false;
-      if (wo.petugasName && currentUser.name) {
-        const pName = (wo.petugasName || '').toLowerCase().trim();
-        const uName = (currentUser.name || '').toLowerCase().trim();
-        matchPetugas = pName === uName || pName.includes(uName) || uName.includes(pName);
-      }
-
-      const matchPetugasId = wo.petugasId && currentUser.id && wo.petugasId === currentUser.id;
-      const matchUlp = wo.ulpId === currentUser.ulpId || (wo.ulpName && currentUser.ulpName && (wo.ulpName || '').toLowerCase().trim() === (currentUser.ulpName || '').toLowerCase().trim());
-
-      return matchReguId || matchReguName || matchPetugas || matchPetugasId || matchUlp;
+      const matchReguId = wo.reguId && currentUser.reguId && wo.reguId === currentUser.reguId;
+      
+      // Filter based on Regu
+      return matchRegu || matchReguId;
     })
     .sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.tanggal).getTime();

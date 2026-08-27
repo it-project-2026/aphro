@@ -890,7 +890,6 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 <tr className="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-extrabold border-b border-slate-200 dark:border-slate-700 uppercase tracking-wider text-[11px]">
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700">Hari / Tanggal</th>
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700">ULP</th>
-                  <th className="p-3 border-r border-slate-200 dark:border-slate-700">Penyulang</th>
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700">Nama Regu</th>
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700 bg-teal-50 dark:bg-teal-950/40">
                     Nama Petugas 1
@@ -1019,9 +1018,6 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         </td>
                         <td className="p-3 border-r border-slate-200 dark:border-slate-700">
                           {ulpVal}
-                        </td>
-                        <td className="p-3 border-r border-slate-200 dark:border-slate-700">
-                          {penyulangVal}
                         </td>
                         <td className="p-3 border-r border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200">
                           {reguVal}

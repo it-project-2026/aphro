@@ -333,9 +333,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
               <tr>
                 <th className="p-3.5 pl-5">No WO & Tanggal</th>
                 <th className="p-3.5">ULP / Penyulang</th>
-                <th className="p-3.5">Lokasi & Alamat</th>
                 <th className="p-3.5">Regu & Petugas</th>
-                <th className="p-3.5">Prioritas</th>
                 <th className="p-3.5">Status</th>
                 <th className="p-3.5">Progress</th>
                 <th className="p-3.5 pr-5 text-right">Aksi</th>
@@ -388,22 +386,11 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                       <p className="text-[11px] text-slate-500 font-medium">{wo.ulpName}</p>
                     </td>
 
-                    <td className="p-3.5 max-w-xs">
-                      <p className="font-medium text-slate-900 dark:text-slate-200 truncate">
-                        {wo.lokasi}
-                      </p>
-                      <p className="text-[10px] text-slate-500 font-medium truncate">{wo.alamat}</p>
-                    </td>
-
                     <td className="p-3.5">
                       <p className="font-bold text-slate-900 dark:text-white">
                         {wo.petugasName}
                       </p>
                       <p className="text-[11px] text-slate-500 font-medium">{wo.reguName}</p>
-                    </td>
-
-                    <td className="p-3.5">
-                      <PriorityBadge priority={wo.prioritas} />
                     </td>
 
                     <td className="p-3.5">

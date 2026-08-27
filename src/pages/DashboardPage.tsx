@@ -78,16 +78,42 @@ export const DashboardPage: React.FC = () => {
 
   const role = currentUser?.role || 'User';
 
+  // 1. Deduplicate Work Orders to ensure each Nomor WO only appears once
+  const uniqueWorkOrders = React.useMemo(() => {
+    const seen = new Map<string, any>();
+    workOrders.forEach((wo) => {
+      if (!wo) return;
+      const woKey = (wo.nomorWO || '').trim().toUpperCase() || (wo.id || '').trim().toUpperCase();
+      if (!woKey) return;
+
+      if (!seen.has(woKey)) {
+        seen.set(woKey, wo);
+      } else {
+        const existing = seen.get(woKey)!;
+        const isNewSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
+        const isExistingSelesai = (existing.status || '').toUpperCase() === 'SELESAI';
+        
+        // Priority: 1. Selesai, 2. Most realisasi
+        if (isNewSelesai && !isExistingSelesai) {
+          seen.set(woKey, wo);
+        } else if (isNewSelesai === isExistingSelesai && (wo.totalRealisasi || 0) > (existing.totalRealisasi || 0)) {
+          seen.set(woKey, wo);
+        }
+      }
+    });
+    return Array.from(seen.values());
+  }, [workOrders]);
+
   // Apply Filters to Data
   const filteredWOs = React.useMemo(() => {
-    return workOrders.filter(wo => {
+    return uniqueWorkOrders.filter(wo => {
       const matchesStartDate = !startDate || (wo.tanggal && wo.tanggal >= startDate);
       const matchesEndDate = !endDate || (wo.tanggal && wo.tanggal <= endDate);
       const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
       const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
       return matchesStartDate && matchesEndDate && matchesUlp && matchesPenyulang;
     });
-  }, [workOrders, startDate, endDate, filterUlp, filterPenyulang]);
+  }, [uniqueWorkOrders, startDate, endDate, filterUlp, filterPenyulang]);
 
   const filteredRealisasi = React.useMemo(() => {
     return realisasiList.filter(rel => {
@@ -119,7 +145,10 @@ export const DashboardPage: React.FC = () => {
 
   const totalRealisasiKms = filteredWOs.reduce((sum, wo) => {
     const isSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
-    return sum + (isSelesai ? (wo.totalRealisasi || 0) : 0);
+    if (!isSelesai) return sum;
+    let val = Number(wo.totalRealisasi) || 0;
+    if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') val = val / 20;
+    return sum + val;
   }, 0);
   const kmsPercentage = totalTargetKms > 0 ? Math.round((totalRealisasiKms / totalTargetKms) * 100) : 0;
 
@@ -146,12 +175,15 @@ export const DashboardPage: React.FC = () => {
       const reguWOs = filteredWOs.filter(w => w.reguId === r.id || w.reguName === r.namaRegu);
       const realisasi = reguWOs.reduce((sum, wo) => {
         const isSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
-        return sum + (isSelesai ? (wo.totalRealisasi || 0) : 0);
+        if (!isSelesai) return sum;
+        let val = Number(wo.totalRealisasi) || 0;
+        if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') val = val / 20;
+        return sum + val;
       }, 0);
       
       return {
         id: r.id,
-        name: `TIN: ROW ${String(idx + 1).padStart(2, '0')} ${ (r.namaRegu || '').toUpperCase() }`,
+        name: `TIM: ROW ${String(idx + 1).padStart(2, '0')} ${ (r.namaRegu || '').toUpperCase() }`,
         realisasi: Number(realisasi.toFixed(1)),
         target: 50.2
       };
