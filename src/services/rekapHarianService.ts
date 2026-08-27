@@ -477,8 +477,12 @@ export class RekapHarianService {
               let targetKms = Number(wo.volumePekerjaan) || 0;
               if (wo.satuan?.toUpperCase() === 'GAWANG') targetKms = targetKms / 20;
 
-              let realisasiKms = Number(wo.totalRealisasi) || 0;
-              if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') realisasiKms = realisasiKms / 20;
+              let realisasiKms = 0;
+              const statusUpper = (wo.status || '').toUpperCase();
+              if (statusUpper === 'SELESAI') {
+                realisasiKms = Number(wo.totalRealisasi) || 0;
+                if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') realisasiKms = realisasiKms / 20;
+              }
 
               updatedDaily[targetDayKey].targetKms += targetKms;
               updatedDaily[targetDayKey].realisasiKms += realisasiKms;

@@ -169,7 +169,7 @@ export function normalizeAbsensi(a: any): any {
       if (pVal && pVal !== '-') {
         petugasList.push({
           nama: String(pVal).replace(/\s*\([^)]*\)/g, '').trim(),
-          keterangan: (String(kVal).includes('TIDAK') ? 'TIDAK HADIR' : String(kVal).includes('SAKIT') ? 'SAKIT' : String(kVal).includes('IZIN') ? 'IZIN' : 'HADIR'),
+          keterangan: String(kVal || 'HADIR').trim().toUpperCase(),
         });
       }
     }

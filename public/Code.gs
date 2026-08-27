@@ -479,6 +479,7 @@ function doPost(e) {
         timestampStr                                    // 16. Timestamp (Col P)
       ]);
 
+      /* 
       // Update progress in WORK_ORDER sheet
       var woSheet = ss.getSheetByName("WORK_ORDER") || ss.getSheetByName("WORK_ORDERS");
       if (woSheet) {
@@ -490,6 +491,7 @@ function doPost(e) {
           }
         }
       }
+      */
 
       return createJsonResponse({
         status: "success",

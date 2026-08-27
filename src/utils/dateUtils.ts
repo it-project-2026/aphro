@@ -72,6 +72,16 @@ export const normalizeDateISO = (dateVal: any): string => {
     try {
       const d = new Date(s);
       if (!isNaN(d.getTime())) {
+        // Trick for Google Apps Script: if hours are > 12 UTC, it's usually a previous day shift for local midnight
+        if (s.endsWith('Z') && d.getUTCHours() >= 12) {
+          const nextDay = new Date(d);
+          nextDay.setUTCDate(d.getUTCDate() + 1);
+          const year = nextDay.getFullYear();
+          const month = String(nextDay.getMonth() + 1).padStart(2, '0');
+          const day = String(nextDay.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');

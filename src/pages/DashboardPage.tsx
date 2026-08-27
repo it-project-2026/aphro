@@ -101,9 +101,9 @@ export const DashboardPage: React.FC = () => {
 
   // Metrics calculations based on FILTERED data
   const totalWO = filteredWOs.length;
-  const woSelesai = filteredWOs.filter((w) => w.status === 'Selesai').length;
-  const woProgress = filteredWOs.filter((w) => w.status === 'Sedang Dikerjakan').length;
-  const woBelum = filteredWOs.filter((w) => w.status === 'Belum Dikerjakan').length;
+  const woSelesai = filteredWOs.filter((w) => (w.status || '').toUpperCase() === 'SELESAI').length;
+  const woProgress = filteredWOs.filter((w) => (w.status || '').toUpperCase() === 'SEDANG DIKERJAKAN').length;
+  const woBelum = filteredWOs.filter((w) => (w.status || '').toUpperCase() === 'BELUM DIKERJAKAN').length;
 
   // New KMS Metrics logic
   const totalTargetKms = React.useMemo(() => {
@@ -117,7 +117,10 @@ export const DashboardPage: React.FC = () => {
     }, 0);
   }, [ulpList, reguList, filterUlp]);
 
-  const totalRealisasiKms = filteredWOs.reduce((sum, wo) => sum + (wo.totalRealisasi || 0), 0);
+  const totalRealisasiKms = filteredWOs.reduce((sum, wo) => {
+    const isSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
+    return sum + (isSelesai ? (wo.totalRealisasi || 0) : 0);
+  }, 0);
   const kmsPercentage = totalTargetKms > 0 ? Math.round((totalRealisasiKms / totalTargetKms) * 100) : 0;
 
   // New Tebang/Pangkas Metrics logic
@@ -141,7 +144,10 @@ export const DashboardPage: React.FC = () => {
   const reguDashboardData = React.useMemo(() => {
     return reguList.map((r, idx) => {
       const reguWOs = filteredWOs.filter(w => w.reguId === r.id || w.reguName === r.namaRegu);
-      const realisasi = reguWOs.reduce((sum, wo) => sum + (wo.totalRealisasi || 0), 0);
+      const realisasi = reguWOs.reduce((sum, wo) => {
+        const isSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
+        return sum + (isSelesai ? (wo.totalRealisasi || 0) : 0);
+      }, 0);
       
       return {
         id: r.id,
@@ -196,7 +202,10 @@ export const DashboardPage: React.FC = () => {
   const ulpLabels = ulpList.map((u) => (u.namaULP || '').replace('ULP ', ''));
   const ulpProgressData = ulpList.map((u) => {
     const ulpWOs = filteredWOs.filter((w) => w.ulpId === u.id || w.ulpName === u.namaULP);
-    const ulpRealisasiKms = ulpWOs.reduce((sum, wo) => sum + (wo.totalRealisasi || 0), 0);
+    const ulpRealisasiKms = ulpWOs.reduce((sum, wo) => {
+      const isSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
+      return sum + (isSelesai ? (wo.totalRealisasi || 0) : 0);
+    }, 0);
     
     const reguInUlp = reguList.filter(r => r.ulpId === u.id || r.ulpName === u.namaULP);
     const reguCount = reguInUlp.length;

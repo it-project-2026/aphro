@@ -749,17 +749,17 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                           let cellText = '-';
                           let cellClass = 'text-slate-300 dark:text-slate-600';
                           
-                          const statusUpper = (status || '').toUpperCase();
-
-                          if (statusUpper.startsWith('HADIR')) {
+                          const statusUpper = (status || '').toUpperCase().trim();
+                          
+                          if (statusUpper === 'HADIR' || statusUpper.startsWith('HADIR')) {
                             cellText = 'H';
                             cellClass = 'text-teal-600 dark:text-teal-400 font-black';
                             totalHadir++;
-                          } else if (statusUpper.startsWith('IZIN')) {
+                          } else if (statusUpper === 'IZIN' || statusUpper.startsWith('IZIN')) {
                             cellText = 'I';
                             cellClass = 'text-amber-600 dark:text-amber-400 font-black';
                             totalIzin++;
-                          } else if (statusUpper.startsWith('SAKIT')) {
+                          } else if (statusUpper === 'SAKIT' || statusUpper.startsWith('SAKIT')) {
                             cellText = 'S';
                             cellClass = 'text-rose-600 dark:text-rose-400 font-black';
                             totalSakit++;
@@ -767,6 +767,11 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                             cellText = 'A';
                             cellClass = 'text-slate-400 dark:text-slate-500 font-black';
                             totalAlfa++;
+                          } else if (statusUpper && statusUpper !== '-') {
+                            // Custom status: show first letter
+                            cellText = statusUpper.charAt(0);
+                            cellClass = 'text-violet-600 dark:text-violet-400 font-black';
+                            totalHadir++; 
                           }
 
                           return (
@@ -991,13 +996,17 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
                     const renderStatusBadge = (ket?: string) => {
                       if (!ket || ket === '-') return <span className="text-slate-400 text-[10px]">-</span>;
-                      let badgeClass = 'bg-teal-100 text-[#008396] dark:bg-teal-950 dark:text-teal-300';
-                      if (ket === 'SAKIT') badgeClass = 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
-                      if (ket === 'IZIN') badgeClass = 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300';
-                      if (ket === 'TIDAK HADIR') badgeClass = 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
+                      const ketUpper = ket.toUpperCase();
+                      let badgeClass = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+                      
+                      if (ketUpper === 'HADIR') badgeClass = 'bg-teal-100 text-[#008396] dark:bg-teal-950 dark:text-teal-300';
+                      else if (ketUpper === 'SAKIT') badgeClass = 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+                      else if (ketUpper === 'IZIN') badgeClass = 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300';
+                      else if (ketUpper === 'TIDAK HADIR' || ketUpper === 'ALFA' || ketUpper === 'ALPHA') badgeClass = 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
+                      else if (ketUpper !== 'HADIR') badgeClass = 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300';
 
                       return (
-                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${badgeClass}`}>
+                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] whitespace-normal ${badgeClass}`}>
                           {ket}
                         </span>
                       );

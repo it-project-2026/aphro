@@ -90,8 +90,8 @@ export class GASApiService {
     try {
       const mappedWo = {
         ...workOrder,
-        TOTAL_REALISASI: workOrder.totalRealisasi || workOrder.volumePekerjaan,
-        SATUAN_TOTAL_REALISASI: workOrder.satuanTotalRealisasi || workOrder.satuan,
+        TOTAL_REALISASI: (workOrder.status || '').toUpperCase() === 'SELESAI' ? (workOrder.totalRealisasi || 0) : 0,
+        SATUAN_TOTAL_REALISASI: (workOrder.status || '').toUpperCase() === 'SELESAI' ? (workOrder.satuanTotalRealisasi || workOrder.satuan || '') : '',
         LOKASI_START: workOrder.lokasiStart || '',
         LOKASI_FINISH: workOrder.lokasiFinish || '',
       };
@@ -246,10 +246,10 @@ export class GASApiService {
     try {
       const mappedWo = {
         ...wo,
-        TOTAL_REALISASI: wo.totalRealisasi,
-        SATUAN_TOTAL_REALISASI: wo.satuanTotalRealisasi,
-        LOKASI_START: wo.lokasiStart,
-        LOKASI_FINISH: wo.lokasiFinish,
+        TOTAL_REALISASI: (wo.status || '').toUpperCase() === 'SELESAI' ? (wo.totalRealisasi || 0) : 0,
+        SATUAN_TOTAL_REALISASI: (wo.status || '').toUpperCase() === 'SELESAI' ? (wo.satuanTotalRealisasi || '') : '',
+        LOKASI_START: wo.lokasiStart || '',
+        LOKASI_FINISH: wo.lokasiFinish || '',
       };
 
       const response = await fetch(gasUrl, {
