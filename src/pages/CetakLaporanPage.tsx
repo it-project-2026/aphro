@@ -590,138 +590,148 @@ export const CetakLaporanPage: React.FC = () => {
         }
       `}</style>
       {/* Top Header & Export Controls */}
-      <div className="no-print bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-2">
-              <FileText className="w-6 h-6 text-[#00A2B9]" />
+      <div className="no-print bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-3">
+              <div className="p-2 bg-teal-50 dark:bg-teal-950 rounded-xl">
+                <FileText className="w-6 h-6 text-[#00A2B9]" />
+              </div>
               <span>Cetak & Export Laporan Operations</span>
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
               {activeReportTab === 'foto'
                 ? 'Fitur Download PDF dan Excel Laporan CETAK PHOTO (Rekap Hasil ROW Eviden Area & ULP).'
                 : 'Fitur Download PDF dan Excel Laporan CETAK PETA (Rekapitulasi Titik Lokasi Work Order).'}
             </p>
           </div>
 
-          {/* Action Buttons: Sync, Download PDF, Download Excel, Print */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Action Buttons Group */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
             <button
               onClick={() => syncWithGAS(showToast)}
               disabled={isSyncing}
-              className="inline-flex items-center space-x-2 px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-900 font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+              className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-900 font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
               title="Sinkronkan / Tarik Data Terbaru dari Spreadsheet Google"
             >
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Proses...' : 'Sync Spreadsheet'}</span>
+              <span>{isSyncing ? 'Syncing...' : 'Sync Data'}</span>
             </button>
 
             <button
               onClick={handleExportPDF}
               disabled={isGeneratingPDF}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+              className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-50"
               title="Download File PDF Laporan"
             >
               <Download className={`w-4 h-4 ${isGeneratingPDF ? 'animate-spin' : ''}`} />
-              <span>{isGeneratingPDF ? 'Proses PDF...' : 'Download PDF'}</span>
+              <span>PDF Report</span>
             </button>
 
             <button
               onClick={handleExportExcel}
               disabled={isGeneratingExcel}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+              className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-50"
               title="Download File Spreadsheet Excel (.xlsx)"
             >
               <FileSpreadsheet className={`w-4 h-4 ${isGeneratingExcel ? 'animate-spin' : ''}`} />
-              <span>{isGeneratingExcel ? 'Proses Excel...' : 'Download Excel'}</span>
+              <span>Excel Export</span>
             </button>
 
             <button
               onClick={handlePrint}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#00A2B9] hover:bg-[#008396] text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+              className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-[#00A2B9] hover:bg-[#008396] text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
               title="Cetak/Print Dokumen"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Laporan</span>
+              <span>Print</span>
             </button>
           </div>
         </div>
 
-        {/* Tab Selection & Filter */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-          <div className="flex space-x-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl w-full sm:w-auto">
+        {/* Tab Selection & Filter Bar */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 pt-6 border-t border-slate-100 dark:border-slate-700">
+          {/* Professional Tab Toggle */}
+          <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl sm:w-auto self-start">
             <button
               onClick={() => setActiveReportTab('foto')}
-              className={`flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`inline-flex items-center justify-center space-x-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeReportTab === 'foto'
-                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-xs'
+                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-sm ring-1 ring-slate-200/50'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               <ImageIcon className="w-4 h-4" />
-              <span>1. CETAK PHOTO</span>
+              <span>CETAK PHOTO</span>
             </button>
 
             <button
               onClick={() => setActiveReportTab('peta')}
-              className={`flex-1 sm:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`inline-flex items-center justify-center space-x-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeReportTab === 'peta'
-                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-xs'
+                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-sm ring-1 ring-slate-200/50'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               <Map className="w-4 h-4" />
-              <span>2. CETAK PETA</span>
+              <span>CETAK PETA</span>
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <div className="flex items-center space-x-1 text-slate-400 text-xs">
-              <Filter className="w-3.5 h-3.5" />
-              <span>Filter:</span>
+          {/* Vertical Divider for desktop */}
+          <div className="hidden lg:block w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+
+          {/* Unified Filter Group */}
+          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
+            <div className="flex items-center space-x-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+              <Filter className="w-3 h-3" />
+              <span>Filter Laporan</span>
             </div>
-            <select
-              value={filterUlp}
-              onChange={(e) => {
-                setFilterUlp(e.target.value);
-                setFilterPenyulang('ALL');
-                setFilterNoWo('ALL');
-              }}
-              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
-            >
-              <option value="ALL">Semua ULP</option>
-              {ulpList.map((u, idx) => (
-                <option key={`${u.id}-${idx}`} value={u.id}>
-                  {u.namaULP}
-                </option>
-              ))}
-            </select>
+            
+            <div className="grid grid-cols-1 sm:flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={filterUlp}
+                onChange={(e) => {
+                  setFilterUlp(e.target.value);
+                  setFilterPenyulang('ALL');
+                  setFilterNoWo('ALL');
+                }}
+                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[140px]"
+              >
+                <option value="ALL">Semua ULP</option>
+                {ulpList.map((u, idx) => (
+                  <option key={`${u.id}-${idx}`} value={u.id}>
+                    {u.namaULP}
+                  </option>
+                ))}
+              </select>
 
-            <select
-              value={filterPenyulang}
-              onChange={(e) => setFilterPenyulang(e.target.value)}
-              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
-            >
-              <option value="ALL">Semua Penyulang</option>
-              {availablePenyulangList.map((p, idx) => (
-                <option key={`${p.id}-${idx}`} value={p.id}>
-                  {p.namaPenyulang}
-                </option>
-              ))}
-            </select>
+              <select
+                value={filterPenyulang}
+                onChange={(e) => setFilterPenyulang(e.target.value)}
+                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[160px]"
+              >
+                <option value="ALL">Semua Penyulang</option>
+                {availablePenyulangList.map((p, idx) => (
+                  <option key={`${p.id}-${idx}`} value={p.id}>
+                    {p.namaPenyulang}
+                  </option>
+                ))}
+              </select>
 
-            <select
-              value={filterNoWo}
-              onChange={(e) => setFilterNoWo(e.target.value)}
-              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
-            >
-              <option value="ALL">Semua NO WO</option>
-              {availableWONumbers.map((woNum, idx) => (
-                <option key={`${woNum}-${idx}`} value={woNum}>
-                  {woNum}
-                </option>
-              ))}
-            </select>
+              <select
+                value={filterNoWo}
+                onChange={(e) => setFilterNoWo(e.target.value)}
+                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[140px]"
+              >
+                <option value="ALL">Semua NO WO</option>
+                {availableWONumbers.map((woNum, idx) => (
+                  <option key={`${woNum}-${idx}`} value={woNum}>
+                    {woNum}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
