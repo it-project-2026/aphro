@@ -877,15 +877,13 @@ export const DashboardPage: React.FC = () => {
           className="overflow-x-auto"
           style={draggable.style}
         >
-          <table className="w-full text-left text-xs sm:text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800 uppercase tracking-wider text-[11px]">
+          <table className="w-full text-left text-[11px]">
+            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800 uppercase tracking-wider">
               <tr>
                 <th className="p-3.5 pl-5">Nomor WO</th>
                 <th className="p-3.5">Penyulang & ULP</th>
-                <th className="p-3.5">Lokasi</th>
                 <th className="p-3.5">Regu / Petugas</th>
-                <th className="p-3.5">Status</th>
-                <th className="p-3.5 pr-5">Progress</th>
+                <th className="p-3.5 pr-5">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -896,7 +894,7 @@ export const DashboardPage: React.FC = () => {
                 >
                   <td className="p-3.5 pl-5">
                     <div className="flex items-center space-x-2">
-                      <span className="font-bold text-teal-600 dark:text-teal-400">
+                      <span className="font-bold text-[#00A2B9] dark:text-teal-400 text-[12px]">
                         {wo.nomorWO}
                       </span>
                       {pendingIds.includes(wo.id) ? (
@@ -914,32 +912,16 @@ export const DashboardPage: React.FC = () => {
                     <p className="font-bold text-slate-900 dark:text-white uppercase">
                       {wo.penyulangName}
                     </p>
-                    <p className="text-[11px] text-slate-500 font-medium">{wo.ulpName}</p>
-                  </td>
-                  <td className="p-3.5 max-w-xs truncate text-slate-700 dark:text-slate-300 font-medium">
-                    {wo.lokasi}
+                    <p className="text-[10px] text-slate-400 font-medium">{wo.ulpName}</p>
                   </td>
                   <td className="p-3.5">
-                    <p className="font-bold text-slate-900 dark:text-white">
+                    <p className="font-bold text-indigo-600 dark:text-indigo-400">
                       {wo.petugasName}
                     </p>
-                    <p className="text-[11px] text-slate-500 font-medium">{wo.reguName}</p>
-                  </td>
-                  <td className="p-3.5">
-                    <StatusBadge status={wo.status} size="sm" />
+                    <p className="text-[10px] text-slate-400 font-medium uppercase">{wo.reguName}</p>
                   </td>
                   <td className="p-3.5 pr-5">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-20 bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                        <div
-                          className="bg-[#00A2B9] h-full rounded-full transition-all duration-300"
-                          style={{ width: `${wo.progressPercent}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        {wo.progressPercent}%
-                      </span>
-                    </div>
+                    <StatusBadge status={wo.status} size="sm" />
                   </td>
                 </tr>
               ))}
