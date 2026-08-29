@@ -154,6 +154,16 @@ export const DashboardPage: React.FC = () => {
       const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
       const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
       return matchesStartDate && matchesEndDate && matchesUlp && matchesPenyulang;
+    }).sort((a, b) => {
+      // Primary sort: Tanggal (Z-A / Newest first)
+      const dateA = a.tanggal || '';
+      const dateB = b.tanggal || '';
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
+
+      // Secondary sort: Nama Regu (A-Z / Ascending)
+      const reguA = a.reguName || '';
+      const reguB = b.reguName || '';
+      return reguA.localeCompare(reguB);
     });
   }, [uniqueWorkOrders, startDate, endDate, filterUlp, filterPenyulang, role, currentUser]);
 
@@ -877,51 +887,51 @@ export const DashboardPage: React.FC = () => {
           className="overflow-x-auto"
           style={draggable.style}
         >
-          <table className="w-full text-left text-[11px]">
-            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800 uppercase tracking-wider">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800 uppercase tracking-wider text-[11px]">
               <tr>
-                <th className="p-3.5 pl-5">Nomor WO</th>
-                <th className="p-3.5">Penyulang & ULP</th>
-                <th className="p-3.5">Regu / Petugas</th>
-                <th className="p-3.5 pr-5">Status</th>
+                <th className="p-4 pl-6">Nomor WO</th>
+                <th className="p-4">Penyulang & ULP</th>
+                <th className="p-4">Regu / Petugas</th>
+                <th className="p-4 pr-6">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredWOs.slice(0, 5).map((wo, idx) => (
+              {filteredWOs.slice(0, 10).map((wo, idx) => (
                 <tr
                   key={`${wo.id}-${idx}`}
                   className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
                 >
-                  <td className="p-3.5 pl-5">
+                  <td className="p-4 pl-6">
                     <div className="flex items-center space-x-2">
-                      <span className="font-bold text-[#00A2B9] dark:text-teal-400 text-[12px]">
+                      <span className="font-black text-[#00A2B9] dark:text-teal-400 text-base sm:text-lg">
                         {wo.nomorWO}
                       </span>
                       {pendingIds.includes(wo.id) ? (
                         <span title="Menunggu Sinkronisasi" className="text-amber-500">
-                          <CloudOff className="w-3.5 h-3.5" />
+                          <CloudOff className="w-4 h-4" />
                         </span>
                       ) : (
                         <span title="Tersinkron" className="text-teal-500">
-                          <Cloud className="w-3.5 h-3.5" />
+                          <Cloud className="w-4 h-4" />
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="p-3.5">
+                  <td className="p-4">
                     <p className="font-bold text-slate-900 dark:text-white uppercase">
                       {wo.penyulangName}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-medium">{wo.ulpName}</p>
+                    <p className="text-xs text-slate-400 font-medium">{wo.ulpName}</p>
                   </td>
-                  <td className="p-3.5">
+                  <td className="p-4">
                     <p className="font-bold text-indigo-600 dark:text-indigo-400">
                       {wo.petugasName}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-medium uppercase">{wo.reguName}</p>
+                    <p className="text-xs text-slate-400 font-medium uppercase">{wo.reguName}</p>
                   </td>
-                  <td className="p-3.5 pr-5">
-                    <StatusBadge status={wo.status} size="sm" />
+                  <td className="p-4 pr-6">
+                    <StatusBadge status={wo.status} size="md" />
                   </td>
                 </tr>
               ))}

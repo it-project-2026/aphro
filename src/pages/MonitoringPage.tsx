@@ -38,7 +38,7 @@ function createCustomMarkerIcon(status: string) {
   else if (status === 'Regu') color = '#EF4444'; // Red for Regu
 
   const svg = status === 'Regu' ? `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="16" height="24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="8" height="12">
       <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
       <path d="M12 7c-1.65 0-3 1.35-3 3s1.35 3 3 3 3-1.35 3-3-1.35-3-3-3zm0 10c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="#ffffff" />
     </svg>
@@ -52,8 +52,8 @@ function createCustomMarkerIcon(status: string) {
   return L.divIcon({
     className: `custom-leaflet-marker ${status === 'Regu' ? 'marker-blink' : ''}`,
     html: svg,
-    iconSize: status === 'Regu' ? [16, 24] : [28, 42],
-    iconAnchor: status === 'Regu' ? [8, 24] : [14, 42],
+    iconSize: status === 'Regu' ? [8, 12] : [28, 42],
+    iconAnchor: status === 'Regu' ? [4, 12] : [14, 42],
     popupAnchor: [0, -24],
   });
 }

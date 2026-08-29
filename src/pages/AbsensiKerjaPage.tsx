@@ -15,19 +15,15 @@ import {
   Trash2,
   Building2,
   LogOut,
-  ExternalLink,
   Clock,
-  Sparkles,
-  Info,
   Plus,
-  Eye,
-  X,
-  Image as ImageIcon
+  Eye
 } from 'lucide-react';
 import { generateWatermarkedImage } from '../utils/watermark';
 import { compressImage } from '../utils/imageCompression';
 import { AbsensiPetugas } from '../types';
 import { getLocalDateTimeString } from '../utils/dateUtils';
+import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 
 interface AbsensiKerjaPageProps {
   onSuccess: () => void;
@@ -364,18 +360,13 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
             {todayAbsensi.fotoMasuk && (
               <div className="flex items-center space-x-3 self-end sm:self-center shrink-0">
-                <div className="w-12 h-12 rounded-xl overflow-hidden border border-teal-300 dark:border-teal-700 bg-black">
+                <div className="w-12 h-12 rounded-xl overflow-hidden border border-teal-300 dark:border-teal-700 bg-black cursor-pointer" onClick={() => setPreviewImage({
+                    url: formatDriveImageUrl(todayAbsensi.fotoMasuk!),
+                    title: `Foto Masuk - ${reguName} (${todayStr})`,
+                    driveUrl: formatDriveViewUrl(todayAbsensi.fotoMasuk!)
+                  })}>
                   <img src={formatDriveImageUrl(todayAbsensi.fotoMasuk)} alt="Foto Masuk" className="w-full h-full object-cover" />
                 </div>
-                <a
-                  href={formatDriveViewUrl(todayAbsensi.fotoMasuk)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs shadow-xs transition-all"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Buka Link Foto Masuk</span>
-                </a>
               </div>
             )}
           </div>
@@ -540,25 +531,16 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
                 {fotoMasuk ? (
                   <div className="space-y-3">
-                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video bg-black max-w-md mx-auto">
-                      <img src={formatDriveImageUrl(fotoMasuk)} alt="Foto Masuk" className="w-full h-full object-cover" />
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video bg-black max-w-md mx-auto cursor-pointer" onClick={() => setPreviewImage({
+                        url: fotoMasuk,
+                        title: `Foto Masuk (Pratinjau) - ${reguName}`,
+                        driveUrl: ''
+                      })}>
+                      <img src={fotoMasuk.startsWith('data:') ? fotoMasuk : formatDriveImageUrl(fotoMasuk)} alt="Foto Masuk" className="w-full h-full object-cover" />
                       <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-[#008396]/90 text-white text-[10px] font-bold">
                         Terunggah (Foto Masuk)
                       </div>
                     </div>
-                    {fotoMasuk.startsWith('http') && (
-                      <div className="flex justify-center">
-                        <a
-                          href={formatDriveViewUrl(fotoMasuk)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold text-xs"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Link URL Foto Masuk</span>
-                        </a>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-teal-300 dark:border-teal-700 hover:border-[#00A2B9] dark:hover:border-teal-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
@@ -608,7 +590,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
                 {fotoKeluar || todayAbsensi?.fotoKeluar ? (
                   <div className="space-y-3">
-                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video max-w-md mx-auto bg-black">
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video max-w-md mx-auto bg-black cursor-pointer" onClick={() => setPreviewImage({
+                        url: fotoKeluar || todayAbsensi?.fotoKeluar || '',
+                        title: `Foto Keluar (Pratinjau) - ${reguName}`,
+                        driveUrl: ''
+                      })}>
                       <img
                         src={fotoKeluar || todayAbsensi?.fotoKeluar}
                         alt="Foto Keluar"
@@ -619,20 +605,6 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                         <span>Foto Keluar Terunggah</span>
                       </div>
                     </div>
-
-                    {(fotoKeluar || todayAbsensi?.fotoKeluar)?.startsWith('http') && (
-                      <div className="flex justify-center">
-                        <a
-                          href={fotoKeluar || todayAbsensi?.fotoKeluar}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-teal-100 dark:bg-teal-900/60 text-[#008396] dark:text-teal-200 font-bold text-xs shadow-xs"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Link URL Foto Keluar</span>
-                        </a>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-teal-300 dark:border-teal-700 hover:border-[#00A2B9] dark:hover:border-teal-400 rounded-2xl aspect-video max-w-md mx-auto flex flex-col items-center justify-center cursor-pointer p-6 transition-all bg-white dark:bg-slate-900 group">
@@ -728,7 +700,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                     </td>
                     <td className="p-3">
                       {item.fotoMasuk ? (
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center justify-center">
                           <button
                             type="button"
                             onClick={() =>
@@ -753,15 +725,6 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                               <Eye className="w-4 h-4 text-white" />
                             </div>
                           </button>
-                          <a
-                            href={formatDriveViewUrl(item.fotoMasuk)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
-                            title="Buka di Google Drive"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
                         </div>
                       ) : (
                         <span className="text-slate-400 text-[11px] italic">Belum Ada</span>
@@ -769,7 +732,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                     </td>
                     <td className="p-3">
                       {item.fotoKeluar ? (
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center justify-center">
                           <button
                             type="button"
                             onClick={() =>
@@ -794,15 +757,6 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                               <Eye className="w-4 h-4 text-white" />
                             </div>
                           </button>
-                          <a
-                            href={formatDriveViewUrl(item.fotoKeluar)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#008396] dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
-                            title="Buka di Google Drive"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
                         </div>
                       ) : (
                         <span className="text-slate-400 text-[11px] italic">Belum Ada</span>
@@ -816,55 +770,12 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         </div>
       )}
 
-      {/* Lightbox / Image Preview Modal */}
-      {previewImage && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-4">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <ImageIcon className="w-4 h-4 text-teal-400" />
-                <h4 className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
-                  {previewImage.title}
-                </h4>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewImage(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 flex items-center justify-center bg-black/50 min-h-[300px] max-h-[70vh] overflow-hidden">
-              <img
-                src={previewImage.url}
-                alt={previewImage.title}
-                className="max-h-[65vh] max-w-full object-contain rounded-2xl shadow-lg"
-              />
-            </div>
-
-            <div className="p-4 border-t border-slate-800 flex items-center justify-between">
-              <a
-                href={previewImage.driveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-[#00A2B9] text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Buka Full di Google Drive</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => setPreviewImage(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ImagePreviewModal
+        isOpen={!!previewImage}
+        onClose={() => setPreviewImage(null)}
+        imageUrl={previewImage?.url || ''}
+        title={previewImage?.title}
+      />
     </div>
   </div>
 );

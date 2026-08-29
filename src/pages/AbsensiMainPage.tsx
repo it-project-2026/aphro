@@ -18,15 +18,12 @@ import {
   Trash2,
   Building2,
   LogOut,
-  ExternalLink,
   Clock,
   Table as TableIcon,
   Search,
   Filter,
   FileSpreadsheet,
   Eye,
-  X,
-  Image as ImageIcon,
 } from 'lucide-react';
 
 interface AbsensiMainPageProps {
@@ -494,22 +491,17 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 </div>
 
                 <div className="flex items-center space-x-3 self-end sm:self-center shrink-0">
-                  <div className="w-12 h-12 rounded-xl overflow-hidden border border-teal-300 dark:border-teal-700 bg-black">
+                  <div className="w-12 h-12 rounded-xl overflow-hidden border border-teal-300 dark:border-teal-700 bg-black cursor-pointer" onClick={() => setPreviewImage({
+                      url: formatDriveImageUrl(todayAbsensi.fotoKeluar),
+                      title: `Foto Pulang - ${reguName} (${todayStr})`,
+                      driveUrl: formatDriveViewUrl(todayAbsensi.fotoKeluar)
+                    })}>
                     <img
                       src={formatDriveImageUrl(todayAbsensi.fotoKeluar)}
                       alt="Foto Pulang"
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <a
-                    href={formatDriveViewUrl(todayAbsensi.fotoKeluar)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#008396] hover:bg-[#00A2B9] text-white font-bold text-xs shadow-xs transition-all"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Lihat Foto Pulang</span>
-                  </a>
                 </div>
               </div>
             )}
@@ -1067,7 +1059,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         {/* Foto Masuk */}
                         <td className="p-3 border-r border-slate-200 dark:border-slate-700 text-center">
                           {item.fotoMasuk ? (
-                            <div className="inline-flex items-center space-x-1.5">
+                            <div className="inline-flex items-center justify-center">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -1092,15 +1084,6 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                                   <Eye className="w-4 h-4 text-white" />
                                 </div>
                               </button>
-                              <a
-                                href={formatDriveViewUrl(item.fotoMasuk)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1 rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
-                                title="Buka di Google Drive"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
                             </div>
                           ) : (
                             <span className="text-slate-400 text-[11px]">-</span>
@@ -1110,7 +1093,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         {/* Foto Keluar */}
                         <td className="p-3 text-center">
                           {item.fotoKeluar ? (
-                            <div className="inline-flex items-center space-x-1.5">
+                            <div className="inline-flex items-center justify-center">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -1135,15 +1118,6 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                                   <Eye className="w-4 h-4 text-white" />
                                 </div>
                               </button>
-                              <a
-                                href={formatDriveViewUrl(item.fotoKeluar)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1 rounded-lg text-slate-400 hover:text-[#008396] dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
-                                title="Buka di Google Drive"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
                             </div>
                           ) : (
                             <span className="text-slate-400 text-[11px]">-</span>
