@@ -43,10 +43,10 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
   );
   
   const [ulpName, setUlpName] = useState(
-    editMode && initialData ? initialData.ulpName : (ulpList[0]?.namaULP || 'ULP Kuranji')
+    editMode && initialData ? initialData.ulpName : (ulpList[0]?.namaULP || '')
   );
   const [reguName, setReguName] = useState(
-    editMode && initialData ? initialData.reguName : (reguList[0]?.namaRegu || 'Regu ROW Alpha')
+    editMode && initialData ? initialData.reguName : (reguList[0]?.namaRegu || '')
   );
   const [status, setStatus] = useState<WOStatus>(
     editMode && initialData ? initialData.status : 'BELUM SELESAI'
@@ -62,6 +62,12 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
 
   const [nomorWO, setNomorWO] = useState(
     editMode && initialData ? initialData.nomorWO : ''
+  );
+  const [woMulai, setWoMulai] = useState(
+    editMode && initialData ? initialData.woMulai : ''
+  );
+  const [woAkhir, setWoAkhir] = useState(
+    editMode && initialData ? initialData.woAkhir : ''
   );
 
   // Only auto-generate if not in edit mode or no initial data
@@ -84,7 +90,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
   }
 
   const [penyulangName, setPenyulangName] = useState(
-    editMode && initialData ? initialData.penyulangName : (filteredPenyulang[0]?.namaPenyulang || penyulangList[0]?.namaPenyulang || 'Penyulang Kuranji')
+    editMode && initialData ? initialData.penyulangName : (filteredPenyulang[0]?.namaPenyulang || penyulangList[0]?.namaPenyulang || '')
   );
 
   const cleanStr = (s: any) => String(s || '').trim().toUpperCase();
@@ -214,15 +220,30 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const numVolume = parseFloat(volumePekerjaan);
+    if (!nomorWO.trim()) {
+      showToast('Nomor WO wajib diisi!', 'warning');
+      return;
+    }
 
-    if (isNaN(numVolume) || numVolume <= 0) {
-      showToast('Mohon isi Volume Pekerjaan dengan angka yang valid!', 'warning');
+    if (!ulpName) {
+      showToast('Unit Layanan (ULP) wajib dipilih!', 'warning');
       return;
     }
 
     if (!penyulangName) {
-      showToast('Mohon pilih Penyulang dari ULP yang dipilih', 'warning');
+      showToast('Mohon pilih Penyulang dari ULP yang dipilih!', 'warning');
+      return;
+    }
+
+    if (!reguName) {
+      showToast('Mohon pilih Regu yang ditugaskan!', 'warning');
+      return;
+    }
+
+    const numVolume = parseFloat(volumePekerjaan);
+
+    if (isNaN(numVolume) || numVolume <= 0) {
+      showToast('Mohon isi Volume Pekerjaan dengan angka yang valid dan lebih dari 0!', 'warning');
       return;
     }
 
@@ -241,7 +262,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
       const currentPenyulangObj = penyulangList.find((p) => p.namaPenyulang === penyulangName) || penyulangList[0];
       const currentReguObj = reguList.find((r) => r.namaRegu === reguName) || reguList[0];
 
-      const woData = {
+        const woData = {
         pekerjaan: pekerjaan,
         nomorWO: (nomorWO || '').trim() || generateFormattedNomorWO(tanggal, reguName, ulpName),
         tanggal,
@@ -253,6 +274,8 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
         reguName,
         volumePekerjaan: numVolume,
         satuan: satuan,
+        woMulai,
+        woAkhir,
         status: status,
         progressPercent: status === 'SELESAI' ? 100 : (editMode && initialData ? initialData.progressPercent : 0),
       };
@@ -262,8 +285,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
         showToast(`Work Order "${nomorWO}" Berhasil Diperbarui!`, 'success');
       } else {
         // addWorkOrder already handles both local state and GAS API synchronization
-        addWorkOrder(woData);
-        showToast(`Work Order Baru (${numVolume} ${satuan}) Berhasil Disimpan!`, 'success');
+        await addWorkOrder(woData);
       }
       
       if (onBack) onBack();
@@ -511,6 +533,35 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
                   <option value="GAWANG">GAWANG (Jumlah Gawang/Span)</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Row 5.5: WO AWAL & WO AKHIR (Manual Input) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                WO AWAL <span className="text-slate-400 font-normal">(Input Manual)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Titik Awal Pekerjaan"
+                value={woMulai || ''}
+                onChange={(e) => setWoMulai(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                WO AKHIR <span className="text-slate-400 font-normal">(Input Manual)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Titik Akhir Pekerjaan"
+                value={woAkhir || ''}
+                onChange={(e) => setWoAkhir(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
+              />
             </div>
           </div>
 

@@ -30,10 +30,9 @@ import {
 } from 'lucide-react';
 
 interface LoginPageProps {
-  onOpenInisiasi?: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
+export const LoginPage: React.FC<LoginPageProps> = () => {
   const { login } = useAuth();
   const { settings, updateSettings } = useSettings();
   const { users } = useMasterData();
@@ -80,6 +79,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
           const authenticatedUser = normalizeUser(rawUserObj);
           
           login(authenticatedUser);
+          
+          // Trigger automatic sync after login
+          if (settings.gasWebAppUrl && navigator.onLine) {
+            syncWithGAS().catch(e => console.warn('Sync after GAS login error:', e));
+          }
+
           const isAdm = (authenticatedUser.role || '').toUpperCase() === 'ADM' || (authenticatedUser.userName || authenticatedUser.nip || authenticatedUser.id || '').toLowerCase() === 'admbkt';
           if (isAdm) {
             setActiveTab('cetak_laporan');
@@ -149,6 +154,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
       }
 
       login(foundUser);
+
+      // Trigger automatic sync after login
+      if (settings.gasWebAppUrl && navigator.onLine) {
+        syncWithGAS().catch(e => console.warn('Sync after local login error:', e));
+      }
+
       const isAdm = (foundUser.role || '').toUpperCase() === 'ADM' || (foundUser.userName || foundUser.nip || foundUser.id || '').toLowerCase() === 'admbkt';
       if (isAdm) {
         setActiveTab('cetak_laporan');
@@ -202,7 +213,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
     }
 
     const cleanUrl = tempGasUrl.trim();
-    saveAndEmbedGasConfig(cleanUrl);
+    saveAndEmbedGasConfig({ gasWebAppUrl: cleanUrl });
     updateSettings({ gasWebAppUrl: cleanUrl });
 
     showToast('Menghubungkan ke Spreadsheet...', 'info');
@@ -257,16 +268,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
                 <Building2 className="w-3.5 h-3.5 text-black" />
                 <span>{settings.namaUnitLayanan}</span>
               </span>
-              {onOpenInisiasi && (
-                <button
-                  type="button"
-                  onClick={onOpenInisiasi}
-                  className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-white/60 hover:bg-teal-50 text-black hover:text-black border border-teal-200 transition-colors flex items-center space-x-1 shadow-sm cursor-pointer backdrop-blur-sm"
-                  title="Ganti Unit Layanan & Sambungkan ke Spreadsheet Lain"
-                >
-                  <span>Ganti Unit</span>
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -332,7 +333,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
                   <UserIcon className="w-3.5 h-3.5 text-black" />
-                  <span>USERNAME (Sheet USERS)</span>
+                  <span>USERNAME (Sheet USERS) <span className="text-rose-500">*</span></span>
                 </label>
                 <span className="text-[9px] text-black font-bold bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded">Kolom: Username</span>
               </div>
@@ -356,7 +357,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenInisiasi }) => {
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
                   <Lock className="w-3.5 h-3.5 text-rose-600" />
-                  <span>PASSWORD (Sheet USERS)</span>
+                  <span>PASSWORD (Sheet USERS) <span className="text-rose-500">*</span></span>
                 </label>
                 <span className="text-[9px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded">Kolom: Password</span>
               </div>

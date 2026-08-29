@@ -133,3 +133,12 @@
   animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+@keyframes marker-blink {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.marker-blink {
+  animation: marker-blink 1.2s ease-in-out infinite;
+}
+

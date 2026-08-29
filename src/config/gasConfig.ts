@@ -27,11 +27,10 @@ export const EMBEDDED_GAS_CONFIG: EmbeddedGASConfig = {
 /**
  * Direct helper function to force-embed and persist GAS Web App URL directly into localStorage & App State
  */
-export const saveAndEmbedGasConfig = (url: string): EmbeddedGASConfig => {
-  const cleanUrl = (url || '').trim();
+export const saveAndEmbedGasConfig = (config: Partial<EmbeddedGASConfig>): EmbeddedGASConfig => {
   const newConfig: EmbeddedGASConfig = {
     ...EMBEDDED_GAS_CONFIG,
-    gasWebAppUrl: cleanUrl,
+    ...config,
     lastUpdated: new Date().toISOString(),
   };
 

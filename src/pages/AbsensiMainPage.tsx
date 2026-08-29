@@ -7,7 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
-import { normalizeDateISO } from '../utils/dateUtils';
+import { normalizeDateISO, getLocalDateTimeString } from '../utils/dateUtils';
 import {
   UserCheck,
   Calendar,
@@ -68,7 +68,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     }
   }, [initialSubTab, isAdmRole]);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateTimeString().slice(0, 10);
   const reguName = currentUser?.reguName || currentUser?.reguId || (currentUser?.role === 'SuperAdmin' || currentUser?.role === 'Admin' ? 'Manajemen/Admin' : 'Belum Ada Regu');
   const ulpName = currentUser?.ulpName || currentUser?.ulpId || 'Belum Ada ULP';
 

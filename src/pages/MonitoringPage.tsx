@@ -50,7 +50,7 @@ function createCustomMarkerIcon(status: string) {
   `;
 
   return L.divIcon({
-    className: 'custom-leaflet-marker',
+    className: `custom-leaflet-marker ${status === 'Regu' ? 'marker-blink' : ''}`,
     html: svg,
     iconSize: status === 'Regu' ? [32, 48] : [28, 42],
     iconAnchor: status === 'Regu' ? [16, 48] : [14, 42],

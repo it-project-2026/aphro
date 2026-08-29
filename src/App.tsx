@@ -30,6 +30,7 @@ import { AbsensiKerjaPage } from './pages/AbsensiKerjaPage';
 import { AbsensiMainPage } from './pages/AbsensiMainPage';
 import { InisiasiPage } from './pages/InisiasiPage';
 import { RekapPekerjaanHarianPage } from './pages/RekapPekerjaanHarianPage';
+import { RekapPenyulangHarianPage } from './pages/RekapPenyulangHarianPage';
 import { WorkOrderMainPage } from './pages/WorkOrderMainPage';
 import { RealisasiMainPage } from './pages/RealisasiMainPage';
 
@@ -38,7 +39,7 @@ const AppContent: React.FC = () => {
   const { activeTab, setActiveTab } = useUI();
   const { settings } = useSettings();
   const { hasCheckedInToday } = useAbsensi();
-  const { isSyncing, syncWithGAS } = useGASSync();
+  const { isSyncing, syncWithGAS, isGasConnected } = useGASSync();
   const { showToast } = useToast();
   
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
@@ -47,6 +48,18 @@ const AppContent: React.FC = () => {
   const [isInitiated, setIsInitiated] = React.useState<boolean>(() => {
     return localStorage.getItem('aphro_has_initiated') === 'true';
   });
+
+  // Automatically sync data when user logs in or app is initiated
+  React.useEffect(() => {
+    if (isInitiated && settings.gasWebAppUrl && navigator.onLine) {
+      // Small delay to ensure all providers are updated with latest settings
+      const timer = setTimeout(() => {
+        // Use silent sync (true) to avoid annoying popups on every refresh
+        syncWithGAS(undefined, true).catch(() => {});
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isInitiated, user?.id, settings.gasWebAppUrl]);
 
   const isAdmRole = user && (
     (user.role || '').toUpperCase() === 'ADM' ||
@@ -72,6 +85,8 @@ const AppContent: React.FC = () => {
       switch (activeTab) {
         case 'rekap_harian':
           return <RekapPekerjaanHarianPage />;
+        case 'rekap_penyulang':
+          return <RekapPenyulangHarianPage />;
         case 'monitoring_absensi':
           return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
         case 'cetak_laporan':
@@ -98,6 +113,9 @@ const AppContent: React.FC = () => {
       case 'rekap_harian': 
         if ((user?.role || '').toUpperCase() === 'USER') return <DashboardPage />;
         return <RekapPekerjaanHarianPage />;
+      case 'rekap_penyulang': 
+        if ((user?.role || '').toUpperCase() === 'USER') return <DashboardPage />;
+        return <RekapPenyulangHarianPage />;
       case 'master_data': return <MasterDataPage />;
       case 'settings':
       case 'logs': return <SettingAplikasiPage />;
@@ -205,7 +223,7 @@ const AppContent: React.FC = () => {
   // 4. Halaman Login (Belum login & sudah inisiasi)
   return (
     <>
-      <LoginPage onOpenInisiasi={() => setIsInitiated(false)} />
+      <LoginPage />
       <ToastContainer />
     </>
   );

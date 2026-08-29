@@ -27,6 +27,8 @@ import {
   FileCheck2,
   FileSpreadsheet,
   RefreshCw,
+  Cloud,
+  CloudOff,
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -67,6 +69,32 @@ export const DashboardPage: React.FC = () => {
   const { isGasConnected, syncWithGAS } = useGASSync();
   const { showToast } = useToast();
 
+  // Get pending items from sync queue to identify unsynced WOs
+  const [pendingIds, setPendingIds] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    const checkPending = () => {
+      try {
+        const raw = localStorage.getItem('aphro_pending_sync_queue');
+        if (raw) {
+          const queue = JSON.parse(raw);
+          const ids = queue
+            .filter((item: any) => item.type === 'WORK_ORDER_CREATE' || item.type === 'WORK_ORDER_UPDATE')
+            .map((item: any) => item.payload?.id || item.payload?.workOrder?.id);
+          setPendingIds(ids);
+        } else {
+          setPendingIds([]);
+        }
+      } catch (e) {
+        setPendingIds([]);
+      }
+    };
+
+    checkPending();
+    const interval = setInterval(checkPending, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [filterUlp, setFilterUlp] = React.useState('ALL');
@@ -104,26 +132,50 @@ export const DashboardPage: React.FC = () => {
     return Array.from(seen.values());
   }, [workOrders]);
 
+  // Helper to clean string for better matching
+  const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+
   // Apply Filters to Data
   const filteredWOs = React.useMemo(() => {
     return uniqueWorkOrders.filter(wo => {
+      // If User role, restrict to their Regu
+      if (role === 'User') {
+        const userRegu = cleanStr(currentUser?.reguName || '');
+        const woRegu = cleanStr(wo.reguName || '');
+        
+        const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(woRegu));
+        const matchReguId = wo.reguId && currentUser?.reguId && String(wo.reguId) === String(currentUser.reguId);
+        
+        if (!matchRegu && !matchReguId) return false;
+      }
+
       const matchesStartDate = !startDate || (wo.tanggal && wo.tanggal >= startDate);
       const matchesEndDate = !endDate || (wo.tanggal && wo.tanggal <= endDate);
       const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
       const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
       return matchesStartDate && matchesEndDate && matchesUlp && matchesPenyulang;
     });
-  }, [uniqueWorkOrders, startDate, endDate, filterUlp, filterPenyulang]);
+  }, [uniqueWorkOrders, startDate, endDate, filterUlp, filterPenyulang, role, currentUser]);
 
   const filteredRealisasi = React.useMemo(() => {
     return realisasiList.filter(rel => {
+      // If User role, restrict to their Regu
+      if (role === 'User') {
+        const userRegu = cleanStr(currentUser?.reguName || '');
+        const relRegu = cleanStr(rel.reguName || '');
+        
+        const matchRegu = userRegu !== '' && (relRegu === userRegu || relRegu.includes(userRegu) || userRegu.includes(relRegu));
+        
+        if (!matchRegu) return false;
+      }
+
       const matchesStartDate = !startDate || (rel.tanggalRealisasi && rel.tanggalRealisasi >= startDate);
       const matchesEndDate = !endDate || (rel.tanggalRealisasi && rel.tanggalRealisasi <= endDate);
       const matchesUlp = filterUlp === 'ALL' || rel.ulpName === filterUlp;
       const matchesPenyulang = filterPenyulang === 'ALL' || rel.penyulangName === filterPenyulang;
       return matchesStartDate && matchesEndDate && matchesUlp && matchesPenyulang;
     });
-  }, [realisasiList, startDate, endDate, filterUlp, filterPenyulang]);
+  }, [realisasiList, startDate, endDate, filterUlp, filterPenyulang, role, currentUser]);
 
   // Metrics calculations based on FILTERED data
   const totalWO = filteredWOs.length;
@@ -200,7 +252,7 @@ export const DashboardPage: React.FC = () => {
     datasets: [
       {
         label: 'Volume Realisasi Harian',
-        data: [1.2, 2.5, 1.8, 3.0, 2.2, 1.5, woSelesai > 0 ? woSelesai * 0.8 : 2.0],
+        data: [0, 0, 0, 0, 0, 0, woSelesai > 0 ? woSelesai * 0.8 : 0],
         backgroundColor: '#00A2B9',
         borderRadius: 8,
       },
@@ -213,7 +265,7 @@ export const DashboardPage: React.FC = () => {
     datasets: [
       {
         label: 'WO Selesai',
-        data: [12, 19, 15, 25, 22, 30, 28, woSelesai],
+        data: [0, 0, 0, 0, 0, 0, 0, woSelesai],
         borderColor: '#00A2B9',
         backgroundColor: 'rgba(0, 162, 185, 0.15)',
         fill: true,
@@ -221,7 +273,7 @@ export const DashboardPage: React.FC = () => {
       },
       {
         label: 'WO Dalam Progress',
-        data: [5, 8, 12, 10, 14, 9, 11, woProgress],
+        data: [0, 0, 0, 0, 0, 0, 0, woProgress],
         borderColor: '#f59e0b',
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
         fill: true,
@@ -343,6 +395,67 @@ export const DashboardPage: React.FC = () => {
               title="PROGRESS PENYELESAIAN ROW"
               subtitle={`Tim: ${currentUser?.reguName || 'Lapangan'}`}
             />
+          </div>
+
+          {/* Recent Realizations for User with Sync Status */}
+          <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                  Realisasi Saya Terkini
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Status sinkronisasi laporan kerja Anda
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab('realisasi')}
+                className="text-xs font-bold px-3 py-1.5 bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 rounded-xl hover:bg-teal-100 transition-colors"
+              >
+                Detail Realisasi
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="p-3 pl-5">Nomor WO</th>
+                    <th className="p-3">Tanggal</th>
+                    <th className="p-3">Penyulang</th>
+                    <th className="p-3 text-center">Status Sinkron</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredRealisasi.slice(0, 5).map((rel, idx) => (
+                    <tr key={`${rel.id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                      <td className="p-3 pl-5 font-bold text-teal-600">{rel.nomorWO}</td>
+                      <td className="p-3">{rel.tanggalRealisasi}</td>
+                      <td className="p-3 font-medium">{rel.penyulangName}</td>
+                      <td className="p-3 text-center">
+                        {rel.isSynced ? (
+                          <div className="inline-flex items-center space-x-1 text-teal-600 bg-teal-50 dark:bg-teal-900/30 px-2 py-1 rounded-full">
+                            <Cloud className="w-3 h-3" />
+                            <span className="text-[10px] font-bold">TERKIRIM</span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center space-x-1 text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 rounded-full animate-pulse">
+                            <CloudOff className="w-3 h-3" />
+                            <span className="text-[10px] font-bold">MENUNGGU</span>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredRealisasi.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="p-10 text-center text-slate-400 italic">
+                        Belum ada data realisasi yang diinput.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -736,12 +849,23 @@ export const DashboardPage: React.FC = () => {
               Monitoring real-time status penugasan terkini
             </p>
           </div>
-          <button
-            onClick={() => setActiveTab('work_orders')}
-            className="text-xs font-bold px-3 py-1.5 bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 rounded-xl hover:bg-teal-100 transition-colors"
-          >
-            Lihat Semua WO
-          </button>
+          <div className="flex items-center gap-2">
+            {pendingIds.length > 0 && (
+              <button
+                onClick={handleSync}
+                className="text-[10px] font-bold px-3 py-1.5 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded-xl hover:bg-amber-100 transition-all flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3 h-3 animate-spin-slow" />
+                Sync {pendingIds.length} Data
+              </button>
+            )}
+            <button
+              onClick={() => setActiveTab('work_orders')}
+              className="text-xs font-bold px-3 py-1.5 bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 rounded-xl hover:bg-teal-100 transition-colors"
+            >
+              Lihat Semua WO
+            </button>
+          </div>
         </div>
 
         <div 
@@ -765,13 +889,26 @@ export const DashboardPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {workOrders.slice(0, 5).map((wo, idx) => (
+              {filteredWOs.slice(0, 5).map((wo, idx) => (
                 <tr
                   key={`${wo.id}-${idx}`}
                   className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
                 >
-                  <td className="p-3.5 pl-5 font-bold text-teal-600 dark:text-teal-400">
-                    {wo.nomorWO}
+                  <td className="p-3.5 pl-5">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-teal-600 dark:text-teal-400">
+                        {wo.nomorWO}
+                      </span>
+                      {pendingIds.includes(wo.id) ? (
+                        <span title="Menunggu Sinkronisasi" className="text-amber-500">
+                          <CloudOff className="w-3.5 h-3.5" />
+                        </span>
+                      ) : (
+                        <span title="Tersinkron" className="text-teal-500">
+                          <Cloud className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-3.5">
                     <p className="font-bold text-slate-900 dark:text-white uppercase">

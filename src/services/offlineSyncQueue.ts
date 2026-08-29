@@ -35,7 +35,9 @@ export function addToOfflineQueue(
   const queue = getOfflineQueue();
   // Prevent duplicate queuing for exact same id/type
   const existingIndex = queue.findIndex(
-    item => item.type === type && item.payload?.id === payload?.id && payload?.id
+    item => item.type === type && 
+           ((item.payload?.syncId && item.payload?.syncId === payload?.syncId) || 
+            (item.payload?.id === payload?.id && payload?.id))
   );
 
   const newItem: PendingSyncItem = {
@@ -65,24 +67,28 @@ export function clearOfflineQueue(): void {
   localStorage.removeItem(QUEUE_KEY);
 }
 
-/**
- * Process all queued items sequentially to Google Sheets
- */
 export async function processOfflineSyncQueue(
-  gasUrl: string
-): Promise<{ successCount: number; failCount: number; errors: string[] }> {
+  gasUrl: string,
+  spreadsheetId?: string
+): Promise<{ 
+  successCount: number; 
+  failCount: number; 
+  errors: string[];
+  syncedItems: Array<{ type: PendingSyncItem['type'], syncId?: string, payloadId?: string }> 
+}> {
   if (!gasUrl || !navigator.onLine) {
-    return { successCount: 0, failCount: 0, errors: ['Offline / URL tidak dikonfigurasi'] };
+    return { successCount: 0, failCount: 0, errors: ['Offline / URL tidak dikonfigurasi'], syncedItems: [] };
   }
 
   const queue = getOfflineQueue();
   if (queue.length === 0) {
-    return { successCount: 0, failCount: 0, errors: [] };
+    return { successCount: 0, failCount: 0, errors: [], syncedItems: [] };
   }
 
   let successCount = 0;
   let failCount = 0;
   const errors: string[] = [];
+  const syncedItems: Array<{ type: PendingSyncItem['type'], syncId?: string, payloadId?: string }> = [];
 
   for (const item of [...queue]) {
     try {
@@ -90,12 +96,13 @@ export async function processOfflineSyncQueue(
       if (item.type === 'ABSENSI') {
         res = await GASApiService.saveAbsensi(gasUrl, item.payload);
       } else if (item.type === 'REALISASI') {
-        res = await GASApiService.saveRealisasi(gasUrl, item.payload);
+        res = await GASApiService.saveRealisasi(gasUrl, spreadsheetId, item.payload);
       } else if (item.type === 'WORK_ORDER_CREATE') {
-        res = await GASApiService.createWorkOrder(gasUrl, item.payload);
+        res = await GASApiService.createWorkOrder(gasUrl, spreadsheetId, item.payload);
       } else if (item.type === 'WORK_ORDER_UPDATE') {
         res = await GASApiService.updateWorkOrder(
           gasUrl,
+          spreadsheetId,
           item.payload.id || item.payload.nomorWO,
           item.payload.workOrder || item.payload
         );
@@ -105,6 +112,11 @@ export async function processOfflineSyncQueue(
 
       if (res && res.status === 'success') {
         successCount++;
+        syncedItems.push({ 
+          type: item.type, 
+          syncId: item.payload?.syncId, 
+          payloadId: item.payload?.id 
+        });
         removeFromOfflineQueue(item.id);
       } else {
         failCount++;
@@ -118,5 +130,5 @@ export async function processOfflineSyncQueue(
     }
   }
 
-  return { successCount, failCount, errors };
+  return { successCount, failCount, errors, syncedItems };
 }

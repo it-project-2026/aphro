@@ -138,6 +138,8 @@ export function normalizeWorkOrder(w: any): WorkOrder {
     satuan,
     totalRealisasi: Number(w.totalRealisasi || w.TOTAL_REALISASI || w.Total_Realisasi || w.total_realisasi || 0),
     satuanTotalRealisasi: (w.satuanTotalRealisasi || w.SATUAN_TOTAL_REALISASI || w.Satuan_Total_Realisasi || w.satuan_total_realisasi || 'KMS') as 'KMS' | 'GAWANG',
+    woMulai: String(w.woMulai || w.WO_MULAI || w.Wo_Mulai || w.WoMulai || ''),
+    woAkhir: String(w.woAkhir || w.WO_AKHIR || w.Wo_Akhir || w.WoAkhir || ''),
     status: (w.status || w.STATUS || 'Belum Dikerjakan'),
     deskripsi: String(w.deskripsi || w.DESKRIPSI || w.Deskripsi || ''),
     jenisPekerjaan: w.jenisPekerjaan || w.JENIS_PEKERJAAN || w.Jenis_Pekerjaan || w.Kategori || 'Pemangkasan Pohon (ROW)',
@@ -277,10 +279,10 @@ export class SyncService {
     }
   }
 
-  static async fetchAllData(gasUrl: string) {
+  static async fetchAllData(gasUrl: string, spreadsheetId?: string) {
     try {
       // Try bulk fetch with minimal retry delay
-      const response = await this.withRetry(() => GASApiService.fetchAllData(gasUrl), 1, 300);
+      const response = await this.withRetry(() => GASApiService.fetchAllData(gasUrl, spreadsheetId), 1, 300);
       
       if (response.status === 'success' && response.data) {
         const d = response.data;
@@ -289,8 +291,16 @@ export class SyncService {
         const penyulangList = Array.isArray(d.PENYULANG || d.Penyulang || d.penyulang) ? (d.PENYULANG || d.Penyulang || d.penyulang).map(normalizePenyulang) : [];
         const reguList = Array.isArray(d.REGU_ROW || d.Regu_ROW || d.ReguROW || d.Regu || d.regu) ? (d.REGU_ROW || d.Regu_ROW || d.ReguROW || d.Regu || d.regu).map(normalizeRegu) : [];
         const petugasList = Array.isArray(d.PETUGAS || d.Petugas || d.petugas || d.Data_Petugas || d.DATA_PETUGAS) ? (d.PETUGAS || d.Petugas || d.petugas || d.Data_Petugas || d.DATA_PETUGAS).map(normalizePetugas) : [];
-        const workOrdersList = Array.isArray(d.WORK_ORDER || d.Work_Order || d.WorkOrder || d.WO || d.wo) ? (d.WORK_ORDER || d.Work_Order || d.WorkOrder || d.WO || d.wo).map(normalizeWorkOrder) : [];
-        const realisasiList = Array.isArray(d.REALISASI || d.Realisasi || d.realisasi) ? (d.REALISASI || d.Realisasi || d.realisasi).map(normalizeRealisasi) : [];
+        const workOrdersList = Array.isArray(d.WORK_ORDER || d.Work_Order || d.WorkOrder || d.WO || d.wo) 
+          ? (d.WORK_ORDER || d.Work_Order || d.WorkOrder || d.WO || d.wo)
+            .map(normalizeWorkOrder)
+            .filter(wo => wo.nomorWO || wo.ulpName || wo.reguName || wo.penyulangName)
+          : [];
+        const realisasiList = Array.isArray(d.REALISASI || d.Realisasi || d.realisasi) 
+          ? (d.REALISASI || d.Realisasi || d.realisasi)
+            .map(normalizeRealisasi)
+            .filter(rel => rel.workOrderId || rel.nomorWO)
+          : [];
 
         const result = {
           masterData: {
@@ -302,13 +312,18 @@ export class SyncService {
           },
           workOrders: workOrdersList,
           realisasi: realisasiList,
-          absensi: Array.isArray(d.ABSENSI || d.Absensi || d.absensi) ? (d.ABSENSI || d.Absensi || d.absensi).map(normalizeAbsensi) : [],
+          absensi: Array.isArray(d.ABSENSI || d.Absensi || d.absensi) 
+            ? (d.ABSENSI || d.Absensi || d.absensi)
+              .map(normalizeAbsensi)
+              .filter(abs => abs.reguName || abs.ulpName)
+            : [],
           errors: []
         };
 
-        // Cache in localStorage for instant future loads
+        // Cache in localStorage for instant future loads (Excluding Work Orders)
         try {
-          localStorage.setItem('aphro_cached_synced_data', JSON.stringify(result));
+          const cacheResult = { ...result, workOrders: [] };
+          localStorage.setItem('aphro_cached_synced_data', JSON.stringify(cacheResult));
         } catch (e) {
           // ignore quote quota errors
         }
@@ -320,14 +335,14 @@ export class SyncService {
       // Fallback to individual parallel fetches if bulk fetch fails
       console.warn('Bulk fetch failed, trying fast parallel fetches...', err);
       const results = await Promise.allSettled([
-        this.withRetry(() => GASApiService.fetchUsers(gasUrl), 1, 200),
-        this.withRetry(() => GASApiService.fetchWorkOrders(gasUrl), 1, 200),
-        this.withRetry(() => GASApiService.fetchRealisasi(gasUrl), 1, 200),
-        this.withRetry(() => GASApiService.fetchAbsensi(gasUrl), 1, 200),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getULP'), 1, 200),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPenyulang'), 1, 200),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getRegu'), 1, 200),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPetugas'), 1, 200),
+        this.withRetry(() => GASApiService.fetchUsers(gasUrl, spreadsheetId), 1, 200),
+        this.withRetry(() => GASApiService.fetchWorkOrders(gasUrl, spreadsheetId), 1, 200),
+        this.withRetry(() => GASApiService.fetchRealisasi(gasUrl, spreadsheetId), 1, 200),
+        this.withRetry(() => GASApiService.fetchAbsensi(gasUrl, spreadsheetId), 1, 200),
+        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getULP', spreadsheetId), 1, 200),
+        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPenyulang', spreadsheetId), 1, 200),
+        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getRegu', spreadsheetId), 1, 200),
+        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPetugas', spreadsheetId), 1, 200),
       ]);
 
       const errors = results.filter(r => r.status === 'rejected');
@@ -348,14 +363,17 @@ export class SyncService {
           regu: rawRegu.map(normalizeRegu),
           petugas: rawPtg.map(normalizePetugas),
         },
-        workOrders: rawWo.map(normalizeWorkOrder),
-        realisasi: rawRel.map(normalizeRealisasi),
-        absensi: results[3].status === 'fulfilled' && Array.isArray(results[3].value.data) ? results[3].value.data.map(normalizeAbsensi) : [],
+        workOrders: rawWo.map(normalizeWorkOrder).filter(wo => wo.nomorWO || wo.ulpName || wo.reguName || wo.penyulangName),
+        realisasi: rawRel.map(normalizeRealisasi).filter(rel => rel.workOrderId || rel.nomorWO),
+        absensi: results[3].status === 'fulfilled' && Array.isArray(results[3].value.data) 
+          ? results[3].value.data.map(normalizeAbsensi).filter(abs => abs.reguName || abs.ulpName) 
+          : [],
         errors: errors
       };
 
       try {
-        localStorage.setItem('aphro_cached_synced_data', JSON.stringify(result));
+        const cacheResult = { ...result, workOrders: [] };
+        localStorage.setItem('aphro_cached_synced_data', JSON.stringify(cacheResult));
       } catch (e) {
         // ignore
       }

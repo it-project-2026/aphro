@@ -23,6 +23,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const settings: AppSettings = React.useMemo(() => {
     return {
       ...SettingsContextData.defaultSettings,
+      ...embeddedConfig,
       ...rawSettings,
       gasWebAppUrl: rawSettings?.gasWebAppUrl?.trim() || embeddedConfig.gasWebAppUrl || SettingsContextData.defaultSettings.gasWebAppUrl,
       spreadsheetId: rawSettings?.spreadsheetId?.trim() || embeddedConfig.spreadsheetId || SettingsContextData.defaultSettings.spreadsheetId,

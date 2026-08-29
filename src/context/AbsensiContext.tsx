@@ -11,7 +11,7 @@ import { formatDriveViewUrl } from '../utils/driveUtils';
 
 interface AbsensiContextType {
   absensiList: Absensi[];
-  setAbsensiList: (list: Absensi[]) => void;
+  setAbsensiList: React.Dispatch<React.SetStateAction<Absensi[]>>;
   addAbsensi: (abs: Omit<Absensi, 'id' | 'createdAt'>) => Promise<Absensi>;
   hasCheckedInToday: boolean;
 }
@@ -25,7 +25,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   const [absensiList, setAbsensiList] = usePersistState<Absensi[]>('aphro_absensi', INITIAL_ABSENSI);
 
   const addAbsensi = React.useCallback(async (absData: Omit<Absensi, 'id' | 'createdAt'>) => {
-    const todayStr = absData.tanggal || new Date().toISOString().slice(0, 10);
+    const todayStr = absData.tanggal || (new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0'));
     const nowStr = new Date().toLocaleString('id-ID');
 
     // Helper to normalize date for comparison

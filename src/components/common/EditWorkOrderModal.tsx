@@ -25,6 +25,8 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
   
   const [volumePekerjaan, setVolumePekerjaan] = useState(workOrder.volumePekerjaan?.toString() || '');
   const [satuan, setSatuan] = useState(workOrder.satuan || 'KMS');
+  const [woMulai, setWoMulai] = useState(workOrder.woMulai || '');
+  const [woAkhir, setWoAkhir] = useState(workOrder.woAkhir || '');
   const [status, setStatus] = useState<WOStatus>((workOrder.status as WOStatus) || 'BELUM SELESAI');
 
   const cleanStr = (s: any) => String(s || '').trim().toUpperCase();
@@ -135,6 +137,8 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
       reguName,
       volumePekerjaan: numVolume,
       satuan,
+      woMulai,
+      woAkhir,
       status,
     });
 
@@ -250,6 +254,26 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
                 <option value="KMS">KMS</option>
                 <option value="GAWANG">GAWANG</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">WO AWAL</label>
+              <input
+                type="text"
+                value={woMulai}
+                onChange={(e) => setWoMulai(e.target.value)}
+                placeholder="Titik Awal"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">WO AKHIR</label>
+              <input
+                type="text"
+                value={woAkhir}
+                onChange={(e) => setWoAkhir(e.target.value)}
+                placeholder="Titik Akhir"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
+              />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Status</label>

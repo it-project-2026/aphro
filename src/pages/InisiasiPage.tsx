@@ -125,10 +125,13 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
     showToast(`Menyambungkan konfigurasi ${selectedUnit.namaUL}...`, 'info');
 
     try {
-      // 1. Simpan konfigurasi GAS
-      if (selectedUnit.urlGas) {
-        saveAndEmbedGasConfig(selectedUnit.urlGas);
-      }
+      // 1. Simpan konfigurasi GAS secara mendalam agar tetap ada setelah refresh
+      saveAndEmbedGasConfig({
+        gasWebAppUrl: selectedUnit.urlGas || '',
+        spreadsheetId: selectedUnit.idSpreadsheet || '',
+        driveFolderId: selectedUnit.folderIdSpreadsheet || '',
+        absensiFolderId: selectedUnit.folderIdAbsensi || '',
+      });
 
       // 2. Tandai inisiasi selesai & simpan unit terpilih
       InisiasiService.saveSelectedUnit(selectedUnit);
@@ -143,6 +146,11 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
         photoFolderId: selectedUnit.folderIdFoto || settings.photoFolderId,
         absensiFolderId: selectedUnit.folderIdAbsensi || settings.absensiFolderId,
       });
+
+      // Clear old data caches to force fresh fetch for new unit
+      localStorage.removeItem('pln_work_orders');
+      localStorage.removeItem('pln_realisasi');
+      localStorage.removeItem('pln_absensi');
 
       // 4. Background live sync
       if (selectedUnit.urlGas && navigator.onLine) {

@@ -119,7 +119,7 @@ export const SettingAplikasiPage: React.FC = () => {
       showToast('Masukkan Web App URL yang valid terlebih dahulu!', 'warning');
       return;
     }
-    saveAndEmbedGasConfig(cleanGasUrl);
+    saveAndEmbedGasConfig({ gasWebAppUrl: cleanGasUrl });
     updateSettings({ gasWebAppUrl: cleanGasUrl });
     showToast('BERHASIL! Konfigurasi GAS Web App telah tertanam permanen di Aplikasi!', 'success');
   };
@@ -129,7 +129,7 @@ export const SettingAplikasiPage: React.FC = () => {
 
     const cleanGasUrl = (gasWebAppUrl || '').trim();
     if (cleanGasUrl) {
-      saveAndEmbedGasConfig(cleanGasUrl);
+      saveAndEmbedGasConfig({ gasWebAppUrl: cleanGasUrl });
     }
 
     updateSettings({

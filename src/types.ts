@@ -57,6 +57,8 @@ export interface WorkOrder {
   lokasiFinish?: string;
   woKms?: number;
   woBatang?: number;
+  woMulai?: string;
+  woAkhir?: string;
   deskripsi?: string;
   status: WOStatus;
   progressPercent: number;
@@ -129,6 +131,8 @@ export interface Realisasi {
   fotoSebelumUrl?: string;
   fotoSesudahUrl?: string;
   createdAt: string;
+  isSynced?: boolean;
+  syncId?: string;
 }
 
 export interface ULP {

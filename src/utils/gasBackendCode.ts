@@ -49,8 +49,8 @@ function setupDatabase() {
   // List of required Sheets and Header Columns
   var sheetsSchema = {
     "USERS": ["UserID", "Username", "Password", "NamaRegu", "Role", "ULP", "Status", "Last Login", "Created At"],
-    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "STATUS", "Total_Realisasi", "Satuan_Realisasi", "Created_At"],
-    "REALISASI": ["WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Timestamp"],
+    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "STATUS", "LOKASI_START", "LOKASI_FINISH", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI", "Created_At"],
+    "REALISASI": ["WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Lokasi_kerja", "Timestamp"],
     "ULP": ["ID", "Kode_ULP", "Nama_ULP", "Manajer", "Kontak", "Alamat", "Status"],
     "PENYULANG": ["ID", "Nama_Penyulang", "ULP", "Panjang_Kms", "Jumlah_Trafo", "Status"],
     "REGU_ROW": ["ID", "Kode_Regu", "Nama_Regu", "ULP", "Jumlah_Anggota", "Kontak", "Status"],
@@ -394,31 +394,42 @@ function doPost(e) {
       var ss = getSpreadsheet();
       var sheet = ss.getSheetByName("WORK_ORDER") || ss.insertSheet("WORK_ORDER");
 
-      var woId = wo.id || ("wo-" + new Date().getTime());
+      var woId = wo.id || wo.WO_ID || ("wo-" + new Date().getTime());
       var now = new Date();
-      var createdTime = wo.createdAt || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
-      var tglStr = wo.tanggal ? Utilities.formatDate(new Date(wo.tanggal), "GMT+7", "yyyy-MM-dd") : Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+      var createdTime = wo.createdAt || wo.Created_At || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+      var tglRaw = wo.tanggal || wo.Tanggal || "";
+      var tglStr = "";
+      if (tglRaw) {
+        try {
+          tglStr = Utilities.formatDate(new Date(tglRaw), "GMT+7", "yyyy-MM-dd");
+        } catch (e) { tglStr = String(tglRaw).slice(0, 10); }
+      } else {
+        tglStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+      }
       
-      var volPekerjaan = Number(wo.volumePekerjaan || wo.volume || 0);
-      var satuanVal = String(wo.satuan || "KMS").toUpperCase();
+      var volPekerjaan = Number(wo.volumePekerjaan || wo.VOLUME || wo.volume || 0);
+      var satuanVal = String(wo.satuan || wo.SATUAN || "KMS").toUpperCase();
+      var statusVal = String(wo.status || wo.STATUS || "BELUM SELESAI").toUpperCase();
 
       sheet.appendRow([
         woId,                                 // 1. WO_ID
-        wo.pekerjaan || "NORMAL",             // 2. PEKERJAAN
-        wo.nomorWO || "",                     // 3. Nomor_WO
+        wo.pekerjaan || wo.PEKERJAAN || "NORMAL", // 2. PEKERJAAN
+        wo.nomorWO || wo.Nomor_WO || "",       // 3. Nomor_WO
         tglStr,                               // 4. Tanggal
-        wo.ulpName || "",                     // 5. ULP
-        wo.penyulangName || "",               // 6. Penyulang
-        wo.reguName || "",                    // 7. Regu_ROW
+        wo.ulpName || wo.ULP || "",           // 5. ULP
+        wo.penyulangName || wo.Penyulang || "", // 6. Penyulang
+        wo.reguName || wo.Regu_ROW || "",     // 7. Regu_ROW
         volPekerjaan,                         // 8. VOLUME
         satuanVal,                            // 9. SATUAN
-        wo.status || "BELUM SELESAI",         // 10. STATUS
-        0,                                    // 11. Total_Realisasi
-        satuanVal,                            // 12. Satuan_Realisasi
-        createdTime                           // 13. Created_At
+        statusVal,                            // 10. STATUS
+        wo.LOKASI_START || wo.lokasiStart || "", // 11. LOKASI_START
+        wo.LOKASI_FINISH || wo.lokasiFinish || "", // 12. LOKASI_FINISH
+        wo.TOTAL_REALISASI || wo.totalRealisasi || 0, // 13. TOTAL_REALISASI
+        wo.SATUAN_TOTAL_REALISASI || wo.satuanTotalRealisasi || "", // 14. SATUAN_TOTAL_REALISASI
+        createdTime                           // 15. Created_At
       ]);
 
-      return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO });
+      return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO || wo.Nomor_WO });
     }
 
     // SAVE REALISASI

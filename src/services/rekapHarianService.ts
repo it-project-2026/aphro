@@ -4,7 +4,7 @@
  */
 
 import { RekapItemData } from '../utils/rekapExportService';
-import { Realisasi, ULP, ReguROW, WorkOrder } from '../types';
+import { Realisasi, ULP, ReguROW, WorkOrder, Penyulang } from '../types';
 
 export interface ULConfigPreset {
   kodeUL: string;
@@ -195,6 +195,196 @@ export class RekapHarianService {
 
     // 3. Fallback bawaan
     return DEFAULT_REKAP_ROWS;
+  }
+
+  /**
+   * Menghasilkan struktur baris awal berdasarkan Master Data Penyulang
+   */
+  static getDefaultRowsForPenyulang(
+    unitName: string,
+    ulpList?: ULP[],
+    penyulangList?: Penyulang[]
+  ): Array<{ id: string; noUrut: number; kodeUnit: string; namaUlp: string; timRow: string; target: number }> {
+    if (penyulangList && penyulangList.length > 0) {
+      const rows: Array<{ id: string; noUrut: number; kodeUnit: string; namaUlp: string; timRow: string; target: number }> = [];
+      let seq = 1;
+
+      // Filter by unit if needed, otherwise use all
+      const targetPenyulangs = penyulangList;
+
+      targetPenyulangs.forEach((p) => {
+        rows.push({
+          id: `row-penyulang-${p.id || seq}`,
+          noUrut: seq,
+          kodeUnit: p.kodePenyulang || `PYL-${seq}`,
+          namaUlp: (p.ulpName || 'ULP TERKAIT').toUpperCase(),
+          timRow: p.namaPenyulang, // We use timRow field as Nama Penyulang for compatibility with RekapItemData
+          target: 50.20,
+        });
+        seq++;
+      });
+
+      if (rows.length > 0) return rows;
+    }
+
+    return [];
+  }
+
+  /**
+   * Memuat data Rekap Penyulang dari LocalStorage atau menginisialisasi
+   */
+  static loadRekapPenyulangData(
+    unitName: string,
+    year: number,
+    monthIndex: number,
+    realisasiList?: Realisasi[],
+    ulpList?: ULP[],
+    penyulangList?: Penyulang[],
+    workOrders?: WorkOrder[]
+  ): RekapItemData[] {
+    const unitKey = this.normalizeUnitKey(unitName);
+    const monthPadded = String(monthIndex + 1).padStart(2, '0');
+    const key = `aphro_rekap_penyulang_${unitKey}_${year}_${monthPadded}`;
+    
+    let rows: RekapItemData[] = [];
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          rows = parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse saved rekap penyulang:', e);
+    }
+
+    if (rows.length === 0) {
+      const defaultRows = this.getDefaultRowsForPenyulang(unitName, ulpList, penyulangList);
+      rows = defaultRows.map((def, idx) => ({
+        id: def.id,
+        noUrut: idx + 1,
+        kodeUnit: def.kodeUnit,
+        namaUlp: def.namaUlp,
+        timRow: def.timRow,
+        target: def.target,
+        keterangan: '',
+        dailyValues: {},
+      }));
+    }
+
+    if ((realisasiList && realisasiList.length > 0) || (workOrders && workOrders.length > 0)) {
+      rows = this.syncFromDataByPenyulang(year, monthIndex, rows, realisasiList || [], workOrders || []);
+    }
+
+    return rows.map((r, idx) => ({ ...r, noUrut: idx + 1 }));
+  }
+
+  /**
+   * Sinkronisasi data KMS dan Pohon berdasarkan PENYULANG
+   */
+  static syncFromDataByPenyulang(
+    year: number,
+    monthIndex: number,
+    currentRows: RekapItemData[],
+    realisasiList: Realisasi[],
+    workOrders: WorkOrder[]
+  ): RekapItemData[] {
+    const normalize = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
+
+    return currentRows.map((row) => {
+      const updatedDaily = { ...row.dailyValues };
+      
+      // Reset
+      for (let i = 1; i <= 31; i++) {
+        const dayKey = String(i).padStart(2, '0');
+        updatedDaily[dayKey] = {
+          tebang1: 0,
+          pangkas: 0,
+          tebang2: 0,
+          targetKms: 0,
+          realisasiKms: 0
+        };
+      }
+
+      const rowPenyulangClean = normalize(row.timRow); // timRow is used as Nama Penyulang
+
+      // 1. Data Pohon
+      if (Array.isArray(realisasiList)) {
+        realisasiList.forEach((rel) => {
+          if (!rel) return;
+          const parts = this.parseDateParts(rel.tanggalRealisasi);
+          if (!parts) return;
+
+          if (parts.y === year && parts.m === monthIndex + 1) {
+            const relPenyulang = normalize(rel.penyulangName || '');
+            
+            if (relPenyulang === rowPenyulangClean || relPenyulang.includes(rowPenyulangClean) || rowPenyulangClean.includes(relPenyulang)) {
+              const dayKey = String(parts.d).padStart(2, '0');
+              if (!updatedDaily[dayKey]) {
+                updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
+              }
+
+              const ket = normalize(rel.keterangan || '');
+              if (ket.includes('TEBANG')) {
+                updatedDaily[dayKey].tebang1++;
+              } else if (ket.includes('PANGKAS') || ket.includes('POTONG')) {
+                updatedDaily[dayKey].pangkas++;
+              }
+            }
+          }
+        });
+      }
+
+      // 2. Data KMS
+      if (Array.isArray(workOrders)) {
+        workOrders.forEach((wo) => {
+          if (!wo) return;
+          const parts = this.parseDateParts(wo.tanggal);
+          if (!parts) return;
+
+          if (parts.y === year && parts.m === monthIndex + 1) {
+            const woPenyulang = normalize(wo.penyulangName || '');
+            
+            if (woPenyulang === rowPenyulangClean || woPenyulang.includes(rowPenyulangClean) || rowPenyulangClean.includes(woPenyulang)) {
+              const dayKey = String(parts.d).padStart(2, '0');
+              if (!updatedDaily[dayKey]) {
+                updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
+              }
+
+              let targetKms = Number(wo.volumePekerjaan) || 0;
+              if (wo.satuan?.toUpperCase() === 'GAWANG') targetKms = targetKms / 20;
+
+              let realisasiKms = 0;
+              const statusUpper = (wo.status || '').toUpperCase();
+              if (statusUpper === 'SELESAI') {
+                realisasiKms = Number(wo.totalRealisasi) || 0;
+                if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') realisasiKms = realisasiKms / 20;
+              }
+
+              updatedDaily[dayKey].targetKms += targetKms;
+              updatedDaily[dayKey].realisasiKms += realisasiKms;
+            }
+          }
+        });
+      }
+
+      return { ...row, dailyValues: updatedDaily };
+    });
+  }
+
+  /**
+   * Menyimpan data Rekap Penyulang ke LocalStorage
+   */
+  static saveRekapPenyulangData(unitName: string, year: number, monthIndex: number, data: RekapItemData[]): void {
+    const unitKey = this.normalizeUnitKey(unitName);
+    const monthPadded = String(monthIndex + 1).padStart(2, '0');
+    const key = `aphro_rekap_penyulang_${unitKey}_${year}_${monthPadded}`;
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+      console.warn('Failed to save rekap penyulang:', e);
+    }
   }
 
   /**

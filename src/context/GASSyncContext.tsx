@@ -13,7 +13,7 @@ interface GASSyncContextType {
   isGasConnected: boolean;
   isOnline: boolean;
   pendingCount: number;
-  syncWithGAS: (showToast?: (msg: string, type?: any) => void) => Promise<any>;
+  syncWithGAS: (showToast?: (msg: string, type?: any) => void, isSilent?: boolean) => Promise<any>;
   processPendingQueue: (showToast?: (msg: string, type?: any) => void) => Promise<void>;
   checkConnection: () => Promise<boolean>;
   refreshPendingCount: () => void;
@@ -24,7 +24,7 @@ const GASSyncContext = React.createContext<GASSyncContextType | undefined>(undef
 export function GASSyncProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { setMasterData } = useMasterData();
-  const { setWorkOrders } = useWorkOrders();
+  const { workOrders, setWorkOrders } = useWorkOrders();
   const { setRealisasiList } = useRealisasi();
   const { setAbsensiList } = useAbsensi();
 
@@ -62,8 +62,22 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     if (showToast) showToast(`Menyinkronkan ${currentQueue.length} data offline ke Spreadsheet...`, 'info');
 
-    const res = await processOfflineSyncQueue(settings.gasWebAppUrl);
+    const res = await processOfflineSyncQueue(settings.gasWebAppUrl, settings.spreadsheetId);
     refreshPendingCount();
+
+    // Update local state to mark items as synced to prevent re-syncing or duplicate display
+    if (res.syncedItems && res.syncedItems.length > 0) {
+      res.syncedItems.forEach(item => {
+        if (item.type === 'REALISASI') {
+          setRealisasiList(prev => prev.map(rel => {
+            if (rel.syncId === item.syncId || rel.id === item.payloadId) {
+              return { ...rel, isSynced: true };
+            }
+            return rel;
+          }));
+        }
+      });
+    }
 
     if (showToast) {
       if (res.successCount > 0 && res.failCount === 0) {
@@ -76,29 +90,45 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [settings.gasWebAppUrl, refreshPendingCount]);
 
-  const syncWithGAS = React.useCallback(async (showToast?: (msg: string, type?: any) => void) => {
+  const syncWithGAS = React.useCallback(async (showToast?: (msg: string, type?: any) => void, isSilent = false) => {
+    if (isSyncing) return null;
+    
     if (!settings.gasWebAppUrl) {
-      if (showToast) showToast('GAS Web App URL belum dikonfigurasi', 'warning');
+      if (showToast && !isSilent) showToast('GAS Web App URL belum dikonfigurasi', 'warning');
       setIsGasConnected(false);
       return null;
     }
 
     if (!navigator.onLine) {
-      if (showToast) showToast('Perangkat dalam mode Offline. Data tersimpan di perangkat.', 'warning');
+      if (showToast && !isSilent) showToast('Perangkat dalam mode Offline. Data tersimpan di perangkat.', 'warning');
       setIsGasConnected(false);
       return null;
     }
 
     setIsSyncing(true);
-    if (showToast) showToast('Menghubungkan ke Spreadsheet...', 'info');
+    if (showToast && !isSilent) showToast('Menghubungkan ke Spreadsheet...', 'info');
 
     try {
       // 1. Process pending offline queue first
-      await processOfflineSyncQueue(settings.gasWebAppUrl);
+      const queueRes = await processOfflineSyncQueue(settings.gasWebAppUrl, settings.spreadsheetId);
       refreshPendingCount();
 
+      // Update local state to mark items as synced from queue
+      if (queueRes.syncedItems && queueRes.syncedItems.length > 0) {
+        queueRes.syncedItems.forEach(item => {
+          if (item.type === 'REALISASI') {
+            setRealisasiList(prev => prev.map(rel => {
+              if (rel.syncId === item.syncId || rel.id === item.payloadId) {
+                return { ...rel, isSynced: true };
+              }
+              return rel;
+            }));
+          }
+        });
+      }
+
       // 2. Fetch full updated dataset
-      const data = await SyncService.fetchAllData(settings.gasWebAppUrl);
+      const data = await SyncService.fetchAllData(settings.gasWebAppUrl, settings.spreadsheetId);
 
       if (data.masterData) {
         setMasterData({
@@ -113,50 +143,36 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       // Helper for normalization
       const clean = (s?: string | null) => (s || '').trim().toUpperCase();
 
+      let finalWOs = workOrders;
+      let finalRealisasi = [];
+      let finalAbsensi = [];
+
       if (Array.isArray(data.workOrders)) {
-        // Deduplicate Work Orders by (nomorWO + penyulangName)
-        const uniqueWOs = new Map<string, any>();
-        data.workOrders.forEach((wo: any) => {
-          if (!wo) return;
-          const key = `${clean(wo.nomorWO)}_${clean(wo.penyulangName)}`;
-          if (!uniqueWOs.has(key)) {
-            uniqueWOs.set(key, wo);
-          } else {
-            // Keep the one with more realisasi info or later timestamp
-            const existing = uniqueWOs.get(key);
-            if ((Number(wo.totalRealisasi) || 0) > (Number(existing.totalRealisasi) || 0)) {
-              uniqueWOs.set(key, wo);
-            }
-          }
-        });
-        setWorkOrders(Array.from(uniqueWOs.values()));
+        // Stop merging local-only WOs to satisfy "hanya membaca kepada Spreadsheet"
+        finalWOs = data.workOrders.filter((wo: any) => wo && wo.nomorWO);
+        setWorkOrders(finalWOs);
       }
 
       if (Array.isArray(data.realisasi)) {
-        // Deduplicate Realisasi by (workOrderId + latitude + longitude + timestamp) or unique field if any
-        // Since Realisasi often has multiple entries per WO, we use a broader key or just trust unique records from GAS
-        // If GAS has duplicates, we filter them here
         const uniqueRel = new Map<string, any>();
         data.realisasi.forEach((rel: any) => {
           if (!rel) return;
           const key = `${rel.id}_${rel.workOrderId}_${rel.tanggalRealisasi}_${rel.latitude}_${rel.longitude}_${clean(rel.keterangan)}`;
           uniqueRel.set(key, rel);
         });
-        setRealisasiList(Array.from(uniqueRel.values()));
+        finalRealisasi = Array.from(uniqueRel.values());
+        setRealisasiList(finalRealisasi);
       }
 
       if (Array.isArray(data.absensi)) {
-        // Deduplicate Absensi by (tanggal + reguName)
         const uniqueAbs = new Map<string, any>();
         data.absensi.forEach((abs: any) => {
           if (!abs) return;
           const datePart = (abs.tanggal || '').slice(0, 10);
           const key = `${datePart}_${clean(abs.reguName)}`;
-          
           if (!uniqueAbs.has(key)) {
             uniqueAbs.set(key, abs);
           } else {
-            // Merge fotoMasuk and fotoKeluar if they are in different rows
             const existing = uniqueAbs.get(key);
             uniqueAbs.set(key, {
               ...existing,
@@ -168,12 +184,26 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
             });
           }
         });
-        setAbsensiList(Array.from(uniqueAbs.values()));
+        finalAbsensi = Array.from(uniqueAbs.values());
+        setAbsensiList(finalAbsensi);
+      }
+
+      // 3. Cache the full dataset for instantaneous future loads (Excluding Work Orders)
+      try {
+        localStorage.setItem('aphro_cached_synced_data', JSON.stringify({
+          masterData: data.masterData,
+          // workOrders excluded to satisfy "hanya membaca kepada Spreadsheet"
+          realisasi: finalRealisasi,
+          absensi: finalAbsensi,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (e) {
+        console.warn('Failed to cache synced data:', e);
       }
 
       setIsGasConnected(true);
 
-      if (showToast) {
+      if (showToast && !isSilent) {
         if (data.errors.length > 0) {
           showToast(`Sinkronisasi parsial. ${data.errors.length} sumber gagal.`, 'warning');
         } else {
@@ -184,7 +214,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       return data;
     } catch (error) {
       console.error('GAS Sync error:', error);
-      if (showToast) showToast('Gagal terhubung ke Google Spreadsheet Web App', 'error');
+      if (showToast && !isSilent) showToast('Gagal terhubung ke Google Spreadsheet Web App', 'error');
       return null;
     } finally {
       setIsSyncing(false);
@@ -206,7 +236,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
             users: Array.isArray(cached.masterData.users) ? cached.masterData.users : undefined,
           });
         }
-        if (Array.isArray(cached.workOrders)) setWorkOrders(cached.workOrders);
+        // Work Orders are intentionally NOT loaded from cache to ensure fresh data from Spreadsheet
         if (Array.isArray(cached.realisasi)) setRealisasiList(cached.realisasi);
         if (Array.isArray(cached.absensi)) setAbsensiList(cached.absensi);
       }

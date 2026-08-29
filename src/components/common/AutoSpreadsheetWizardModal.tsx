@@ -57,7 +57,7 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
 
     try {
       // 1. Save and embed settings URL
-      saveAndEmbedGasConfig(cleanUrl);
+      saveAndEmbedGasConfig({ gasWebAppUrl: cleanUrl });
       updateSettings({ gasWebAppUrl: cleanUrl });
 
       // 2. Call initDatabase

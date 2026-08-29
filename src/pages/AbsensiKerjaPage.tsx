@@ -125,15 +125,21 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   });
 
   useEffect(() => {
-    if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
-      setPetugasRows(
-        todayAbsensi.petugasList.map((p) => ({
-          nama: p.nama || '',
-          keterangan: p.keterangan || 'HADIR',
-        }))
-      );
-    } else {
-      setPetugasRows(getReguMembersFromMaster());
+    // Only initialize if petugasRows is effectively empty or reset is needed
+    // This prevents losing user input after taking a photo
+    const currentRowsValid = petugasRows.some(p => p.nama !== '');
+    
+    if (!currentRowsValid) {
+      if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
+        setPetugasRows(
+          todayAbsensi.petugasList.map((p) => ({
+            nama: p.nama || '',
+            keterangan: p.keterangan || 'HADIR',
+          }))
+        );
+      } else {
+        setPetugasRows(getReguMembersFromMaster());
+      }
     }
   }, [todayAbsensi, reguName, petugasList, users]);
 
@@ -248,6 +254,13 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
     if (!hasDoneAbsensiMasuk && !fotoMasuk) {
       showToast('Mohon lampirkan Foto Masuk (Kamera / File) terlebih dahulu!', 'warning');
+      return;
+    }
+
+    // Validate that all petugas have names
+    const emptyPetugas = petugasRows.some(p => !p.nama.trim());
+    if (emptyPetugas) {
+      showToast('Nama Petugas tidak boleh ada yang kosong!', 'warning');
       return;
     }
 

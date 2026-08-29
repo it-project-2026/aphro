@@ -1,7 +1,5 @@
 import * as React from 'react';
-import { usePersistState } from '../hooks/usePersistState';
-import { WorkOrder, WOStatus } from '../types';
-import { INITIAL_WORK_ORDERS } from '../data/initialData';
+import { WorkOrder } from '../types';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
@@ -14,8 +12,8 @@ interface WorkOrderContextType {
   displayedWorkOrders: WorkOrder[];
   selectedWoIdForRealisasi: string | null;
   setSelectedWoIdForRealisasi: (id: string | null) => void;
-  setWorkOrders: (orders: WorkOrder[]) => void;
-  addWorkOrder: (wo: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => WorkOrder;
+  setWorkOrders: React.Dispatch<React.SetStateAction<WorkOrder[]>>;
+  addWorkOrder: (wo: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WorkOrder>;
   updateWorkOrder: (id: string, wo: Partial<WorkOrder>) => void;
   deleteWorkOrder: (id: string) => void;
 }
@@ -26,7 +24,9 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
-  const [workOrders, setWorkOrders] = usePersistState<WorkOrder[]>('aphro_wo', INITIAL_WORK_ORDERS);
+  
+  // Work Orders are initialized as empty and only populated from Spreadsheet sync
+  const [workOrders, setWorkOrders] = React.useState<WorkOrder[]>([]);
   const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = React.useState<string | null>(null);
 
   const displayedWorkOrders = React.useMemo(() => {
@@ -92,7 +92,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     return workOrders;
   }, [workOrders, user]);
 
-  const addWorkOrder = React.useCallback((woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addWorkOrder = React.useCallback(async (woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
     const nowStr = getLocalDateTimeString();
     const newWo: WorkOrder = {
       ...woData,
@@ -100,68 +100,92 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       createdAt: nowStr,
       updatedAt: nowStr,
     };
+    
+    // Optimistic local update with 'pending' status if needed
+    // (In this app, we just add it to the state and try to sync)
     setWorkOrders(prev => [newWo, ...prev]);
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('WORK_ORDER_CREATE', newWo);
       showToast(`⚡ Work Order ${newWo.nomorWO} tersimpan lokal (Offline).`, 'info');
     } else {
-      GASApiService.createWorkOrder(settings.gasWebAppUrl, newWo)
-        .then(res => {
-          if (res.status === 'success') {
-            showToast(`Work Order ${newWo.nomorWO} tersimpan ke Spreadsheet!`, 'success');
-          } else {
-            addToOfflineQueue('WORK_ORDER_CREATE', newWo);
-            showToast(`⚡ Work Order tersimpan lokal. Gagal sync ke Spreadsheet.`, 'warning');
-          }
-        })
-        .catch(err => {
-          console.error('Save WO error:', err);
+      try {
+        // Ensure we are using the latest settings URL and Spreadsheet ID
+        const res = await GASApiService.createWorkOrder(settings.gasWebAppUrl, settings.spreadsheetId, newWo);
+        
+        if (res && res.status === 'success') {
+          showToast(`Work Order ${newWo.nomorWO} tersimpan ke Spreadsheet!`, 'success');
+        } else {
+          console.error('GAS Save failed:', res?.message);
           addToOfflineQueue('WORK_ORDER_CREATE', newWo);
-          showToast(`⚡ Work Order tersimpan lokal di perangkat.`, 'info');
-        });
+          showToast(`⚡ Work Order tersimpan lokal. Gagal sync ke Spreadsheet: ${res?.message || 'Unknown Error'}`, 'warning');
+        }
+      } catch (err) {
+        console.error('Save WO error:', err);
+        addToOfflineQueue('WORK_ORDER_CREATE', newWo);
+        showToast(`⚡ Gagal terhubung ke Spreadsheet. Data disimpan lokal di perangkat.`, 'info');
+      }
     }
 
     return newWo;
   }, [setWorkOrders, settings.gasWebAppUrl, showToast]);
 
-  const updateWorkOrder = React.useCallback((id: string, updates: Partial<WorkOrder>) => {
-    let updatedWo: WorkOrder | undefined;
+  const updateWorkOrder = React.useCallback(async (id: string, updates: Partial<WorkOrder>) => {
     const nowStr = getLocalDateTimeString();
-    setWorkOrders(prev => prev.map(wo => {
-      if (wo.id === id) {
-        updatedWo = { ...wo, ...updates, updatedAt: nowStr };
-        return updatedWo;
-      }
-      return wo;
-    }));
+    const existingWo = workOrders.find(wo => wo.id === id);
+    if (!existingWo) return;
 
-    if (updatedWo) {
-      if (!navigator.onLine || !settings.gasWebAppUrl) {
-        addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
-      } else {
-        GASApiService.updateWorkOrder(settings.gasWebAppUrl, id, updatedWo)
-          .catch(err => {
-            console.error('Update WO error:', err);
-            if (updatedWo) addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
-          });
-      }
-    }
-  }, [setWorkOrders, settings.gasWebAppUrl]);
+    const updatedWo = { ...existingWo, ...updates, updatedAt: nowStr };
+    
+    // Update local state first (Optimistic)
+    setWorkOrders(prev => prev.map(wo => wo.id === id ? updatedWo : wo));
 
-  const deleteWorkOrder = React.useCallback((id: string) => {
+    if (!navigator.onLine || !settings.gasWebAppUrl) {
+      addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
+      showToast('Work Order diperbarui secara lokal (Offline)', 'info');
+    } else {
+        try {
+          const res = await GASApiService.updateWorkOrder(settings.gasWebAppUrl, settings.spreadsheetId, id, updatedWo);
+          if (res.status === 'success') {
+            showToast('Work Order berhasil diperbarui di Spreadsheet', 'success');
+          } else {
+            addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
+            showToast('Gagal sinkron, disimpan di antrean offline', 'warning');
+          }
+        } catch (err) {
+          console.error('Update WO error:', err);
+          addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
+          showToast('Koneksi bermasalah, disimpan di antrean offline', 'info');
+        }
+      }
+  }, [setWorkOrders, settings.gasWebAppUrl, settings.spreadsheetId, showToast, workOrders]);
+
+  const deleteWorkOrder = React.useCallback(async (id: string) => {
+    // Save WO for potential undo or offline queue
+    const woToDelete = workOrders.find(wo => wo.id === id);
+    
+    // Update local state (Optimistic)
     setWorkOrders(prev => prev.filter(wo => wo.id !== id));
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('WORK_ORDER_DELETE', { id });
+      showToast('Work Order dihapus secara lokal (Offline)', 'info');
     } else {
-      GASApiService.deleteWorkOrder(settings.gasWebAppUrl, id)
-        .catch(err => {
-          console.error('Delete WO error:', err);
+      try {
+        const res = await GASApiService.deleteWorkOrder(settings.gasWebAppUrl, id);
+        if (res.status === 'success') {
+          showToast('Work Order berhasil dihapus dari Spreadsheet', 'success');
+        } else {
           addToOfflineQueue('WORK_ORDER_DELETE', { id });
-        });
+          showToast('Gagal hapus di Spreadsheet, disimpan di antrean offline', 'warning');
+        }
+      } catch (err) {
+        console.error('Delete WO error:', err);
+        addToOfflineQueue('WORK_ORDER_DELETE', { id });
+        showToast('Koneksi bermasalah, antrean hapus disimpan', 'info');
+      }
     }
-  }, [setWorkOrders, settings.gasWebAppUrl]);
+  }, [setWorkOrders, settings.gasWebAppUrl, workOrders, showToast]);
 
   return (
     <WorkOrderContext.Provider value={{

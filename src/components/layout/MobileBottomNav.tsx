@@ -46,6 +46,11 @@ export const MobileBottomNav: React.FC = () => {
           icon: CalendarRange,
         },
         {
+          id: 'rekap_penyulang',
+          label: 'Rekap Penyulang',
+          icon: CalendarRange,
+        },
+        {
           id: 'monitoring_absensi',
           label: 'Monitoring Absensi',
           icon: Clock,

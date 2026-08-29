@@ -21,7 +21,9 @@ import {
   X,
   FileCheck2,
   Image as ImageIcon,
+  RefreshCw,
 } from 'lucide-react';
+import { useGASSync } from '../context/GASSyncContext';
 
 interface InputRealisasiPageProps {
   editMode?: boolean;
@@ -42,25 +44,44 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   const { settings } = useSettings();
   const { setActiveTab, selectedWoIdForRealisasi, setSelectedWoIdForRealisasi } = useUI();
   const { showToast } = useToast();
+  const { syncWithGAS, isGasConnected } = useGASSync();
+
+  // Auto-sync when page is opened if connected
+  React.useEffect(() => {
+    if (isGasConnected && workOrders.length === 0) {
+      syncWithGAS();
+    }
+  }, [isGasConnected, workOrders.length]);
+
+  // Helper to clean string for better matching
+  const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 
   // Filter Work Orders for the current user's regu, unless admin
   const availableWorkOrders = workOrders
     .filter((wo) => {
+      // Always show current WO if in edit mode
       if (editMode && initialData && wo.id === initialData.workOrderId) return true;
-      if (currentUser?.role !== 'User') return true;
-      if (!currentUser) return false;
       
-      let matchRegu = false;
-      if (wo.reguName && currentUser.reguName) {
-        const woRegu = (wo.reguName || '').toLowerCase().trim();
-        const userRegu = (currentUser.reguName || '').toLowerCase().trim();
-        matchRegu = woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(woRegu);
+      // Admins / Adm / SuperAdmin see all work orders
+      if (currentUser && currentUser.role !== 'User') return true;
+      
+      // Regular "User" only sees WOs matching their Regu Name
+      if (currentUser?.role === 'User') {
+        const userRegu = cleanStr(currentUser.reguName || '');
+        const userName = cleanStr(currentUser.name || '');
+        const woRegu = cleanStr(wo.reguName || '');
+        const woPetugas = cleanStr(wo.petugasName || '');
+        
+        // Match by Regu Name, Regu ID, or if specifically assigned to this User Name
+        const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(woRegu));
+        const matchReguId = (wo.reguId && currentUser.reguId && String(wo.reguId) === String(currentUser.reguId));
+        const matchPetugas = userName !== '' && (woPetugas === userName || woPetugas.includes(userName));
+        
+        // Show if matches regu or assigned petugas
+        return matchRegu || matchReguId || matchPetugas;
       }
 
-      const matchReguId = wo.reguId && currentUser.reguId && wo.reguId === currentUser.reguId;
-      
-      // Filter based on Regu
-      return matchRegu || matchReguId;
+      return false;
     })
     .sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.tanggal).getTime();
@@ -283,6 +304,21 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       return;
     }
 
+    if (!noTiang.trim()) {
+      showToast('Nomor Tiang tidak boleh kosong!', 'warning');
+      return;
+    }
+
+    if (!jenisTanaman.trim()) {
+      showToast('Jenis Tanaman tidak boleh kosong!', 'warning');
+      return;
+    }
+
+    if (!lokasiKerja.trim()) {
+      showToast('Lokasi Kerja tidak boleh kosong!', 'warning');
+      return;
+    }
+
     if (photosSebelum.length === 0) {
       showToast('Mohon unggah minimal 1 foto kondisi Sebelum (Before)', 'warning');
       return;
@@ -371,6 +407,21 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
   const handleFinalizeWorkOrder = async () => {
     if (!selectedWO) return;
+
+    if (!lokasiStart.trim()) {
+      showToast('Titik Start wajib diisi untuk menyatakan pekerjaan SELESAI!', 'warning');
+      return;
+    }
+
+    if (!lokasiFinish.trim()) {
+      showToast('Titik Finish wajib diisi untuk menyatakan pekerjaan SELESAI!', 'warning');
+      return;
+    }
+
+    if (totalVolume <= 0) {
+      showToast('Jumlah Realisasi (Total Volume) wajib diisi dan harus lebih dari 0!', 'warning');
+      return;
+    }
     
     setIsProcessing(true);
     showToast('Memproses penyelesaian pekerjaan...', 'info');
@@ -454,7 +505,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  LOKASI START
+                  LOKASI START <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -466,7 +517,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  LOKASI FINISH
+                  LOKASI FINISH <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -480,7 +531,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                TOTAL VOLUME REALISASI
+                TOTAL VOLUME REALISASI <span className="text-rose-500">*</span>
               </label>
                 <input
                 type="number"
@@ -494,7 +545,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                PILIH SATUAN
+                PILIH SATUAN <span className="text-rose-500">*</span>
               </label>
               <div className="grid grid-cols-2 gap-4">
                 <button
@@ -534,7 +585,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
             <button
               type="button"
               onClick={handleFinalizeWorkOrder}
-              disabled={isProcessing || totalVolume <= 0}
+              disabled={isProcessing || totalVolume <= 0 || !lokasiStart.trim() || !lokasiFinish.trim()}
               className="flex-[2] py-4 px-6 bg-[#00A2B9] hover:bg-[#008396] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all shadow-lg shadow-teal-600/25 flex items-center justify-center space-x-2"
             >
               {isProcessing ? (
@@ -568,19 +619,46 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* WO Selection Card */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-3 shadow-sm">
-            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-              Pilih Work Order Yang Dikerjakan
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                Pilih Work Order Yang Dikerjakan
+              </label>
+              <button 
+                type="button"
+                onClick={() => syncWithGAS && syncWithGAS()}
+                className="text-[10px] font-bold text-[#00A2B9] hover:underline flex items-center gap-1"
+              >
+                <RefreshCw className="w-3 h-3" />
+                REFRESH DATA
+              </button>
+            </div>
+            
+            {currentUser?.role === 'User' && (
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">
+                Menampilkan WO untuk Regu: <span className="font-bold text-teal-600 dark:text-teal-400">{currentUser?.reguName || 'Belum Diatur'}</span>
+              </p>
+            )}
             <select
               value={selectedWoId || ''}
               onChange={(e) => handleWoChange(e.target.value)}
               className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-[#00A2B9]"
             >
-              {availableWorkOrders.map((wo, wIdx) => (
-                <option key={`${wo.id}-${wIdx}`} value={wo.id}>
-                  {wo.nomorWO} - {wo.penyulangName} ({wo.ulpName}) - [{wo.status}]
-                </option>
-              ))}
+              {workOrders.length === 0 ? (
+                <option value="">-- Menunggu Data Dari Spreadsheet... --</option>
+              ) : availableWorkOrders.length === 0 ? (
+                <option value="">-- Tidak Ada WO Aktif Untuk Regu: {currentUser?.reguName || 'Belum Diatur'} --</option>
+              ) : (
+                <>
+                  {(!selectedWoId || !availableWorkOrders.find(w => w.id === selectedWoId)) && (
+                    <option value="">-- Pilih Work Order --</option>
+                  )}
+                  {availableWorkOrders.map((wo, wIdx) => (
+                    <option key={`${wo.id}-${wIdx}`} value={wo.id}>
+                      {wo.nomorWO} - {wo.penyulangName} ({wo.ulpName}) - [{wo.status}]
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
 
             {selectedWO && (
@@ -679,28 +757,30 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                NO TIANG
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
+                NO TIANG <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
+                required
                 placeholder="Contoh: T.12 / T.05"
                 value={noTiang || ''}
                 onChange={(e) => setNoTiang(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:border-[#00A2B9] outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                JENIS TANAMAN
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
+                JENIS TANAMAN <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
+                required
                 placeholder="Contoh: Kelapa Sawit"
                 value={jenisTanaman || ''}
                 onChange={(e) => setJenisTanaman(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:border-[#00A2B9] outline-none"
               />
             </div>
 
@@ -749,15 +829,16 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                LOKASI KERJA (Manual)
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
+                LOKASI KERJA (Manual) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
+                required
                 placeholder="Contoh: Depan Kantor ULP..."
                 value={lokasiKerja || ''}
                 onChange={(e) => setLokasiKerja(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:border-[#00A2B9] outline-none"
               />
             </div>
             
@@ -802,7 +883,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
             <div className="flex items-center space-x-2 text-rose-600 dark:text-rose-400 border-b border-rose-100 dark:border-rose-900/40 pb-2">
               <ImageIcon className="w-5 h-5" />
               <h3 className="font-bold text-sm uppercase tracking-wider">
-                FOTO SEBELUM {noTiang ? `- NO TIANG: ${noTiang}` : ''}
+                FOTO SEBELUM <span className="text-rose-500">*</span> {noTiang ? `- NO TIANG: ${noTiang}` : ''}
               </h3>
             </div>
 

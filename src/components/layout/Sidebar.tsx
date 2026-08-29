@@ -111,6 +111,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin', 'Adm'],
     },
     {
+      id: 'rekap_penyulang',
+      label: 'Rekap Penyulang Harian',
+      icon: CalendarRange,
+      roles: ['SuperAdmin', 'Admin', 'Adm'],
+    },
+    {
       id: 'master_data',
       label: 'Master Data',
       icon: Database,
@@ -137,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   ];
 
   const allowedItems = isAdmRole
-    ? navItems.filter((item) => item.id === 'cetak_laporan' || item.id === 'rekap_harian' || item.id === 'monitoring_absensi')
+    ? navItems.filter((item) => ['cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi'].includes(item.id))
     : navItems.filter((item) => item.roles.includes(role));
 
   return (

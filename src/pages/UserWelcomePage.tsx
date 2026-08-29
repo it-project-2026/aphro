@@ -89,7 +89,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
     day: 'numeric',
   });
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0');
 
   // Filter work orders strictly matching current logged-in user
   const userMatchedWorkOrders = useMemo(() => {

@@ -47,16 +47,12 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
   const { showToast } = useToast();
   const { syncWithGAS, isSyncing: isGASSyncing } = useGASSync();
 
-  // Unit Layanan (UL) Selection
-  const [activeUL, setActiveUL] = useState<string>(() => {
-    const fromSettings = settings.namaUnitLayanan || 'BUKITTINGGI';
-    return RekapHarianService.normalizeUnitKey(fromSettings);
-  });
-
-  const selectedULKey = useMemo(() => activeUL, [activeUL]);
-
   // ULP Filter inside selected UL ('ALL' or specific ULP name)
   const [selectedUlpFilter, setSelectedUlpFilter] = useState<string>('ALL');
+
+  const selectedULKey = useMemo(() => {
+    return RekapHarianService.normalizeUnitKey(settings.namaUnitLayanan || 'BUKITTINGGI');
+  }, [settings.namaUnitLayanan]);
 
   // Date Selection State
   const [selectedYear, setSelectedYear] = useState<number>(() => {
@@ -170,12 +166,8 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
   // Active UL display label
   const unitDisplayName = useMemo(() => {
-    if (activeUL === 'PADANG') return 'UL PADANG';
-    if (activeUL === 'PAYAKUMBUH') return 'UL PAYAKUMBUH';
-    if (activeUL === 'SOLOK') return 'UL SOLOK';
-    if (activeUL === 'BUKITTINGGI') return 'UL BUKITTINGGI';
-    return `UL ${activeUL}`;
-  }, [activeUL]);
+    return `UL ${selectedULKey}`;
+  }, [selectedULKey]);
 
   // Load Data when UL, Year, or Month changes
   useEffect(() => {
@@ -381,16 +373,18 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       let rowTot = 0;
       daysInMonth.forEach((d) => {
         const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, targetKms: 0, realisasiKms: 0 };
-        rowTot += (v.tebang1 || 0) + (v.pangkas || 0);
+        // TOTAL is now sum of realisasiKms
+        rowTot += (v.realisasiKms || 0);
         grandTargetKms += v.targetKms || 0;
         grandRealisasiKms += v.realisasiKms || 0;
       });
       grandVolume += rowTot;
-      grandTarget += row.target || 0;
+      // Target is 50.20 per row
+      grandTarget += 50.20;
     });
 
-    const sisa = grandTarget > 0 ? Math.max(0, grandTarget - grandVolume) : 0;
-    const percent = grandTarget > 0 ? Math.round((grandVolume / grandTarget) * 100) : 0;
+    const sisa = grandTarget - grandVolume;
+    const percent = grandTarget > 0 ? (grandVolume / grandTarget) * 100 : 0;
 
     return {
       volume: grandVolume,
@@ -398,7 +392,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       targetKms: grandTargetKms,
       realisasiKms: grandRealisasiKms,
       sisa,
-      percent,
+      percent: Math.round(percent),
     };
   }, [daysInMonth, filteredRows]);
 
@@ -426,24 +420,6 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
           {/* Month & Year Selectors & Actions */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* UL Selection Dropdown */}
-            <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 shadow-sm">
-              <Building2 className="w-4 h-4 text-[#00A2B9] dark:text-teal-400" />
-              <select
-                value={activeUL}
-                onChange={(e) => {
-                  setActiveUL(e.target.value);
-                  setIsLoading(true);
-                }}
-                className="bg-transparent font-black text-slate-900 dark:text-white focus:outline-none cursor-pointer text-sm"
-              >
-                <option value="BUKITTINGGI">UL BUKITTINGGI</option>
-                <option value="PADANG">UL PADANG</option>
-                <option value="PAYAKUMBUH">UL PAYAKUMBUH</option>
-                <option value="SOLOK">UL SOLOK</option>
-              </select>
-            </div>
-
             {/* Month Dropdown */}
             <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1.5">
               <button
@@ -779,16 +755,16 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
             {/* Table Body */}
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {filteredRows.map((row, rIdx) => {
-                // Calculate Total for this row
+                // Calculate Total for this row (Sum of REALISASI KMS)
                 let rowVolumeSum = 0;
                 daysInMonth.forEach((d) => {
-                  const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0 };
-                  rowVolumeSum += (val.tebang1 || 0) + (val.pangkas || 0);
+                  const val = row.dailyValues[d.dayFormatted] || { realisasiKms: 0 };
+                  rowVolumeSum += (val.realisasiKms || 0);
                 });
 
-                const target = row.target || 0;
-                const sisa = target > 0 ? Math.max(0, target - rowVolumeSum) : 0;
-                const percent = target > 0 ? Math.round((rowVolumeSum / target) * 100) : 0;
+                const target = 50.20; // Fixed target as requested
+                const sisa = target - rowVolumeSum;
+                const percent = (rowVolumeSum / target) * 100;
 
                 return (
                   <tr
@@ -909,29 +885,25 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
                     {/* Summary Columns */}
                     <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-850">
-                      {rowVolumeSum > 0 ? rowVolumeSum : 0}
+                      {rowVolumeSum.toFixed(2)}
                     </td>
 
                     <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-850">
-                      {target > 0 ? sisa : '-'}
+                      {sisa.toFixed(2)}
                     </td>
 
                     <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold bg-slate-50 dark:bg-slate-850">
-                      {target > 0 ? (
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                            percent >= 100
-                              ? 'bg-teal-100 text-[#008396] dark:bg-teal-950 dark:text-teal-300'
-                              : percent >= 75
-                              ? 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300'
-                              : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                          }`}
-                        >
-                          {percent}%
-                        </span>
-                      ) : (
-                        '-'
-                      )}
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                          percent >= 100
+                            ? 'bg-teal-100 text-[#008396] dark:bg-teal-950 dark:text-teal-300'
+                            : percent >= 75
+                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                        }`}
+                      >
+                        {percent.toFixed(1)}%
+                      </span>
                     </td>
 
                     <td className="px-3 py-2 border-slate-200 dark:border-slate-800 text-left text-slate-600 dark:text-slate-400 text-[11px] truncate max-w-[150px]">
@@ -981,14 +953,12 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 {/* Grand Summary Columns */}
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-teal-700 dark:text-teal-300">
                   <div className="flex flex-col">
-                    <span>{grandTotalsSummary.volume} BTG</span>
-                    <span className="text-[9px] text-[#00A2B9] opacity-70">({grandTotalsSummary.realisasiKms.toFixed(2)} KMS)</span>
+                    <span>{grandTotalsSummary.volume.toFixed(2)} KMS</span>
                   </div>
                 </td>
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-bold text-xs text-slate-700 dark:text-slate-300">
                   <div className="flex flex-col">
-                    <span>{grandTotalsSummary.sisa} BTG</span>
-                    <span className="text-[9px] text-slate-400">({grandTotalsSummary.targetKms.toFixed(2)} KMS)</span>
+                    <span>{grandTotalsSummary.sisa.toFixed(2)} KMS</span>
                   </div>
                 </td>
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-[#008396] dark:text-teal-400">

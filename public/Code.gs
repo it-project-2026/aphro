@@ -49,7 +49,7 @@ function setupDatabase() {
   // List of required Sheets and Header Columns
   var sheetsSchema = {
     "USERS": ["UserID", "Username", "Password", "NamaRegu", "Role", "ULP", "Status", "Last Login", "Created At"],
-    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "STATUS", "LOKASI_START", "LOKASI_FINISH", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI", "Created_At"],
+    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "WO_AWAL", "WO_AKHIR", "STATUS", "LOKASI_START", "LOKASI_FINISH", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI", "Created_At"],
     "REALISASI": ["WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Lokasi_kerja", "Timestamp"],
     "ULP": ["ID", "Kode_ULP", "Nama_ULP", "Manajer", "Kontak", "Alamat", "Status"],
     "PENYULANG": ["ID", "Nama_Penyulang", "ULP", "Panjang_Kms", "Jumlah_Trafo", "Status"],
@@ -397,30 +397,44 @@ function doPost(e) {
       var ss = getSpreadsheet();
       var sheet = ss.getSheetByName("WORK_ORDER") || ss.insertSheet("WORK_ORDER");
 
-      var woId = wo.id || ("wo-" + new Date().getTime());
-      var createdTime = wo.createdAt || new Date().toISOString();
-      var volPekerjaan = Number(wo.volumePekerjaan || wo.volume || 0);
-      var satuanVal = String(wo.satuan || "KMS").toUpperCase();
+      var woId = wo.id || wo.WO_ID || ("wo-" + new Date().getTime());
+      var now = new Date();
+      var createdTime = wo.createdAt || wo.Created_At || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+      var tglRaw = wo.tanggal || wo.Tanggal || "";
+      var tglStr = "";
+      if (tglRaw) {
+        try {
+          tglStr = Utilities.formatDate(new Date(tglRaw), "GMT+7", "yyyy-MM-dd");
+        } catch (e) { tglStr = String(tglRaw).slice(0, 10); }
+      } else {
+        tglStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+      }
+      
+      var volPekerjaan = Number(wo.volumePekerjaan || wo.VOLUME || wo.volume || 0);
+      var satuanVal = String(wo.satuan || wo.SATUAN || "KMS").toUpperCase();
+      var statusVal = String(wo.status || wo.STATUS || "BELUM SELESAI").toUpperCase();
 
       sheet.appendRow([
-        woId,                                 // 1. WO_ID
-        wo.pekerjaan || "NORMAL",             // 2. PEKERJAAN
-        wo.nomorWO || "",                     // 3. Nomor_WO
-        wo.tanggal || "",                     // 4. Tanggal
-        wo.ulpName || "",                     // 5. ULP
-        wo.penyulangName || "",               // 6. Penyulang
-        wo.reguName || "",                    // 7. Regu_ROW
-        volPekerjaan,                         // 8. VOLUME
-        satuanVal,                            // 9. SATUAN
-        wo.status || "BELUM SELESAI",         // 10. STATUS
-        wo.LOKASI_START || "",                // 11. LOKASI_START
-        wo.LOKASI_FINISH || "",               // 12. LOKASI_FINISH
-        wo.TOTAL_REALISASI || 0,              // 13. TOTAL_REALISASI
-        wo.SATUAN_TOTAL_REALISASI || "",      // 14. SATUAN_TOTAL_REALISASI
-        createdTime                           // 15. Created_At
+        woId,                                 // 1 (A) WO_ID
+        wo.pekerjaan || wo.PEKERJAAN || "NORMAL", // 2 (B) PEKERJAAN
+        wo.nomorWO || wo.NOMOR_WO || wo.Nomor_WO || "", // 3 (C) Nomor_WO
+        tglStr,                               // 4 (D) Tanggal
+        wo.ulpName || wo.ULP || wo.ulp || "", // 5 (E) ULP
+        wo.penyulangName || wo.PENYULANG || wo.Penyulang || "", // 6 (F) Penyulang
+        wo.reguName || wo.REGU || wo.Regu_ROW || "", // 7 (G) Regu_ROW
+        volPekerjaan,                         // 8 (H) VOLUME
+        satuanVal,                            // 9 (I) SATUAN
+        wo.woMulai || wo.WO_MULAI || wo.WO_AWAL || "", // 10 (J) WO_AWAL
+        wo.woAkhir || wo.WO_AKHIR || "",      // 11 (K) WO_AKHIR
+        statusVal,                            // 12 (L) STATUS
+        wo.LOKASI_START || wo.lokasiStart || "", // 13 (M) LOKASI_START
+        wo.LOKASI_FINISH || wo.lokasiFinish || "", // 14 (N) LOKASI_FINISH
+        wo.TOTAL_REALISASI || wo.totalRealisasi || 0, // 15 (O) TOTAL_REALISASI
+        wo.SATUAN_TOTAL_REALISASI || wo.satuanTotalRealisasi || "", // 16 (P) SATUAN_TOTAL_REALISASI
+        createdTime                           // 17 (Q) Created_At
       ]);
 
-      return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO });
+      return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO || wo.NOMOR_WO || wo.Nomor_WO });
     }
 
     // SAVE REALISASI
@@ -508,7 +522,7 @@ function doPost(e) {
       var sheet = ss.getSheetByName("ABSENSI") || ss.insertSheet("ABSENSI");
       var absId = abs.id || ("abs-" + new Date().getTime());
       var pList = abs.petugasList || [];
-      var tgl = abs.tanggal || new Date().toISOString().slice(0, 10);
+      var tgl = abs.tanggal || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
       var regu = abs.reguName || "";
       var nowStr = new Date().toLocaleString("id-ID");
 
@@ -525,17 +539,6 @@ function doPost(e) {
           break;
         }
       }
-
-      var p1_nama = pList[0] ? pList[0].nama : "-";
-      var p1_ket = pList[0] ? (pList[0].keterangan || "HADIR") : "HADIR";
-      var p2_nama = pList[1] ? pList[1].nama : "-";
-      var p2_ket = pList[1] ? (pList[1].keterangan || "HADIR") : "HADIR";
-      var p3_nama = pList[2] ? pList[2].nama : "-";
-      var p3_ket = pList[2] ? (pList[2].keterangan || "HADIR") : "HADIR";
-      var p4_nama = pList[3] ? pList[3].nama : "-";
-      var p4_ket = pList[3] ? (pList[3].keterangan || "HADIR") : "HADIR";
-      var p5_nama = pList[4] ? pList[4].nama : "-";
-      var p5_ket = pList[4] ? (pList[4].keterangan || "HADIR") : "HADIR";
 
       var fMasukLink = "";
       var fKeluarLink = "";
@@ -559,16 +562,30 @@ function doPost(e) {
       }
 
       if (existingRowIndex > 0) {
-        sheet.getRange(existingRowIndex, 5).setValue(p1_nama);
-        sheet.getRange(existingRowIndex, 6).setValue(p1_ket);
-        sheet.getRange(existingRowIndex, 7).setValue(p2_nama);
-        sheet.getRange(existingRowIndex, 8).setValue(p2_ket);
-        sheet.getRange(existingRowIndex, 9).setValue(p3_nama);
-        sheet.getRange(existingRowIndex, 10).setValue(p3_ket);
-        sheet.getRange(existingRowIndex, 11).setValue(p4_nama);
-        sheet.getRange(existingRowIndex, 12).setValue(p4_ket);
-        sheet.getRange(existingRowIndex, 13).setValue(p5_nama);
-        sheet.getRange(existingRowIndex, 14).setValue(p5_ket);
+        // ONLY update personnel names and remarks if they are provided in pList
+        // This prevents losing data during checkout (Absen Pulang) if pList is empty
+        if (pList && pList.length > 0) {
+          if (pList[0]) {
+            sheet.getRange(existingRowIndex, 5).setValue(pList[0].nama || "-");
+            sheet.getRange(existingRowIndex, 6).setValue(pList[0].keterangan || "HADIR");
+          }
+          if (pList[1]) {
+            sheet.getRange(existingRowIndex, 7).setValue(pList[1].nama || "-");
+            sheet.getRange(existingRowIndex, 8).setValue(pList[1].keterangan || "HADIR");
+          }
+          if (pList[2]) {
+            sheet.getRange(existingRowIndex, 9).setValue(pList[2].nama || "-");
+            sheet.getRange(existingRowIndex, 10).setValue(pList[2].keterangan || "HADIR");
+          }
+          if (pList[3]) {
+            sheet.getRange(existingRowIndex, 11).setValue(pList[3].nama || "-");
+            sheet.getRange(existingRowIndex, 12).setValue(pList[3].keterangan || "HADIR");
+          }
+          if (pList[4]) {
+            sheet.getRange(existingRowIndex, 13).setValue(pList[4].nama || "-");
+            sheet.getRange(existingRowIndex, 14).setValue(pList[4].keterangan || "HADIR");
+          }
+        }
 
         if (fMasukLink) {
           sheet.getRange(existingRowIndex, 15).setValue(fMasukLink);
@@ -579,6 +596,18 @@ function doPost(e) {
           sheet.getRange(existingRowIndex, 18).setValue(abs.timestampKeluar || nowStr);
         }
       } else {
+        // Create new row
+        var p1_nama = pList[0] ? pList[0].nama : "-";
+        var p1_ket = pList[0] ? (pList[0].keterangan || "HADIR") : "HADIR";
+        var p2_nama = pList[1] ? pList[1].nama : "-";
+        var p2_ket = pList[1] ? (pList[1].keterangan || "HADIR") : "HADIR";
+        var p3_nama = pList[2] ? pList[2].nama : "-";
+        var p3_ket = pList[2] ? (pList[2].keterangan || "HADIR") : "HADIR";
+        var p4_nama = pList[3] ? pList[3].nama : "-";
+        var p4_ket = pList[3] ? (pList[3].keterangan || "HADIR") : "HADIR";
+        var p5_nama = pList[4] ? pList[4].nama : "-";
+        var p5_ket = pList[4] ? (pList[4].keterangan || "HADIR") : "HADIR";
+
         sheet.appendRow([
           absId,
           targetTgl,
@@ -618,20 +647,23 @@ function doPost(e) {
       var updated = false;
 
       for (var r = 1; r < data.length; r++) {
-        if (String(data[r][0]) === String(id) || String(data[r][2]) === String(wo.nomorWO)) {
-          if (wo.pekerjaan !== undefined) sheet.getRange(r + 1, 2).setValue(wo.pekerjaan);
-          if (wo.nomorWO !== undefined) sheet.getRange(r + 1, 3).setValue(wo.nomorWO);
-          if (wo.tanggal !== undefined) sheet.getRange(r + 1, 4).setValue(wo.tanggal);
-          if (wo.ulpName !== undefined) sheet.getRange(r + 1, 5).setValue(wo.ulpName);
-          if (wo.penyulangName !== undefined) sheet.getRange(r + 1, 6).setValue(wo.penyulangName);
-          if (wo.reguName !== undefined) sheet.getRange(r + 1, 7).setValue(wo.reguName);
-          if (wo.volumePekerjaan !== undefined) sheet.getRange(r + 1, 8).setValue(wo.volumePekerjaan);
-          if (wo.satuan !== undefined) sheet.getRange(r + 1, 9).setValue(wo.satuan);
-          if (wo.status !== undefined) sheet.getRange(r + 1, 10).setValue(wo.status);
-          if (wo.LOKASI_START !== undefined) sheet.getRange(r + 1, 11).setValue(wo.LOKASI_START);
-          if (wo.LOKASI_FINISH !== undefined) sheet.getRange(r + 1, 12).setValue(wo.LOKASI_FINISH);
-          if (wo.TOTAL_REALISASI !== undefined) sheet.getRange(r + 1, 13).setValue(wo.TOTAL_REALISASI);
-          if (wo.SATUAN_TOTAL_REALISASI !== undefined) sheet.getRange(r + 1, 14).setValue(wo.SATUAN_TOTAL_REALISASI);
+        if (String(data[r][0]) === String(id) || String(data[r][2]) === String(wo.nomorWO) || String(data[r][2]) === String(wo.NOMOR_WO)) {
+          var row = r + 1;
+          if (wo.pekerjaan !== undefined || wo.PEKERJAAN !== undefined) sheet.getRange(row, 2).setValue(wo.pekerjaan || wo.PEKERJAAN);
+          if (wo.nomorWO !== undefined || wo.NOMOR_WO !== undefined) sheet.getRange(row, 3).setValue(wo.nomorWO || wo.NOMOR_WO);
+          if (wo.tanggal !== undefined || wo.TANGGAL !== undefined) sheet.getRange(row, 4).setValue(wo.tanggal || wo.TANGGAL);
+          if (wo.ulpName !== undefined || wo.ULP !== undefined) sheet.getRange(row, 5).setValue(wo.ulpName || wo.ULP);
+          if (wo.penyulangName !== undefined || wo.PENYULANG !== undefined) sheet.getRange(row, 6).setValue(wo.penyulangName || wo.PENYULANG);
+          if (wo.reguName !== undefined || wo.REGU !== undefined) sheet.getRange(row, 7).setValue(wo.reguName || wo.REGU);
+          if (wo.volumePekerjaan !== undefined || wo.VOLUME !== undefined) sheet.getRange(row, 8).setValue(wo.volumePekerjaan || wo.VOLUME);
+          if (wo.satuan !== undefined || wo.SATUAN !== undefined) sheet.getRange(row, 9).setValue(wo.satuan || wo.SATUAN);
+          if (wo.woMulai !== undefined || wo.WO_MULAI !== undefined) sheet.getRange(row, 10).setValue(wo.woMulai || wo.WO_MULAI);
+          if (wo.woAkhir !== undefined || wo.WO_AKHIR !== undefined) sheet.getRange(row, 11).setValue(wo.woAkhir || wo.WO_AKHIR);
+          if (wo.status !== undefined || wo.STATUS !== undefined) sheet.getRange(row, 12).setValue(wo.status || wo.STATUS);
+          if (wo.LOKASI_START !== undefined || wo.lokasiStart !== undefined) sheet.getRange(row, 13).setValue(wo.LOKASI_START || wo.lokasiStart);
+          if (wo.LOKASI_FINISH !== undefined || wo.lokasiFinish !== undefined) sheet.getRange(row, 14).setValue(wo.LOKASI_FINISH || wo.lokasiFinish);
+          if (wo.TOTAL_REALISASI !== undefined || wo.totalRealisasi !== undefined) sheet.getRange(row, 15).setValue(wo.TOTAL_REALISASI || wo.totalRealisasi);
+          if (wo.SATUAN_TOTAL_REALISASI !== undefined || wo.satuanTotalRealisasi !== undefined) sheet.getRange(row, 16).setValue(wo.SATUAN_TOTAL_REALISASI || wo.satuanTotalRealisasi);
           updated = true;
           break;
         }
