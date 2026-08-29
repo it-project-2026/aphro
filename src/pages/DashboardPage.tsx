@@ -826,19 +826,19 @@ export const DashboardPage: React.FC = () => {
                   className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60"
                 >
                   <div className="flex items-center space-x-3">
-                    <span className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 text-xs font-black flex items-center justify-center">
+                    <span className="w-6 h-6 rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 text-[10px] font-black flex items-center justify-center">
                       #{idx + 1}
                     </span>
                     <div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                      <h4 className="font-black text-slate-900 dark:text-white text-[9px] uppercase">
                         {regu.namaRegu}
                       </h4>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[9px] text-slate-500 font-medium">
                         PJ: {regu.penanggungJawab} ({regu.jumlahAnggota} Personel)
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">
+                  <span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 uppercase">
                     Aktif Siaga
                   </span>
                 </div>
@@ -887,51 +887,51 @@ export const DashboardPage: React.FC = () => {
           className="overflow-x-auto"
           style={draggable.style}
         >
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800 uppercase tracking-wider text-[11px]">
+          <table className="w-full text-left text-[9px]">
+            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-100 dark:border-slate-800 uppercase tracking-widest text-[10px]">
               <tr>
                 <th className="p-4 pl-6">Nomor WO</th>
                 <th className="p-4">Penyulang & ULP</th>
                 <th className="p-4">Regu / Petugas</th>
-                <th className="p-4 pr-6">Status</th>
+                <th className="p-4 pr-6 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredWOs.slice(0, 10).map((wo, idx) => (
                 <tr
                   key={`${wo.id}-${idx}`}
-                  className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
+                  className="hover:bg-teal-50/50 dark:hover:bg-slate-800/50 transition-colors group"
                 >
                   <td className="p-4 pl-6">
                     <div className="flex items-center space-x-2">
-                      <span className="font-black text-[#00A2B9] dark:text-teal-400 text-base sm:text-lg">
+                      <span className="font-black text-[#00A2B9] dark:text-teal-400 text-[11px]">
                         {wo.nomorWO}
                       </span>
                       {pendingIds.includes(wo.id) ? (
                         <span title="Menunggu Sinkronisasi" className="text-amber-500">
-                          <CloudOff className="w-4 h-4" />
+                          <CloudOff className="w-3.5 h-3.5" />
                         </span>
                       ) : (
                         <span title="Tersinkron" className="text-teal-500">
-                          <Cloud className="w-4 h-4" />
+                          <Cloud className="w-3.5 h-3.5" />
                         </span>
                       )}
                     </div>
                   </td>
                   <td className="p-4">
-                    <p className="font-bold text-slate-900 dark:text-white uppercase">
+                    <p className="font-black text-slate-800 dark:text-white uppercase truncate">
                       {wo.penyulangName}
                     </p>
-                    <p className="text-xs text-slate-400 font-medium">{wo.ulpName}</p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase">{wo.ulpName}</p>
                   </td>
                   <td className="p-4">
-                    <p className="font-bold text-indigo-600 dark:text-indigo-400">
+                    <p className="font-black text-[#008396] dark:text-teal-400 uppercase">
                       {wo.petugasName}
                     </p>
-                    <p className="text-xs text-slate-400 font-medium uppercase">{wo.reguName}</p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase">{wo.reguName}</p>
                   </td>
-                  <td className="p-4 pr-6">
-                    <StatusBadge status={wo.status} size="md" />
+                  <td className="p-4 pr-6 text-center">
+                    <StatusBadge status={wo.status} size="sm" />
                   </td>
                 </tr>
               ))}

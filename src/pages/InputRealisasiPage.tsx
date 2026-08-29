@@ -60,10 +60,29 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   // Filter Work Orders for the current user's regu, unless admin
   const availableWorkOrders = workOrders
     .filter((wo) => {
-      // Always show current WO if in edit mode
+      // Always show current WO if in edit mode to prevent form breaking
       if (editMode && initialData && wo.id === initialData.workOrderId) return true;
+
+      // --- DATE & STATUS RESTRICTIONS ---
+      // 1. Get today's date string (YYYY-MM-DD)
+      const todayStr = new Date().toISOString().split('T')[0];
+      const woDate = wo.tanggal; // YYYY-MM-DD
+
+      const isToday = woDate === todayStr;
+      const isPast = woDate < todayStr;
+      const isFuture = woDate > todayStr;
+
+      // Status check: any status that is NOT finished
+      const isNotFinished = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
+
+      // Rule: Today's WO OR (Past WO AND Not Finished)
+      // Future WO is automatically excluded because isToday and isPast will be false
+      const isSelectable = isToday || (isPast && isNotFinished);
+
+      if (!isSelectable) return false;
+      // ----------------------------------
       
-      // Admins / Adm / SuperAdmin see all work orders
+      // Admins / Adm / SuperAdmin see all work orders that pass the date/status filter
       if (currentUser && currentUser.role !== 'User') return true;
       
       // Regular "User" only sees WOs matching their Regu Name
