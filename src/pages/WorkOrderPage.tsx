@@ -123,7 +123,6 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
 
     const matchesSearch =
       (wo.nomorWO || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (wo.lokasi || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (wo.petugasName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (wo.penyulangName || '').toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -305,7 +304,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center mt-0.5">
                     <MapPin className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0" />
-                    <span className="truncate">{wo.lokasi} ({wo.ulpName})</span>
+                    <span className="truncate">{wo.ulpName}</span>
                   </p>
                 </div>
 
@@ -326,22 +325,6 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                       </span>
                     </div>
                   )}
-                </div>
-
-                {/* Progress bar */}
-                <div className="space-y-1">
-                  <div>
-                    <span className="text-[11px] font-bold">
-                      <span className="text-slate-500">Progress Realisasi:</span>
-                      <span className="text-teal-600 dark:text-teal-400"> {wo.progressPercent}%</span>
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-[#00A2B9]"
-                      style={{ width: `${wo.progressPercent}%` }}
-                    />
-                  </div>
                 </div>
 
                 {/* Mobile Action Buttons */}
