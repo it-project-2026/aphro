@@ -15,6 +15,7 @@ import { useMasterData } from '../context/MasterDataContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatExecutionDateTime } from '../utils/dateFormatter';
 import { InputRealisasiPage } from './InputRealisasiPage';
+import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 
 interface RealisasiMainPageProps {
   initialSubTab?: 'input' | 'history';
@@ -33,6 +34,9 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   
   // Edit State
   const [editingRealisasi, setEditingRealisasi] = useState<any | null>(null);
+
+  // Photo Preview State
+  const [previewPhoto, setPreviewPhoto] = useState<{ url: string; title: string; driveUrl?: string } | null>(null);
 
   // Filters for History Tab
   const [filterUlp, setFilterUlp] = useState('ALL');
@@ -303,11 +307,23 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                             {/* Photos */}
                             <td className="p-1.5 border border-slate-100 dark:border-slate-800">
                               {rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl ? (
-                                <img
-                                  src={rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl}
-                                  alt="Sebelum"
-                                  className="w-20 h-16 object-cover rounded-md mx-auto shadow-sm border border-slate-200 dark:border-slate-700"
-                                />
+                                <button
+                                  onClick={() => setPreviewPhoto({
+                                    url: rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl,
+                                    title: `Foto Sebelum - ${rel.nomorWO || wo?.nomorWO || 'WO'}`,
+                                    driveUrl: rel.fotoSebelumUrl
+                                  })}
+                                  className="group relative block w-20 h-16 mx-auto rounded-md overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700 transition-all hover:scale-105"
+                                >
+                                  <img
+                                    src={rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl}
+                                    alt="Sebelum"
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                    <Search className="w-4 h-4 text-white" />
+                                  </div>
+                                </button>
                               ) : (
                                 <div className="w-20 h-16 bg-slate-100 dark:bg-slate-800 rounded-md mx-auto flex items-center justify-center text-[8px] text-slate-400">
                                   N/A
@@ -316,11 +332,23 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                             </td>
                             <td className="p-1.5 border border-slate-100 dark:border-slate-800">
                               {rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl ? (
-                                <img
-                                  src={rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl}
-                                  alt="Sesudah"
-                                  className="w-20 h-16 object-cover rounded-md mx-auto shadow-sm border border-slate-200 dark:border-slate-700"
-                                />
+                                <button
+                                  onClick={() => setPreviewPhoto({
+                                    url: rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl,
+                                    title: `Foto Sesudah - ${rel.nomorWO || wo?.nomorWO || 'WO'}`,
+                                    driveUrl: rel.fotoSesudahUrl
+                                  })}
+                                  className="group relative block w-20 h-16 mx-auto rounded-md overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700 transition-all hover:scale-105"
+                                >
+                                  <img
+                                    src={rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl}
+                                    alt="Sesudah"
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                    <Search className="w-4 h-4 text-white" />
+                                  </div>
+                                </button>
                               ) : (
                                 <div className="w-20 h-16 bg-slate-100 dark:bg-slate-800 rounded-md mx-auto flex items-center justify-center text-[8px] text-slate-400">
                                   N/A
@@ -362,6 +390,13 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
           </div>
         )}
       </div>
+
+      <ImagePreviewModal
+        isOpen={!!previewPhoto}
+        onClose={() => setPreviewPhoto(null)}
+        imageUrl={previewPhoto?.url || ''}
+        title={previewPhoto?.title}
+      />
     </div>
   );
 };

@@ -26,10 +26,10 @@ export function generateWatermarkedImage(params: WatermarkParams): Promise<strin
         return;
       }
 
-      // Set canvas to original image dimensions (max 1920x1080 for optimization)
+      // Set canvas to original image dimensions (max 1280px for optimization)
       let width = img.width;
       let height = img.height;
-      const MAX_SIZE = 1920;
+      const MAX_SIZE = 1280;
       
       if (width > MAX_SIZE || height > MAX_SIZE) {
         if (width > height) {

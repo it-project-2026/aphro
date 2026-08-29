@@ -7,6 +7,7 @@ import { useUI } from '../context/UIContext';
 import { useToast } from '../hooks/useToast';
 import { WatermarkedPhoto, WOStatus } from '../types';
 import { generateWatermarkedImage } from '../utils/watermark';
+import { compressImage } from '../utils/imageCompression';
 import { GASApiService } from '../services/gasApiService';
 import { formatDriveViewUrl } from '../utils/driveUtils';
 import {
@@ -235,11 +236,13 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           customTimestamp: timestampStr,
         });
 
+        const compressedBase64 = await compressImage(watermarkedBase64);
+
         const photoObj: WatermarkedPhoto = {
           id: `pic-${Date.now()}-${slotIndex}-${Math.random().toString(36).substring(2, 6)}`,
           type,
           slotIndex,
-          dataUrl: watermarkedBase64,
+          dataUrl: compressedBase64,
           fileUrl: '', // Uploaded once during realisasi save
           originalName: file.name,
           timestamp: timestampStr,

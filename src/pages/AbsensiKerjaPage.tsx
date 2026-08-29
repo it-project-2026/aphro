@@ -25,6 +25,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { generateWatermarkedImage } from '../utils/watermark';
+import { compressImage } from '../utils/imageCompression';
 import { AbsensiPetugas } from '../types';
 import { getLocalDateTimeString } from '../utils/dateUtils';
 
@@ -218,14 +219,16 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           customTimestamp: timestampStr,
         });
 
+        const compressedBase64 = await compressImage(watermarkedBase64);
+
         if (type === 'masuk') {
-          setFotoMasuk(watermarkedBase64);
+          setFotoMasuk(compressedBase64);
           setCurrentCoords({ lat, lon });
-          showToast('Foto Masuk berhasil diambil & diberi watermark GPS!', 'success');
+          showToast('Foto Masuk berhasil diambil, dikompres & diberi watermark GPS!', 'success');
         } else {
-          setFotoKeluar(watermarkedBase64);
+          setFotoKeluar(compressedBase64);
           setCurrentCoords({ lat, lon });
-          showToast('Foto Keluar berhasil diambil & diberi watermark GPS!', 'success');
+          showToast('Foto Keluar berhasil diambil, dikompres & diberi watermark GPS!', 'success');
         }
       } catch (err: any) {
         showToast(`Gagal memproses foto: ${err.message}`, 'error');

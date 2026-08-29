@@ -8,6 +8,7 @@ import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
 import { normalizeDateISO, getLocalDateTimeString } from '../utils/dateUtils';
+import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 import {
   UserCheck,
   Calendar,
@@ -1158,55 +1159,12 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         </div>
       )}
 
-      {/* Lightbox Modal */}
-      {previewImage && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-4">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <ImageIcon className="w-4 h-4 text-teal-400" />
-                <h4 className="text-sm font-bold text-white truncate max-w-xs sm:max-w-md">
-                  {previewImage.title}
-                </h4>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewImage(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 flex items-center justify-center bg-black/50 min-h-[300px] max-h-[70vh] overflow-hidden">
-              <img
-                src={previewImage.url}
-                alt={previewImage.title}
-                className="max-h-[65vh] max-w-full object-contain rounded-2xl shadow-lg"
-              />
-            </div>
-
-            <div className="p-4 border-t border-slate-800 flex items-center justify-between">
-              <a
-                href={previewImage.driveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-[#00A2B9] text-white font-bold text-xs flex items-center space-x-2 transition-all shadow-md cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Buka Full di Google Drive</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => setPreviewImage(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ImagePreviewModal
+        isOpen={!!previewImage}
+        onClose={() => setPreviewImage(null)}
+        imageUrl={previewImage?.url || ''}
+        title={previewImage?.title}
+      />
     </div>
   );
 };
