@@ -82,7 +82,7 @@ export const MonitoringPage: React.FC = () => {
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [filterDate, setFilterDate] = useState('');
+  const [filterDate, setFilterDate] = useState(getLocalDateTimeString().slice(0, 10));
   const [searchQuery, setSearchQuery] = useState('');
 
   // State for Rekap Absensi
@@ -266,53 +266,37 @@ export const MonitoringPage: React.FC = () => {
     // Sesuai Tanggal saat Login (Today)
     const today = getLocalDateTimeString().slice(0, 10);
     
-    // For ADMIN, show latest from REALISASI for ALL regus
-    if (currentUser?.role === 'Admin') {
-      const reguNamesFromRealisasi = Array.from(new Set(realisasiList.map(r => r.reguName)));
-      return reguNamesFromRealisasi.map(name => {
-        const latestRel = realisasiList
-          .filter(r => r.reguName === name && r.latitude && r.longitude)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-        
-        if (latestRel) {
-          return {
-            name,
-            lat: latestRel.latitude,
-            lon: latestRel.longitude,
-            lastUpdate: latestRel.createdAt,
-            type: 'Realisasi'
-          };
-        }
-        return null;
-      }).filter(Boolean);
-    }
+    // 1. Dapatkan daftar Work Order hari ini yang BELUM SELESAI
+    // Menggunakan uniqueWorkOrders untuk konsistensi
+    const unfinishedWOsToday = uniqueWorkOrders.filter(wo => {
+      const woDate = (wo.tanggal || '').slice(0, 10);
+      const isToday = woDate === today;
+      const isNotFinished = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
+      return isToday && isNotFinished;
+    });
 
-    // For USER/OTHERS: Get active regu based on today's attendance
-    let todayAbsensi = absensiList.filter(a => a.tanggal && formatDateDisplay(a.tanggal) === today);
-    
-    // Filter by Unit Layanan (Inisiasi)
-    const effectiveUlpFilter = filterUlp;
+    // 2. Ambil nama-nama Regu yang memiliki WO tersebut
+    const activeReguNamesFromWOs = Array.from(
+      new Set(unfinishedWOsToday.map(wo => wo.reguName).filter(Boolean))
+    );
 
-    if (effectiveUlpFilter !== 'ALL') {
-      todayAbsensi = todayAbsensi.filter(a => {
-        const reguInfo = reguList.find(r => r.namaRegu === a.reguName);
-        return reguInfo?.ulpName === effectiveUlpFilter || a.ulpName === effectiveUlpFilter;
-      });
-    }
-    
-    // Unique regus that have checked in today
-    const activeReguNames = Array.from(new Set(todayAbsensi.map(a => a.reguName)));
-    
-    return activeReguNames.map(name => {
-      // Find latest activity for this regu
+    // 3. Cari lokasi terakhir (Realisasi/Absensi) untuk Regu-regu ini
+    return activeReguNamesFromWOs.map(name => {
+      // Find latest activity for this regu TODAY
       const reguRealisasi = realisasiList
         .filter(r => r.reguName === name && formatDateDisplay(r.tanggalRealisasi || r.createdAt) === today)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
       const latestRel = reguRealisasi[0];
-      const reguAbsen = todayAbsensi.find(a => a.reguName === name);
+      
+      // Ambil absensi hari ini sebagai fallback lokasi
+      const todayAbsensi = absensiList.filter(a => 
+        a.reguName === name && 
+        (a.tanggal && formatDateDisplay(a.tanggal) === today)
+      );
+      const reguAbsen = todayAbsensi[0];
 
-      // Explicitly compare timestamps to find the absolute last known location
+      // Bandingkan timestamp untuk lokasi terbaru
       const absTime = reguAbsen ? new Date(reguAbsen.createdAt).getTime() : 0;
       const relTime = latestRel ? new Date(latestRel.createdAt).getTime() : 0;
 
@@ -330,7 +314,7 @@ export const MonitoringPage: React.FC = () => {
       }
       return null;
     }).filter(Boolean);
-  }, [absensiList, realisasiList, filterUlp, reguList, currentUser, settings.namaUnitLayanan]);
+  }, [absensiList, realisasiList, uniqueWorkOrders]);
 
   // Helper component to handle map bounds/zoom
   const MapBoundsHandler = ({ locations }: { locations: any[] }) => {
