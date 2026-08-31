@@ -82,7 +82,8 @@ export const MonitoringPage: React.FC = () => {
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [filterDate, setFilterDate] = useState(getLocalDateTimeString().slice(0, 10));
+  // Default empty for Admin to see all, today for User
+  const [filterDate, setFilterDate] = useState(currentUser?.role === 'User' ? getLocalDateTimeString().slice(0, 10) : '');
   const [searchQuery, setSearchQuery] = useState('');
 
   // State for Rekap Absensi
@@ -266,22 +267,37 @@ export const MonitoringPage: React.FC = () => {
     // Sesuai Tanggal saat Login (Today)
     const today = getLocalDateTimeString().slice(0, 10);
     
-    // 1. Dapatkan daftar Work Order hari ini yang BELUM SELESAI
-    // Menggunakan uniqueWorkOrders untuk konsistensi
-    const unfinishedWOsToday = uniqueWorkOrders.filter(wo => {
-      const woDate = (wo.tanggal || '').slice(0, 10);
-      const isToday = woDate === today;
-      const isNotFinished = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
-      return isToday && isNotFinished;
-    });
+    // For Admin: show ALL regus that have any activity today (Attendance or Realization)
+    // For User: show only regus with unfinished WOs today
+    let activeReguNames: string[] = [];
 
-    // 2. Ambil nama-nama Regu yang memiliki WO tersebut
-    const activeReguNamesFromWOs = Array.from(
-      new Set(unfinishedWOsToday.map(wo => wo.reguName).filter(Boolean))
-    );
+    if (!isUserRole) {
+      // Admin sees everyone who checked in OR has realization today
+      const regusWithAbsensi = absensiList
+        .filter(a => a.tanggal && formatDateDisplay(a.tanggal) === today)
+        .map(a => a.reguName);
+      
+      const regusWithRealisasi = realisasiList
+        .filter(r => formatDateDisplay(r.tanggalRealisasi || r.createdAt) === today)
+        .map(r => r.reguName);
+
+      activeReguNames = Array.from(new Set([...regusWithAbsensi, ...regusWithRealisasi])).filter(Boolean);
+    } else {
+      // User only sees regus with unfinished WOs
+      const unfinishedWOsToday = uniqueWorkOrders.filter(wo => {
+        const woDate = (wo.tanggal || '').slice(0, 10);
+        const isToday = woDate === today;
+        const isNotFinished = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
+        return isToday && isNotFinished;
+      });
+
+      activeReguNames = Array.from(
+        new Set(unfinishedWOsToday.map(wo => wo.reguName).filter(Boolean))
+      );
+    }
 
     // 3. Cari lokasi terakhir (Realisasi/Absensi) untuk Regu-regu ini
-    return activeReguNamesFromWOs.map(name => {
+    return activeReguNames.map(name => {
       // Find latest activity for this regu TODAY
       const reguRealisasi = realisasiList
         .filter(r => r.reguName === name && formatDateDisplay(r.tanggalRealisasi || r.createdAt) === today)
