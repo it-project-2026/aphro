@@ -65,17 +65,23 @@ export const normalizeDateISO = (dateVal: any): string => {
   const s = String(dateVal).trim();
   if (!s) return '';
 
+  // Handle common Indonesia/Excel formats first: DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+  const dmyMatch = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
   // 1. Handle full ISO strings (contains 'T')
-  // We MUST use local parts for these absolute times to correctly interpret the day
-  // relative to the user's timezone (e.g. 17:00 UTC 19th -> 00:00 WIB 20th)
   if (s.includes('T')) {
     try {
       const d = new Date(s);
       if (!isNaN(d.getTime())) {
-        // Trick for Google Apps Script: if hours are > 12 UTC, it's usually a previous day shift for local midnight
+        // If it's a Zulu time at 17:00, it's usually meant to be midnight of the NEXT day in WIB
         if (s.endsWith('Z') && d.getUTCHours() >= 12) {
-          const nextDay = new Date(d);
-          nextDay.setUTCDate(d.getUTCDate() + 1);
+          const nextDay = new Date(d.getTime() + 12 * 60 * 60 * 1000);
           const year = nextDay.getFullYear();
           const month = String(nextDay.getMonth() + 1).padStart(2, '0');
           const day = String(nextDay.getDate()).padStart(2, '0');
@@ -90,19 +96,12 @@ export const normalizeDateISO = (dateVal: any): string => {
     } catch (e) {}
   }
 
-  // 2. Check for YYYY-MM-DD plain string pattern
-  // Prioritize this for naive strings to avoid any timezone shifts
-  const ymdMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // 2. Check for YYYY-MM-DD plain string pattern (possibly with time)
+  const ymdMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (ymdMatch) {
-    return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
-  }
-  
-  // 3. Check for DD-MM-YYYY or DD/MM/YYYY (Common Indonesian format)
-  const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-  if (dmyMatch) {
-    const day = dmyMatch[1].padStart(2, '0');
-    const month = dmyMatch[2].padStart(2, '0');
-    const year = dmyMatch[3];
+    const year = ymdMatch[1];
+    const month = ymdMatch[2].padStart(2, '0');
+    const day = ymdMatch[3].padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
 

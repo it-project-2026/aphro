@@ -10,7 +10,7 @@ import { useUI } from '../context/UIContext';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { WorkOrder, Realisasi } from '../types';
-import { getLocalDateTimeString, formatDateDisplay } from '../utils/dateUtils';
+import { getLocalDateTimeString, formatDateDisplay, normalizeDateISO } from '../utils/dateUtils';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import {
@@ -267,67 +267,62 @@ export const MonitoringPage: React.FC = () => {
     // Sesuai Tanggal saat Login (Today)
     const today = getLocalDateTimeString().slice(0, 10);
     
-    // For Admin: show ALL regus that have any activity today (Attendance or Realization)
-    // For User: show only regus with unfinished WOs today
-    let activeReguNames: string[] = [];
+    // 1. Dapatkan daftar Work Order hari ini yang BELUM SELESAI
+    const unfinishedWOsToday = uniqueWorkOrders.filter(wo => {
+      if (!wo.tanggal) return false;
+      const woDate = normalizeDateISO(wo.tanggal);
+      const isToday = woDate === today;
+      const isNotFinished = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
+      return isToday && isNotFinished;
+    });
 
-    if (!isUserRole) {
-      // Admin sees everyone who checked in OR has realization today
-      const regusWithAbsensi = absensiList
-        .filter(a => a.tanggal && formatDateDisplay(a.tanggal) === today)
-        .map(a => a.reguName);
-      
-      const regusWithRealisasi = realisasiList
-        .filter(r => formatDateDisplay(r.tanggalRealisasi || r.createdAt) === today)
-        .map(r => r.reguName);
+    // 2. Ambil nama-nama Regu yang memiliki WO BELUM SELESAI tersebut
+    const activeReguNames = Array.from(
+      new Set(unfinishedWOsToday.map(wo => wo.reguName).filter(Boolean))
+    );
 
-      activeReguNames = Array.from(new Set([...regusWithAbsensi, ...regusWithRealisasi])).filter(Boolean);
-    } else {
-      // User only sees regus with unfinished WOs
-      const unfinishedWOsToday = uniqueWorkOrders.filter(wo => {
-        const woDate = (wo.tanggal || '').slice(0, 10);
-        const isToday = woDate === today;
-        const isNotFinished = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
-        return isToday && isNotFinished;
-      });
-
-      activeReguNames = Array.from(
-        new Set(unfinishedWOsToday.map(wo => wo.reguName).filter(Boolean))
-      );
-    }
-
-    // 3. Cari lokasi terakhir (Realisasi/Absensi) untuk Regu-regu ini
+    // 3. Cari lokasi terakhir (Prioritaskan Realisasi, Fallback ke Absensi)
     return activeReguNames.map(name => {
-      // Find latest activity for this regu TODAY
-      const reguRealisasi = realisasiList
-        .filter(r => r.reguName === name && formatDateDisplay(r.tanggalRealisasi || r.createdAt) === today)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
-      const latestRel = reguRealisasi[0];
-      
-      // Ambil absensi hari ini sebagai fallback lokasi
-      const todayAbsensi = absensiList.filter(a => 
-        a.reguName === name && 
-        (a.tanggal && formatDateDisplay(a.tanggal) === today)
-      );
-      const reguAbsen = todayAbsensi[0];
+      // Cari realisasi terbaru regu ini HARI INI yang memiliki koordinat
+      const latestRel = realisasiList
+        .filter(r => {
+          const rName = (r.reguName || '').trim().toUpperCase();
+          const targetName = (name || '').trim().toUpperCase();
+          const rDate = normalizeDateISO(r.tanggalRealisasi || r.createdAt);
+          return rName === targetName && rDate === today && r.latitude && r.longitude;
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
-      // Bandingkan timestamp untuk lokasi terbaru
-      const absTime = reguAbsen ? new Date(reguAbsen.createdAt).getTime() : 0;
-      const relTime = latestRel ? new Date(latestRel.createdAt).getTime() : 0;
-
-      const isRelLatest = latestRel && relTime >= absTime;
-      const latestData = isRelLatest ? latestRel : reguAbsen;
-
-      if (latestData?.latitude && latestData?.longitude) {
+      if (latestRel) {
         return {
           name,
-          lat: latestData.latitude,
-          lon: latestData.longitude,
-          lastUpdate: latestData.createdAt,
-          type: isRelLatest ? 'Realisasi' : 'Absensi'
+          lat: latestRel.latitude,
+          lon: latestRel.longitude,
+          lastUpdate: latestRel.createdAt,
+          type: 'Realisasi'
         };
       }
+
+      // Fallback: Cari Absensi terbaru hari ini jika Realisasi belum ada
+      const latestAbs = absensiList
+        .filter(a => {
+          const aName = (a.reguName || '').trim().toUpperCase();
+          const targetName = (name || '').trim().toUpperCase();
+          const aDate = normalizeDateISO(a.tanggal || a.createdAt);
+          return aName === targetName && aDate === today && a.latitude && a.longitude;
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+      if (latestAbs) {
+        return {
+          name,
+          lat: latestAbs.latitude,
+          lon: latestAbs.longitude,
+          lastUpdate: latestAbs.createdAt,
+          type: 'Absensi'
+        };
+      }
+      
       return null;
     }).filter(Boolean);
   }, [absensiList, realisasiList, uniqueWorkOrders]);
