@@ -4,6 +4,19 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
 import './index.css';
 
+// Register Service Worker for Firebase Messaging
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/firebase-messaging-sw.js')
+      .then(registration => {
+        console.log('FCM Service Worker registered:', registration.scope);
+      })
+      .catch(err => {
+        console.log('FCM Service Worker registration failed:', err);
+      });
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

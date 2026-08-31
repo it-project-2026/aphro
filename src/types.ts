@@ -238,4 +238,5 @@ export interface NotificationItem {
   timestamp: string;
   read: boolean;
   type: 'info' | 'success' | 'warning' | 'danger';
+  reguTarget?: string; // Target team name (optional, if empty shows to everyone/admin)
 }

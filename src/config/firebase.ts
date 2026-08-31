@@ -19,6 +19,12 @@ export const requestForToken = async () => {
   if (!messaging) return null;
   
   try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.log('Notification permission not granted.');
+      return null;
+    }
+
     const currentToken = await getToken(messaging, {
       vapidKey: 'BGrmudCVGIDGatsIOlDYs254nhyO32Jgo7siAccQOjQo_Mx_Gn7ctZ_bQDAdrOpe-iil33gB8zxt4vdC0s6kJO4'
     });
@@ -35,11 +41,10 @@ export const requestForToken = async () => {
   }
 };
 
-export const onMessageListener = () =>
-  new Promise((resolve) => {
-    if (!messaging) return;
-    onMessage(messaging, (payload) => {
-      console.log('Payload received: ', payload);
-      resolve(payload);
-    });
+export const onMessageListener = (callback: (payload: any) => void) => {
+  if (!messaging) return () => {};
+  return onMessage(messaging, (payload) => {
+    console.log('Payload received: ', payload);
+    callback(payload);
   });
+};

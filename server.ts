@@ -37,11 +37,15 @@ async function startServer() {
 
     try {
       // 1. Get FCM tokens for this regu
-      const tokensSnapshot = await db.collection("fcm_tokens")
-        .where("reguName", "==", reguName)
-        .get();
-
-      const tokens = tokensSnapshot.docs.map(doc => doc.data().token);
+      // We'll fetch all tokens and filter in code to handle case-insensitivity more easily
+      // OR we can store them in uppercase. Let's fetch all and filter for now as it's more robust.
+      const tokensSnapshot = await db.collection("fcm_tokens").get();
+      
+      const targetRegu = String(reguName).trim().toUpperCase();
+      const tokens = tokensSnapshot.docs
+        .map(doc => doc.data())
+        .filter(data => (data.reguName || "").trim().toUpperCase() === targetRegu)
+        .map(data => data.token);
 
       if (tokens.length === 0) {
         console.log(`No FCM tokens found for regu: ${reguName}`);
