@@ -8,7 +8,7 @@ import { useGASSync } from '../hooks/useGASSync';
 import { GASApiService } from '../services/gasApiService';
 import { Save, ArrowLeft, FilePlus, Database, CheckCircle2, Sparkles, Layers, AlertTriangle } from 'lucide-react';
 import { WOStatus } from '../types';
-import { getLocalDateTimeString } from '../utils/dateUtils';
+import { getLocalDateTimeString, normalizeDateISO } from '../utils/dateUtils';
 
 const INDO_MONTHS = [
   'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
@@ -38,8 +38,12 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
   const [pekerjaan, setPekerjaan] = useState<'NORMAL' | 'GOROW'>(
     editMode && initialData ? initialData.pekerjaan : 'NORMAL'
   );
+  
+  // Fix: Ensure date is normalized to YYYY-MM-DD for the input[type=date]
   const [tanggal, setTanggal] = useState(
-    editMode && initialData ? initialData.tanggal : getLocalDateTimeString().slice(0, 10)
+    editMode && initialData 
+      ? normalizeDateISO(initialData.tanggal)
+      : getLocalDateTimeString().slice(0, 10)
   );
   
   const [ulpName, setUlpName] = useState(
@@ -48,8 +52,12 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
   const [reguName, setReguName] = useState(
     editMode && initialData ? initialData.reguName : (reguList[0]?.namaRegu || '')
   );
+  
+  // Fix: Ensure status is normalized to uppercase for consistent dropdown value
   const [status, setStatus] = useState<WOStatus>(
-    editMode && initialData ? initialData.status : 'BELUM SELESAI'
+    editMode && initialData 
+      ? (String(initialData.status).toUpperCase() === 'SELESAI' ? 'SELESAI' : 'BELUM SELESAI') 
+      : 'BELUM SELESAI'
   );
 
   // Target Volume: VOLUME PEKERJAAN & SATUAN (KMS / GAWANG)
