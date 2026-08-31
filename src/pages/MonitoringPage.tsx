@@ -267,23 +267,20 @@ export const MonitoringPage: React.FC = () => {
     // Sesuai Tanggal saat Login (Today)
     const today = getLocalDateTimeString().slice(0, 10);
     
-    // 1. Dapatkan daftar Work Order hari ini yang BELUM SELESAI
-    const unfinishedWOsToday = uniqueWorkOrders.filter(wo => {
-      if (!wo.tanggal) return false;
-      const woDate = normalizeDateISO(wo.tanggal);
-      const isToday = woDate === today;
-      const isNotFinished = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
-      return isToday && isNotFinished;
-    });
+    // 1. Ambil semua nama regu unik dari Absensi dan Realisasi hari ini
+    const activeFromAbsensi = absensiList
+      .filter(a => normalizeDateISO(a.tanggal || a.createdAt) === today)
+      .map(a => (a.reguName || '').trim());
+      
+    const activeFromRealisasi = realisasiList
+      .filter(r => normalizeDateISO(r.tanggalRealisasi || r.createdAt) === today)
+      .map(r => (r.reguName || '').trim());
+      
+    const allActiveNames = Array.from(new Set([...activeFromAbsensi, ...activeFromRealisasi])).filter(Boolean);
 
-    // 2. Ambil nama-nama Regu yang memiliki WO BELUM SELESAI tersebut
-    const activeReguNames = Array.from(
-      new Set(unfinishedWOsToday.map(wo => wo.reguName).filter(Boolean))
-    );
-
-    // 3. Cari lokasi terakhir (Prioritaskan Realisasi, Fallback ke Absensi)
-    return activeReguNames.map(name => {
-      // Cari realisasi terbaru regu ini HARI INI yang memiliki koordinat
+    // 2. Cari lokasi terakhir untuk setiap regu aktif tersebut
+    return allActiveNames.map(name => {
+      // Prioritaskan Realisasi (lokasi kerja)
       const latestRel = realisasiList
         .filter(r => {
           const rName = (r.reguName || '').trim().toUpperCase();
@@ -303,7 +300,7 @@ export const MonitoringPage: React.FC = () => {
         };
       }
 
-      // Fallback: Cari Absensi terbaru hari ini jika Realisasi belum ada
+      // Fallback ke Absensi (lokasi masuk)
       const latestAbs = absensiList
         .filter(a => {
           const aName = (a.reguName || '').trim().toUpperCase();
@@ -325,7 +322,7 @@ export const MonitoringPage: React.FC = () => {
       
       return null;
     }).filter(Boolean);
-  }, [absensiList, realisasiList, uniqueWorkOrders]);
+  }, [absensiList, realisasiList]);
 
   // Helper component to handle map bounds/zoom
   const MapBoundsHandler = ({ locations }: { locations: any[] }) => {
