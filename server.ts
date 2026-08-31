@@ -2,6 +2,21 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import axios from "axios";
+import * as admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
+
+// Initialize Firebase Admin
+try {
+  admin.initializeApp({
+    projectId: "conductive-catcher-w9v0l",
+  });
+} catch (e) {
+  console.warn("Firebase Admin already initialized or failed:", e);
+}
+
+const db = getFirestore();
+const messaging = getMessaging();
 
 async function startServer() {
   const app = express();
@@ -11,6 +26,63 @@ async function startServer() {
 
   // Simple in-memory cache for Nominatim
   const geoCache = new Map();
+
+  // Notification endpoint
+  app.post("/api/send-notification", async (req, res) => {
+    const { reguName, woData } = req.body;
+    
+    if (!reguName || !woData) {
+      return res.status(400).json({ error: "Missing reguName or woData" });
+    }
+
+    try {
+      // 1. Get FCM tokens for this regu
+      const tokensSnapshot = await db.collection("fcm_tokens")
+        .where("reguName", "==", reguName)
+        .get();
+
+      const tokens = tokensSnapshot.docs.map(doc => doc.data().token);
+
+      if (tokens.length === 0) {
+        console.log(`No FCM tokens found for regu: ${reguName}`);
+        return res.json({ success: true, message: "No tokens found, notification not sent" });
+      }
+
+      // 2. Format message
+      const messageBody = `Ada Work Order untuk Team ${reguName}
+No. Work ORDER : ${woData.nomorWO}
+Tanggal WORK ORDER : ${woData.tanggal}
+PENYULANG : ${woData.penyulangName}
+START : ${woData.woMulai || "-"}
+AKHIR : ${woData.woAkhir || "-"}
+TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
+
+      const message = {
+        notification: {
+          title: "Work Order Baru",
+          body: messageBody,
+        },
+        data: {
+          woId: woData.id || "",
+          click_action: "FLUTTER_NOTIFICATION_CLICK", // for mobile
+        },
+        tokens: tokens,
+      };
+
+      // 3. Send notification
+      const response = await messaging.sendEachForMulticast(message);
+      
+      console.log(`Successfully sent ${response.successCount} notifications`);
+      res.json({ 
+        success: true, 
+        successCount: response.successCount, 
+        failureCount: response.failureCount 
+      });
+    } catch (error: any) {
+      console.error("Error sending notification:", error);
+      res.status(500).json({ error: "Failed to send notification", details: error.message });
+    }
+  });
 
   // Proxy endpoint for Nominatim to avoid CORS issues
   app.get("/api/reverse-geocode", async (req, res) => {

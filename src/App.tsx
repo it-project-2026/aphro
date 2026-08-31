@@ -34,8 +34,11 @@ import { RekapPenyulangHarianPage } from './pages/RekapPenyulangHarianPage';
 import { WorkOrderMainPage } from './pages/WorkOrderMainPage';
 import { RealisasiMainPage } from './pages/RealisasiMainPage';
 
+import { useNotifications } from './hooks/useNotifications';
+
 const AppContent: React.FC = () => {
   const { user } = useAuth();
+  useNotifications();
   const { activeTab, setActiveTab } = useUI();
   const { settings } = useSettings();
   const { hasCheckedInToday } = useAbsensi();

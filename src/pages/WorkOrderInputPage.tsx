@@ -285,7 +285,21 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
         showToast(`Work Order "${nomorWO}" Berhasil Diperbarui!`, 'success');
       } else {
         // addWorkOrder already handles both local state and GAS API synchronization
-        await addWorkOrder(woData);
+        const newWo = await addWorkOrder(woData);
+        
+        // Trigger push notification for the targeted regu
+        try {
+          await fetch('/api/send-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reguName: woData.reguName,
+              woData: { ...woData, id: newWo?.id || '' }
+            })
+          });
+        } catch (notifErr) {
+          console.warn('Failed to trigger push notification:', notifErr);
+        }
       }
       
       if (onBack) onBack();
