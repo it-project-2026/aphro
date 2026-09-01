@@ -94,6 +94,15 @@ export const MonitoringPage: React.FC = () => {
 
   const { petugasList } = useMasterData();
 
+  // Helper to normalize strings for robust matching
+  const cleanStr = (s?: string | null) => {
+    if (!s) return '';
+    return String(s)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/gi, '');
+  };
+
   // Logic for Rekap Absensi
   const rekapData = useMemo(() => {
     const daysInMonth = new Date(rekapYear, rekapMonth, 0).getDate();
@@ -102,8 +111,8 @@ export const MonitoringPage: React.FC = () => {
     const presenceMap = new Map<string, Map<string, string>>();
 
     absensiList.forEach((abs) => {
-      const matchesUlp = filterUlp === 'ALL' || abs.ulpName === filterUlp;
-      const matchesRegu = filterRegu === 'ALL' || abs.reguName === filterRegu;
+      const matchesUlp = filterUlp === 'ALL' || cleanStr(abs.ulpName) === cleanStr(filterUlp);
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(abs.reguName) === cleanStr(filterRegu);
       if (!matchesUlp || !matchesRegu) return;
 
       const dateStr = String(abs.tanggal || '').slice(0, 10);
@@ -123,8 +132,8 @@ export const MonitoringPage: React.FC = () => {
 
     const officerSet = new Map<string, { nama: string; reguName: string }>();
     petugasList.forEach(p => {
-      const matchesUlp = filterUlp === 'ALL' || p.ulpName === filterUlp;
-      const matchesRegu = filterRegu === 'ALL' || p.reguName === filterRegu;
+      const matchesUlp = filterUlp === 'ALL' || cleanStr(p.ulpName) === cleanStr(filterUlp) || cleanStr(p.ulpId) === cleanStr(filterUlp);
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(p.reguName) === cleanStr(filterRegu);
       if (p.status === 'Aktif' && matchesUlp && matchesRegu) {
         officerSet.set(p.nama.trim().toLowerCase(), { nama: p.nama, reguName: p.reguName });
       }
@@ -175,8 +184,8 @@ export const MonitoringPage: React.FC = () => {
   // 2. Filtered unique WOs
   const filteredWOs = useMemo(() => {
     return uniqueWorkOrders.filter((wo) => {
-      const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
-      const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
+      const matchesUlp = filterUlp === 'ALL' || cleanStr(wo.ulpId) === cleanStr(filterUlp) || cleanStr(wo.ulpName) === cleanStr(filterUlp);
+      const matchesPenyulang = filterPenyulang === 'ALL' || cleanStr(wo.penyulangId) === cleanStr(filterPenyulang) || cleanStr(wo.penyulangName) === cleanStr(filterPenyulang);
       const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
       const matchesDate = !filterDate || (wo.tanggal && wo.tanggal.includes(filterDate));
       
@@ -491,6 +500,7 @@ export const MonitoringPage: React.FC = () => {
                   onChange={(e) => {
                     setFilterUlp(e.target.value);
                     setFilterPenyulang('ALL');
+                    if (typeof setFilterRegu === 'function') setFilterRegu('ALL');
                   }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00A2B9]"
                 >
@@ -512,7 +522,7 @@ export const MonitoringPage: React.FC = () => {
                 >
                   <option value="ALL">Semua Penyulang</option>
                   {penyulangList
-                    .filter(p => filterUlp === 'ALL' || p.ulpName === filterUlp || p.ulpId === filterUlp)
+                    .filter(p => filterUlp === 'ALL' || cleanStr(p.ulpName) === cleanStr(filterUlp) || cleanStr(p.ulpId) === cleanStr(filterUlp))
                     .map((p, idx) => (
                     <option key={`${p.id}-${idx}`} value={p.namaPenyulang || p.id}>
                       {p.namaPenyulang}

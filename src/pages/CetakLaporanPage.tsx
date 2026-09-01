@@ -213,6 +213,15 @@ export const CetakLaporanPage: React.FC = () => {
     return uName.includes('admbkt') || currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin' || currentUser.role === 'Adm';
   }, [currentUser]);
 
+  // Helper to normalize strings for robust matching
+  const cleanStr = (s?: string | null) => {
+    if (!s) return '';
+    return String(s)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/gi, '');
+  };
+
   // Map WO by ID for easy lookup
   const workOrdersMap = useMemo(() => {
     return workOrders.reduce((acc, wo) => {
@@ -228,9 +237,9 @@ export const CetakLaporanPage: React.FC = () => {
     const targetUlpName = selectedUlpObj ? selectedUlpObj.namaULP : filterUlp;
 
     return penyulangList.filter((p) => {
-      if (p.ulpId === filterUlp || p.ulpName === filterUlp) return true;
-      if (selectedUlpObj && (p.ulpId === selectedUlpObj.id || p.ulpName === selectedUlpObj.namaULP)) return true;
-      if (p.ulpName && targetUlpName && p.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim()) return true;
+      if (cleanStr(p.ulpId) === cleanStr(filterUlp) || cleanStr(p.ulpName) === cleanStr(filterUlp)) return true;
+      if (selectedUlpObj && (cleanStr(p.ulpId) === cleanStr(selectedUlpObj.id) || cleanStr(p.ulpName) === cleanStr(selectedUlpObj.namaULP))) return true;
+      if (p.ulpName && targetUlpName && cleanStr(p.ulpName) === cleanStr(targetUlpName)) return true;
       return false;
     });
   }, [penyulangList, filterUlp, ulpList]);
@@ -245,9 +254,9 @@ export const CetakLaporanPage: React.FC = () => {
     workOrders.forEach((wo) => {
       const matchesUlp =
         filterUlp === 'ALL' ||
-        wo.ulpId === filterUlp ||
-        wo.ulpName === filterUlp ||
-        (wo.ulpName && targetUlpName && wo.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim());
+        cleanStr(wo.ulpId) === cleanStr(filterUlp) ||
+        cleanStr(wo.ulpName) === cleanStr(filterUlp) ||
+        (wo.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
       if (matchesUlp && wo.nomorWO) {
         woSet.add(wo.nomorWO);
       }
@@ -257,11 +266,11 @@ export const CetakLaporanPage: React.FC = () => {
       const wo = workOrdersMap[rel.workOrderId];
       const matchesUlp =
         filterUlp === 'ALL' ||
-        rel.ulpName === filterUlp ||
-        wo?.ulpName === filterUlp ||
-        wo?.ulpId === filterUlp ||
-        (rel.ulpName && targetUlpName && rel.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim()) ||
-        (wo?.ulpName && targetUlpName && wo.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim());
+        cleanStr(rel.ulpName) === cleanStr(filterUlp) ||
+        cleanStr(wo?.ulpName) === cleanStr(filterUlp) ||
+        cleanStr(wo?.ulpId) === cleanStr(filterUlp) ||
+        (rel.ulpName && targetUlpName && cleanStr(rel.ulpName) === cleanStr(targetUlpName)) ||
+        (wo?.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
       if (matchesUlp) {
         if (rel.nomorWO) woSet.add(rel.nomorWO);
         if (wo?.nomorWO) woSet.add(wo.nomorWO);
@@ -289,28 +298,28 @@ export const CetakLaporanPage: React.FC = () => {
 
       const matchesUlp =
         filterUlp === 'ALL' ||
-        rel.ulpName === filterUlp ||
-        wo?.ulpName === filterUlp ||
-        wo?.ulpId === filterUlp ||
-        (rel.ulpName && targetUlpName && rel.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim()) ||
-        (wo?.ulpName && targetUlpName && wo.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim());
+        cleanStr(rel.ulpName) === cleanStr(filterUlp) ||
+        cleanStr(wo?.ulpName) === cleanStr(filterUlp) ||
+        cleanStr(wo?.ulpId) === cleanStr(filterUlp) ||
+        (rel.ulpName && targetUlpName && cleanStr(rel.ulpName) === cleanStr(targetUlpName)) ||
+        (wo?.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
 
       const selectedPenyulangObj = penyulangList.find((p) => p.id === filterPenyulang || p.namaPenyulang === filterPenyulang);
       const targetPenyulangName = selectedPenyulangObj ? selectedPenyulangObj.namaPenyulang : filterPenyulang;
 
       const matchesPenyulang =
         filterPenyulang === 'ALL' ||
-        rel.penyulangName === filterPenyulang ||
-        wo?.penyulangName === filterPenyulang ||
-        wo?.penyulangId === filterPenyulang ||
-        (rel.penyulangName && targetPenyulangName && rel.penyulangName.toLowerCase().trim() === targetPenyulangName.toLowerCase().trim()) ||
-        (wo?.penyulangName && targetPenyulangName && wo.penyulangName.toLowerCase().trim() === targetPenyulangName.toLowerCase().trim());
+        cleanStr(rel.penyulangName) === cleanStr(filterPenyulang) ||
+        cleanStr(wo?.penyulangName) === cleanStr(filterPenyulang) ||
+        cleanStr(wo?.penyulangId) === cleanStr(filterPenyulang) ||
+        (rel.penyulangName && targetPenyulangName && cleanStr(rel.penyulangName) === cleanStr(targetPenyulangName)) ||
+        (wo?.penyulangName && targetPenyulangName && cleanStr(wo.penyulangName) === cleanStr(targetPenyulangName));
 
       const matchesNoWo =
         filterNoWo === 'ALL' ||
-        rel.nomorWO === filterNoWo ||
-        wo?.nomorWO === filterNoWo ||
-        rel.workOrderId === filterNoWo;
+        cleanStr(rel.nomorWO) === cleanStr(filterNoWo) ||
+        cleanStr(wo?.nomorWO) === cleanStr(filterNoWo) ||
+        cleanStr(rel.workOrderId) === cleanStr(filterNoWo);
 
       return matchesUlp && matchesPenyulang && matchesNoWo;
     });
@@ -331,23 +340,23 @@ export const CetakLaporanPage: React.FC = () => {
 
       const matchesUlp =
         filterUlp === 'ALL' ||
-        wo.ulpId === filterUlp ||
-        wo.ulpName === filterUlp ||
-        (wo.ulpName && targetUlpName && wo.ulpName.toLowerCase().trim() === targetUlpName.toLowerCase().trim());
+        cleanStr(wo.ulpId) === cleanStr(filterUlp) ||
+        cleanStr(wo.ulpName) === cleanStr(filterUlp) ||
+        (wo.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
 
       const selectedPenyulangObj = penyulangList.find((p) => p.id === filterPenyulang || p.namaPenyulang === filterPenyulang);
       const targetPenyulangName = selectedPenyulangObj ? selectedPenyulangObj.namaPenyulang : filterPenyulang;
 
       const matchesPenyulang =
         filterPenyulang === 'ALL' ||
-        wo.penyulangId === filterPenyulang ||
-        wo.penyulangName === filterPenyulang ||
-        (wo.penyulangName && targetPenyulangName && wo.penyulangName.toLowerCase().trim() === targetPenyulangName.toLowerCase().trim());
+        cleanStr(wo.penyulangId) === cleanStr(filterPenyulang) ||
+        cleanStr(wo.penyulangName) === cleanStr(filterPenyulang) ||
+        (wo.penyulangName && targetPenyulangName && cleanStr(wo.penyulangName) === cleanStr(targetPenyulangName));
 
       const matchesNoWo =
         filterNoWo === 'ALL' ||
-        wo.nomorWO === filterNoWo ||
-        wo.id === filterNoWo;
+        cleanStr(wo.nomorWO) === cleanStr(filterNoWo) ||
+        cleanStr(wo.id) === cleanStr(filterNoWo);
 
       return matchesUlp && matchesPenyulang && matchesNoWo;
     });

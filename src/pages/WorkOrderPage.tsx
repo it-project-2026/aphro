@@ -114,7 +114,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       const userName = cleanStr(currentUser?.name || '');
       const woPetugas = cleanStr(wo.petugasName || '');
       
-      const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(woRegu));
+      const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(userRegu));
       const matchReguId = wo.reguId && currentUser?.reguId && String(wo.reguId) === String(currentUser.reguId);
       const matchPetugas = userName !== '' && (woPetugas === userName || woPetugas.includes(userName));
       
@@ -127,14 +127,15 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       (wo.penyulangName || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesUlp = filterUlp === 'ALL' || 
-      (wo.ulpName || '').toLowerCase().trim() === filterUlp.toLowerCase().trim() || 
-      (wo.ulpId || '').toLowerCase().trim() === filterUlp.toLowerCase().trim();
+      cleanStr(wo.ulpName) === cleanStr(filterUlp) || 
+      cleanStr(wo.ulpId) === cleanStr(filterUlp);
     
     const matchesPenyulang = filterPenyulang === 'ALL' || 
-      (wo.penyulangName || '').toLowerCase().trim() === filterPenyulang.toLowerCase().trim() ||
-      (wo.penyulangId || '').toLowerCase().trim() === filterPenyulang.toLowerCase().trim();
+      cleanStr(wo.penyulangName) === cleanStr(filterPenyulang) ||
+      cleanStr(wo.penyulangId) === cleanStr(filterPenyulang);
+      
     const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
-    const matchesDate = !filterDate || wo.tanggal === filterDate;
+    const matchesDate = !filterDate || (wo.tanggal && wo.tanggal.includes(filterDate));
 
     return matchesSearch && matchesUlp && matchesPenyulang && matchesStatus && matchesDate;
   }).sort((a, b) => {
@@ -216,7 +217,10 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
           <div>
             <select
               value={filterUlp}
-              onChange={(e) => setFilterUlp(e.target.value)}
+              onChange={(e) => {
+                setFilterUlp(e.target.value);
+                setFilterPenyulang('ALL');
+              }}
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
             >
               <option value="ALL">Semua ULP</option>
@@ -236,7 +240,9 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
             >
               <option value="ALL">Semua Penyulang</option>
-              {penyulangList.map((p, idx) => (
+              {penyulangList
+                .filter(p => filterUlp === 'ALL' || cleanStr(p.ulpName) === cleanStr(filterUlp) || cleanStr(p.ulpId) === cleanStr(filterUlp))
+                .map((p, idx) => (
                 <option key={`${p.id}-${idx}`} value={p.namaPenyulang}>
                   {p.namaPenyulang}
                 </option>

@@ -320,10 +320,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       }
 
       // ULP Filter
-      const matchesUlp = filterUlp === 'ALL' || (item.ulpName || '').trim().toLowerCase() === filterUlp.trim().toLowerCase();
+      const matchesUlp = filterUlp === 'ALL' || cleanStr(item.ulpName) === cleanStr(filterUlp);
 
       // Regu Filter
-      const matchesRegu = filterRegu === 'ALL' || (item.reguName || '').trim().toLowerCase() === filterRegu.trim().toLowerCase();
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(item.reguName) === cleanStr(filterRegu);
 
       // Search Query
       const query = searchQuery.toLowerCase().trim();
@@ -619,7 +619,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               <div className="flex items-center gap-2">
                 <select
                   value={filterUlp}
-                  onChange={(e) => setFilterUlp(e.target.value)}
+                  onChange={(e) => {
+                    setFilterUlp(e.target.value);
+                    setFilterRegu('ALL');
+                  }}
                   className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold"
                 >
                   <option value="ALL">Semua ULP</option>
@@ -633,8 +636,14 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                   className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold"
                 >
                   <option value="ALL">Semua Regu</option>
-                  {reguList.filter(r => filterUlp === 'ALL' || r.ulpName === filterUlp).map(r => (
-                    <option key={r.id} value={r.namaRegu}>{r.namaRegu}</option>
+                  {allReguOptions
+                    .filter(r => {
+                      if (filterUlp === 'ALL') return true;
+                      const reguObj = reguList.find(reg => reg.namaRegu === r);
+                      return reguObj && (cleanStr(reguObj.ulpName) === cleanStr(filterUlp) || cleanStr(reguObj.ulpId) === cleanStr(filterUlp));
+                    })
+                    .map((r, idx) => (
+                    <option key={`${r}-${idx}`} value={r}>{r}</option>
                   ))}
                 </select>
               </div>
@@ -865,7 +874,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
               <select
                 value={filterUlp}
-                onChange={(e) => setFilterUlp(e.target.value)}
+                onChange={(e) => {
+                  setFilterUlp(e.target.value);
+                  setFilterRegu('ALL');
+                }}
                 className="w-full sm:w-36 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
               >
                 <option value="ALL">Semua ULP</option>
@@ -883,7 +895,13 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                   className="w-full sm:w-44 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
                 >
                   <option value="ALL">Semua Nama Regu</option>
-                  {allReguOptions.map((r, idx) => (
+                  {allReguOptions
+                    .filter(r => {
+                      if (filterUlp === 'ALL') return true;
+                      const reguObj = reguList.find(reg => reg.namaRegu === r);
+                      return reguObj && (cleanStr(reguObj.ulpName) === cleanStr(filterUlp) || cleanStr(reguObj.ulpId) === cleanStr(filterUlp));
+                    })
+                    .map((r, idx) => (
                     <option key={`${r}-${idx}`} value={r}>
                       {r}
                     </option>
