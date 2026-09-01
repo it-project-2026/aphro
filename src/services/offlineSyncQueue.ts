@@ -2,7 +2,7 @@ import { GASApiService } from './gasApiService';
 
 export interface PendingSyncItem {
   id: string;
-  type: 'ABSENSI' | 'REALISASI' | 'WORK_ORDER_CREATE' | 'WORK_ORDER_UPDATE' | 'WORK_ORDER_DELETE';
+  type: 'ABSENSI' | 'REALISASI' | 'REALISASI_DELETE' | 'WORK_ORDER_CREATE' | 'WORK_ORDER_UPDATE' | 'WORK_ORDER_DELETE';
   payload: any;
   timestamp: string;
   retryCount: number;
@@ -67,9 +67,37 @@ export function clearOfflineQueue(): void {
   localStorage.removeItem(QUEUE_KEY);
 }
 
+export function getItemReadableDescription(item: PendingSyncItem): string {
+  switch (item.type) {
+    case 'ABSENSI':
+      return `Absensi ${item.payload?.reguName || 'Regu'} (${item.payload?.tanggal || 'Hari ini'})`;
+    case 'REALISASI':
+      return `Realisasi WO ${item.payload?.nomorWO || item.payload?.workOrderId || ''} (${item.payload?.ulpName || 'ROW'})`;
+    case 'REALISASI_DELETE':
+      return `Hapus Realisasi #${item.payload?.id || ''}`;
+    case 'WORK_ORDER_CREATE':
+      return `Work Order Baru ${item.payload?.nomorWO || ''}`;
+    case 'WORK_ORDER_UPDATE':
+      return `Pembaruan WO ${item.payload?.nomorWO || item.payload?.id || ''}`;
+    case 'WORK_ORDER_DELETE':
+      return `Hapus WO #${item.payload?.id || ''}`;
+    default:
+      return `Data ${item.type}`;
+  }
+}
+
+export type SyncProgressCallback = (progress: {
+  current: number;
+  total: number;
+  percent: number;
+  item: PendingSyncItem;
+  description: string;
+}) => void;
+
 export async function processOfflineSyncQueue(
   gasUrl: string,
-  spreadsheetId?: string
+  spreadsheetId?: string,
+  onProgress?: SyncProgressCallback
 ): Promise<{ 
   successCount: number; 
   failCount: number; 
@@ -89,14 +117,31 @@ export async function processOfflineSyncQueue(
   let failCount = 0;
   const errors: string[] = [];
   const syncedItems: Array<{ type: PendingSyncItem['type'], syncId?: string, payloadId?: string }> = [];
+  const total = queue.length;
 
-  for (const item of [...queue]) {
+  for (let i = 0; i < total; i++) {
+    const item = queue[i];
+    const description = getItemReadableDescription(item);
+    const percent = Math.round(((i + 1) / total) * 100);
+
+    if (onProgress) {
+      onProgress({
+        current: i + 1,
+        total,
+        percent,
+        item,
+        description,
+      });
+    }
+
     try {
       let res: any = null;
       if (item.type === 'ABSENSI') {
-        res = await GASApiService.saveAbsensi(gasUrl, item.payload);
+        res = await GASApiService.saveAbsensi(gasUrl, spreadsheetId, item.payload);
       } else if (item.type === 'REALISASI') {
         res = await GASApiService.saveRealisasi(gasUrl, spreadsheetId, item.payload);
+      } else if (item.type === 'REALISASI_DELETE') {
+        res = await GASApiService.deleteRealisasi(gasUrl, spreadsheetId, item.payload.id || item.payload);
       } else if (item.type === 'WORK_ORDER_CREATE') {
         res = await GASApiService.createWorkOrder(gasUrl, spreadsheetId, item.payload);
       } else if (item.type === 'WORK_ORDER_UPDATE') {
@@ -107,7 +152,7 @@ export async function processOfflineSyncQueue(
           item.payload.workOrder || item.payload
         );
       } else if (item.type === 'WORK_ORDER_DELETE') {
-        res = await GASApiService.deleteWorkOrder(gasUrl, item.payload.id || item.payload);
+        res = await GASApiService.deleteWorkOrder(gasUrl, spreadsheetId, item.payload.id || item.payload);
       }
 
       if (res && res.status === 'success') {
@@ -120,7 +165,7 @@ export async function processOfflineSyncQueue(
         removeFromOfflineQueue(item.id);
       } else {
         failCount++;
-        errors.push(res?.message || `Gagal sinkronkan item ${item.type}`);
+        errors.push(res?.message || `Gagal sinkronkan ${description}`);
       }
     } catch (err: any) {
       failCount++;

@@ -207,8 +207,12 @@ export class GASApiService {
    */
   static async saveRealisasi(gasUrl: string, spreadsheetId: string | undefined, realisasi: any): Promise<GASApiResponse> {
     try {
+      const { id, ...rest } = realisasi;
       const mappedRel = {
-        ...realisasi,
+        id: id || '', // Ensure ID is the first column
+        ...rest,
+        // Ensure volume is always 2 decimal string to prevent GAS truthy/date bug (46265)
+        volume: Number(realisasi.volume || 0).toFixed(2),
         Lokasi_kerja: realisasi.lokasiKerja || '',
       };
 
@@ -266,13 +270,14 @@ export class GASApiService {
     }
   }
 
-  static async saveAbsensi(gasUrl: string, absensi: any): Promise<GASApiResponse> {
+  static async saveAbsensi(gasUrl: string, spreadsheetId: string | undefined, absensi: any): Promise<GASApiResponse> {
     try {
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'saveAbsensi',
+          spreadsheetId,
           absensi,
         }),
       });
@@ -282,13 +287,14 @@ export class GASApiService {
     }
   }
 
-  static async deleteAbsensi(gasUrl: string, id: string): Promise<GASApiResponse> {
+  static async deleteAbsensi(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'deleteAbsensi',
+          spreadsheetId,
           id,
         }),
       });
@@ -300,6 +306,14 @@ export class GASApiService {
 
   static async updateRealisasi(gasUrl: string, spreadsheetId: string, id: string, rel: any): Promise<GASApiResponse> {
     try {
+      const { id: relId, ...rest } = rel;
+      const mappedRel = {
+        id: id || relId || '', // Ensure ID is the first column
+        ...rest,
+        // Ensure volume is always 2 decimal string to prevent GAS truthy/date bug (46265)
+        volume: Number(rel.volume || 0).toFixed(2),
+      };
+
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -307,7 +321,7 @@ export class GASApiService {
           action: 'updateRealisasi',
           spreadsheetId,
           id,
-          realisasi: rel,
+          realisasi: mappedRel,
         }),
       });
       return await this.handleResponse(response);
@@ -316,13 +330,14 @@ export class GASApiService {
     }
   }
 
-  static async deleteRealisasi(gasUrl: string, id: string): Promise<GASApiResponse> {
+  static async deleteRealisasi(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'deleteRealisasi',
+          spreadsheetId,
           id,
         }),
       });
@@ -394,12 +409,12 @@ export class GASApiService {
   /**
    * Delete Work Order in WORK_ORDER sheet
    */
-  static async deleteWorkOrder(gasUrl: string, id: string): Promise<GASApiResponse> {
+  static async deleteWorkOrder(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'deleteWorkOrder', id }),
+        body: JSON.stringify({ action: 'deleteWorkOrder', spreadsheetId, id }),
       });
       return await this.handleResponse(response);
     } catch (err: any) {
@@ -412,6 +427,7 @@ export class GASApiService {
    */
   static async saveMasterData(
     gasUrl: string,
+    spreadsheetId: string,
     sheetName: 'ULP' | 'PENYULANG' | 'REGU_ROW' | 'PETUGAS' | 'USERS' | 'SETTING' | 'LOG_ACTIVITY',
     item: any
   ): Promise<GASApiResponse> {
@@ -419,7 +435,7 @@ export class GASApiService {
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'saveMasterData', sheetName, item }),
+        body: JSON.stringify({ action: 'saveMasterData', spreadsheetId, sheetName, item }),
       });
       return await this.handleResponse(response);
     } catch (err: any) {
@@ -432,6 +448,7 @@ export class GASApiService {
    */
   static async deleteMasterData(
     gasUrl: string,
+    spreadsheetId: string,
     sheetName: 'ULP' | 'PENYULANG' | 'REGU_ROW' | 'PETUGAS' | 'USERS',
     id: string
   ): Promise<GASApiResponse> {
@@ -439,7 +456,7 @@ export class GASApiService {
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'deleteMasterData', sheetName, id }),
+        body: JSON.stringify({ action: 'deleteMasterData', spreadsheetId, sheetName, id }),
       });
       return await this.handleResponse(response);
     } catch (err: any) {

@@ -383,7 +383,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                     <span>{wo.status === 'Selesai' ? 'Sudah Selesai' : 'Realisasi'}</span>
                   </button>
 
-                  {isUserRole && wo.status !== 'Selesai' && (
+                  {wo.status !== 'Selesai' && (
                     <button
                       onClick={() => {
                         if (setSelectedWoIdForRealisasi) {
@@ -558,7 +558,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                           <QrCode className="w-4 h-4" />
                         </button>
 
-                         <button
+                        <button
                           disabled={isUserRole && wo.status === 'Selesai'}
                           onClick={() => {
                             if (setSelectedWoIdForRealisasi) {
@@ -576,7 +576,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                           <CheckSquare className="w-4 h-4" />
                         </button>
 
-                        {isUserRole && wo.status !== 'Selesai' && (
+                        {wo.status !== 'Selesai' && (
                           <button
                             onClick={() => {
                               if (setSelectedWoIdForRealisasi) {

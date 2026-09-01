@@ -41,6 +41,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     const payloadToSave = {
       ...gasRelData,
       id: newRel.id,
+      createdAt: newRel.createdAt,
       syncId: syncId, // Pass unique sync ID to GAS
       folderId: settings.photoFolderId || settings.driveFolderId || '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
     };
@@ -78,7 +79,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     }
 
     return newRel;
-  }, [setRealisasiList, settings.gasWebAppUrl, settings.photoFolderId, settings.driveFolderId, showToast]);
+  }, [setRealisasiList, settings.gasWebAppUrl, settings.spreadsheetId, settings.photoFolderId, settings.driveFolderId, showToast]);
 
   const updateRealisasi = React.useCallback(async (id: string, updates: Partial<Realisasi>) => {
     const existing = realisasiList.find(r => r.id === id);
@@ -110,19 +111,24 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   const deleteRealisasi = React.useCallback(async (id: string) => {
     setRealisasiList(prev => prev.filter(rel => rel.id !== id));
 
-    if (settings.gasWebAppUrl) {
+    if (!navigator.onLine || !settings.gasWebAppUrl) {
+      addToOfflineQueue('REALISASI_DELETE', { id });
+      showToast('⚡ Realisasi dihapus lokal (Offline). Akan disinkronkan otomatis.', 'info');
+    } else {
       try {
-        const res = await GASApiService.deleteRealisasi(settings.gasWebAppUrl, id);
+        const res = await GASApiService.deleteRealisasi(settings.gasWebAppUrl, settings.spreadsheetId, id);
         if (res.status === 'success') {
           showToast('Realisasi berhasil dihapus dari Spreadsheet', 'success');
         } else {
-          showToast('Gagal menghapus di Spreadsheet, terhapus lokal.', 'warning');
+          addToOfflineQueue('REALISASI_DELETE', { id });
+          showToast('Gagal menghapus di Spreadsheet, antrean offline disimpan.', 'warning');
         }
       } catch (err) {
-        showToast('Gagal menghapus di Spreadsheet, terhapus lokal.', 'warning');
+        addToOfflineQueue('REALISASI_DELETE', { id });
+        showToast('Koneksi terputus, antrean hapus disimpan.', 'warning');
       }
     }
-  }, [setRealisasiList, settings.gasWebAppUrl, showToast]);
+  }, [setRealisasiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
 
   return (
     <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, deleteRealisasi }}>

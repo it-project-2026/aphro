@@ -33,16 +33,22 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
   const { settings } = useSettings();
   const { isDarkMode, toggleDarkMode } = useUI();
   const { notifications, markNotificationAsRead, clearNotifications } = useNotifications();
-  const { isGasConnected, isOnline, pendingCount, syncWithGAS, processPendingQueue } = useGASSync();
+  const {
+    isGasConnected,
+    isOnline,
+    pendingCount,
+    isSyncing,
+    syncProgress,
+    syncWithGAS,
+    processPendingQueue,
+  } = useGASSync();
   const { showToast } = useToast();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showGasPopover, setShowGasPopover] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleManualSync = async () => {
-    setIsSyncing(true);
     try {
       if (pendingCount > 0) {
         await processPendingQueue(showToast);
@@ -50,8 +56,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
       await syncWithGAS(showToast);
     } catch {
       showToast('Gagal sinkronisasi dengan Google Spreadsheet', 'error');
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -107,7 +111,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               type="button"
               onClick={() => setShowGasPopover(!showGasPopover)}
               className={`inline-flex items-center space-x-1 sm:space-x-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all border shadow-2xs ${
-                !isOnline
+                isSyncing
+                  ? 'bg-teal-600 border-teal-500 text-white animate-pulse'
+                  : !isOnline
                   ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300 hover:bg-rose-100'
                   : pendingCount > 0
                   ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100'
@@ -117,11 +123,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               }`}
               title="Status Koneksi & Offline Sync"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#008396] dark:text-teal-400 shrink-0" />
+              {isSyncing ? (
+                <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-spin shrink-0" />
+              ) : (
+                <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#008396] dark:text-teal-400 shrink-0" />
+              )}
               <span className="relative flex h-2 w-2 shrink-0">
                 <span
                   className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    !isOnline
+                    isSyncing
+                      ? 'bg-teal-200'
+                      : !isOnline
                       ? 'bg-rose-400'
                       : pendingCount > 0
                       ? 'bg-amber-400'
@@ -132,7 +144,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                 />
                 <span
                   className={`relative inline-flex rounded-full h-2 w-2 ${
-                    !isOnline
+                    isSyncing
+                      ? 'bg-teal-100'
+                      : !isOnline
                       ? 'bg-rose-500'
                       : pendingCount > 0
                       ? 'bg-amber-500'
@@ -143,7 +157,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                 />
               </span>
               <span className="hidden md:inline font-display">
-                {!isOnline
+                {isSyncing
+                  ? syncProgress && syncProgress.total > 0
+                    ? `Sinkronkan (${syncProgress.current}/${syncProgress.total})...`
+                    : 'Menyinkronkan...'
+                  : !isOnline
                   ? `Offline (${pendingCount} Antrean)`
                   : pendingCount > 0
                   ? `Sync ${pendingCount} Data`
@@ -152,7 +170,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                   : 'Spreadsheet: Standby'}
               </span>
               <span className="md:hidden font-display text-[10px]">
-                {!isOnline ? `Offline` : pendingCount > 0 ? `Sync(${pendingCount})` : isGasConnected ? 'Online' : 'Standby'}
+                {isSyncing
+                  ? `Sync...`
+                  : !isOnline
+                  ? `Offline`
+                  : pendingCount > 0
+                  ? `Sync(${pendingCount})`
+                  : isGasConnected
+                  ? 'Online'
+                  : 'Standby'}
               </span>
               <ChevronDown className="w-3 h-3 opacity-60 hidden sm:block" />
             </button>

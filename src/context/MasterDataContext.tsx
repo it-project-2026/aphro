@@ -109,14 +109,14 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
             phone: itemOrId.phone
           };
         }
-        await GASApiService.saveMasterData(settings.gasWebAppUrl, sheetName, mappedItem);
+        await GASApiService.saveMasterData(settings.gasWebAppUrl, settings.spreadsheetId, sheetName, mappedItem);
       } else {
-        await GASApiService.deleteMasterData(settings.gasWebAppUrl, sheetName, itemOrId);
+        await GASApiService.deleteMasterData(settings.gasWebAppUrl, settings.spreadsheetId, sheetName, itemOrId);
       }
     } catch (err) {
       console.warn(`Sync ${sheetName} failed:`, err);
     }
-  }, [settings.gasWebAppUrl]);
+  }, [settings.gasWebAppUrl, settings.spreadsheetId]);
 
   const addULP = React.useCallback(async (data: Omit<ULP, 'id'>) => {
     const newId = 'ULP-' + Date.now();

@@ -13,6 +13,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { MobileBottomNav } from './components/layout/MobileBottomNav';
 import { Footer } from './components/layout/Footer';
 import { ToastContainer } from './components/common/ToastContainer';
+import { SyncStatusBanner } from './components/common/SyncStatusBanner';
 import { NotificationListener } from './components/layout/NotificationListener';
 import { FileSpreadsheet } from 'lucide-react';
 
@@ -177,6 +178,7 @@ const AppContent: React.FC = () => {
       return (
         <>
           <NotificationListener />
+          <SyncStatusBanner />
           {showAbsensiForm ? (
             <AbsensiKerjaPage onSuccess={() => {
               setShowAbsensiForm(false);
@@ -194,6 +196,7 @@ const AppContent: React.FC = () => {
       <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 pb-20 lg:pb-0">
         <NotificationListener />
         <Navbar onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} />
+        <SyncStatusBanner />
 
         <div className="flex-1 flex max-w-[1600px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 gap-6">
           <Sidebar

@@ -128,7 +128,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     }
 
     return newWo;
-  }, [setWorkOrders, settings.gasWebAppUrl, showToast]);
+  }, [setWorkOrders, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
 
   const updateWorkOrder = React.useCallback(async (id: string, updates: Partial<WorkOrder>) => {
     const nowStr = getLocalDateTimeString();
@@ -172,7 +172,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       showToast('Work Order dihapus secara lokal (Offline)', 'info');
     } else {
       try {
-        const res = await GASApiService.deleteWorkOrder(settings.gasWebAppUrl, id);
+        const res = await GASApiService.deleteWorkOrder(settings.gasWebAppUrl, settings.spreadsheetId, id);
         if (res.status === 'success') {
           showToast('Work Order berhasil dihapus dari Spreadsheet', 'success');
         } else {
@@ -185,7 +185,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         showToast('Koneksi bermasalah, antrean hapus disimpan', 'info');
       }
     }
-  }, [setWorkOrders, settings.gasWebAppUrl, workOrders, showToast]);
+  }, [setWorkOrders, settings.gasWebAppUrl, settings.spreadsheetId, workOrders, showToast]);
 
   return (
     <WorkOrderContext.Provider value={{

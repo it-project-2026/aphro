@@ -49,8 +49,8 @@ function setupDatabase() {
   // List of required Sheets and Header Columns
   var sheetsSchema = {
     "USERS": ["UserID", "Username", "Password", "NamaRegu", "Role", "ULP", "Status", "Last Login", "Created At"],
-    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "STATUS", "LOKASI_START", "LOKASI_FINISH", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI", "Created_At"],
-    "REALISASI": ["WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Lokasi_kerja", "Timestamp"],
+    "WORK_ORDER": ["WO_ID", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "WO_AWAL", "WO_AKHIR", "STATUS", "LOKASI_START", "LOKASI_FINISH", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI", "Created_At"],
+    "REALISASI": ["ID", "WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Lokasi_kerja", "Timestamp"],
     "ULP": ["ID", "Kode_ULP", "Nama_ULP", "Manajer", "Kontak", "Alamat", "Status"],
     "PENYULANG": ["ID", "Nama_Penyulang", "ULP", "Panjang_Kms", "Jumlah_Trafo", "Status"],
     "REGU_ROW": ["ID", "Kode_Regu", "Nama_Regu", "ULP", "Jumlah_Anggota", "Kontak", "Status"],
@@ -113,7 +113,14 @@ function createJsonResponse(data) {
 /**
  * Helper to get active Spreadsheet
  */
-function getSpreadsheet() {
+function getSpreadsheet(id) {
+  if (id) {
+    try {
+      return SpreadsheetApp.openById(id);
+    } catch (e) {
+      Logger.log("Failed to open spreadsheet by ID: " + id + ". Falling back to name search.");
+    }
+  }
   var dbFolder;
   try {
     dbFolder = DriveApp.getFolderById(DATABASE_FOLDER_ID);
@@ -132,8 +139,8 @@ function getSpreadsheet() {
 /**
  * Convert Sheet data to Array of Objects
  */
-function sheetToObjects(sheetName) {
-  var ss = getSpreadsheet();
+function sheetToObjects(sheetName, id) {
+  var ss = getSpreadsheet(id);
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -145,15 +152,7 @@ function sheetToObjects(sheetName) {
     var row = data[r];
     var obj = {};
     for (var c = 0; c < headers.length; c++) {
-      var val = row[c];
-      // Convert Date objects to YYYY-MM-DD string to avoid timezone shifts during JSON stringify
-      if (val instanceof Date && !isNaN(val.getTime())) {
-        var year = val.getFullYear();
-        var month = ("0" + (val.getMonth() + 1)).slice(-2);
-        var day = ("0" + val.getDate()).slice(-2);
-        val = year + "-" + month + "-" + day;
-      }
-      obj[headers[c]] = val;
+      obj[headers[c]] = row[c];
     }
     results.push(obj);
   }
@@ -165,62 +164,64 @@ function sheetToObjects(sheetName) {
  */
 function doGet(e) {
   try {
-    var action = (e && e.parameter) ? (e.parameter.action || "ping") : "ping";
+    var params = (e && e.parameter) ? e.parameter : {};
+    var action = params.action || "ping";
+    var ssId = params.spreadsheetId;
     
     if (action === "ping") {
       return createJsonResponse({ status: "success", message: "APHRO GAS REST API Connected!", timestamp: new Date().toISOString() });
     }
 
     if (action === "initDatabase") {
-      var ssId = setupDatabase();
-      return createJsonResponse({ status: "success", spreadsheetId: ssId, message: "Database created & initialized successfully!" });
+      var initializedSsId = setupDatabase();
+      return createJsonResponse({ status: "success", spreadsheetId: initializedSsId, message: "Database created & initialized successfully!" });
     }
 
     if (action === "getWorkOrders") {
-      var woData = sheetToObjects("WORK_ORDER");
-      if (!woData.length) woData = sheetToObjects("WORK_ORDERS");
+      var woData = sheetToObjects("WORK_ORDER", ssId);
+      if (!woData.length) woData = sheetToObjects("WORK_ORDERS", ssId);
       return createJsonResponse({ status: "success", data: woData });
     }
 
     if (action === "getRealisasi") {
-      return createJsonResponse({ status: "success", data: sheetToObjects("REALISASI") });
+      return createJsonResponse({ status: "success", data: sheetToObjects("REALISASI", ssId) });
     }
 
     if (action === "getAbsensi") {
-      return createJsonResponse({ status: "success", data: sheetToObjects("ABSENSI") });
+      return createJsonResponse({ status: "success", data: sheetToObjects("ABSENSI", ssId) });
     }
 
     if (action === "getUsers") {
-      return createJsonResponse({ status: "success", data: sheetToObjects("USERS") });
+      return createJsonResponse({ status: "success", data: sheetToObjects("USERS", ssId) });
     }
 
-    if (action === "getULP") return createJsonResponse({ status: "success", data: sheetToObjects("ULP") });
-    if (action === "getPenyulang") return createJsonResponse({ status: "success", data: sheetToObjects("PENYULANG") });
-    if (action === "getRegu") return createJsonResponse({ status: "success", data: sheetToObjects("REGU_ROW") });
-    if (action === "getPetugas") return createJsonResponse({ status: "success", data: sheetToObjects("PETUGAS") });
-    if (action === "getSetting") return createJsonResponse({ status: "success", data: sheetToObjects("SETTING") });
-    if (action === "getLogs") return createJsonResponse({ status: "success", data: sheetToObjects("LOG_ACTIVITY") });
-    if (action === "getNotifications") return createJsonResponse({ status: "success", data: sheetToObjects("NOTIFICATION") });
+    if (action === "getULP") return createJsonResponse({ status: "success", data: sheetToObjects("ULP", ssId) });
+    if (action === "getPenyulang") return createJsonResponse({ status: "success", data: sheetToObjects("PENYULANG", ssId) });
+    if (action === "getRegu") return createJsonResponse({ status: "success", data: sheetToObjects("REGU_ROW", ssId) });
+    if (action === "getPetugas") return createJsonResponse({ status: "success", data: sheetToObjects("PETUGAS", ssId) });
+    if (action === "getSetting") return createJsonResponse({ status: "success", data: sheetToObjects("SETTING", ssId) });
+    if (action === "getLogs") return createJsonResponse({ status: "success", data: sheetToObjects("LOG_ACTIVITY", ssId) });
+    if (action === "getNotifications") return createJsonResponse({ status: "success", data: sheetToObjects("NOTIFICATION", ssId) });
 
     if (action === "getAllData" || action === "getDatabase") {
-      var woDataAll = sheetToObjects("WORK_ORDER");
-      if (!woDataAll.length) woDataAll = sheetToObjects("WORK_ORDERS");
+      var woDataAll = sheetToObjects("WORK_ORDER", ssId);
+      if (!woDataAll.length) woDataAll = sheetToObjects("WORK_ORDERS", ssId);
 
       return createJsonResponse({
         status: "success",
         data: {
-          USERS: sheetToObjects("USERS"),
+          USERS: sheetToObjects("USERS", ssId),
           WORK_ORDER: woDataAll,
           WORK_ORDERS: woDataAll,
-          REALISASI: sheetToObjects("REALISASI"),
-          ABSENSI: sheetToObjects("ABSENSI"),
-          ULP: sheetToObjects("ULP"),
-          PENYULANG: sheetToObjects("PENYULANG"),
-          REGU_ROW: sheetToObjects("REGU_ROW"),
-          PETUGAS: sheetToObjects("PETUGAS"),
-          SETTING: sheetToObjects("SETTING"),
-          LOG_ACTIVITY: sheetToObjects("LOG_ACTIVITY"),
-          NOTIFICATION: sheetToObjects("NOTIFICATION")
+          REALISASI: sheetToObjects("REALISASI", ssId),
+          ABSENSI: sheetToObjects("ABSENSI", ssId),
+          ULP: sheetToObjects("ULP", ssId),
+          PENYULANG: sheetToObjects("PENYULANG", ssId),
+          REGU_ROW: sheetToObjects("REGU_ROW", ssId),
+          PETUGAS: sheetToObjects("PETUGAS", ssId),
+          SETTING: sheetToObjects("SETTING", ssId),
+          NOTIFICATION: sheetToObjects("NOTIFICATION", ssId),
+          LOG_ACTIVITY: sheetToObjects("LOG_ACTIVITY", ssId)
         }
       });
     }
@@ -298,13 +299,35 @@ function savePhotoToDrive(base64Data, folderIdToUse, woIdentifier, photoType) {
 
 function formatDateForCompare(val) {
   if (!val) return "";
+  var date;
   if (val instanceof Date) {
-    return Utilities.formatDate(val, Session.getScriptTimeZone() || "GMT+7", "yyyy-MM-dd");
+    date = val;
+  } else {
+    var s = String(val).trim();
+    // Handle YYYY-MM-DD
+    if (s.indexOf("-") === 4 && s.length >= 10) {
+      date = new Date(s.slice(0, 10));
+    } 
+    // Handle DD/MM/YYYY or DD-MM-YYYY
+    else if (s.indexOf("/") > 0 || (s.indexOf("-") > 0 && s.indexOf("-") < 4)) {
+      var parts = s.split(/[\/\-]/);
+      if (parts.length >= 3) {
+        // Assume DD is first, MM second, YYYY third
+        var d = parseInt(parts[0], 10);
+        var m = parseInt(parts[1], 10) - 1;
+        var y = parseInt(parts[2], 10);
+        if (y < 100) y += 2000;
+        date = new Date(y, m, d);
+      }
+    }
+    // Fallback
+    if (!date || isNaN(date.getTime())) {
+      date = new Date(s);
+    }
   }
-  var s = String(val).trim();
-  if (s.indexOf("T") > 0) return s.split("T")[0];
-  if (s.length >= 10 && s.indexOf("-") === 4) return s.slice(0, 10);
-  return s;
+  
+  if (!date || isNaN(date.getTime())) return String(val).slice(0, 10);
+  return Utilities.formatDate(date, "GMT+7", "yyyy-MM-dd");
 }
 
 function formatDriveViewUrlGAS(url) {
@@ -331,44 +354,33 @@ function doPost(e) {
 
     // LOGIN ACTION
     if (action === "login") {
-      var username = String(postData.username || "").trim();
-      var password = String(postData.password || "").trim();
+      var username = postData.username;
+      var password = postData.password;
       var users = sheetToObjects("USERS");
       var passHash = hashSHA256(password);
 
       for (var u = 0; u < users.length; u++) {
         var usr = users[u];
-        var uName = String(usr.Username || usr.username || usr.UserID || usr.userid || usr.NIP || usr.nip || "").trim().toLowerCase();
-        var uPass = String(usr.Password || usr.password || "").trim();
-        var uStatus = String(usr.Status || usr.status || "Aktif").trim();
+        var uName = String(usr.Username || usr.username || usr.NIP || usr.nip || "").toLowerCase();
+        var uPass = String(usr.Password || usr.password || "");
 
-        if (uName === username.toLowerCase()) {
-          if (uStatus === "Non-Aktif" || uStatus === "Nonaktif") {
-            return createJsonResponse({ status: "error", message: "Akun Anda dengan Username " + (usr.Username || username) + " sedang Non-Aktif. Hubungi Administrator." });
-          }
-
-          if (uPass === passHash || uPass === password || password === "admin123" || uPass === "") {
-            return createJsonResponse({
-              status: "success",
-              user: {
-                id: usr.UserID || usr.id || ("usr-" + u),
-                nip: usr.UserID || usr.NIP || usr.Username || username,
-                name: usr.Nama || usr.Name || usr.Username || username,
-                userName: usr.Username || username,
-                password: usr.Password || password,
-                role: usr.Role || "User",
-                reguName: usr.NamaRegu || usr.Regu || "",
-                ulpName: usr.ULP || "",
-                status: uStatus
-              }
-            });
-          } else {
-            return createJsonResponse({ status: "error", message: "Password salah untuk Username: " + (usr.Username || username) });
-          }
+        if (uName === String(username).toLowerCase() && (uPass === passHash || uPass === password || password === "admin123")) {
+          return createJsonResponse({
+            status: "success",
+            user: {
+              id: usr.UserID || usr.id || ("usr-" + u),
+              nip: usr.NIP || usr.Username || username,
+              name: usr.Nama || usr.Username || username,
+              userName: usr.Username || username,
+              role: usr.Role || "User",
+              reguName: usr.NamaRegu || usr.Regu || "",
+              ulpName: usr.ULP || ""
+            }
+          });
         }
       }
 
-      return createJsonResponse({ status: "error", message: "Username '" + username + "' tidak ditemukan di Sheet USERS Spreadsheet!" });
+      return createJsonResponse({ status: "error", message: "Username atau Password salah!" });
     }
 
     // UPLOAD PHOTO / IMAGE
@@ -391,7 +403,7 @@ function doPost(e) {
     // SAVE WORK ORDER
     if (action === "createWorkOrder" || action === "saveWorkOrder") {
       var wo = postData.workOrder || postData;
-      var ss = getSpreadsheet();
+      var ss = getSpreadsheet(postData.spreadsheetId);
       var sheet = ss.getSheetByName("WORK_ORDER") || ss.insertSheet("WORK_ORDER");
 
       var woId = wo.id || wo.WO_ID || ("wo-" + new Date().getTime());
@@ -412,30 +424,32 @@ function doPost(e) {
       var statusVal = String(wo.status || wo.STATUS || "BELUM SELESAI").toUpperCase();
 
       sheet.appendRow([
-        woId,                                 // 1. WO_ID
-        wo.pekerjaan || wo.PEKERJAAN || "NORMAL", // 2. PEKERJAAN
-        wo.nomorWO || wo.Nomor_WO || "",       // 3. Nomor_WO
-        tglStr,                               // 4. Tanggal
-        wo.ulpName || wo.ULP || "",           // 5. ULP
-        wo.penyulangName || wo.Penyulang || "", // 6. Penyulang
-        wo.reguName || wo.Regu_ROW || "",     // 7. Regu_ROW
-        volPekerjaan,                         // 8. VOLUME
-        satuanVal,                            // 9. SATUAN
-        statusVal,                            // 10. STATUS
-        wo.LOKASI_START || wo.lokasiStart || "", // 11. LOKASI_START
-        wo.LOKASI_FINISH || wo.lokasiFinish || "", // 12. LOKASI_FINISH
-        wo.TOTAL_REALISASI || wo.totalRealisasi || 0, // 13. TOTAL_REALISASI
-        wo.SATUAN_TOTAL_REALISASI || wo.satuanTotalRealisasi || "", // 14. SATUAN_TOTAL_REALISASI
-        createdTime                           // 15. Created_At
+        woId,                                 // 1 (A) WO_ID
+        wo.pekerjaan || wo.PEKERJAAN || "NORMAL", // 2 (B) PEKERJAAN
+        wo.nomorWO || wo.NOMOR_WO || wo.Nomor_WO || "", // 3 (C) Nomor_WO
+        tglStr,                               // 4 (D) Tanggal
+        wo.ulpName || wo.ULP || wo.ulp || "", // 5 (E) ULP
+        wo.penyulangName || wo.PENYULANG || wo.Penyulang || "", // 6 (F) Penyulang
+        wo.reguName || wo.REGU || wo.Regu_ROW || "", // 7 (G) Regu_ROW
+        volPekerjaan,                         // 8 (H) VOLUME
+        satuanVal,                            // 9 (I) SATUAN
+        wo.woMulai || wo.WO_MULAI || wo.WO_AWAL || "", // 10 (J) WO_AWAL
+        wo.woAkhir || wo.WO_AKHIR || "",      // 11 (K) WO_AKHIR
+        statusVal,                            // 12 (L) STATUS
+        wo.LOKASI_START || wo.lokasiStart || "", // 13 (M) LOKASI_START
+        wo.LOKASI_FINISH || wo.lokasiFinish || "", // 14 (N) LOKASI_FINISH
+        wo.TOTAL_REALISASI || wo.totalRealisasi || 0, // 15 (O) TOTAL_REALISASI
+        wo.SATUAN_TOTAL_REALISASI || wo.satuanTotalRealisasi || "", // 16 (P) SATUAN_TOTAL_REALISASI
+        createdTime                           // 17 (Q) Created_At
       ]);
 
-      return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO || wo.Nomor_WO });
+      return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO || wo.NOMOR_WO || wo.Nomor_WO });
     }
 
     // SAVE REALISASI
     if (action === "saveRealisasi") {
       var rel = postData.realisasi || postData;
-      var ss = getSpreadsheet();
+      var ss = getSpreadsheet(postData.spreadsheetId);
       var sheet = ss.getSheetByName("REALISASI") || ss.insertSheet("REALISASI");
 
       var woId = rel.workOrderId || rel.woId || "";
@@ -467,51 +481,41 @@ function doPost(e) {
         latLng = (rel.latitude || 0) + ", " + (rel.longitude || 0);
       }
 
-      var now = new Date();
-      var timestampStr = rel.timestamp || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
-      var tglRelStr = rel.tanggalRealisasi || rel.tanggal || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
-      if (tglRelStr.indexOf("T") > 0) tglRelStr = tglRelStr.split("T")[0];
+      var timestampStr = rel.timestamp || rel.createdAt || new Date().toISOString();
 
       sheet.appendRow([
-        woId,                                           // 1. WO_ID (Col A)
-        nomorWO,                                        // 2. Nomor_WO (Col B)
-        rel.ulpName || "",                              // 3. ULP (Col C)
-        rel.reguName || "",                             // 4. REGU_ROW (Col D)
-        rel.penyulangName || "",                        // 5. PENYULANG (Col E)
-        rel.noTiang || "-",                             // 6. NO_TIANG (Col F)
-        tglRelStr,                                      // 7. TANGGAL (Col G)
-        fotoSebelumLink,                                // 8. Foto_Sebelum (Col H)
-        fotoSesudahLink,                                // 9. Foto_Sesudah (Col I)
-        rel.jenisTanaman || "-",                        // 10. Jenis_Tanaman (Col J)
-        rel.keterangan || "",                           // 11. Keterangan (Col K)
-        rel.pertumbuhanTanaman || "-",                  // 12. Pertumbuhan_Tanaman (Col L)
-        rel.kendala || "-",                             // 13. Kendala (Col M)
-        latLng,                                         // 14. Latitude_Longitude (Col N)
-        timestampStr                                    // 15. Timestamp (Col O)
+        rel.id || ("rel-" + new Date().getTime()),      // 1. ID (Col A)
+        woId,                                           // 2. WO_ID (Col B)
+        nomorWO,                                        // 3. Nomor_WO (Col C)
+        rel.ulpName || "",                              // 4. ULP (Col D)
+        rel.reguName || "",                             // 5. REGU_ROW (Col E)
+        rel.penyulangName || "",                        // 6. PENYULANG (Col F)
+        rel.noTiang || "-",                             // 7. NO_TIANG (Col G)
+        rel.tanggalRealisasi || rel.tanggal || new Date().toISOString().slice(0, 10), // 8. TANGGAL (Col H)
+        fotoSebelumLink,                                // 9. Foto_Sebelum (Col I)
+        fotoSesudahLink,                                // 10. Foto_Sesudah (Col J)
+        rel.jenisTanaman || "-",                        // 11. Jenis_Tanaman (Col K)
+        rel.keterangan || "",                           // 12. Keterangan (Col L)
+        rel.pertumbuhanTanaman || "-",                  // 13. Pertumbuhan_Tanaman (Col M)
+        rel.kendala || "-",                             // 14. Kendala (Col N)
+        latLng,                                         // 15. Latitude_Longitude (Col O)
+        rel.Lokasi_kerja || "",                         // 16. Lokasi_kerja (Col P)
+        timestampStr                                    // 17. Timestamp (Col Q)
       ]);
 
+      /* 
       // Update progress in WORK_ORDER sheet
       var woSheet = ss.getSheetByName("WORK_ORDER") || ss.getSheetByName("WORK_ORDERS");
       if (woSheet) {
         var woData = woSheet.getDataRange().getValues();
-        var woHeaders = woData[0];
-        var statusCol = -1;
-        for (var h = 0; h < woHeaders.length; h++) {
-          if (woHeaders[h].toUpperCase() === "STATUS") {
-            statusCol = h + 1;
+        for (var r = 1; r < woData.length; r++) {
+          if (String(woData[r][0]) === String(woId) || String(woData[r][2]) === String(nomorWO)) {
+            woSheet.getRange(r + 1, 10).setValue("SELESAI"); // Status
             break;
           }
         }
-        
-        if (statusCol > 0) {
-          for (var r = 1; r < woData.length; r++) {
-            if (String(woData[r][0]) === String(woId) || String(woData[r][2]) === String(nomorWO)) {
-              woSheet.getRange(r + 1, statusCol).setValue("SELESAI"); // Status
-              break;
-            }
-          }
-        }
       }
+      */
 
       return createJsonResponse({
         status: "success",
@@ -524,15 +528,13 @@ function doPost(e) {
     // SAVE ABSENSI
     if (action === "saveAbsensi") {
       var abs = postData.absensi || postData;
-      var ss = getSpreadsheet();
+      var ss = getSpreadsheet(postData.spreadsheetId);
       var sheet = ss.getSheetByName("ABSENSI") || ss.insertSheet("ABSENSI");
       var absId = abs.id || ("abs-" + new Date().getTime());
       var pList = abs.petugasList || [];
-      
-      var now = new Date();
-      var tgl = abs.tanggal || Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+      var tgl = abs.tanggal || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
       var regu = abs.reguName || "";
-      var nowStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd HH:mm:ss");
+      var nowStr = new Date().toLocaleString("id-ID");
 
       var data = sheet.getDataRange().getValues();
       var existingRowIndex = -1;
@@ -547,17 +549,6 @@ function doPost(e) {
           break;
         }
       }
-
-      var p1_nama = pList[0] ? pList[0].nama : "-";
-      var p1_ket = pList[0] ? (pList[0].keterangan || "HADIR") : "HADIR";
-      var p2_nama = pList[1] ? pList[1].nama : "-";
-      var p2_ket = pList[1] ? (pList[1].keterangan || "HADIR") : "HADIR";
-      var p3_nama = pList[2] ? pList[2].nama : "-";
-      var p3_ket = pList[2] ? (pList[2].keterangan || "HADIR") : "HADIR";
-      var p4_nama = pList[3] ? pList[3].nama : "-";
-      var p4_ket = pList[3] ? (pList[3].keterangan || "HADIR") : "HADIR";
-      var p5_nama = pList[4] ? pList[4].nama : "-";
-      var p5_ket = pList[4] ? (pList[4].keterangan || "HADIR") : "HADIR";
 
       var fMasukLink = "";
       var fKeluarLink = "";
@@ -581,32 +572,52 @@ function doPost(e) {
       }
 
       if (existingRowIndex > 0) {
-        // Update basic info only if provided and not empty
-        if (abs.ulpName) sheet.getRange(existingRowIndex, 4).setValue(abs.ulpName);
-        
-        // Update petugas only if they were provided in the list
-        if (pList.length > 0) {
-          sheet.getRange(existingRowIndex, 5).setValue(p1_nama);
-          sheet.getRange(existingRowIndex, 6).setValue(p1_ket);
-          sheet.getRange(existingRowIndex, 7).setValue(p2_nama);
-          sheet.getRange(existingRowIndex, 8).setValue(p2_ket);
-          sheet.getRange(existingRowIndex, 9).setValue(p3_nama);
-          sheet.getRange(existingRowIndex, 10).setValue(p3_ket);
-          sheet.getRange(existingRowIndex, 11).setValue(p4_nama);
-          sheet.getRange(existingRowIndex, 12).setValue(p4_ket);
-          sheet.getRange(existingRowIndex, 13).setValue(p5_nama);
-          sheet.getRange(existingRowIndex, 14).setValue(p5_ket);
+        // ONLY update personnel names and remarks if they are provided in pList
+        // This prevents losing data during checkout (Absen Pulang) if pList is empty
+        if (pList && pList.length > 0) {
+          if (pList[0]) {
+            sheet.getRange(existingRowIndex, 5).setValue(pList[0].nama || "-");
+            sheet.getRange(existingRowIndex, 6).setValue(pList[0].keterangan || "HADIR");
+          }
+          if (pList[1]) {
+            sheet.getRange(existingRowIndex, 7).setValue(pList[1].nama || "-");
+            sheet.getRange(existingRowIndex, 8).setValue(pList[1].keterangan || "HADIR");
+          }
+          if (pList[2]) {
+            sheet.getRange(existingRowIndex, 9).setValue(pList[2].nama || "-");
+            sheet.getRange(existingRowIndex, 10).setValue(pList[2].keterangan || "HADIR");
+          }
+          if (pList[3]) {
+            sheet.getRange(existingRowIndex, 11).setValue(pList[3].nama || "-");
+            sheet.getRange(existingRowIndex, 12).setValue(pList[3].keterangan || "HADIR");
+          }
+          if (pList[4]) {
+            sheet.getRange(existingRowIndex, 13).setValue(pList[4].nama || "-");
+            sheet.getRange(existingRowIndex, 14).setValue(pList[4].keterangan || "HADIR");
+          }
         }
 
         if (fMasukLink) {
           sheet.getRange(existingRowIndex, 15).setValue(fMasukLink);
-          if (abs.timestampMasuk) sheet.getRange(existingRowIndex, 16).setValue(abs.timestampMasuk);
+          sheet.getRange(existingRowIndex, 16).setValue(abs.timestampMasuk || nowStr);
         }
         if (fKeluarLink) {
           sheet.getRange(existingRowIndex, 17).setValue(fKeluarLink);
           sheet.getRange(existingRowIndex, 18).setValue(abs.timestampKeluar || nowStr);
         }
       } else {
+        // Create new row
+        var p1_nama = pList[0] ? pList[0].nama : "-";
+        var p1_ket = pList[0] ? (pList[0].keterangan || "HADIR") : "HADIR";
+        var p2_nama = pList[1] ? pList[1].nama : "-";
+        var p2_ket = pList[1] ? (pList[1].keterangan || "HADIR") : "HADIR";
+        var p3_nama = pList[2] ? pList[2].nama : "-";
+        var p3_ket = pList[2] ? (pList[2].keterangan || "HADIR") : "HADIR";
+        var p4_nama = pList[3] ? pList[3].nama : "-";
+        var p4_ket = pList[3] ? (pList[3].keterangan || "HADIR") : "HADIR";
+        var p5_nama = pList[4] ? pList[4].nama : "-";
+        var p5_ket = pList[4] ? (pList[4].keterangan || "HADIR") : "HADIR";
+
         sheet.appendRow([
           absId,
           targetTgl,
@@ -636,36 +647,102 @@ function doPost(e) {
       });
     }
 
+    // DELETE ABSENSI
+    if (action === "deleteAbsensi") {
+      var id = postData.id;
+      var ss = getSpreadsheet(postData.spreadsheetId);
+      var sheet = ss.getSheetByName("ABSENSI");
+      var data = sheet.getDataRange().getValues();
+      var deleted = false;
+      for (var r = 1; r < data.length; r++) {
+        if (String(data[r][0]) === String(id)) {
+          sheet.deleteRow(r + 1);
+          deleted = true;
+          break;
+        }
+      }
+      return createJsonResponse({ status: deleted ? "success" : "error", message: deleted ? "Absensi deleted" : "ID not found" });
+    }
+
+    // UPDATE REALISASI
+    if (action === "updateRealisasi") {
+      var id = postData.id;
+      var rel = postData.realisasi;
+      var ss = getSpreadsheet(postData.spreadsheetId);
+      var sheet = ss.getSheetByName("REALISASI");
+      var data = sheet.getDataRange().getValues();
+      var updated = false;
+
+      for (var r = 1; r < data.length; r++) {
+        if (String(data[r][0]) === String(id)) {
+          var row = r + 1;
+          if (rel.woId !== undefined) sheet.getRange(row, 2).setValue(rel.woId);
+          if (rel.nomorWO !== undefined) sheet.getRange(row, 3).setValue(rel.nomorWO);
+          if (rel.ulpName !== undefined) sheet.getRange(row, 4).setValue(rel.ulpName);
+          if (rel.reguName !== undefined) sheet.getRange(row, 5).setValue(rel.reguName);
+          if (rel.penyulangName !== undefined) sheet.getRange(row, 6).setValue(rel.penyulangName);
+          if (rel.noTiang !== undefined) sheet.getRange(row, 7).setValue(rel.noTiang);
+          if (rel.tanggal !== undefined) sheet.getRange(row, 8).setValue(rel.tanggal);
+          // Note: Handling photo updates might be complex if they are base64, but assuming simple update for now
+          if (rel.fotoSebelum !== undefined) sheet.getRange(row, 9).setValue(rel.fotoSebelum);
+          if (rel.fotoSesudah !== undefined) sheet.getRange(row, 10).setValue(rel.fotoSesudah);
+          if (rel.jenisTanaman !== undefined) sheet.getRange(row, 11).setValue(rel.jenisTanaman);
+          if (rel.keterangan !== undefined) sheet.getRange(row, 12).setValue(rel.keterangan);
+          if (rel.pertumbuhanTanaman !== undefined) sheet.getRange(row, 13).setValue(rel.pertumbuhanTanaman);
+          if (rel.kendala !== undefined) sheet.getRange(row, 14).setValue(rel.kendala);
+          if (rel.latitudeLongitude !== undefined) sheet.getRange(row, 15).setValue(rel.latitudeLongitude);
+          if (rel.Lokasi_kerja !== undefined) sheet.getRange(row, 16).setValue(rel.Lokasi_kerja);
+          updated = true;
+          break;
+        }
+      }
+      return createJsonResponse({ status: updated ? "success" : "error", message: updated ? "Realisasi updated" : "ID not found" });
+    }
+
+    // DELETE REALISASI
+    if (action === "deleteRealisasi") {
+      var id = postData.id;
+      var ss = getSpreadsheet(postData.spreadsheetId);
+      var sheet = ss.getSheetByName("REALISASI");
+      var data = sheet.getDataRange().getValues();
+      var deleted = false;
+      for (var r = 1; r < data.length; r++) {
+        if (String(data[r][0]) === String(id)) {
+          sheet.deleteRow(r + 1);
+          deleted = true;
+          break;
+        }
+      }
+      return createJsonResponse({ status: deleted ? "success" : "error", message: deleted ? "Realisasi deleted" : "ID not found" });
+    }
+
     // UPDATE WORK ORDER
     if (action === "updateWorkOrder") {
       var id = postData.id;
       var wo = postData.workOrder;
-      var ss = getSpreadsheet();
+      var ss = getSpreadsheet(postData.spreadsheetId);
       var sheet = ss.getSheetByName("WORK_ORDER") || ss.getSheetByName("WORK_ORDERS");
       var data = sheet.getDataRange().getValues();
-      var headers = data[0];
       var updated = false;
 
-      // Find column indices
-      var colIdx = {};
-      headers.forEach(function(h, i) {
-        colIdx[h.toUpperCase()] = i + 1;
-      });
-
       for (var r = 1; r < data.length; r++) {
-        if (String(data[r][0]) === String(id) || String(data[r][2]) === String(wo.nomorWO)) {
+        if (String(data[r][0]) === String(id) || String(data[r][2]) === String(wo.nomorWO) || String(data[r][2]) === String(wo.NOMOR_WO)) {
           var row = r + 1;
-          if (wo.pekerjaan !== undefined && colIdx["PEKERJAAN"]) sheet.getRange(row, colIdx["PEKERJAAN"]).setValue(wo.pekerjaan);
-          if (wo.nomorWO !== undefined && colIdx["NOMOR_WO"]) sheet.getRange(row, colIdx["NOMOR_WO"]).setValue(wo.nomorWO);
-          if (wo.tanggal !== undefined && colIdx["TANGGAL"]) sheet.getRange(row, colIdx["TANGGAL"]).setValue(wo.tanggal);
-          if (wo.ulpName !== undefined && colIdx["ULP"]) sheet.getRange(row, colIdx["ULP"]).setValue(wo.ulpName);
-          if (wo.penyulangName !== undefined && colIdx["PENYULANG"]) sheet.getRange(row, colIdx["PENYULANG"]).setValue(wo.penyulangName);
-          if (wo.reguName !== undefined && colIdx["REGU_ROW"]) sheet.getRange(row, colIdx["REGU_ROW"]).setValue(wo.reguName);
-          if (wo.volumePekerjaan !== undefined && colIdx["VOLUME"]) sheet.getRange(row, colIdx["VOLUME"]).setValue(wo.volumePekerjaan);
-          if (wo.satuan !== undefined && colIdx["SATUAN"]) sheet.getRange(row, colIdx["SATUAN"]).setValue(wo.satuan);
-          if (wo.status !== undefined && colIdx["STATUS"]) sheet.getRange(row, colIdx["STATUS"]).setValue(wo.status);
-          if (wo.totalRealisasi !== undefined && colIdx["TOTAL_REALISASI"]) sheet.getRange(row, colIdx["TOTAL_REALISASI"]).setValue(wo.totalRealisasi);
-          if (wo.satuanTotalRealisasi !== undefined && colIdx["SATUAN_REALISASI"]) sheet.getRange(row, colIdx["SATUAN_REALISASI"]).setValue(wo.satuanTotalRealisasi);
+          if (wo.pekerjaan !== undefined || wo.PEKERJAAN !== undefined) sheet.getRange(row, 2).setValue(wo.pekerjaan || wo.PEKERJAAN);
+          if (wo.nomorWO !== undefined || wo.NOMOR_WO !== undefined) sheet.getRange(row, 3).setValue(wo.nomorWO || wo.NOMOR_WO);
+          if (wo.tanggal !== undefined || wo.TANGGAL !== undefined) sheet.getRange(row, 4).setValue(wo.tanggal || wo.TANGGAL);
+          if (wo.ulpName !== undefined || wo.ULP !== undefined) sheet.getRange(row, 5).setValue(wo.ulpName || wo.ULP);
+          if (wo.penyulangName !== undefined || wo.PENYULANG !== undefined) sheet.getRange(row, 6).setValue(wo.penyulangName || wo.PENYULANG);
+          if (wo.reguName !== undefined || wo.REGU !== undefined) sheet.getRange(row, 7).setValue(wo.reguName || wo.REGU);
+          if (wo.volumePekerjaan !== undefined || wo.VOLUME !== undefined) sheet.getRange(row, 8).setValue(wo.volumePekerjaan || wo.VOLUME);
+          if (wo.satuan !== undefined || wo.SATUAN !== undefined) sheet.getRange(row, 9).setValue(wo.satuan || wo.SATUAN);
+          if (wo.woMulai !== undefined || wo.WO_MULAI !== undefined) sheet.getRange(row, 10).setValue(wo.woMulai || wo.WO_MULAI);
+          if (wo.woAkhir !== undefined || wo.WO_AKHIR !== undefined) sheet.getRange(row, 11).setValue(wo.woAkhir || wo.WO_AKHIR);
+          if (wo.status !== undefined || wo.STATUS !== undefined) sheet.getRange(row, 12).setValue(wo.status || wo.STATUS);
+          if (wo.LOKASI_START !== undefined || wo.lokasiStart !== undefined) sheet.getRange(row, 13).setValue(wo.LOKASI_START || wo.lokasiStart);
+          if (wo.LOKASI_FINISH !== undefined || wo.lokasiFinish !== undefined) sheet.getRange(row, 14).setValue(wo.LOKASI_FINISH || wo.lokasiFinish);
+          if (wo.TOTAL_REALISASI !== undefined || wo.totalRealisasi !== undefined) sheet.getRange(row, 15).setValue(wo.TOTAL_REALISASI || wo.totalRealisasi);
+          if (wo.SATUAN_TOTAL_REALISASI !== undefined || wo.satuanTotalRealisasi !== undefined) sheet.getRange(row, 16).setValue(wo.SATUAN_TOTAL_REALISASI || wo.satuanTotalRealisasi);
           updated = true;
           break;
         }
@@ -676,7 +753,7 @@ function doPost(e) {
     // DELETE WORK ORDER
     if (action === "deleteWorkOrder") {
       var id = postData.id;
-      var ss = getSpreadsheet();
+      var ss = getSpreadsheet(postData.spreadsheetId);
       var sheet = ss.getSheetByName("WORK_ORDER") || ss.getSheetByName("WORK_ORDERS");
       var data = sheet.getDataRange().getValues();
       var deleted = false;
@@ -695,7 +772,7 @@ function doPost(e) {
     if (action === "saveMasterData") {
       var sheetName = postData.sheetName;
       var item = postData.item;
-      var ss = getSpreadsheet();
+      var ss = getSpreadsheet(postData.spreadsheetId);
       var sheet = ss.getSheetByName(sheetName);
       if (!sheet) return createJsonResponse({ status: "error", message: "Sheet not found: " + sheetName });
 
@@ -720,11 +797,11 @@ function doPost(e) {
       } else if (sheetName === "PETUGAS") {
         rowValues = [item.id, item.nip || item.id, item.nama, item.reguName || "-", item.ulpName || "-", item.nomorHp || "-", item.role || "User", "Aktif"];
       } else if (sheetName === "USERS") {
-        rowValues = [item.id, item.username || item.nip, hashSHA256(item.password || "user123"), item.reguName || "-", item.role || "User", item.ulpName || "PLN UP3 Padang", "Aktif", Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss"), Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss")];
+        rowValues = [item.id, item.username || item.nip, hashSHA256(item.password || "user123"), item.reguName || "-", item.role || "User", item.ulpName || "PLN UP3 Padang", "Aktif", new Date().toISOString(), new Date().toISOString()];
       } else if (sheetName === "SETTING") {
-        rowValues = [item.namaUnitLayanan, item.logoAplikasiUrl || "", item.themeColor || "sky", item.footerText || "", item.whatsapp || "", item.email || "", Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss")];
+        rowValues = [item.namaUnitLayanan, item.logoAplikasiUrl || "", item.themeColor || "sky", item.footerText || "", item.whatsapp || "", item.email || "", new Date().toISOString()];
       } else if (sheetName === "LOG_ACTIVITY") {
-        rowValues = [Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss"), item.actorName || "Sistem", item.action, item.details, "-", "-"];
+        rowValues = [new Date().toISOString(), item.actorName || "Sistem", item.action, item.details, "-", "-"];
       }
 
       if (existingRow > 0) {
@@ -740,7 +817,7 @@ function doPost(e) {
     if (action === "deleteMasterData") {
       var sheetName = postData.sheetName;
       var id = postData.id;
-      var ss = getSpreadsheet();
+      var ss = getSpreadsheet(postData.spreadsheetId);
       var sheet = ss.getSheetByName(sheetName);
       if (!sheet) return createJsonResponse({ status: "error", message: "Sheet not found" });
 

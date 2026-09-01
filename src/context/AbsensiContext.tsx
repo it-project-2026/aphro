@@ -114,7 +114,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       showToast('⚡ Absensi tersimpan di perangkat (Offline). Akan otomatis disinkronkan saat terhubung internet.', 'info');
     } else {
       try {
-        const res = await GASApiService.saveAbsensi(settings.gasWebAppUrl, payloadToSave);
+        const res = await GASApiService.saveAbsensi(settings.gasWebAppUrl, settings.spreadsheetId, payloadToSave);
         
         if (res.status === 'success') {
           showToast('Absensi berhasil disinkronkan ke Spreadsheet!', 'success');
@@ -142,7 +142,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     }
 
     return finalAbs;
-  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.absensiFolderId, showToast]);
+  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.spreadsheetId, settings.absensiFolderId, showToast]);
 
   const updateAbsensi = React.useCallback(async (id: string, absData: Partial<Absensi>) => {
     const existingIndex = absensiList.findIndex(a => a.id === id);
@@ -161,7 +161,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
     if (settings.gasWebAppUrl) {
       try {
-        const res = await GASApiService.saveAbsensi(settings.gasWebAppUrl, updatedAbs);
+        const res = await GASApiService.saveAbsensi(settings.gasWebAppUrl, settings.spreadsheetId, updatedAbs);
         if (res.status === 'success') {
           showToast('Perubahan absensi berhasil disinkronkan!', 'success');
           return true;
@@ -172,7 +172,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return true;
-  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, showToast]);
+  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
 
   const deleteAbsensi = React.useCallback(async (id: string) => {
     // Update local state
@@ -181,7 +181,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
     if (settings.gasWebAppUrl) {
       try {
-        const res = await GASApiService.deleteAbsensi(settings.gasWebAppUrl, id);
+        const res = await GASApiService.deleteAbsensi(settings.gasWebAppUrl, settings.spreadsheetId, id);
         if (res.status === 'success') {
           showToast('Absensi berhasil dihapus dari Spreadsheet!', 'success');
           return true;
@@ -192,7 +192,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return true;
-  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, showToast]);
+  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
 
   const hasCheckedInToday = React.useMemo(() => {
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
