@@ -221,9 +221,14 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     }
 
     setIsSyncing(true);
-    setSyncStage('syncing');
-    if (!isSilent) setShowSyncBanner(true);
-    setSyncMessage('Menyinkronkan data dengan Google Spreadsheet...');
+    const initialPendingCount = getOfflineQueue().length;
+    if (initialPendingCount > 0) {
+      setSyncStage('syncing');
+      setShowSyncBanner(true);
+      setSyncMessage(`Mengirim ${initialPendingCount} data dari perangkat ke Spreadsheet...`);
+    } else {
+      setSyncMessage('Menyinkronkan data dengan Google Spreadsheet...');
+    }
     if (showToast && !isSilent) showToast('Menghubungkan ke Spreadsheet...', 'info');
 
     try {

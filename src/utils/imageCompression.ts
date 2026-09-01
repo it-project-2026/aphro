@@ -54,7 +54,8 @@ export const compressImage = (base64Str: string): Promise<string> => {
       
       // Hitung estimasi ukuran dari base64
       const getBase64Size = (s: string) => {
-        const base64Content = s.split(',')[1];
+        const parts = s.split(',');
+        const base64Content = parts.length > 1 ? parts[1] : parts[0];
         return Math.round((base64Content.length * 3) / 4);
       };
 
