@@ -43,7 +43,13 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   const { workOrders, updateWorkOrder } = useWorkOrders();
   const { addRealisasi, updateRealisasi } = useRealisasi();
   const { settings } = useSettings();
-  const { setActiveTab, selectedWoIdForRealisasi, setSelectedWoIdForRealisasi } = useUI();
+  const { 
+    setActiveTab, 
+    selectedWoIdForRealisasi, 
+    setSelectedWoIdForRealisasi,
+    isFinalizingMode,
+    setIsFinalizingMode
+  } = useUI();
   const { showToast } = useToast();
   const { syncWithGAS, isGasConnected } = useGASSync();
 
@@ -154,6 +160,14 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         setSelectedWoId(wo.id);
         setLatitude(wo.latitude || latitude);
         setLongitude(wo.longitude || longitude);
+        
+        if (isFinalizingMode) {
+          setSubmissionStatus('finalizing');
+          setIsFinalizingMode(false);
+        } else {
+          setSubmissionStatus('idle');
+        }
+        
         setSelectedWoIdForRealisasi(null);
         return;
       }

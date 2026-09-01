@@ -13,6 +13,8 @@ interface UIContextType {
   toggleDarkMode: () => void;
   selectedWoIdForRealisasi: string | null;
   setSelectedWoIdForRealisasi: (id: string | null) => void;
+  isFinalizingMode: boolean;
+  setIsFinalizingMode: (val: boolean) => void;
   toasts: ToastState[];
   showToast: (message: string, type?: ToastState['type']) => void;
   removeToast: (id: string) => void;
@@ -26,6 +28,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
     return localStorage.getItem('aphro_dark_mode') === 'true';
   });
   const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = React.useState<string | null>(null);
+  const [isFinalizingMode, setIsFinalizingMode] = React.useState<boolean>(false);
   const [toasts, setToasts] = React.useState<ToastState[]>([]);
 
   React.useEffect(() => {
@@ -65,6 +68,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       toggleDarkMode,
       selectedWoIdForRealisasi,
       setSelectedWoIdForRealisasi,
+      isFinalizingMode,
+      setIsFinalizingMode,
       toasts,
       showToast,
       removeToast

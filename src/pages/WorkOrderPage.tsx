@@ -27,6 +27,7 @@ import {
   Calendar,
   UserCheck,
   CheckSquare,
+  FileCheck2,
   Cloud,
   CloudOff,
   RefreshCw,
@@ -43,7 +44,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
   const { workOrders, deleteWorkOrder } = useWorkOrders();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
-  const { setActiveTab, setSelectedWoIdForRealisasi } = useUI();
+  const { setActiveTab, setSelectedWoIdForRealisasi, setIsFinalizingMode } = useUI();
   const { showToast } = useToast();
   const draggable = useDraggableScroll();
 
@@ -362,7 +363,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                   )}
                 </div>
 
-                {/* Mobile Action Buttons */}
+                  {/* Mobile Action Buttons */}
                 <div className="pt-2 flex items-center gap-2 border-t border-slate-200/60 dark:border-slate-700/60">
                   <button
                     disabled={isUserRole && wo.status === 'Selesai'}
@@ -379,8 +380,25 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                     }`}
                   >
                     <CheckSquare className="w-4 h-4" />
-                    <span>{wo.status === 'Selesai' ? 'Sudah Selesai' : 'Input Realisasi'}</span>
+                    <span>{wo.status === 'Selesai' ? 'Sudah Selesai' : 'Realisasi'}</span>
                   </button>
+
+                  {isUserRole && wo.status !== 'Selesai' && (
+                    <button
+                      onClick={() => {
+                        if (setSelectedWoIdForRealisasi) {
+                          setSelectedWoIdForRealisasi(wo.id);
+                          setIsFinalizingMode(true);
+                        }
+                        setActiveTab('input_realisasi');
+                      }}
+                      className="flex-1 py-2.5 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-sm active:scale-95"
+                    >
+                      <FileCheck2 className="w-4 h-4" />
+                      <span>Selesai</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => setSelectedWO(wo)}
                     className="py-2.5 px-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 active:scale-95"
@@ -540,7 +558,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                           <QrCode className="w-4 h-4" />
                         </button>
 
-                        <button
+                         <button
                           disabled={isUserRole && wo.status === 'Selesai'}
                           onClick={() => {
                             if (setSelectedWoIdForRealisasi) {
@@ -557,6 +575,22 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                         >
                           <CheckSquare className="w-4 h-4" />
                         </button>
+
+                        {isUserRole && wo.status !== 'Selesai' && (
+                          <button
+                            onClick={() => {
+                              if (setSelectedWoIdForRealisasi) {
+                                setSelectedWoIdForRealisasi(wo.id);
+                                setIsFinalizingMode(true);
+                              }
+                              setActiveTab('input_realisasi');
+                            }}
+                            className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors"
+                            title="Penyelesaian Pekerjaan (Final)"
+                          >
+                            <FileCheck2 className="w-4 h-4" />
+                          </button>
+                        )}
 
                         {isAdminRole && (
                           <>
