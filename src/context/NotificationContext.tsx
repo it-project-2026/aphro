@@ -3,6 +3,7 @@ import { usePersistState } from '../hooks/usePersistState';
 import { AuditLog, NotificationItem } from '../types';
 import { INITIAL_LOGS, INITIAL_NOTIFICATIONS } from '../data/initialData';
 import { useAuth } from './AuthContext';
+import { useSettings } from './SettingsContext';
 
 interface NotificationContextType {
   auditLogs: AuditLog[];
@@ -17,26 +18,38 @@ const NotificationContext = React.createContext<NotificationContextType | undefi
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { settings } = useSettings();
 
   const [auditLogs, setAuditLogs] = usePersistState<AuditLog[]>('aphro_logs', INITIAL_LOGS);
   const [notifications, setNotifications] = usePersistState<NotificationItem[]>('aphro_notifications', INITIAL_NOTIFICATIONS);
 
-  // Derived state: filtered notifications based on user role and regu
+  // Derived state: filtered notifications based on active ULP, user role and regu
   const filteredNotifications = React.useMemo(() => {
     if (!user) return [];
     
-    // Admins/SuperAdmins see everything
+    const currentULP = (settings.namaUnitLayanan || '').trim().toUpperCase();
+
+    // 1. Filter by ULP (hanya sesuai dengan UL yang melakukan Inisiasi)
+    const ulpFiltered = notifications.filter(n => {
+      // If notification has no ulpTarget, we assume it's global for compatibility
+      // But if it has one, it must match currentULP
+      if (!n.ulpTarget) return true;
+      return n.ulpTarget.trim().toUpperCase() === currentULP;
+    });
+
+    // 2. Further filter for non-admins (Regu)
+    // Admins/SuperAdmins see everything within the current ULP
     if (user.role === 'SuperAdmin' || user.role === 'Admin' || user.role === 'Adm') {
-      return notifications;
+      return ulpFiltered;
     }
 
-    // Users (Regu) only see notifications targeted to them OR global ones
+    // Users (Regu) only see notifications targeted to them OR global ones within that ULP
     const userRegu = (user.reguName || '').trim().toUpperCase();
-    return notifications.filter(n => {
-      if (!n.reguTarget) return true; // Global notification
+    return ulpFiltered.filter(n => {
+      if (!n.reguTarget) return true; // Global notification for this ULP
       return n.reguTarget.trim().toUpperCase() === userRegu;
     });
-  }, [notifications, user]);
+  }, [notifications, user, settings.namaUnitLayanan]);
 
   const logActivity = React.useCallback((action: string, details: string) => {
     const newLog: AuditLog = {

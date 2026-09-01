@@ -66,7 +66,8 @@ export const NotificationListener: React.FC = () => {
         addNotification({
           title,
           message,
-          type: 'info'
+          type: 'info',
+          ulpTarget: wo.ulpName
         });
         
         showToast(message, 'info');
@@ -94,7 +95,8 @@ export const NotificationListener: React.FC = () => {
         addNotification({
           title,
           message,
-          type: 'success'
+          type: 'success',
+          ulpTarget: wo.ulpName
         });
         
         showToast(message, 'success');

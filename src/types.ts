@@ -239,4 +239,5 @@ export interface NotificationItem {
   read: boolean;
   type: 'info' | 'success' | 'warning' | 'danger';
   reguTarget?: string; // Target team name (optional, if empty shows to everyone/admin)
+  ulpTarget?: string; // Target ULP name (optional)
 }

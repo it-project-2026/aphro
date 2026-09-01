@@ -46,7 +46,8 @@ export const useNotifications = () => {
             title,
             message: body,
             type: 'info',
-            reguTarget: currentUser.reguName
+            reguTarget: currentUser.reguName,
+            ulpTarget: currentUser.ulpName
           });
         }
       });
