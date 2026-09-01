@@ -47,6 +47,10 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   const { showToast } = useToast();
   const { syncWithGAS, isGasConnected } = useGASSync();
 
+  const role = (currentUser?.role || 'User').toLowerCase();
+  const isUserRole = role === 'user';
+  const isAdminRole = ['admin', 'superadmin', 'adm'].includes(role);
+
   // Auto-sync when page is opened if connected
   React.useEffect(() => {
     if (isGasConnected && workOrders.length === 0) {
@@ -83,17 +87,17 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       // ----------------------------------
       
       // Admins / Adm / SuperAdmin see all work orders that pass the date/status filter
-      if (currentUser && currentUser.role !== 'User') return true;
+      if (currentUser && !isUserRole) return true;
       
       // Regular "User" only sees WOs matching their Regu Name
-      if (currentUser?.role === 'User') {
+      if (isUserRole) {
         const userRegu = cleanStr(currentUser.reguName || '');
         const userName = cleanStr(currentUser.name || '');
         const woRegu = cleanStr(wo.reguName || '');
         const woPetugas = cleanStr(wo.petugasName || '');
         
         // Match by Regu Name, Regu ID, or if specifically assigned to this User Name
-        const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(woRegu));
+        const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu));
         const matchReguId = (wo.reguId && currentUser.reguId && String(wo.reguId) === String(currentUser.reguId));
         const matchPetugas = userName !== '' && (woPetugas === userName || woPetugas.includes(userName));
         
@@ -658,7 +662,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
               </button>
             </div>
             
-            {currentUser?.role === 'User' && (
+            {isUserRole && (
               <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">
                 Menampilkan WO untuk Regu: <span className="font-bold text-teal-600 dark:text-teal-400">{currentUser?.reguName || 'Belum Diatur'}</span>
               </p>
@@ -709,7 +713,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           </div>
 
           {/* Main Attributes Row */}
-          {currentUser?.role === 'User' && selectedWO?.status === 'Selesai' ? (
+          {isUserRole && selectedWO?.status === 'Selesai' ? (
             <div className="p-10 text-center space-y-4 bg-rose-50 dark:bg-rose-950/20 border-2 border-dashed border-rose-200 dark:border-rose-900/40 rounded-3xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto shadow-sm">
                 <X className="w-8 h-8" />

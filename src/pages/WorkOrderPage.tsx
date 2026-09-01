@@ -101,6 +101,8 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
   };
 
   const role = currentUser?.role || 'User';
+  const isUserRole = role.toLowerCase() === 'user';
+  const isAdminRole = ['admin', 'superadmin', 'adm'].includes(role.toLowerCase());
 
   // Helper to clean string for better matching
   const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
@@ -108,13 +110,13 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
   // Filter logic
   const filteredWOs = workOrders.filter((wo) => {
     // If User role, restrict to their Regu
-    if (role === 'User') {
+    if (isUserRole) {
       const userRegu = cleanStr(currentUser?.reguName || '');
       const woRegu = cleanStr(wo.reguName || '');
       const userName = cleanStr(currentUser?.name || '');
       const woPetugas = cleanStr(wo.petugasName || '');
       
-      const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(userRegu));
+      const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu));
       const matchReguId = wo.reguId && currentUser?.reguId && String(wo.reguId) === String(currentUser.reguId);
       const matchPetugas = userName !== '' && (woPetugas === userName || woPetugas.includes(userName));
       
@@ -156,7 +158,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 rounded-3xl shadow-sm">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white font-display">
-            {role === 'User' ? 'Work Order Saya (Penugasan)' : 'Daftar Seluruh Work Order'}
+            {isUserRole ? 'Work Order Saya (Penugasan)' : 'Daftar Seluruh Work Order'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
             Kelola data instruksi kerja, lokasi tapak tiang, status progress, dan pelimpahan tugas.
@@ -175,7 +177,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
             </button>
           )}
 
-          {role !== 'User' && (
+          {!isUserRole && (
             <button
               onClick={() => exportWorkOrdersToExcel(filteredWOs, settings.namaUnitLayanan)}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600 transition-all active:scale-95"
@@ -185,7 +187,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
             </button>
           )}
 
-          {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
+          {isAdminRole && (
             <button
               onClick={() => onAdd ? onAdd() : setActiveTab('input_wo')}
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#00A2B9] hover:bg-[#008396] text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
@@ -198,7 +200,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       </div>
 
       {/* Filter Control Bar */}
-      {role !== 'User' && (
+      {!isUserRole && (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search Field */}
@@ -341,7 +343,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                 {/* Mobile Action Buttons */}
                 <div className="pt-2 flex items-center gap-2 border-t border-slate-200/60 dark:border-slate-700/60">
                   <button
-                    disabled={role === 'User' && wo.status === 'Selesai'}
+                    disabled={isUserRole && wo.status === 'Selesai'}
                     onClick={() => {
                       if (setSelectedWoIdForRealisasi) {
                         setSelectedWoIdForRealisasi(wo.id);
@@ -349,7 +351,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                       setActiveTab('input_realisasi');
                     }}
                     className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-sm active:scale-95 transition-transform ${
-                      role === 'User' && wo.status === 'Selesai'
+                      isUserRole && wo.status === 'Selesai'
                         ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                         : 'bg-[#008396] hover:bg-[#00A2B9] text-white'
                     }`}
@@ -372,7 +374,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                     <QrCode className="w-4 h-4" />
                   </button>
 
-                  {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
+                  {isAdminRole && (
                     <>
                       <button
                         onClick={() => {
@@ -517,7 +519,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                         </button>
 
                         <button
-                          disabled={role === 'User' && wo.status === 'Selesai'}
+                          disabled={isUserRole && wo.status === 'Selesai'}
                           onClick={() => {
                             if (setSelectedWoIdForRealisasi) {
                               setSelectedWoIdForRealisasi(wo.id);
@@ -525,7 +527,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                             setActiveTab('input_realisasi');
                           }}
                           className={`p-1.5 rounded-lg transition-colors ${
-                            role === 'User' && wo.status === 'Selesai'
+                            isUserRole && wo.status === 'Selesai'
                               ? 'text-slate-300 cursor-not-allowed'
                               : 'text-slate-500 hover:text-[#008396] hover:bg-teal-50 dark:hover:bg-teal-950/40'
                           }`}
@@ -534,7 +536,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                           <CheckSquare className="w-4 h-4" />
                         </button>
 
-                        {(role === 'Admin' || role === 'SuperAdmin' || role === 'Adm') && (
+                        {isAdminRole && (
                           <>
                             <button
                               onClick={() => {
