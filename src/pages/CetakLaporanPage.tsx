@@ -1151,14 +1151,12 @@ export const CetakLaporanPage: React.FC = () => {
         {/* Footer Signatures for Official Documents */}
         <div className="pt-8 grid grid-cols-2 text-center text-xs text-slate-700 border-t border-slate-200">
           <div>
-            <p className="font-semibold">Diperiksa Oleh,</p>
-            <p className="font-bold text-slate-900 mt-12">Supervisor Asset Protection</p>
-            <p className="text-[10px] text-slate-500">NIP. 198804122012011002</p>
+            <p className="font-semibold">Disetujui Oleh,</p>
+            <p className="font-bold text-slate-900 mt-12">TL. TEKNIK</p>
           </div>
           <div>
-            <p className="font-semibold">Disetujui Oleh,</p>
-            <p className="font-bold text-slate-900 mt-12">Manager ULP / UP3</p>
-            <p className="text-[10px] text-slate-500">NIP. 198203152008021001</p>
+            <p className="font-semibold">Dibuat Oleh,</p>
+            <p className="font-bold text-slate-900 mt-12">Pengatur ULP</p>
           </div>
         </div>
       </div>
