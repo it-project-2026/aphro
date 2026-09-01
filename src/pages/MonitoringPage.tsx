@@ -34,16 +34,32 @@ import {
 // Custom Marker Icon Generator using SVG
 function createCustomMarkerIcon(status: string) {
   let color = '#64748b'; // Slate Belum
-  if (status === 'Selesai') color = '#00A2B9'; // Teal Selesai
-  else if (status === 'Sedang Dikerjakan') color = '#00C2DE'; // Teal Progress
+  if (status === 'Selesai' || status === 'SELESAI') color = '#00A2B9'; // Teal Selesai
+  else if (status === 'Sedang Dikerjakan') color = '#F59E0B'; // Amber Progress
   else if (status === 'Regu') color = '#EF4444'; // Red for Regu
+  else color = '#3B82F6'; // Blue Belum Dikerjakan
 
-  const svg = status === 'Regu' ? `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="8" height="12">
-      <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
-      <path d="M12 7c-1.65 0-3 1.35-3 3s1.35 3 3 3 3-1.35 3-3-1.35-3-3-3zm0 10c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="#ffffff" />
-    </svg>
-  ` : `
+  if (status === 'Regu') {
+    const reguHtml = `
+      <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+        <span style="position: absolute; width: 100%; height: 100%; border-radius: 9999px; background-color: rgba(239, 68, 68, 0.35); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+        <div style="position: relative; width: 30px; height: 30px; border-radius: 9999px; background-color: #EF4444; border: 2px solid #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25); display: flex; align-items: center; justify-content: center; color: white;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+      </div>
+    `;
+    return L.divIcon({
+      className: 'custom-regu-leaflet-marker',
+      html: reguHtml,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor: [0, -18],
+    });
+  }
+
+  const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="28" height="42">
       <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
       <circle cx="12" cy="12" r="5" fill="#ffffff" />
@@ -51,10 +67,10 @@ function createCustomMarkerIcon(status: string) {
   `;
 
   return L.divIcon({
-    className: `custom-leaflet-marker ${status === 'Regu' ? 'marker-blink' : ''}`,
+    className: 'custom-leaflet-marker',
     html: svg,
-    iconSize: status === 'Regu' ? [8, 12] : [28, 42],
-    iconAnchor: status === 'Regu' ? [4, 12] : [14, 42],
+    iconSize: [28, 42],
+    iconAnchor: [14, 42],
     popupAnchor: [0, -24],
   });
 }
@@ -218,57 +234,126 @@ export const MonitoringPage: React.FC = () => {
   // Map Center (Padang, West Sumatra default)
   const mapCenter: [number, number] = [-0.92, 100.4];
 
-  const mapPolylinePositions: [number, number][] = useMemo(() => {
-    return filteredWOs
-      .filter((wo) => wo.latitude && wo.longitude)
-      .map((wo) => [wo.latitude as number, wo.longitude as number]);
-  }, [filteredWOs]);
+  // Today ISO date (YYYY-MM-DD)
+  const todayISO = useMemo(() => getLocalDateTimeString().slice(0, 10), []);
 
+  // 4. Dedicated Work Orders for GIS Field: ONLY TODAY & Status BELUM SELESAI
+  const mapWOs = useMemo(() => {
+    return uniqueWorkOrders.filter((wo) => {
+      // Must be TODAY
+      const isToday = normalizeDateISO(wo.tanggal) === todayISO;
+      if (!isToday) return false;
+
+      // Must be Status BELUM SELESAI (exclude Selesai / SELESAI)
+      const s = (wo.status || '').trim().toUpperCase();
+      const isBelumSelesai = s !== 'SELESAI';
+      if (!isBelumSelesai) return false;
+
+      // Match dropdown filter selections
+      const matchesUlp = filterUlp === 'ALL' || cleanStr(wo.ulpId) === cleanStr(filterUlp) || cleanStr(wo.ulpName) === cleanStr(filterUlp);
+      const matchesPenyulang = filterPenyulang === 'ALL' || cleanStr(wo.penyulangId) === cleanStr(filterPenyulang) || cleanStr(wo.penyulangName) === cleanStr(filterPenyulang);
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(wo.reguName) === cleanStr(filterRegu);
+      
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        (wo.nomorWO || '').toLowerCase().includes(query) ||
+        (wo.ulpName || '').toLowerCase().includes(query) ||
+        (wo.penyulangName || '').toLowerCase().includes(query) ||
+        (wo.jenisPekerjaan || '').toLowerCase().includes(query);
+
+      return matchesUlp && matchesPenyulang && matchesRegu && matchesSearch;
+    });
+  }, [uniqueWorkOrders, todayISO, filterUlp, filterPenyulang, filterRegu, searchQuery]);
+
+  // 5. Active Regu ROW Locations for TODAY with Status BELUM SELESAI
   const activeReguLocations = useMemo(() => {
-    // 1. Get unique Regu names from the CURRENTLY FILTERED Work Orders
-    const reguNamesFromWOs = Array.from(
-      new Set(filteredWOs.map(wo => (wo.reguName || '').trim()))
+    // Unique Regu from today's Belum Selesai Work Orders
+    const reguNamesFromTodayUnfinishedWOs = Array.from(
+      new Set(mapWOs.map(wo => (wo.reguName || '').trim()))
     ).filter(Boolean);
 
-    if (reguNamesFromWOs.length === 0) return [];
+    if (reguNamesFromTodayUnfinishedWOs.length === 0) return [];
 
-    // 2. For each regu, find their latest position from Realisasi or Absensi (any date)
-    return reguNamesFromWOs.map(name => {
+    return reguNamesFromTodayUnfinishedWOs.map(name => {
       const targetName = name.toUpperCase();
 
-      // Find latest realization with coordinates
-      const latestRel = realisasiList
-        .filter(r => (r.reguName || '').trim().toUpperCase() === targetName && r.latitude && r.longitude)
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
+      // Find latest realization of TODAY with coordinates for this Regu
+      const latestRelToday = realisasiList
+        .filter(r => {
+          if ((r.reguName || '').trim().toUpperCase() !== targetName) return false;
+          if (!r.latitude || !r.longitude) return false;
+          const relDate = normalizeDateISO(r.tanggalRealisasi || r.createdAt);
+          return relDate === todayISO;
+        })
+        .sort((a, b) => new Date(b.createdAt || b.tanggalRealisasi || 0).getTime() - new Date(a.createdAt || a.tanggalRealisasi || 0).getTime())[0];
 
-      if (latestRel) {
+      if (latestRelToday) {
         return {
           name,
-          lat: latestRel.latitude,
-          lon: latestRel.longitude,
-          lastUpdate: latestRel.createdAt || latestRel.tanggalRealisasi,
-          type: 'Realisasi'
+          lat: latestRelToday.latitude,
+          lon: latestRelToday.longitude,
+          lastUpdate: latestRelToday.createdAt || latestRelToday.tanggalRealisasi,
+          type: 'Realisasi Lapangan Hari Ini',
+          nomorWO: latestRelToday.nomorWO || '-',
+          keterangan: latestRelToday.keterangan || '-'
         };
       }
 
-      // Fallback to latest attendance with coordinates
-      const latestAbs = absensiList
-        .filter(a => (a.reguName || '').trim().toUpperCase() === targetName && a.latitude && a.longitude)
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
+      // Fallback to latest attendance of TODAY with coordinates
+      const latestAbsToday = absensiList
+        .filter(a => {
+          if ((a.reguName || '').trim().toUpperCase() !== targetName) return false;
+          if (!a.latitude || !a.longitude) return false;
+          const absDate = normalizeDateISO(a.tanggal || a.createdAt);
+          return absDate === todayISO;
+        })
+        .sort((a, b) => new Date(b.createdAt || b.tanggal || 0).getTime() - new Date(a.createdAt || a.tanggal || 0).getTime())[0];
 
-      if (latestAbs) {
+      if (latestAbsToday) {
         return {
           name,
-          lat: latestAbs.latitude,
-          lon: latestAbs.longitude,
-          lastUpdate: latestAbs.createdAt || latestAbs.tanggal,
-          type: 'Absensi'
+          lat: latestAbsToday.latitude,
+          lon: latestAbsToday.longitude,
+          lastUpdate: latestAbsToday.createdAt || latestAbsToday.tanggal,
+          type: 'Absensi Regu (Check-In Hari Ini)',
+          petugas: latestAbsToday.namaPetugas || '-'
+        };
+      }
+
+      // Fallback: If no realization/attendance recorded today yet, use WO coordinates for today's unfinished work
+      const woWithCoords = mapWOs.find(wo => (wo.reguName || '').trim().toUpperCase() === targetName && wo.latitude && wo.longitude);
+      if (woWithCoords) {
+        return {
+          name,
+          lat: woWithCoords.latitude,
+          lon: woWithCoords.longitude,
+          lastUpdate: woWithCoords.tanggal,
+          type: 'Titik Rencana WO Hari Ini',
+          nomorWO: woWithCoords.nomorWO
         };
       }
 
       return null;
     }).filter(Boolean);
-  }, [filteredWOs, absensiList, realisasiList]);
+  }, [mapWOs, realisasiList, absensiList, todayISO]);
+
+  const mapPolylinePositions: [number, number][] = useMemo(() => {
+    return mapWOs
+      .filter((wo) => wo.latitude && wo.longitude)
+      .map((wo) => [wo.latitude as number, wo.longitude as number]);
+  }, [mapWOs]);
+
+  const allMapLocations = useMemo(() => {
+    const pts: { lat: number; lon: number }[] = [];
+    activeReguLocations.forEach((r: any) => {
+      if (r && r.lat && r.lon) pts.push({ lat: r.lat, lon: r.lon });
+    });
+    mapWOs.forEach((w) => {
+      if (w.latitude && w.longitude) pts.push({ lat: w.latitude, lon: w.longitude });
+    });
+    return pts;
+  }, [activeReguLocations, mapWOs]);
 
   // Helper component to handle map bounds/zoom
   const MapBoundsHandler = ({ locations }: { locations: any[] }) => {
@@ -606,18 +691,48 @@ export const MonitoringPage: React.FC = () => {
             /* MAP GIS VIEW */
             <div className="space-y-6 no-print">
               <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden p-2">
-                <div className="h-[520px] w-full rounded-2xl overflow-hidden relative">
+                <div className="h-[560px] w-full rounded-2xl overflow-hidden relative">
                   {/* Floating Overlay Badge */}
-                  <div className="absolute top-3 right-3 z-[400] bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-3 rounded-xl border border-slate-300 dark:border-slate-700 shadow-md text-[11px] space-y-1 font-sans text-slate-800 dark:text-slate-200">
-                    <p className="font-extrabold flex items-center space-x-1">
-                      <span>⚡ JARINGAN TR & PETA GIS</span>
-                    </p>
-                    <p className="text-slate-600 dark:text-slate-400">Total Lokasi: <span className="font-extrabold text-[#00A2B9]">{filteredWOs.length} Titik</span></p>
-                    <p className="text-slate-600 dark:text-slate-400">Regu Aktif: <span className="font-extrabold text-[#00A2B9]">{activeReguLocations.length} Regu</span></p>
-                    <p className="text-amber-600 dark:text-amber-400 font-extrabold pt-1 border-t border-slate-200 dark:border-slate-700">
-                      ⚡ Jaringan Listrik TR (Tegangan Rendah) PLN
-                    </p>
+                  <div className="absolute top-3 right-3 z-[400] bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-3.5 rounded-2xl border border-slate-300 dark:border-slate-700 shadow-lg text-[11px] space-y-2 font-sans text-slate-800 dark:text-slate-200 min-w-[240px]">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-700">
+                      <p className="font-extrabold text-[#008396] dark:text-teal-400 flex items-center space-x-1">
+                        <span>⚡ PETA GIS FIELD</span>
+                      </p>
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-extrabold text-[10px]">
+                        HARI INI (TODAY)
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 text-slate-600 dark:text-slate-400 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Status WO:</span>
+                        <span className="font-extrabold text-amber-600 dark:text-amber-400">BELUM SELESAI</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">WO Belum Selesai:</span>
+                        <span className="font-extrabold text-[#00A2B9] dark:text-teal-400">{mapWOs.length} Titik</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Regu ROW Terpantau:</span>
+                        <span className="font-extrabold text-[#00A2B9] dark:text-teal-400">{activeReguLocations.length} Regu</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-1.5 border-t border-slate-200 dark:border-slate-700 text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center space-x-1">
+                      <span>⚡ Jalur Jaringan TR (Tegangan Rendah)</span>
+                    </div>
                   </div>
+
+                  {mapWOs.length === 0 && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl text-center max-w-md">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Tidak ada Work Order berstatus <span className="text-amber-600 font-extrabold">Belum Selesai</span> untuk hari ini ({formatDateDisplay(todayISO)}).
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Semua pekerjaan hari ini telah selesai atau belum ada jadwal baru.
+                      </p>
+                    </div>
+                  )}
 
                   <MapContainer
                     center={mapCenter}
@@ -625,7 +740,7 @@ export const MonitoringPage: React.FC = () => {
                     scrollWheelZoom={true}
                     style={{ height: '100%', width: '100%' }}
                   >
-                    <MapBoundsHandler locations={activeReguLocations} />
+                    <MapBoundsHandler locations={allMapLocations.length > 0 ? allMapLocations : activeReguLocations} />
                     <TileLayer
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -652,23 +767,23 @@ export const MonitoringPage: React.FC = () => {
                       </>
                     )}
 
-                    {filteredWOs.map((wo, idx) => {
-                      const rel = realisasiList.find((r) => r.workOrderId === wo.id);
-                      const customIcon = createCustomMarkerIcon(wo.status);
+                    {/* Titik Lokasi Work Order Hari Ini (Status Belum Selesai) */}
+                    {mapWOs.map((wo, idx) => {
+                      const customIcon = createCustomMarkerIcon(wo.status || 'Belum Dikerjakan');
 
                       return (
                         <Marker
-                          key={`${wo.id}-${idx}`}
+                          key={`map-wo-${wo.id}-${idx}`}
                           position={[wo.latitude || -0.92, wo.longitude || 100.4]}
                           icon={customIcon}
                         >
                           <Popup>
-                            <div className="p-1 space-y-2 max-w-xs font-sans">
-                              <div className="border-b border-slate-200 pb-1 flex items-center justify-between">
-                                <span className="font-extrabold text-[#008396] text-xs">
+                            <div className="p-1.5 space-y-2 max-w-xs font-sans">
+                              <div className="border-b border-slate-200 dark:border-slate-700 pb-1.5 flex items-center justify-between">
+                                <span className="font-black text-[#008396] text-xs">
                                   {wo.nomorWO}
                                 </span>
-                                <StatusBadge status={wo.status} size="sm" />
+                                <StatusBadge status={wo.status || 'Belum Dikerjakan'} size="sm" />
                               </div>
 
                               <div className="space-y-1 text-xs">
@@ -676,8 +791,11 @@ export const MonitoringPage: React.FC = () => {
                                   {wo.penyulangName} - {wo.ulpName}
                                 </p>
                                 <p className="text-slate-600 text-[11px]">📍 {wo.lokasi || 'Lokasi Field'}</p>
+                                <p className="text-slate-700 text-[11px] font-semibold">
+                                  👷‍♂️ Regu ROW: <span className="font-black text-[#008396]">{wo.reguName}</span>
+                                </p>
                                 <p className="text-slate-500 text-[10px]">
-                                  👤 Regu: {wo.reguName}
+                                  📅 Tanggal: {formatDateDisplay(wo.tanggal)}
                                 </p>
                               </div>
                             </div>
@@ -686,38 +804,45 @@ export const MonitoringPage: React.FC = () => {
                       );
                     })}
 
-                    {/* Live Regu Markers */}
+                    {/* Titik Koordinat Live Regu ROW Hari Ini */}
                     {activeReguLocations.map((regu: any, idx: number) => (
                       <Marker
-                        key={`regu-${regu.name}-${idx}`}
+                        key={`regu-live-${regu.name}-${idx}`}
                         position={[regu.lat, regu.lon]}
                         icon={createCustomMarkerIcon('Regu')}
                       >
-                        <Tooltip permanent direction="top" offset={[0, -40]} className="bg-[#00A2B9] text-white font-bold border-none rounded-lg px-2 py-1 shadow-md text-[10px]">
+                        <Tooltip permanent direction="top" offset={[0, -20]} className="bg-[#EF4444] text-white font-extrabold border-none rounded-lg px-2.5 py-1 shadow-md text-[11px]">
                           {regu.name}
                         </Tooltip>
                         <Popup>
-                          <div className="p-2 space-y-2 min-w-[180px] font-sans">
-                            <div className="border-b border-slate-200 pb-1 flex items-center justify-between">
-                              <span className="font-black text-[#008396] text-sm italic">
-                                LIVE TRACKING
+                          <div className="p-2 space-y-2 min-w-[200px] font-sans">
+                            <div className="border-b border-slate-200 dark:border-slate-700 pb-1.5 flex items-center justify-between">
+                              <span className="font-black text-[#EF4444] text-xs tracking-wide">
+                                📍 REGUS ROW HARI INI
                               </span>
-                              <span className="px-2 py-0.5 rounded-full bg-[#00A2B9]/10 text-[#008396] text-[10px] font-black uppercase">
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase">
                                 AKTIF
                               </span>
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               <p className="text-xs font-black text-slate-900 uppercase">
                                 {regu.name}
                               </p>
-                              <div className="flex items-center space-x-1.5 text-[11px] text-slate-600">
-                                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                <span>Update: {new Date(regu.lastUpdate).toLocaleTimeString('id-ID')}</span>
+                              <div className="text-[11px] text-slate-600 space-y-1">
+                                <div className="flex items-center space-x-1.5">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Update: {new Date(regu.lastUpdate).toLocaleTimeString('id-ID')}</span>
+                                </div>
+                                <div className="flex items-center space-x-1.5">
+                                  <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Sumber: {regu.type}</span>
+                                </div>
+                                {regu.nomorWO && regu.nomorWO !== '-' && (
+                                  <p className="text-[10px] text-slate-500 font-semibold">
+                                    📋 WO: {regu.nomorWO}
+                                  </p>
+                                )}
                               </div>
-                              <p className="text-[10px] text-slate-400 flex items-center space-x-1">
-                                <MapPin className="w-3 h-3" />
-                                <span>Sumber: {regu.type}</span>
-                              </p>
                             </div>
                           </div>
                         </Popup>
