@@ -357,7 +357,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       const fotoSesudahUrl = photosSesudah[0]?.fileUrl ? formatDriveViewUrl(photosSesudah[0].fileUrl) : fotoSesudahRaw;
 
       if (editMode && initialData) {
-        updateRealisasi(initialData.id, {
+        await updateRealisasi(initialData.id, {
           workOrderId: selectedWO.id,
           nomorWO: selectedWO.nomorWO,
           ulpName: selectedWO.ulpName,
@@ -450,7 +450,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     
     try {
       // Use the context update method which handles both local and server sync
-      updateWorkOrder(selectedWO.id, {
+      await updateWorkOrder(selectedWO.id, {
         status: 'Selesai' as WOStatus,
         totalRealisasi: totalVolume,
         satuanTotalRealisasi: finalSatuan,
@@ -531,6 +531,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
                 </label>
                 <input
                   type="text"
+                  required
                   placeholder="Titik mulai..."
                   value={lokasiStart}
                   onChange={(e) => setLokasiStart(e.target.value)}
@@ -543,6 +544,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
                 </label>
                 <input
                   type="text"
+                  required
                   placeholder="Titik selesai..."
                   value={lokasiFinish}
                   onChange={(e) => setLokasiFinish(e.target.value)}
@@ -557,6 +559,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
               </label>
                 <input
                 type="number"
+                required
                 step="0.01"
                 placeholder="0.00"
                 value={totalVolume || ''}
@@ -843,6 +846,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
               </label>
               <input
                 type="text"
+                required
                 placeholder="Kendala lapangan..."
                 value={kendala || ''}
                 onChange={(e) => setKendala(e.target.value)}

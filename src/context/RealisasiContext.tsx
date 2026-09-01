@@ -80,20 +80,49 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     return newRel;
   }, [setRealisasiList, settings.gasWebAppUrl, settings.photoFolderId, settings.driveFolderId, showToast]);
 
-  const updateRealisasi = React.useCallback((id: string, updates: Partial<Realisasi>) => {
+  const updateRealisasi = React.useCallback(async (id: string, updates: Partial<Realisasi>) => {
+    const existing = realisasiList.find(r => r.id === id);
+    if (!existing) return;
+
+    const updatedRel = { ...existing, ...updates };
+
     setRealisasiList(prev => prev.map(rel => {
       if (rel.id === id) {
-        return { ...rel, ...updates };
+        return updatedRel;
       }
       return rel;
     }));
-    showToast('Realisasi berhasil diperbarui', 'success');
-  }, [setRealisasiList, showToast]);
 
-  const deleteRealisasi = React.useCallback((id: string) => {
+    if (settings.gasWebAppUrl) {
+      try {
+        const res = await GASApiService.updateRealisasi(settings.gasWebAppUrl, settings.spreadsheetId, id, updatedRel);
+        if (res.status === 'success') {
+          showToast('Realisasi berhasil diperbarui di Spreadsheet', 'success');
+        } else {
+          showToast('Gagal sinkronisasi ke Spreadsheet, perubahan tersimpan lokal.', 'warning');
+        }
+      } catch (err) {
+        showToast('Gagal sinkronisasi, perubahan tersimpan lokal.', 'warning');
+      }
+    }
+  }, [realisasiList, setRealisasiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
+
+  const deleteRealisasi = React.useCallback(async (id: string) => {
     setRealisasiList(prev => prev.filter(rel => rel.id !== id));
-    showToast('Realisasi berhasil dihapus', 'info');
-  }, [setRealisasiList, showToast]);
+
+    if (settings.gasWebAppUrl) {
+      try {
+        const res = await GASApiService.deleteRealisasi(settings.gasWebAppUrl, id);
+        if (res.status === 'success') {
+          showToast('Realisasi berhasil dihapus dari Spreadsheet', 'success');
+        } else {
+          showToast('Gagal menghapus di Spreadsheet, terhapus lokal.', 'warning');
+        }
+      } catch (err) {
+        showToast('Gagal menghapus di Spreadsheet, terhapus lokal.', 'warning');
+      }
+    }
+  }, [setRealisasiList, settings.gasWebAppUrl, showToast]);
 
   return (
     <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, deleteRealisasi }}>

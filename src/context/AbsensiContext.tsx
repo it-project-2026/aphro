@@ -13,6 +13,8 @@ interface AbsensiContextType {
   absensiList: Absensi[];
   setAbsensiList: React.Dispatch<React.SetStateAction<Absensi[]>>;
   addAbsensi: (abs: Omit<Absensi, 'id' | 'createdAt'>) => Promise<Absensi>;
+  updateAbsensi: (id: string, absData: Partial<Absensi>) => Promise<boolean>;
+  deleteAbsensi: (id: string) => Promise<boolean>;
   hasCheckedInToday: boolean;
 }
 
@@ -142,6 +144,56 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     return finalAbs;
   }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.absensiFolderId, showToast]);
 
+  const updateAbsensi = React.useCallback(async (id: string, absData: Partial<Absensi>) => {
+    const existingIndex = absensiList.findIndex(a => a.id === id);
+    if (existingIndex === -1) return false;
+
+    const updatedAbs = {
+      ...absensiList[existingIndex],
+      ...absData,
+      updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    };
+
+    // Update local state
+    const newList = [...absensiList];
+    newList[existingIndex] = updatedAbs;
+    setAbsensiList(newList);
+
+    if (settings.gasWebAppUrl) {
+      try {
+        const res = await GASApiService.saveAbsensi(settings.gasWebAppUrl, updatedAbs);
+        if (res.status === 'success') {
+          showToast('Perubahan absensi berhasil disinkronkan!', 'success');
+          return true;
+        }
+        showToast('Gagal sinkronisasi ke Spreadsheet, perubahan tersimpan lokal.', 'warning');
+      } catch (err) {
+        showToast('Gagal sinkronisasi, perubahan tersimpan lokal.', 'warning');
+      }
+    }
+    return true;
+  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, showToast]);
+
+  const deleteAbsensi = React.useCallback(async (id: string) => {
+    // Update local state
+    const newList = absensiList.filter(a => a.id !== id);
+    setAbsensiList(newList);
+
+    if (settings.gasWebAppUrl) {
+      try {
+        const res = await GASApiService.deleteAbsensi(settings.gasWebAppUrl, id);
+        if (res.status === 'success') {
+          showToast('Absensi berhasil dihapus dari Spreadsheet!', 'success');
+          return true;
+        }
+        showToast('Gagal menghapus di Spreadsheet, terhapus lokal.', 'warning');
+      } catch (err) {
+        showToast('Gagal menghapus di Spreadsheet, terhapus lokal.', 'warning');
+      }
+    }
+    return true;
+  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, showToast]);
+
   const hasCheckedInToday = React.useMemo(() => {
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
     
@@ -237,7 +289,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   }, [absensiList, user]);
 
   return (
-    <AbsensiContext.Provider value={{ absensiList, setAbsensiList, addAbsensi, hasCheckedInToday }}>
+    <AbsensiContext.Provider value={{ absensiList, setAbsensiList, addAbsensi, updateAbsensi, deleteAbsensi, hasCheckedInToday }}>
       {children}
     </AbsensiContext.Provider>
   );

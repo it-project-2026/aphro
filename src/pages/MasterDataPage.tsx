@@ -121,122 +121,160 @@ export const MasterDataPage: React.FC = () => {
   const [usrUlpId, setUsrUlpId] = useState(ulpList[0]?.id || '');
   const [usrReguId, setUsrReguId] = useState(reguList[0]?.id || '');
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Submit Regu
-  const handleSaveRegu = (e: React.FormEvent) => {
+  const handleSaveRegu = async (e: React.FormEvent) => {
     e.preventDefault();
     const selUlp = ulpList.find((u) => u.id === reguUlpId);
-    if (editingRegu) {
-      updateRegu(editingRegu.id, {
-        kodeRegu: reguKode,
-        namaRegu: reguName,
-        penanggungJawab: reguPj,
-        jumlahAnggota: Number(reguAnggota),
-        kontak: reguKontak,
-        ulpId: reguUlpId,
-        ulpName: selUlp?.namaULP || '-',
-        status: reguStatus,
-      });
-    } else {
-      addRegu({
-        kodeRegu: reguKode || `ROW-${Date.now().toString().slice(-2)}`,
-        namaRegu: reguName,
-        penanggungJawab: reguPj,
-        jumlahAnggota: Number(reguAnggota),
-        kontak: reguKontak,
-        ulpId: reguUlpId,
-        ulpName: selUlp?.namaULP || '-',
-        status: reguStatus,
-      });
+    setIsSubmitting(true);
+    try {
+      if (editingRegu) {
+        await updateRegu(editingRegu.id, {
+          kodeRegu: reguKode,
+          namaRegu: reguName,
+          penanggungJawab: reguPj,
+          jumlahAnggota: Number(reguAnggota),
+          kontak: reguKontak,
+          ulpId: reguUlpId,
+          ulpName: selUlp?.namaULP || '-',
+          status: reguStatus,
+        });
+        showToast(`Regu "${reguName}" berhasil diperbarui.`, 'success');
+      } else {
+        await addRegu({
+          kodeRegu: reguKode || `ROW-${Date.now().toString().slice(-2)}`,
+          namaRegu: reguName,
+          penanggungJawab: reguPj,
+          jumlahAnggota: Number(reguAnggota),
+          kontak: reguKontak,
+          ulpId: reguUlpId,
+          ulpName: selUlp?.namaULP || '-',
+          status: reguStatus,
+        });
+        showToast(`Regu "${reguName}" berhasil ditambahkan.`, 'success');
+      }
+      setShowReguModal(false);
+    } catch (err) {
+      showToast('Gagal menyimpan data Regu', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-    setShowReguModal(false);
   };
 
   // Submit Petugas
-  const handleSavePetugas = (e: React.FormEvent) => {
+  const handleSavePetugas = async (e: React.FormEvent) => {
     e.preventDefault();
     const selRegu = reguList.find((r) => r.id === ptgReguId);
     const selUlp = ulpList.find((u) => u.id === ptgUlpId);
 
-    if (editingPetugas) {
-      updatePetugas(editingPetugas.id, {
-        nip: ptgNip,
-        nama: ptgNama,
-        reguId: ptgReguId,
-        reguName: selRegu?.namaRegu || '-',
-        ulpId: ptgUlpId,
-        ulpName: selUlp?.namaULP || '-',
-        noHp: ptgNoHp,
-        role: ptgRole,
-        status: ptgStatus,
-      });
-    } else {
-      addPetugas({
-        nip: ptgNip || '19980000000',
-        nama: ptgNama,
-        reguId: ptgReguId,
-        reguName: selRegu?.namaRegu || '-',
-        ulpId: ptgUlpId,
-        ulpName: selUlp?.namaULP || '-',
-        noHp: ptgNoHp,
-        role: ptgRole,
-        status: ptgStatus,
-      });
+    setIsSubmitting(true);
+    try {
+      if (editingPetugas) {
+        await updatePetugas(editingPetugas.id, {
+          nip: ptgNip,
+          nama: ptgNama,
+          reguId: ptgReguId,
+          reguName: selRegu?.namaRegu || '-',
+          ulpId: ptgUlpId,
+          ulpName: selUlp?.namaULP || '-',
+          noHp: ptgNoHp,
+          role: ptgRole,
+          status: ptgStatus,
+        });
+        showToast(`Petugas "${ptgNama}" berhasil diperbarui.`, 'success');
+      } else {
+        await addPetugas({
+          nip: ptgNip || '19980000000',
+          nama: ptgNama,
+          reguId: ptgReguId,
+          reguName: selRegu?.namaRegu || '-',
+          ulpId: ptgUlpId,
+          ulpName: selUlp?.namaULP || '-',
+          noHp: ptgNoHp,
+          role: ptgRole,
+          status: ptgStatus,
+        });
+        showToast(`Petugas "${ptgNama}" berhasil ditambahkan.`, 'success');
+      }
+      setShowPetugasModal(false);
+    } catch (err) {
+      showToast('Gagal menyimpan data Petugas', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-    setShowPetugasModal(false);
   };
 
   // Submit ULP
-  const handleSaveUlp = (e: React.FormEvent) => {
+  const handleSaveUlp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingUlp) {
-      updateULP(editingUlp.id, {
-        kodeULP: ulpKode,
-        namaULP: ulpNama,
-        manajer: ulpManajer,
-        kontak: ulpKontak,
-        alamat: ulpAlamat,
-        status: ulpStatus,
-      });
-    } else {
-      addULP({
-        kodeULP: ulpKode || `ULP-${Date.now().toString().slice(-2)}`,
-        namaULP: ulpNama,
-        manajer: ulpManajer,
-        kontak: ulpKontak,
-        alamat: ulpAlamat,
-        status: ulpStatus,
-      });
+    setIsSubmitting(true);
+    try {
+      if (editingUlp) {
+        await updateULP(editingUlp.id, {
+          kodeULP: ulpKode,
+          namaULP: ulpNama,
+          manajer: ulpManajer,
+          kontak: ulpKontak,
+          alamat: ulpAlamat,
+          status: ulpStatus,
+        });
+        showToast(`ULP "${ulpNama}" berhasil diperbarui.`, 'success');
+      } else {
+        await addULP({
+          kodeULP: ulpKode || `ULP-${Date.now().toString().slice(-2)}`,
+          namaULP: ulpNama,
+          manajer: ulpManajer,
+          kontak: ulpKontak,
+          alamat: ulpAlamat,
+          status: ulpStatus,
+        });
+        showToast(`ULP "${ulpNama}" berhasil ditambahkan.`, 'success');
+      }
+      setShowUlpModal(false);
+    } catch (err) {
+      showToast('Gagal menyimpan data ULP', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-    setShowUlpModal(false);
   };
 
   // Submit Penyulang
-  const handleSavePenyulang = (e: React.FormEvent) => {
+  const handleSavePenyulang = async (e: React.FormEvent) => {
     e.preventDefault();
     const selUlp = ulpList.find((u) => u.id === penyUlpId);
 
-    if (editingPenyulang) {
-      updatePenyulang(editingPenyulang.id, {
-        kodePenyulang: penyKode,
-        namaPenyulang: penyNama,
-        ulpId: penyUlpId,
-        ulpName: selUlp?.namaULP || '-',
-        panjangKms: Number(penyPanjang),
-        jumlahTrafo: Number(penyTrafo),
-        status: penyStatus,
-      });
-    } else {
-      addPenyulang({
-        kodePenyulang: penyKode || `PENY-${Date.now().toString().slice(-2)}`,
-        namaPenyulang: penyNama,
-        ulpId: penyUlpId,
-        ulpName: selUlp?.namaULP || '-',
-        panjangKms: Number(penyPanjang),
-        jumlahTrafo: Number(penyTrafo),
-        status: penyStatus,
-      });
+    setIsSubmitting(true);
+    try {
+      if (editingPenyulang) {
+        await updatePenyulang(editingPenyulang.id, {
+          kodePenyulang: penyKode,
+          namaPenyulang: penyNama,
+          ulpId: penyUlpId,
+          ulpName: selUlp?.namaULP || '-',
+          panjangKms: Number(penyPanjang),
+          jumlahTrafo: Number(penyTrafo),
+          status: penyStatus,
+        });
+        showToast(`Penyulang "${penyNama}" berhasil diperbarui.`, 'success');
+      } else {
+        await addPenyulang({
+          kodePenyulang: penyKode || `PENY-${Date.now().toString().slice(-2)}`,
+          namaPenyulang: penyNama,
+          ulpId: penyUlpId,
+          ulpName: selUlp?.namaULP || '-',
+          panjangKms: Number(penyPanjang),
+          jumlahTrafo: Number(penyTrafo),
+          status: penyStatus,
+        });
+        showToast(`Penyulang "${penyNama}" berhasil ditambahkan.`, 'success');
+      }
+      setShowPenyulangModal(false);
+    } catch (err) {
+      showToast('Gagal menyimpan data Penyulang', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-    setShowPenyulangModal(false);
   };
 
   // Submit User & Password (Sesuai Kolom Sheet USERS Spreadsheet)
@@ -260,40 +298,21 @@ export const MasterDataPage: React.FC = () => {
       status: usrStatus,
     };
 
-    let targetId = '';
-    if (editingUser) {
-      targetId = editingUser.id;
-      updateUser(editingUser.id, userPayload);
-      showToast(`Data User & Password "${usrNama}" berhasil diperbarui!`, 'success');
-    } else {
-      targetId = 'usr-' + Date.now();
-      addUser(userPayload);
-      showToast(`User & Password "${usrNama}" berhasil ditambahkan!`, 'success');
-    }
-
-    // Direct GAS Spreadsheet Sync (Save row to Sheet USERS)
-    if (settings.gasWebAppUrl) {
-      try {
-        await GASApiService.saveMasterData(settings.gasWebAppUrl, 'USERS', {
-          id: targetId,
-          UserID: userPayload.nip,
-          Username: userPayload.userName,
-          Password: userPayload.password,
-          NamaRegu: userPayload.reguName,
-          Role: userPayload.role,
-          ULP: userPayload.ulpName,
-          Status: userPayload.status,
-          nip: userPayload.nip,
-          name: userPayload.name,
-          email: userPayload.email,
-          phone: userPayload.phone,
-        });
-      } catch (err) {
-        console.warn('Sync user to GAS spreadsheet failed:', err);
+    setIsSubmitting(true);
+    try {
+      if (editingUser) {
+        await updateUser(editingUser.id, userPayload);
+        showToast(`Data User & Password "${usrNama}" berhasil diperbarui!`, 'success');
+      } else {
+        await addUser(userPayload);
+        showToast(`User & Password "${usrNama}" berhasil ditambahkan!`, 'success');
       }
+      setShowUserModal(false);
+    } catch (err) {
+      showToast('Gagal menyimpan data User', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setShowUserModal(false);
   };
 
   // Confirm and handle Delete User
@@ -302,18 +321,16 @@ export const MasterDataPage: React.FC = () => {
     const deletedId = userToDelete.id;
     const deletedName = userToDelete.name || userToDelete.nip;
 
-    deleteUser(deletedId);
-
-    if (settings.gasWebAppUrl) {
-      try {
-        await GASApiService.deleteMasterData(settings.gasWebAppUrl, 'USERS', deletedId);
-      } catch (err) {
-        console.warn('Sync delete user to GAS spreadsheet failed:', err);
-      }
+    setIsSubmitting(true);
+    try {
+      await deleteUser(deletedId);
+      showToast(`User & Password "${deletedName}" telah berhasil dihapus!`, 'info');
+      setUserToDelete(null);
+    } catch (err) {
+      showToast('Gagal menghapus User', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    showToast(`User & Password "${deletedName}" telah berhasil dihapus!`, 'info');
-    setUserToDelete(null);
   };
 
   const togglePasswordVisibility = (id: string) => {
@@ -577,7 +594,12 @@ export const MasterDataPage: React.FC = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => deleteRegu(regu.id)}
+                          onClick={async () => {
+                            if (window.confirm('Hapus Regu ini?')) {
+                              await deleteRegu(regu.id);
+                              showToast(`Regu "${regu.namaRegu}" berhasil dihapus.`, 'info');
+                            }
+                          }}
                           className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -648,7 +670,12 @@ export const MasterDataPage: React.FC = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => deletePetugas(ptg.id)}
+                          onClick={async () => {
+                            if (window.confirm('Hapus Petugas ini?')) {
+                              await deletePetugas(ptg.id);
+                              showToast(`Petugas "${ptg.nama}" berhasil dihapus.`, 'info');
+                            }
+                          }}
                           className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -718,7 +745,12 @@ export const MasterDataPage: React.FC = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => deleteULP(ulp.id)}
+                          onClick={async () => {
+                            if (window.confirm('Hapus ULP ini?')) {
+                              await deleteULP(ulp.id);
+                              showToast(`ULP "${ulp.namaULP}" berhasil dihapus.`, 'info');
+                            }
+                          }}
                           className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -802,7 +834,12 @@ export const MasterDataPage: React.FC = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => deletePenyulang(p.id)}
+                          onClick={async () => {
+                            if (window.confirm('Hapus Penyulang ini?')) {
+                              await deletePenyulang(p.id);
+                              showToast(`Penyulang "${p.namaPenyulang}" berhasil dihapus.`, 'info');
+                            }
+                          }}
                           className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1010,6 +1047,7 @@ export const MasterDataPage: React.FC = () => {
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kontak / No HP</label>
                 <input
                   type="text"
+                  required
                   placeholder="0812..."
                   value={reguKontak}
                   onChange={(e) => setReguKontak(e.target.value)}
@@ -1020,6 +1058,7 @@ export const MasterDataPage: React.FC = () => {
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unit ULP Base</label>
                 <select
+                  required
                   value={reguUlpId}
                   onChange={(e) => setReguUlpId(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -1107,6 +1146,7 @@ export const MasterDataPage: React.FC = () => {
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Regu ROW Assigned</label>
                   <select
+                    required
                     value={ptgReguId}
                     onChange={(e) => setPtgReguId(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -1122,6 +1162,7 @@ export const MasterDataPage: React.FC = () => {
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unit ULP Base</label>
                   <select
+                    required
                     value={ptgUlpId}
                     onChange={(e) => setPtgUlpId(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -1141,6 +1182,7 @@ export const MasterDataPage: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">No HP / WA</label>
                   <input
                     type="text"
+                    required
                     placeholder="0812..."
                     value={ptgNoHp}
                     onChange={(e) => setPtgNoHp(e.target.value)}
@@ -1236,6 +1278,7 @@ export const MasterDataPage: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Manajer ULP</label>
                   <input
                     type="text"
+                    required
                     placeholder="Nama Manajer"
                     value={ulpManajer}
                     onChange={(e) => setUlpManajer(e.target.value)}
@@ -1246,6 +1289,7 @@ export const MasterDataPage: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kontak</label>
                   <input
                     type="text"
+                    required
                     placeholder="No Telp"
                     value={ulpKontak}
                     onChange={(e) => setUlpKontak(e.target.value)}
@@ -1257,6 +1301,7 @@ export const MasterDataPage: React.FC = () => {
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Alamat Office</label>
                 <textarea
+                  required
                   value={ulpAlamat}
                   onChange={(e) => setUlpAlamat(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900 min-h-[60px]"
@@ -1336,6 +1381,7 @@ export const MasterDataPage: React.FC = () => {
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unit ULP Induk</label>
                 <select
+                  required
                   value={penyUlpId}
                   onChange={(e) => setPenyUlpId(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -1441,6 +1487,7 @@ export const MasterDataPage: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Username Login</label>
                   <input
                     type="text"
+                    required
                     placeholder="Contoh: superadmin"
                     value={usrUserName}
                     onChange={(e) => setUsrUserName(e.target.value)}
@@ -1505,6 +1552,7 @@ export const MasterDataPage: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Email PLN</label>
                   <input
                     type="email"
+                    required
                     placeholder="nama@pln.co.id"
                     value={usrEmail}
                     onChange={(e) => setUsrEmail(e.target.value)}
@@ -1516,6 +1564,7 @@ export const MasterDataPage: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">No HP / WhatsApp</label>
                   <input
                     type="text"
+                    required
                     placeholder="08123456789"
                     value={usrPhone}
                     onChange={(e) => setUsrPhone(e.target.value)}
@@ -1528,6 +1577,7 @@ export const MasterDataPage: React.FC = () => {
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unit ULP Base (ULP)</label>
                   <select
+                    required
                     value={usrUlpId}
                     onChange={(e) => setUsrUlpId(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
@@ -1544,6 +1594,7 @@ export const MasterDataPage: React.FC = () => {
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Regu ROW Assigned (NamaRegu)</label>
                   <select
+                    required
                     value={usrReguId}
                     onChange={(e) => setUsrReguId(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"

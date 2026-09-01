@@ -127,12 +127,12 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       (wo.penyulangName || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesUlp = filterUlp === 'ALL' || 
-      (wo.ulpName || '').toLowerCase() === filterUlp.toLowerCase() || 
-      (wo.ulpId || '').toLowerCase() === filterUlp.toLowerCase();
+      (wo.ulpName || '').toLowerCase().trim() === filterUlp.toLowerCase().trim() || 
+      (wo.ulpId || '').toLowerCase().trim() === filterUlp.toLowerCase().trim();
     
     const matchesPenyulang = filterPenyulang === 'ALL' || 
-      (wo.penyulangName || '').toLowerCase() === filterPenyulang.toLowerCase() ||
-      (wo.penyulangId || '').toLowerCase() === filterPenyulang.toLowerCase();
+      (wo.penyulangName || '').toLowerCase().trim() === filterPenyulang.toLowerCase().trim() ||
+      (wo.penyulangId || '').toLowerCase().trim() === filterPenyulang.toLowerCase().trim();
     const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
     const matchesDate = !filterDate || wo.tanggal === filterDate;
 
@@ -379,9 +379,9 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (window.confirm('Hapus Work Order ini?')) {
-                            deleteWorkOrder(wo.id);
+                            await deleteWorkOrder(wo.id);
                           }
                         }}
                         className="py-2.5 px-3 bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 active:scale-95"
@@ -541,7 +541,11 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                               <Edit className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => deleteWorkOrder(wo.id)}
+                              onClick={async () => {
+                                if (window.confirm('Hapus Work Order ini?')) {
+                                  await deleteWorkOrder(wo.id);
+                                }
+                              }}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                               title="Hapus Work Order"
                             >

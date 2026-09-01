@@ -264,6 +264,56 @@ export class GASApiService {
     }
   }
 
+  static async deleteAbsensi(gasUrl: string, id: string): Promise<GASApiResponse> {
+    try {
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'deleteAbsensi',
+          id,
+        }),
+      });
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message };
+    }
+  }
+
+  static async updateRealisasi(gasUrl: string, spreadsheetId: string, id: string, rel: any): Promise<GASApiResponse> {
+    try {
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'updateRealisasi',
+          spreadsheetId,
+          id,
+          realisasi: rel,
+        }),
+      });
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message };
+    }
+  }
+
+  static async deleteRealisasi(gasUrl: string, id: string): Promise<GASApiResponse> {
+    try {
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'deleteRealisasi',
+          id,
+        }),
+      });
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message };
+    }
+  }
+
   /**
    * Fetch ALL Data from all 10 sheets in a single API call
    */

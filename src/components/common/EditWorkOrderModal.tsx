@@ -3,7 +3,7 @@ import { WorkOrder, WOStatus } from '../../types';
 import { useMasterData } from '../../context/MasterDataContext';
 import { useWorkOrders } from '../../context/WorkOrderContext';
 import { useToast } from '../../hooks/useToast';
-import { X, Save, AlertTriangle } from 'lucide-react';
+import { X, Save, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface EditWorkOrderModalProps {
   workOrder: WorkOrder;
@@ -105,7 +105,9 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const numVolume = parseFloat(volumePekerjaan);
     if (isNaN(numVolume) || numVolume <= 0) {
@@ -125,24 +127,30 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
     const currentPenyulangObj = penyulangList.find((p) => p.namaPenyulang === penyulangName) || penyulangList[0];
     const currentReguObj = reguList.find((r) => r.namaRegu === reguName) || reguList[0];
 
-    updateWorkOrder(workOrder.id, {
-      nomorWO,
-      tanggal,
-      pekerjaan,
-      ulpId: currentUlpObj?.id,
-      ulpName,
-      penyulangId: currentPenyulangObj?.id,
-      penyulangName,
-      reguId: currentReguObj?.id,
-      reguName,
-      volumePekerjaan: numVolume,
-      satuan,
-      woMulai,
-      woAkhir,
-      status,
-    });
-
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await updateWorkOrder(workOrder.id, {
+        nomorWO,
+        tanggal,
+        pekerjaan,
+        ulpId: currentUlpObj?.id,
+        ulpName,
+        penyulangId: currentPenyulangObj?.id,
+        penyulangName,
+        reguId: currentReguObj?.id,
+        reguName,
+        volumePekerjaan: numVolume,
+        satuan,
+        woMulai,
+        woAkhir,
+        status,
+      });
+      onClose();
+    } catch (err) {
+      console.error('Update WO error:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -160,6 +168,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Pekerjaan</label>
               <select
+                required
                 value={pekerjaan}
                 onChange={(e) => handlePekerjaanChange(e.target.value as 'NORMAL' | 'GOROW')}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
@@ -195,6 +204,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">ULP</label>
               <select
+                required
                 value={ulpName}
                 onChange={(e) => handleUlpChange(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
@@ -207,6 +217,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Penyulang</label>
               <select
+                required
                 value={penyulangName}
                 onChange={(e) => setPenyulangName(e.target.value)}
                 className={`w-full px-3 py-2 text-sm rounded-xl border transition-colors ${
@@ -223,6 +234,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Regu ROW</label>
               <select
+                required
                 value={reguName}
                 onChange={(e) => setReguName(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
@@ -247,6 +259,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Satuan</label>
               <select
+                required
                 value={satuan}
                 onChange={(e) => setSatuan(e.target.value as 'KMS' | 'GAWANG')}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
@@ -259,6 +272,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">WO AWAL</label>
               <input
                 type="text"
+                required
                 value={woMulai}
                 onChange={(e) => setWoMulai(e.target.value)}
                 placeholder="Titik Awal"
@@ -269,6 +283,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">WO AKHIR</label>
               <input
                 type="text"
+                required
                 value={woAkhir}
                 onChange={(e) => setWoAkhir(e.target.value)}
                 placeholder="Titik Akhir"
@@ -278,6 +293,7 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Status</label>
               <select
+                required
                 value={status}
                 onChange={(e) => setStatus(e.target.value as WOStatus)}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
@@ -314,11 +330,11 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             </button>
             <button
               type="submit"
-              disabled={Boolean(existingDuplicateWO)}
+              disabled={Boolean(existingDuplicateWO) || isSubmitting}
               className="inline-flex items-center space-x-2 px-5 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-teal-600/25 transition-all"
             >
-              <Save className="w-4 h-4" />
-              <span>Simpan Perubahan</span>
+              {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
             </button>
           </div>
         </form>

@@ -3,6 +3,7 @@ import {
   CheckSquare,
   History,
   Edit,
+  Trash2,
   TrendingUp,
   Filter,
   Search
@@ -23,7 +24,7 @@ interface RealisasiMainPageProps {
 
 export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSubTab = 'input' }) => {
   const { user: currentUser } = useAuth();
-  const { realisasiList } = useRealisasi();
+  const { realisasiList, deleteRealisasi } = useRealisasi();
   const { workOrders } = useWorkOrders();
   const { ulpList, penyulangList } = useMasterData();
   const { settings } = useSettings();
@@ -370,14 +371,27 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                             <td className="p-2 border border-slate-100 dark:border-slate-800 font-mono text-[8px] text-slate-500">
                               {lat && lng ? `${lat.toFixed(6)},\n${lng.toFixed(6)}` : '-'}
                             </td>
-                            <td className="p-2 border border-slate-100 dark:border-slate-800">
-                              <button
-                                onClick={() => handleEditRealisasi(rel)}
-                                className="p-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
-                                title="Edit Realisasi"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
+                             <td className="p-2 border border-slate-100 dark:border-slate-800">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => handleEditRealisasi(rel)}
+                                  className="p-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                                  title="Edit Realisasi"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (window.confirm('Hapus data realisasi ini? Perubahan akan langsung sinkron ke Spreadsheet.')) {
+                                      await deleteRealisasi(rel.id);
+                                    }
+                                  }}
+                                  className="p-1.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors"
+                                  title="Hapus Realisasi"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );

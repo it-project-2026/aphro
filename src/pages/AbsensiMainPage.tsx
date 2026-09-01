@@ -16,6 +16,8 @@ import {
   Camera,
   CheckCircle2,
   Trash2,
+  Pencil,
+  Plus,
   Building2,
   LogOut,
   Clock,
@@ -48,9 +50,11 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   const draggable2 = useDraggableScroll();
 
   const { user: currentUser } = useAuth();
-  const { absensiList, addAbsensi } = useAbsensi();
+  const { absensiList, addAbsensi, updateAbsensi, deleteAbsensi } = useAbsensi();
   const { ulpList, reguList, petugasList } = useMasterData();
   const { showToast } = useToast();
+
+  const [editingAbsensi, setEditingAbsensi] = useState<any | null>(null);
 
   const isAdmRole = (currentUser?.role || '').toUpperCase() === 'ADM' || (currentUser?.role || '').toUpperCase() === 'ADMIN' || (currentUser?.userName || '').toLowerCase() === 'admbkt';
 
@@ -116,10 +120,21 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     // Map: YYYY-MM-DD -> OfficerName -> Status
     const presenceMap = new Map<string, Map<string, string>>();
 
+    // Helper to normalize names for robust matching
+    const normalizeName = (name: string) => {
+      if (!name) return '';
+      // Remove all non-alphanumeric characters and lowercase for strict comparison
+      return name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    };
+
+    const cleanCompare = (s1: string, s2: string) => {
+      return (s1 || '').trim().toLowerCase() === (s2 || '').trim().toLowerCase();
+    };
+
     absensiList.forEach((abs) => {
       // Filter by ULP/Regu if needed
-      const matchesUlp = filterUlp === 'ALL' || abs.ulpName === filterUlp;
-      const matchesRegu = filterRegu === 'ALL' || abs.reguName === filterRegu;
+      const matchesUlp = filterUlp === 'ALL' || cleanCompare(abs.ulpName, filterUlp);
+      const matchesRegu = filterRegu === 'ALL' || cleanCompare(abs.reguName, filterRegu);
       
       if (!matchesUlp || !matchesRegu) return;
 
@@ -133,7 +148,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         if (Array.isArray(abs.petugasList)) {
           abs.petugasList.forEach((p) => {
             if (p.nama && p.nama !== '-') {
-              officerStatuses.set(p.nama.trim().toLowerCase(), p.keterangan || 'HADIR');
+              const key = normalizeName(p.nama);
+              if (key) {
+                officerStatuses.set(key, p.keterangan || 'HADIR');
+              }
             }
           });
         }
@@ -143,31 +161,17 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     // Get unique officers
     const officerSet = new Map<string, { nama: string; reguName: string }>();
     
-    // Add from master data
+    // Add from master data (Sheet PETUGAS)
     petugasList.forEach(p => {
-      const matchesUlp = filterUlp === 'ALL' || p.ulpName === filterUlp;
-      const matchesRegu = filterRegu === 'ALL' || p.reguName === filterRegu;
+      // ONLY include active officers if requested, but at least ensure they match ULP/Regu
+      const matchesUlp = filterUlp === 'ALL' || cleanCompare(p.ulpName, filterUlp);
+      const matchesRegu = filterRegu === 'ALL' || cleanCompare(p.reguName, filterRegu);
       
-      if (p.status === 'Aktif' && matchesUlp && matchesRegu) {
-        officerSet.set(p.nama.trim().toLowerCase(), { nama: p.nama, reguName: p.reguName });
-      }
-    });
-
-    // Add from attendance logs (in case some officers are not in master or filtered differently)
-    absensiList.forEach(abs => {
-      const matchesUlp = filterUlp === 'ALL' || abs.ulpName === filterUlp;
-      const matchesRegu = filterRegu === 'ALL' || abs.reguName === filterRegu;
-      
-      if (!matchesUlp || !matchesRegu) return;
-
-      const dateStr = normalizeDateISO(abs.tanggal);
-      if (dateStr.startsWith(`${rekapYear}-${String(rekapMonth).padStart(2, '0')}`)) {
-        if (Array.isArray(abs.petugasList)) {
-          abs.petugasList.forEach(p => {
-            if (p.nama && p.nama !== '-' && !officerSet.has(p.nama.trim().toLowerCase())) {
-              officerSet.set(p.nama.trim().toLowerCase(), { nama: p.nama, reguName: abs.reguName });
-            }
-          });
+      // We only show officers from master data that match current filters
+      if (p.nama && p.nama.trim() !== '' && p.nama.trim() !== '-' && matchesUlp && matchesRegu) {
+        const key = normalizeName(p.nama);
+        if (key) {
+          officerSet.set(key, { nama: p.nama.trim(), reguName: p.reguName || 'Tanpa Regu' });
         }
       }
     });
@@ -316,10 +320,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       }
 
       // ULP Filter
-      const matchesUlp = filterUlp === 'ALL' || (item.ulpName || '').toLowerCase().includes(filterUlp.toLowerCase());
+      const matchesUlp = filterUlp === 'ALL' || (item.ulpName || '').trim().toLowerCase() === filterUlp.trim().toLowerCase();
 
       // Regu Filter
-      const matchesRegu = filterRegu === 'ALL' || cleanStr(item.reguName) === cleanStr(filterRegu);
+      const matchesRegu = filterRegu === 'ALL' || (item.reguName || '').trim().toLowerCase() === filterRegu.trim().toLowerCase();
 
       // Search Query
       const query = searchQuery.toLowerCase().trim();
@@ -741,7 +745,9 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         
                         {rekapData.days.map(d => {
                           const dateKey = `${rekapYear}-${String(rekapMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                          const status = rekapData.presenceMap.get(dateKey)?.get(officer.nama.trim().toLowerCase());
+                          // Helper to normalize names for robust matching (must match logic in useMemo)
+                          const normalizeName = (n: string) => n.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+                          const status = rekapData.presenceMap.get(dateKey)?.get(normalizeName(officer.nama));
                           
                           let cellText = '-';
                           let cellClass = 'text-slate-300 dark:text-slate-600';
@@ -829,8 +835,23 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               </p>
             </div>
 
-            {/* Filters */}
+            {/* Filters & Actions */}
             <div className="flex flex-col sm:flex-row items-center gap-3">
+              {!isUserRole && (
+                <button
+                  onClick={() => setEditingAbsensi({
+                    tanggal: todayStr,
+                    ulpName: ulpList[0]?.namaULP || '',
+                    reguName: '',
+                    petugasList: [],
+                    isManual: true
+                  })}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#005a9c] text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 hover:bg-[#004a80] transition-all w-full sm:w-auto justify-center"
+                >
+                  <Plus className="w-4 h-4" />
+                  Tambah Manual
+                </button>
+              )}
               <div className="relative w-full sm:w-52">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
@@ -919,7 +940,8 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                     Keterangan
                   </th>
                   <th className="p-3 border-r border-slate-200 dark:border-slate-700 text-center">Foto Masuk</th>
-                  <th className="p-3 text-center">Foto Keluar</th>
+                  <th className="p-3 border-r border-slate-200 dark:border-slate-700 text-center">Foto Keluar</th>
+                  <th className="p-3 text-center sticky right-0 bg-slate-100 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-4px_0_10px_rgba(0,0,0,0.05)] z-10">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700 font-medium text-slate-800 dark:text-slate-200">
@@ -1095,7 +1117,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         </td>
 
                         {/* Foto Keluar */}
-                        <td className="p-3 text-center">
+                        <td className="p-3 border-r border-slate-200 dark:border-slate-700 text-center">
                           {item.fotoKeluar ? (
                             <div className="inline-flex items-center justify-center">
                               <button
@@ -1127,12 +1149,190 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                             <span className="text-slate-400 text-[11px]">-</span>
                           )}
                         </td>
+                        <td className="p-3 text-center sticky right-0 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-4px_0_10px_rgba(0,0,0,0.05)]">
+                          <div className="flex items-center justify-center gap-2">
+                            <button 
+                              onClick={() => setEditingAbsensi(item)}
+                              className="p-1.5 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors dark:bg-teal-900/30 dark:text-teal-400"
+                              title="Edit Status"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                if (window.confirm('Hapus data absensi ini? Perubahan akan langsung sinkron ke Spreadsheet.')) {
+                                  await deleteAbsensi(item.id);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors dark:bg-rose-900/30 dark:text-rose-400"
+                              title="Hapus Absensi"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Edit/Add Absensi Modal */}
+      {editingAbsensi && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                {editingAbsensi.isManual ? (
+                  <Plus className="w-4 h-4 text-teal-500" />
+                ) : (
+                  <Pencil className="w-4 h-4 text-[#005a9c]" />
+                )}
+                {editingAbsensi.isManual ? 'Tambah Absensi Manual' : 'Edit Status Absensi Manual'}
+              </h3>
+              <button onClick={() => setEditingAbsensi(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <LogOut className="w-5 h-5 rotate-90" />
+              </button>
+            </div>
+            
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (editingAbsensi.isManual && !editingAbsensi.reguName) {
+                  showToast('Harap pilih Regu terlebih dahulu', 'warning');
+                  return;
+                }
+                setIsSubmitting(true);
+                if (editingAbsensi.isManual) {
+                  const { isManual, ...data } = editingAbsensi;
+                  await addAbsensi(data);
+                } else {
+                  await updateAbsensi(editingAbsensi.id, { petugasList: editingAbsensi.petugasList });
+                }
+                setIsSubmitting(false);
+                setEditingAbsensi(null);
+              }}
+              className="flex flex-col h-full"
+            >
+              <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div>
+                    <p className="text-slate-400 mb-1">Tanggal <span className="text-red-500">*</span></p>
+                    {editingAbsensi.isManual ? (
+                      <input 
+                        type="date"
+                        required
+                        value={editingAbsensi.tanggal}
+                        onChange={(e) => setEditingAbsensi({...editingAbsensi, tanggal: e.target.value})}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 font-bold outline-none focus:ring-1 focus:ring-teal-500"
+                      />
+                    ) : (
+                      <p className="font-bold text-slate-700 dark:text-slate-200">{editingAbsensi.tanggal}</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-slate-400 mb-1">ULP <span className="text-red-500">*</span></p>
+                    {editingAbsensi.isManual ? (
+                      <select
+                        required
+                        value={editingAbsensi.ulpName}
+                        onChange={(e) => setEditingAbsensi({...editingAbsensi, ulpName: e.target.value, reguName: '', petugasList: []})}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1 py-1 font-bold outline-none focus:ring-1 focus:ring-teal-500"
+                      >
+                        <option value="">Pilih ULP</option>
+                        {ulpList.map(u => <option key={u.id} value={u.namaULP}>{u.namaULP}</option>)}
+                      </select>
+                    ) : (
+                      <p className="font-bold text-slate-700 dark:text-slate-200">{editingAbsensi.ulpName}</p>
+                    )}
+                  </div>
+                </div>
+
+                {editingAbsensi.isManual && (
+                  <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <p className="text-slate-400 mb-1 text-xs font-bold uppercase tracking-tighter">Pilih Regu <span className="text-red-500">*</span></p>
+                    <select
+                      required
+                      value={editingAbsensi.reguName}
+                      onChange={(e) => {
+                        const selectedReguName = e.target.value;
+                        const members = petugasList
+                          .filter(p => p.reguName === selectedReguName)
+                          .map(p => ({
+                            nama: p.nama,
+                            keterangan: 'HADIR'
+                          }));
+                        setEditingAbsensi({
+                          ...editingAbsensi, 
+                          reguName: selectedReguName,
+                          petugasList: members
+                        });
+                      }}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 font-bold text-xs outline-none focus:ring-1 focus:ring-teal-500"
+                    >
+                      <option value="">-- Pilih Regu --</option>
+                      {reguList
+                        .filter(r => !editingAbsensi.ulpName || r.ulpName === editingAbsensi.ulpName)
+                        .map(r => (
+                          <option key={r.id} value={r.namaRegu}>{r.namaRegu}</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Daftar Petugas & Status</p>
+                  {(editingAbsensi.petugasList || []).length === 0 && (
+                    <p className="text-[11px] text-slate-400 italic text-center py-2">Pilih Regu terlebih dahulu</p>
+                  )}
+                  {(editingAbsensi.petugasList || []).map((p: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{p.nama}</span>
+                      <select
+                        required
+                        value={p.keterangan || 'HADIR'}
+                        onChange={(e) => {
+                          const newList = [...(editingAbsensi.petugasList || [])];
+                          newList[i] = { ...newList[i], keterangan: e.target.value };
+                          setEditingAbsensi({ ...editingAbsensi, petugasList: newList });
+                        }}
+                        className="text-xs px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold focus:ring-2 focus:ring-[#005a9c] outline-none"
+                      >
+                        <option value="HADIR">HADIR</option>
+                        <option value="SAKIT">SAKIT</option>
+                        <option value="IZIN">IZIN</option>
+                        <option value="TIDAK HADIR">TIDAK HADIR</option>
+                        <option value="CUTI">CUTI</option>
+                        <option value="DINAS LUAR">DINAS LUAR</option>
+                        <option value="ALFA">ALFA</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingAbsensi(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-[#005a9c] text-white font-bold text-sm shadow-lg shadow-blue-500/20 hover:bg-[#004a80] transition-all disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Menyimpan...' : (editingAbsensi.isManual ? 'Tambah Absensi' : 'Simpan Perubahan')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

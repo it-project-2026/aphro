@@ -290,6 +290,7 @@ export const SettingAplikasiPage: React.FC = () => {
                 <Link className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
                   type="url"
+                  required
                   placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
                   value={gasWebAppUrl}
                   onChange={(e) => setGasWebAppUrl(e.target.value)}
@@ -451,6 +452,7 @@ export const SettingAplikasiPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                required
                 value={logoAplikasiUrl}
                 onChange={(e) => setLogoAplikasiUrl(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -463,6 +465,7 @@ export const SettingAplikasiPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                required
                 value={logoInstansiUrl}
                 onChange={(e) => setLogoInstansiUrl(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -475,6 +478,7 @@ export const SettingAplikasiPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                required
                 value={loginBgUrl}
                 onChange={(e) => setLoginBgUrl(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -503,6 +507,7 @@ export const SettingAplikasiPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                required
                 value={versiAplikasi}
                 onChange={(e) => setVersiAplikasi(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -527,6 +532,7 @@ export const SettingAplikasiPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                required
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
                 placeholder="6281234567890"
@@ -540,6 +546,7 @@ export const SettingAplikasiPage: React.FC = () => {
               </label>
               <input
                 type="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
@@ -552,6 +559,7 @@ export const SettingAplikasiPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                required
                 value={alamat}
                 onChange={(e) => setAlamat(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"

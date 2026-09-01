@@ -8,6 +8,8 @@ import {
   INITIAL_PETUGAS,
   INITIAL_USERS
 } from '../data/initialData';
+import { useSettings } from './SettingsContext';
+import { GASApiService } from '../services/gasApiService';
 
 interface MasterDataContextType {
   ulpList: ULP[];
@@ -68,66 +70,158 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     if (data.users) setUsers(data.users);
   }, [setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
 
-  const addULP = React.useCallback((data: Omit<ULP, 'id'>) => {
-    setUlpList(prev => [...prev, { ...data, id: 'ULP-' + Date.now() }]);
-  }, [setUlpList]);
+  const { settings } = useSettings();
 
-  const updateULP = React.useCallback((id: string, data: Partial<ULP>) => {
-    setUlpList(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
-  }, [setUlpList]);
+  const syncToGAS = React.useCallback(async (sheetName: any, action: 'save' | 'delete', itemOrId: any) => {
+    if (!settings.gasWebAppUrl) return;
+    
+    try {
+      if (action === 'save') {
+        // Map common fields for GAS to match spreadsheet columns
+        let mappedItem = { ...itemOrId };
+        if (sheetName === 'PETUGAS') {
+          mappedItem = {
+            ...itemOrId,
+            PetugasID: itemOrId.nip || itemOrId.id,
+            Username: itemOrId.nip || '',
+            NamaRegu: itemOrId.reguName || '',
+            ULP: itemOrId.ulpName || '',
+            NoHP: itemOrId.noHp || ''
+          };
+        } else if (sheetName === 'REGU_ROW') {
+          mappedItem = {
+            ...itemOrId,
+            KodeRegu: itemOrId.kodeRegu,
+            NamaRegu: itemOrId.namaRegu,
+            ULP: itemOrId.ulpName
+          };
+        } else if (sheetName === 'USERS') {
+          mappedItem = {
+            ...itemOrId,
+            UserID: itemOrId.nip || itemOrId.id,
+            Username: itemOrId.userName || itemOrId.nip || '',
+            Password: itemOrId.password || 'user123',
+            NamaRegu: itemOrId.reguName,
+            ULP: itemOrId.ulpName,
+            nip: itemOrId.nip,
+            name: itemOrId.name,
+            email: itemOrId.email,
+            phone: itemOrId.phone
+          };
+        }
+        await GASApiService.saveMasterData(settings.gasWebAppUrl, sheetName, mappedItem);
+      } else {
+        await GASApiService.deleteMasterData(settings.gasWebAppUrl, sheetName, itemOrId);
+      }
+    } catch (err) {
+      console.warn(`Sync ${sheetName} failed:`, err);
+    }
+  }, [settings.gasWebAppUrl]);
 
-  const deleteULP = React.useCallback((id: string) => {
+  const addULP = React.useCallback(async (data: Omit<ULP, 'id'>) => {
+    const newId = 'ULP-' + Date.now();
+    const newItem = { ...data, id: newId };
+    setUlpList(prev => [...prev, newItem]);
+    await syncToGAS('ULP', 'save', newItem);
+  }, [setUlpList, syncToGAS]);
+
+  const updateULP = React.useCallback(async (id: string, data: Partial<ULP>) => {
+    setUlpList(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...data } : item);
+      const target = updated.find(i => i.id === id);
+      if (target) syncToGAS('ULP', 'save', target);
+      return updated;
+    });
+  }, [setUlpList, syncToGAS]);
+
+  const deleteULP = React.useCallback(async (id: string) => {
     setUlpList(prev => prev.filter(item => item.id !== id));
-  }, [setUlpList]);
+    await syncToGAS('ULP', 'delete', id);
+  }, [setUlpList, syncToGAS]);
 
-  // Similar for others... (skipped for brevity but should be implemented)
-  const addPenyulang = React.useCallback((data: Omit<Penyulang, 'id'>) => {
-    setPenyulangList(prev => [...prev, { ...data, id: 'PYL-' + Date.now() }]);
-  }, [setPenyulangList]);
+  const addPenyulang = React.useCallback(async (data: Omit<Penyulang, 'id'>) => {
+    const newId = 'PYL-' + Date.now();
+    const newItem = { ...data, id: newId };
+    setPenyulangList(prev => [...prev, newItem]);
+    await syncToGAS('PENYULANG', 'save', newItem);
+  }, [setPenyulangList, syncToGAS]);
 
-  const updatePenyulang = React.useCallback((id: string, data: Partial<Penyulang>) => {
-    setPenyulangList(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
-  }, [setPenyulangList]);
+  const updatePenyulang = React.useCallback(async (id: string, data: Partial<Penyulang>) => {
+    setPenyulangList(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...data } : item);
+      const target = updated.find(i => i.id === id);
+      if (target) syncToGAS('PENYULANG', 'save', target);
+      return updated;
+    });
+  }, [setPenyulangList, syncToGAS]);
 
-  const deletePenyulang = React.useCallback((id: string) => {
+  const deletePenyulang = React.useCallback(async (id: string) => {
     setPenyulangList(prev => prev.filter(item => item.id !== id));
-  }, [setPenyulangList]);
+    await syncToGAS('PENYULANG', 'delete', id);
+  }, [setPenyulangList, syncToGAS]);
 
-  const addRegu = React.useCallback((data: Omit<ReguROW, 'id'>) => {
-    setReguList(prev => [...prev, { ...data, id: 'RGU-' + Date.now() }]);
-  }, [setReguList]);
+  const addRegu = React.useCallback(async (data: Omit<ReguROW, 'id'>) => {
+    const newId = 'RGU-' + Date.now();
+    const newItem = { ...data, id: newId };
+    setReguList(prev => [...prev, newItem]);
+    await syncToGAS('REGU_ROW', 'save', newItem);
+  }, [setReguList, syncToGAS]);
 
-  const updateRegu = React.useCallback((id: string, data: Partial<ReguROW>) => {
-    setReguList(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
-  }, [setReguList]);
+  const updateRegu = React.useCallback(async (id: string, data: Partial<ReguROW>) => {
+    setReguList(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...data } : item);
+      const target = updated.find(i => i.id === id);
+      if (target) syncToGAS('REGU_ROW', 'save', target);
+      return updated;
+    });
+  }, [setReguList, syncToGAS]);
 
-  const deleteRegu = React.useCallback((id: string) => {
+  const deleteRegu = React.useCallback(async (id: string) => {
     setReguList(prev => prev.filter(item => item.id !== id));
-  }, [setReguList]);
+    await syncToGAS('REGU_ROW', 'delete', id);
+  }, [setReguList, syncToGAS]);
 
-  const addPetugas = React.useCallback((data: Omit<Petugas, 'id'>) => {
-    setPetugasList(prev => [...prev, { ...data, id: 'PTG-' + Date.now() }]);
-  }, [setPetugasList]);
+  const addPetugas = React.useCallback(async (data: Omit<Petugas, 'id'>) => {
+    const newId = 'PTG-' + Date.now();
+    const newItem = { ...data, id: newId };
+    setPetugasList(prev => [...prev, newItem]);
+    await syncToGAS('PETUGAS', 'save', newItem);
+  }, [setPetugasList, syncToGAS]);
 
-  const updatePetugas = React.useCallback((id: string, data: Partial<Petugas>) => {
-    setPetugasList(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
-  }, [setPetugasList]);
+  const updatePetugas = React.useCallback(async (id: string, data: Partial<Petugas>) => {
+    setPetugasList(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...data } : item);
+      const target = updated.find(i => i.id === id);
+      if (target) syncToGAS('PETUGAS', 'save', target);
+      return updated;
+    });
+  }, [setPetugasList, syncToGAS]);
 
-  const deletePetugas = React.useCallback((id: string) => {
+  const deletePetugas = React.useCallback(async (id: string) => {
     setPetugasList(prev => prev.filter(item => item.id !== id));
-  }, [setPetugasList]);
+    await syncToGAS('PETUGAS', 'delete', id);
+  }, [setPetugasList, syncToGAS]);
 
-  const addUser = React.useCallback((data: Omit<User, 'id'>) => {
-    setUsers(prev => [...prev, { ...data, id: 'usr-' + Date.now() }]);
-  }, [setUsers]);
+  const addUser = React.useCallback(async (data: Omit<User, 'id'>) => {
+    const newId = 'usr-' + Date.now();
+    const newItem = { ...data, id: newId };
+    setUsers(prev => [...prev, newItem]);
+    await syncToGAS('USERS', 'save', newItem);
+  }, [setUsers, syncToGAS]);
 
-  const updateUser = React.useCallback((id: string, data: Partial<User>) => {
-    setUsers(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
-  }, [setUsers]);
+  const updateUser = React.useCallback(async (id: string, data: Partial<User>) => {
+    setUsers(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...data } : item);
+      const target = updated.find(i => i.id === id);
+      if (target) syncToGAS('USERS', 'save', target);
+      return updated;
+    });
+  }, [setUsers, syncToGAS]);
 
-  const deleteUser = React.useCallback((id: string) => {
+  const deleteUser = React.useCallback(async (id: string) => {
     setUsers(prev => prev.filter(item => item.id !== id));
-  }, [setUsers]);
+    await syncToGAS('USERS', 'delete', id);
+  }, [setUsers, syncToGAS]);
 
   return (
     <MasterDataContext.Provider value={{

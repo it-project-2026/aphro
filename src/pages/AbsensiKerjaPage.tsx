@@ -437,6 +437,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                       </span>
                       <input
                         type="text"
+                        required
                         value={petugas.nama}
                         disabled={hasDoneAbsensiMasuk}
                         onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
@@ -448,6 +449,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                     <div className="flex-1">
                       <input
                         type="text"
+                        required
                         value={petugas.keterangan}
                         disabled={hasDoneAbsensiMasuk}
                         onChange={(e) => handlePetugasStatusChange(idx, e.target.value)}

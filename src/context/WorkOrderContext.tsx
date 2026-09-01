@@ -14,8 +14,8 @@ interface WorkOrderContextType {
   setSelectedWoIdForRealisasi: (id: string | null) => void;
   setWorkOrders: React.Dispatch<React.SetStateAction<WorkOrder[]>>;
   addWorkOrder: (wo: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WorkOrder>;
-  updateWorkOrder: (id: string, wo: Partial<WorkOrder>) => void;
-  deleteWorkOrder: (id: string) => void;
+  updateWorkOrder: (id: string, wo: Partial<WorkOrder>) => Promise<void>;
+  deleteWorkOrder: (id: string) => Promise<void>;
 }
 
 const WorkOrderContext = React.createContext<WorkOrderContextType | undefined>(undefined);

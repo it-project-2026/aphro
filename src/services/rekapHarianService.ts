@@ -648,17 +648,7 @@ export class RekapHarianService {
             const matchUlp = woUlp.includes(rowUlpClean) || rowUlpClean.includes(woUlp) || woTimFull.includes(rowUlpClean);
 
             if (matchUlp && matchTim) {
-              // SMART ALIGNMENT: 
-              // Try to find if this WO has trees cut on a specific day.
-              // If so, we move the KMS to that day to align with trees.
-              const penyClean = normalize(wo.penyulangName || 'GENERAL');
               let targetDayKey = String(parts.d).padStart(2, '0');
-              
-              if (activityDatesByPenyulang[penyClean] && activityDatesByPenyulang[penyClean].size > 0) {
-                // Use the first day of activity found for this penyulang in this month
-                const dates = Array.from(activityDatesByPenyulang[penyClean]).sort();
-                targetDayKey = dates[0];
-              }
 
               if (!updatedDaily[targetDayKey]) {
                 updatedDaily[targetDayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };

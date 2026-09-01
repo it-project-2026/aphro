@@ -369,6 +369,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
                 PEKERJAAN <span className="text-red-600">*</span>
               </label>
               <select
+                required
                 value={pekerjaan || 'NORMAL'}
                 onChange={(e) => {
                   const newPekerjaan = e.target.value as 'NORMAL' | 'GOROW';
@@ -435,6 +436,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
                 ULP <span className="text-rose-500">*</span>
               </label>
               <select
+                required
                 value={ulpName || ''}
                 onChange={(e) => handleUlpChange(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
@@ -453,6 +455,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
                 <span className="text-slate-400 font-normal">(Sesuai ULP dipilih)</span>
               </label>
               <select
+                required
                 value={penyulangName || ''}
                 onChange={(e) => setPenyulangName(e.target.value)}
                 className={`w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border transition-colors ${
@@ -504,6 +507,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               </span>
             </label>
             <select
+              required
               value={reguName || ''}
               onChange={(e) => handleReguChange(e.target.value)}
               className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
@@ -547,6 +551,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
                   SATUAN <span className="text-rose-500">*</span>
                 </label>
                 <select
+                  required
                   value={satuan || 'KMS'}
                   onChange={(e) => setSatuan(e.target.value as 'KMS' | 'GAWANG')}
                   className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
@@ -566,6 +571,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               </label>
               <input
                 type="text"
+                required
                 placeholder="Titik Awal Pekerjaan"
                 value={woMulai || ''}
                 onChange={(e) => setWoMulai(e.target.value)}
@@ -579,6 +585,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               </label>
               <input
                 type="text"
+                required
                 placeholder="Titik Akhir Pekerjaan"
                 value={woAkhir || ''}
                 onChange={(e) => setWoAkhir(e.target.value)}
@@ -593,6 +600,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               STATUS <span className="text-rose-500">*</span>
             </label>
             <select
+              required
               value={status || 'BELUM SELESAI'}
               onChange={(e) => setStatus(e.target.value as WOStatus)}
               className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-[#00A2B9]"
