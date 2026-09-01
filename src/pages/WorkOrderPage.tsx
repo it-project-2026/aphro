@@ -41,7 +41,7 @@ interface WorkOrderPageProps {
 export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) => {
   const { user: currentUser } = useAuth();
   const { workOrders, deleteWorkOrder } = useWorkOrders();
-  const { ulpList, penyulangList } = useMasterData();
+  const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { setActiveTab, setSelectedWoIdForRealisasi } = useUI();
   const { showToast } = useToast();
@@ -76,6 +76,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
+  const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterDate, setFilterDate] = useState('');
 
@@ -136,10 +137,13 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       cleanStr(wo.penyulangName) === cleanStr(filterPenyulang) ||
       cleanStr(wo.penyulangId) === cleanStr(filterPenyulang);
       
+    const matchesRegu = filterRegu === 'ALL' || 
+      cleanStr(wo.reguName) === cleanStr(filterRegu);
+      
     const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
     const matchesDate = !filterDate || (wo.tanggal && wo.tanggal.includes(filterDate));
 
-    return matchesSearch && matchesUlp && matchesPenyulang && matchesStatus && matchesDate;
+    return matchesSearch && matchesUlp && matchesPenyulang && matchesRegu && matchesStatus && matchesDate;
   }).sort((a, b) => {
     // 1. Sort by Date (Newest to Oldest)
     const dateA = new Date(a.tanggal || 0).getTime();
@@ -202,13 +206,13 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       {/* Filter Control Bar */}
       {!isUserRole && (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search Field */}
             <div className="relative lg:col-span-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Cari WO, Lokasi, Petugas..."
+              placeholder="Cari WO, Lokasi..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
@@ -247,6 +251,24 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                 .map((p, idx) => (
                 <option key={`${p.id}-${idx}`} value={p.namaPenyulang}>
                   {p.namaPenyulang}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Regu */}
+          <div>
+            <select
+              value={filterRegu}
+              onChange={(e) => setFilterRegu(e.target.value)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
+            >
+              <option value="ALL">Semua Regu</option>
+              {reguList
+                .filter(r => filterUlp === 'ALL' || cleanStr(r.ulpName) === cleanStr(filterUlp))
+                .map((r, idx) => (
+                <option key={`${r.id}-${idx}`} value={r.namaRegu}>
+                  {r.namaRegu}
                 </option>
               ))}
             </select>

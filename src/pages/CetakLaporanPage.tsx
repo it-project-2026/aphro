@@ -188,7 +188,7 @@ export const CetakLaporanPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { realisasiList } = useRealisasi();
   const { workOrders } = useWorkOrders();
-  const { ulpList, penyulangList } = useMasterData();
+  const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { syncWithGAS, isSyncing } = useGASSync();
   const { showToast } = useToast();
@@ -196,6 +196,7 @@ export const CetakLaporanPage: React.FC = () => {
   const [activeReportTab, setActiveReportTab] = useState<'foto' | 'peta'>('foto');
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
+  const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterNoWo, setFilterNoWo] = useState('ALL');
   const [latestMapImage, setLatestMapImage] = useState<string | null>(null);
   const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
@@ -257,7 +258,10 @@ export const CetakLaporanPage: React.FC = () => {
         cleanStr(wo.ulpId) === cleanStr(filterUlp) ||
         cleanStr(wo.ulpName) === cleanStr(filterUlp) ||
         (wo.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
-      if (matchesUlp && wo.nomorWO) {
+      
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(wo.reguName) === cleanStr(filterRegu);
+
+      if (matchesUlp && matchesRegu && wo.nomorWO) {
         woSet.add(wo.nomorWO);
       }
     });
@@ -271,7 +275,10 @@ export const CetakLaporanPage: React.FC = () => {
         cleanStr(wo?.ulpId) === cleanStr(filterUlp) ||
         (rel.ulpName && targetUlpName && cleanStr(rel.ulpName) === cleanStr(targetUlpName)) ||
         (wo?.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
-      if (matchesUlp) {
+      
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(rel.reguName) === cleanStr(filterRegu) || cleanStr(wo?.reguName) === cleanStr(filterRegu);
+
+      if (matchesUlp && matchesRegu) {
         if (rel.nomorWO) woSet.add(rel.nomorWO);
         if (wo?.nomorWO) woSet.add(wo.nomorWO);
       }
@@ -321,9 +328,11 @@ export const CetakLaporanPage: React.FC = () => {
         cleanStr(wo?.nomorWO) === cleanStr(filterNoWo) ||
         cleanStr(rel.workOrderId) === cleanStr(filterNoWo);
 
-      return matchesUlp && matchesPenyulang && matchesNoWo;
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(rel.reguName) === cleanStr(filterRegu) || cleanStr(wo?.reguName) === cleanStr(filterRegu);
+
+      return matchesUlp && matchesPenyulang && matchesNoWo && matchesRegu;
     });
-  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterNoWo, isAdmbktUser, ulpList, penyulangList]);
+  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterNoWo, filterRegu, isAdmbktUser, ulpList, penyulangList]);
 
   const filteredWOs = useMemo(() => {
     return workOrders.filter((wo) => {
@@ -358,9 +367,11 @@ export const CetakLaporanPage: React.FC = () => {
         cleanStr(wo.nomorWO) === cleanStr(filterNoWo) ||
         cleanStr(wo.id) === cleanStr(filterNoWo);
 
-      return matchesUlp && matchesPenyulang && matchesNoWo;
+      const matchesRegu = filterRegu === 'ALL' || cleanStr(wo.reguName) === cleanStr(filterRegu);
+
+      return matchesUlp && matchesPenyulang && matchesNoWo && matchesRegu;
     });
-  }, [workOrders, filterUlp, filterPenyulang, filterNoWo, isAdmbktUser, currentUser, ulpList, penyulangList]);
+  }, [workOrders, filterUlp, filterPenyulang, filterNoWo, filterRegu, isAdmbktUser, currentUser, ulpList, penyulangList]);
 
   const selectedUlpObj = ulpList.find((u) => u.id === filterUlp || u.namaULP === filterUlp);
   const selectedUlpName = selectedUlpObj
@@ -703,6 +714,7 @@ export const CetakLaporanPage: React.FC = () => {
                 onChange={(e) => {
                   setFilterUlp(e.target.value);
                   setFilterPenyulang('ALL');
+                  setFilterRegu('ALL');
                   setFilterNoWo('ALL');
                 }}
                 className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[140px]"
@@ -724,6 +736,21 @@ export const CetakLaporanPage: React.FC = () => {
                 {availablePenyulangList.map((p, idx) => (
                   <option key={`${p.id}-${idx}`} value={p.id}>
                     {p.namaPenyulang}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={filterRegu}
+                onChange={(e) => setFilterRegu(e.target.value)}
+                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[140px]"
+              >
+                <option value="ALL">Semua Regu</option>
+                {reguList
+                  .filter(r => filterUlp === 'ALL' || cleanStr(r.ulpId) === cleanStr(filterUlp) || cleanStr(r.ulpName) === cleanStr(filterUlp))
+                  .map((r, idx) => (
+                  <option key={`${r.id}-${idx}`} value={r.namaRegu}>
+                    {r.namaRegu}
                   </option>
                 ))}
               </select>

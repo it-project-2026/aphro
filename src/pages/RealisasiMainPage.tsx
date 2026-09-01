@@ -26,7 +26,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   const { user: currentUser } = useAuth();
   const { realisasiList, deleteRealisasi } = useRealisasi();
   const { workOrders } = useWorkOrders();
-  const { ulpList, penyulangList } = useMasterData();
+  const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
 
   const draggable = useDraggableScroll();
@@ -42,6 +42,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   // Filters for History Tab
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
+  const [filterRegu, setFilterRegu] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   const isAdmbktUser = useMemo(() => {
@@ -79,6 +80,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
 
       const matchesUlp = filterUlp === 'ALL' || rel.ulpName === filterUlp || wo?.ulpName === filterUlp;
       const matchesPenyulang = filterPenyulang === 'ALL' || rel.penyulangName === filterPenyulang || wo?.penyulangName === filterPenyulang;
+      const matchesRegu = filterRegu === 'ALL' || rel.reguName === filterRegu || wo?.reguName === filterRegu;
       
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = !searchQuery || 
@@ -87,9 +89,9 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         (rel.noTiang || '').toLowerCase().includes(searchLower) ||
         (rel.lokasiKerja || '').toLowerCase().includes(searchLower);
 
-      return matchesUlp && matchesPenyulang && matchesSearch;
+      return matchesUlp && matchesPenyulang && matchesRegu && matchesSearch;
     });
-  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, searchQuery, isAdmbktUser]);
+  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterRegu, searchQuery, isAdmbktUser]);
 
   const selectedAreaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
   const selectedUlpName = filterUlp !== 'ALL' ? filterUlp : (filteredRealisasi[0]?.ulpName || 'UNIT LAYANAN');
@@ -174,14 +176,14 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
           <div className="space-y-6">
             {/* Filters Bar for History */}
             <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm no-print">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Cari Data</label>
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="No WO, Tiang, Lokasi..."
+                      placeholder="No WO, Lokasi..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -196,6 +198,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                     onChange={(e) => {
                       setFilterUlp(e.target.value);
                       setFilterPenyulang('ALL');
+                      setFilterRegu('ALL');
                     }}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
                   >
@@ -221,6 +224,24 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                       .map((p, idx) => (
                       <option key={`${p.id}-${idx}`} value={p.namaPenyulang}>
                         {p.namaPenyulang}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter Regu</label>
+                  <select
+                    value={filterRegu}
+                    onChange={(e) => setFilterRegu(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
+                  >
+                    <option value="ALL">Semua Regu</option>
+                    {reguList
+                      .filter(r => filterUlp === 'ALL' || r.ulpName === filterUlp)
+                      .map((r, idx) => (
+                      <option key={`${r.id}-${idx}`} value={r.namaRegu}>
+                        {r.namaRegu}
                       </option>
                     ))}
                   </select>

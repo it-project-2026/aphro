@@ -121,12 +121,30 @@ export class GASApiService {
     try {
       const mappedWo = {
         ...workOrder,
-        TOTAL_REALISASI: (workOrder.status || '').toUpperCase() === 'SELESAI' ? (workOrder.totalRealisasi || 0) : 0,
-        SATUAN_TOTAL_REALISASI: (workOrder.status || '').toUpperCase() === 'SELESAI' ? (workOrder.satuanTotalRealisasi || workOrder.satuan || '') : '',
+        // Match Spreadsheet Headers exactly (Case Sensitive in some GAS scripts)
+        NOMOR_WO: workOrder.nomorWO || '',
+        TANGGAL: workOrder.tanggal || '',
+        ULP: workOrder.ulpName || '',
+        PENYULANG: workOrder.penyulangName || '',
+        VOLUME: Number(workOrder.volumePekerjaan || 0).toFixed(2),
+        SATUAN: workOrder.satuan || 'KMS',
+        REGU_ROW: workOrder.reguName || '',
+        PETUGAS: workOrder.petugasName || '',
+        JENIS_PEKERJAAN: workOrder.jenisPekerjaan || '',
+        STATUS: (workOrder.status || 'BELUM SELESAI').toUpperCase(),
+        DEADLINE: workOrder.deadline || '',
+        WO_AWAL: workOrder.woMulai || '',
+        WO_AKHIR: workOrder.woAkhir || '',
+        // Fix 46265 bug: Explicitly send "0.00" string for non-completed to avoid GAS truthy/date bug
+        TOTAL_REALISASI: (workOrder.status || '').toUpperCase() === 'SELESAI' 
+          ? Number(workOrder.totalRealisasi || 0).toFixed(2) 
+          : "0.00",
+        SATUAN_TOTAL_REALISASI: (workOrder.status || '').toUpperCase() === 'SELESAI' 
+          ? (workOrder.satuanTotalRealisasi || workOrder.satuan || '') 
+          : '',
         LOKASI_START: workOrder.lokasiStart || '',
         LOKASI_FINISH: workOrder.lokasiFinish || '',
-        WO_MULAI: workOrder.woMulai || '',
-        WO_AKHIR: workOrder.woAkhir || '',
+        CREATED_AT: workOrder.createdAt || new Date().toISOString(),
       };
 
       const response = await fetch(gasUrl, {
@@ -336,12 +354,30 @@ export class GASApiService {
     try {
       const mappedWo = {
         ...wo,
-        TOTAL_REALISASI: (wo.status || '').toUpperCase() === 'SELESAI' ? (wo.totalRealisasi || 0) : 0,
-        SATUAN_TOTAL_REALISASI: (wo.status || '').toUpperCase() === 'SELESAI' ? (wo.satuanTotalRealisasi || '') : '',
+        // Match Spreadsheet Headers exactly (Case Sensitive in some GAS scripts)
+        NOMOR_WO: wo.nomorWO || '',
+        TANGGAL: wo.tanggal || '',
+        ULP: wo.ulpName || '',
+        PENYULANG: wo.penyulangName || '',
+        VOLUME: Number(wo.volumePekerjaan || 0).toFixed(2),
+        SATUAN: wo.satuan || 'KMS',
+        REGU_ROW: wo.reguName || '',
+        PETUGAS: wo.petugasName || '',
+        JENIS_PEKERJAAN: wo.jenisPekerjaan || '',
+        STATUS: (wo.status || 'BELUM SELESAI').toUpperCase(),
+        DEADLINE: wo.deadline || '',
+        WO_AWAL: wo.woMulai || '',
+        WO_AKHIR: wo.woAkhir || '',
+        // Fix 46265 bug: Explicitly send "0.00" string for non-completed to avoid GAS truthy/date bug
+        TOTAL_REALISASI: (wo.status || '').toUpperCase() === 'SELESAI' 
+          ? Number(wo.totalRealisasi || 0).toFixed(2) 
+          : "0.00",
+        SATUAN_TOTAL_REALISASI: (wo.status || '').toUpperCase() === 'SELESAI' 
+          ? (wo.satuanTotalRealisasi || '') 
+          : '',
         LOKASI_START: wo.lokasiStart || '',
         LOKASI_FINISH: wo.lokasiFinish || '',
-        WO_MULAI: wo.woMulai || '',
-        WO_AKHIR: wo.woAkhir || '',
+        CREATED_AT: wo.createdAt || '', // Should already exist on update
       };
 
       const response = await fetch(gasUrl, {
