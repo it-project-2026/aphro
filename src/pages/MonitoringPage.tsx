@@ -264,65 +264,50 @@ export const MonitoringPage: React.FC = () => {
   }, [filteredWOs]);
 
   const activeReguLocations = useMemo(() => {
-    // Sesuai Tanggal saat Login (Today)
-    const today = getLocalDateTimeString().slice(0, 10);
-    
-    // 1. Ambil semua nama regu unik dari Absensi dan Realisasi hari ini
-    const activeFromAbsensi = absensiList
-      .filter(a => normalizeDateISO(a.tanggal || a.createdAt) === today)
-      .map(a => (a.reguName || '').trim());
-      
-    const activeFromRealisasi = realisasiList
-      .filter(r => normalizeDateISO(r.tanggalRealisasi || r.createdAt) === today)
-      .map(r => (r.reguName || '').trim());
-      
-    const allActiveNames = Array.from(new Set([...activeFromAbsensi, ...activeFromRealisasi])).filter(Boolean);
+    // 1. Get unique Regu names from the CURRENTLY FILTERED Work Orders
+    const reguNamesFromWOs = Array.from(
+      new Set(filteredWOs.map(wo => (wo.reguName || '').trim()))
+    ).filter(Boolean);
 
-    // 2. Cari lokasi terakhir untuk setiap regu aktif tersebut
-    return allActiveNames.map(name => {
-      // Prioritaskan Realisasi (lokasi kerja)
+    if (reguNamesFromWOs.length === 0) return [];
+
+    // 2. For each regu, find their latest position from Realisasi or Absensi (any date)
+    return reguNamesFromWOs.map(name => {
+      const targetName = name.toUpperCase();
+
+      // Find latest realization with coordinates
       const latestRel = realisasiList
-        .filter(r => {
-          const rName = (r.reguName || '').trim().toUpperCase();
-          const targetName = (name || '').trim().toUpperCase();
-          const rDate = normalizeDateISO(r.tanggalRealisasi || r.createdAt);
-          return rName === targetName && rDate === today && r.latitude && r.longitude;
-        })
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        .filter(r => (r.reguName || '').trim().toUpperCase() === targetName && r.latitude && r.longitude)
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
 
       if (latestRel) {
         return {
           name,
           lat: latestRel.latitude,
           lon: latestRel.longitude,
-          lastUpdate: latestRel.createdAt,
+          lastUpdate: latestRel.createdAt || latestRel.tanggalRealisasi,
           type: 'Realisasi'
         };
       }
 
-      // Fallback ke Absensi (lokasi masuk)
+      // Fallback to latest attendance with coordinates
       const latestAbs = absensiList
-        .filter(a => {
-          const aName = (a.reguName || '').trim().toUpperCase();
-          const targetName = (name || '').trim().toUpperCase();
-          const aDate = normalizeDateISO(a.tanggal || a.createdAt);
-          return aName === targetName && aDate === today && a.latitude && a.longitude;
-        })
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        .filter(a => (a.reguName || '').trim().toUpperCase() === targetName && a.latitude && a.longitude)
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
 
       if (latestAbs) {
         return {
           name,
           lat: latestAbs.latitude,
           lon: latestAbs.longitude,
-          lastUpdate: latestAbs.createdAt,
+          lastUpdate: latestAbs.createdAt || latestAbs.tanggal,
           type: 'Absensi'
         };
       }
-      
+
       return null;
     }).filter(Boolean);
-  }, [absensiList, realisasiList]);
+  }, [filteredWOs, absensiList, realisasiList]);
 
   // Helper component to handle map bounds/zoom
   const MapBoundsHandler = ({ locations }: { locations: any[] }) => {
@@ -686,6 +671,7 @@ export const MonitoringPage: React.FC = () => {
                     <TileLayer
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      crossOrigin="anonymous"
                     />
 
                     {mapPolylinePositions.length > 1 && (
