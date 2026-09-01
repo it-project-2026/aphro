@@ -61,8 +61,7 @@ export class GASApiService {
         return result.status === 'success' || !!result.message;
       }
       return false;
-    } catch (err) {
-      console.warn('GAS Connection test failed:', err);
+    } catch {
       return false;
     }
   }

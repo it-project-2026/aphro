@@ -4,16 +4,12 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
 import './index.css';
 
-// Register Service Worker for Firebase Messaging
-if ('serviceWorker' in navigator) {
+// Register Service Worker for PWA / Offline caching
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/firebase-messaging-sw.js')
-      .then(registration => {
-        console.log('FCM Service Worker registered:', registration.scope);
-      })
-      .catch(err => {
-        console.log('FCM Service Worker registration failed:', err);
-      });
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Gracefully ignore SW registration errors in dev/sandbox iframe
+    });
   });
 }
 

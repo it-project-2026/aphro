@@ -16,7 +16,6 @@ export const useNotifications = () => {
         try {
           const token = await requestForToken();
           if (token) {
-            console.log('FCM Token retrieved, saving to Firestore...');
             const tokenRef = doc(db, 'fcm_tokens', token);
             await setDoc(tokenRef, {
               token,
@@ -24,10 +23,9 @@ export const useNotifications = () => {
               reguName: currentUser.reguName || null,
               updatedAt: new Date().toISOString()
             }, { merge: true });
-            console.log('FCM Token saved successfully.');
           }
-        } catch (error) {
-          console.error('Error setting up notifications:', error);
+        } catch {
+          // Graceful handling if FCM token storage fails in local/preview mode
         }
       };
 

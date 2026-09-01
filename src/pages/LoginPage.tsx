@@ -54,9 +54,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   useEffect(() => {
     if (!hasSyncedLoginRef.current) {
       hasSyncedLoginRef.current = true;
-      syncWithGAS().catch((err) => {
-        console.warn('Login auto sync error:', err);
-      });
+      syncWithGAS(undefined, true).catch(() => {});
     }
   }, [syncWithGAS]);
 
@@ -82,7 +80,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           
           // Trigger automatic sync after login
           if (settings.gasWebAppUrl && navigator.onLine) {
-            syncWithGAS().catch(e => console.warn('Sync after GAS login error:', e));
+            syncWithGAS(undefined, true).catch(() => {});
           }
 
           const isAdm = (authenticatedUser.role || '').toUpperCase() === 'ADM' || (authenticatedUser.userName || authenticatedUser.nip || authenticatedUser.id || '').toLowerCase() === 'admbkt';
@@ -104,8 +102,8 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             return;
           }
         }
-      } catch (err) {
-        console.warn('Direct GAS login call error, falling back to synced local users:', err);
+      } catch {
+        // Fall back gracefully to local users list
       }
     }
 
@@ -121,7 +119,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     // If not found locally and GAS Web App URL is configured, try syncing live from Spreadsheet once
     if (!foundUser && settings.gasWebAppUrl && navigator.onLine) {
       try {
-        await syncWithGAS();
+        await syncWithGAS(undefined, true);
         foundUser = users.find(u => 
           (u.userName || '').trim().toLowerCase() === safeUsername ||
           (u.nip || '').trim().toLowerCase() === safeUsername || 
@@ -129,8 +127,8 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           (u.name || '').trim().toLowerCase() === safeUsername ||
           (u.email || '').trim().toLowerCase() === safeUsername
         );
-      } catch (err) {
-        console.warn('Live sync during login failed:', err);
+      } catch {
+        // Continue to check local
       }
     }
 
@@ -157,7 +155,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
 
       // Trigger automatic sync after login
       if (settings.gasWebAppUrl && navigator.onLine) {
-        syncWithGAS().catch(e => console.warn('Sync after local login error:', e));
+        syncWithGAS(undefined, true).catch(() => {});
       }
 
       const isAdm = (foundUser.role || '').toUpperCase() === 'ADM' || (foundUser.userName || foundUser.nip || foundUser.id || '').toLowerCase() === 'admbkt';

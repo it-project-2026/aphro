@@ -41,9 +41,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   useEffect(() => {
     if (settings.gasWebAppUrl && !hasSyncedRef.current) {
       hasSyncedRef.current = true;
-      syncWithGAS().catch((err) => {
-        console.warn('Auto sync error on welcome page:', err);
-      });
+      syncWithGAS(undefined, true).catch(() => {});
     }
   }, [settings.gasWebAppUrl, syncWithGAS]);
 
