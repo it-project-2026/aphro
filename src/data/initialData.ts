@@ -14,7 +14,7 @@ import {
 import { createPlaceholderPhoto } from '../utils/watermark';
 import { getActiveGasConfig } from '../config/gasConfig';
 
-export const APP_LOGO_URL = 'https://lh3.googleusercontent.com/d/1V2zz3q_3umHCaTqeJN6u7kbhGdLrK4NE';
+export const APP_LOGO_URL = '/icon.png';
 
 export const INITIAL_ABSENSI: Absensi[] = [];
 
