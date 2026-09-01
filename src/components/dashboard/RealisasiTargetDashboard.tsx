@@ -105,8 +105,8 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
                         {item.name}
                       </span>
                       <div className="flex gap-6 text-[9px] font-black">
-                        <span className="text-[#008396] w-8 text-right">{item.realisasi}</span>
-                        <span className="text-slate-400 w-8 text-right">{item.target}</span>
+                        <span className="text-[#008396] w-8 text-right">{Number(item.realisasi).toFixed(2)}</span>
+                        <span className="text-slate-400 w-8 text-right">{Number(item.target).toFixed(2)}</span>
                       </div>
                     </div>
                     <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative">
@@ -116,14 +116,14 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
                       >
                         {item.realisasi > 5 && (
                           <span className="text-[8px] font-black text-white leading-none">
-                            {item.realisasi}
+                            {Number(item.realisasi).toFixed(2)}
                           </span>
                         )}
                       </div>
                       {item.realisasi <= 5 && (
                         <div className="absolute inset-0 flex items-center pl-2">
                            <span className="text-[8px] font-black text-teal-700 leading-none">
-                            {item.realisasi}
+                            {Number(item.realisasi).toFixed(2)}
                           </span>
                         </div>
                       )}
@@ -140,10 +140,10 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
                 <span className="font-black tracking-widest text-[11px]">TOTAL REALISASI</span>
               </div>
               <div className="flex items-center gap-8">
-                <span className="text-xl font-black">{totalRealisasi}</span>
+                <span className="text-xl font-black">{totalRealisasi.toFixed(2)}</span>
                 <div className="flex items-center gap-3 pl-6 border-l border-white/20">
                   <span className="text-[10px] font-bold text-teal-200 tracking-widest">TOTAL TARGET</span>
-                  <span className="text-xl font-black">{totalTarget.toFixed(1)}</span>
+                  <span className="text-xl font-black">{totalTarget.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -165,14 +165,14 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
                   <Activity className="w-5 h-5 text-[#00A2B9]" />
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">TOTAL<br/>REALISASI</p>
-                <p className="text-xl font-black text-teal-700">{totalRealisasi}</p>
+                <p className="text-xl font-black text-teal-700">{totalRealisasi.toFixed(2)}</p>
               </div>
               <div className="text-center space-y-1 border-x border-slate-100 px-2">
                 <div className="flex justify-center mb-2">
                   <Target className="w-5 h-5 text-rose-500" />
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">TOTAL<br/>TARGET</p>
-                <p className="text-xl font-black text-teal-700">{totalTarget.toFixed(1)}</p>
+                <p className="text-xl font-black text-teal-700">{totalTarget.toFixed(2)}</p>
               </div>
               <div className="text-center space-y-1">
                 <div className="flex justify-center mb-2">
@@ -207,14 +207,14 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
                   <div className="w-3 h-3 rounded-full bg-teal-600" />
                   <span className="text-slate-600">Realisasi</span>
                 </div>
-                <span className="text-slate-900">{totalRealisasi} ({percentage}%)</span>
+                <span className="text-slate-900">{totalRealisasi.toFixed(2)} ({percentage}%)</span>
               </div>
               <div className="flex items-center justify-between text-xs font-bold">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-slate-200" />
                   <span className="text-slate-600">Sisa Target</span>
                 </div>
-                <span className="text-slate-900">{(totalTarget - totalRealisasi).toFixed(1)} ({100 - percentage}%)</span>
+                <span className="text-slate-900">{(totalTarget - totalRealisasi).toFixed(2)} ({100 - percentage}%)</span>
               </div>
             </div>
           </div>
