@@ -126,8 +126,13 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       (wo.petugasName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (wo.penyulangName || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp;
-    const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang;
+    const matchesUlp = filterUlp === 'ALL' || 
+      (wo.ulpName || '').toLowerCase() === filterUlp.toLowerCase() || 
+      (wo.ulpId || '').toLowerCase() === filterUlp.toLowerCase();
+    
+    const matchesPenyulang = filterPenyulang === 'ALL' || 
+      (wo.penyulangName || '').toLowerCase() === filterPenyulang.toLowerCase() ||
+      (wo.penyulangId || '').toLowerCase() === filterPenyulang.toLowerCase();
     const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
     const matchesDate = !filterDate || wo.tanggal === filterDate;
 
@@ -216,7 +221,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
             >
               <option value="ALL">Semua ULP</option>
               {ulpList.map((u, idx) => (
-                <option key={`${u.id}-${idx}`} value={u.id}>
+                <option key={`${u.id}-${idx}`} value={u.namaULP}>
                   {u.namaULP}
                 </option>
               ))}
@@ -232,7 +237,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
             >
               <option value="ALL">Semua Penyulang</option>
               {penyulangList.map((p, idx) => (
-                <option key={`${p.id}-${idx}`} value={p.id}>
+                <option key={`${p.id}-${idx}`} value={p.namaPenyulang}>
                   {p.namaPenyulang}
                 </option>
               ))}
