@@ -33,8 +33,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem('aphro_user', JSON.stringify(userData)); // Backward compatibility
       localStorage.setItem('aphro_has_initiated', 'true');
-    } catch (e) {
-      console.warn('Unable to save aphro_user to localStorage:', e);
+    } catch {
+      // Ignore storage write error
     }
   }, [setUser]);
 

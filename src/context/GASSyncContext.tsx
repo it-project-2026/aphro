@@ -332,8 +332,8 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
           absensi: finalAbsensi,
           timestamp: new Date().toISOString()
         }));
-      } catch (e) {
-        console.warn('Failed to cache synced data:', e);
+      } catch {
+        // Ignore cache storage error
       }
 
       setIsGasConnected(true);
@@ -385,8 +385,8 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
         if (Array.isArray(cached.realisasi)) setRealisasiList(cached.realisasi);
         if (Array.isArray(cached.absensi)) setAbsensiList(cached.absensi);
       }
-    } catch (e) {
-      console.warn('Failed to load cached sync data:', e);
+    } catch {
+      // Ignore cache read error
     }
 
     refreshPendingCount();

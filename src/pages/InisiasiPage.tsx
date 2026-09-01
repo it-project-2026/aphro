@@ -92,8 +92,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
         setUlOptions(DEFAULT_UL_OPTIONS);
         setSelectedULName(DEFAULT_UL_OPTIONS[0].namaUL);
       }
-    } catch (err: any) {
-      console.warn('Error loading inisiasi UL options:', err);
+    } catch {
       setUlOptions(DEFAULT_UL_OPTIONS);
       setSelectedULName(DEFAULT_UL_OPTIONS[0].namaUL);
       setStatusMessage('Menggunakan data Unit Layanan lokal.');
@@ -155,9 +154,9 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
       // 4. Background live sync
       if (selectedUnit.urlGas && navigator.onLine) {
         try {
-          await syncWithGAS();
-        } catch (e) {
-          console.warn('Sync after inisiasi warning:', e);
+          await syncWithGAS(undefined, true);
+        } catch {
+          // Gracefully continue
         }
       }
 

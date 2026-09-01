@@ -34,8 +34,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     try {
       localStorage.setItem('aphro_dark_mode', String(isDarkMode));
-    } catch (e) {
-      console.warn('Unable to save dark mode setting:', e);
+    } catch {
+      // Ignore storage write error
     }
     if (isDarkMode) {
       document.documentElement.classList.add('dark');

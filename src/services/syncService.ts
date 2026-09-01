@@ -331,9 +331,8 @@ export class SyncService {
         return result;
       }
       throw new Error(response.message || 'Bulk fetch failed');
-    } catch (err: any) {
+    } catch {
       // Fallback to individual parallel fetches if bulk fetch fails
-      console.warn('Bulk fetch failed, trying fast parallel fetches...', err);
       const results = await Promise.allSettled([
         this.withRetry(() => GASApiService.fetchUsers(gasUrl, spreadsheetId), 1, 200),
         this.withRetry(() => GASApiService.fetchWorkOrders(gasUrl, spreadsheetId), 1, 200),

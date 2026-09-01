@@ -13,6 +13,7 @@ import { WorkOrder, Realisasi } from '../types';
 import { getLocalDateTimeString, formatDateDisplay, normalizeDateISO } from '../utils/dateUtils';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   MapPin,
   Filter,

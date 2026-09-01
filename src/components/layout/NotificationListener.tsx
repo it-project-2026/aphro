@@ -29,8 +29,8 @@ export const NotificationListener: React.FC = () => {
         const parsed = JSON.parse(savedSeenComp);
         if (Array.isArray(parsed)) parsed.forEach(id => seenCompletions.current.add(id));
       }
-    } catch (e) {
-      console.warn('Failed to load seen notifications from localStorage', e);
+    } catch {
+      // Ignore if localStorage format is legacy
     }
   }, []);
 

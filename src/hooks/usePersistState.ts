@@ -26,16 +26,13 @@ function safeSetLocalStorage(key: string, value: any): void {
   try {
     const serialized = JSON.stringify(value);
     localStorage.setItem(key, serialized);
-  } catch (error: any) {
-    console.warn(`[usePersistState] QuotaExceeded or write error for key "${key}":`, error);
+  } catch {
     try {
       // Step 1: Strip large base64 image data to drastically reduce size
       const sanitized = sanitizeForStorage(value);
       const sanitizedStr = JSON.stringify(sanitized);
       localStorage.setItem(key, sanitizedStr);
-      console.info(`[usePersistState] Successfully saved sanitized version for key "${key}"`);
-    } catch (e2) {
-      console.error(`[usePersistState] Failed to save even after sanitizing key "${key}":`, e2);
+    } catch {
       // Fallback: silently fail writing to localStorage so React state update does NOT crash
     }
   }
@@ -48,8 +45,8 @@ export function usePersistState<T>(key: string, defaultValue: T): [T, React.Disp
       if (saved !== null) {
         return JSON.parse(saved);
       }
-    } catch (e) {
-      console.error(`Error loading state for key "${key}":`, e);
+    } catch {
+      // Fallback to default value
     }
     return defaultValue;
   });

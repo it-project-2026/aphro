@@ -37,8 +37,8 @@ export const saveAndEmbedGasConfig = (config: Partial<EmbeddedGASConfig>): Embed
   // Save to persistent localStorage key for embedded configs
   try {
     localStorage.setItem('aphro_embedded_gas_config', JSON.stringify(newConfig));
-  } catch (e) {
-    console.warn('Unable to save aphro_embedded_gas_config:', e);
+  } catch {
+    // Ignore storage write error
   }
   return newConfig;
 };
@@ -55,8 +55,8 @@ export const getActiveGasConfig = (): EmbeddedGASConfig => {
         return parsed;
       }
     }
-  } catch (e) {
-    console.warn('Failed to parse embedded GAS config:', e);
+  } catch {
+    // Fallback to default
   }
   return EMBEDDED_GAS_CONFIG;
 };

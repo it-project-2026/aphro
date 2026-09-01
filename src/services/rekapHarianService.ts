@@ -255,8 +255,8 @@ export class RekapHarianService {
           rows = parsed;
         }
       }
-    } catch (e) {
-      console.warn('Failed to parse saved rekap penyulang:', e);
+    } catch {
+      // Ignore parse errors, fallback to default
     }
 
     if (rows.length === 0) {
@@ -382,8 +382,8 @@ export class RekapHarianService {
     const key = `aphro_rekap_penyulang_${unitKey}_${year}_${monthPadded}`;
     try {
       localStorage.setItem(key, JSON.stringify(data));
-    } catch (e) {
-      console.warn('Failed to save rekap penyulang:', e);
+    } catch {
+      // Ignore localStorage write error
     }
   }
 
@@ -442,8 +442,8 @@ export class RekapHarianService {
           rows = parsed;
         }
       }
-    } catch (e) {
-      console.warn('Failed to parse saved rekap harian:', e);
+    } catch {
+      // Ignore parse errors, fallback to default
     }
 
     // Jika belum ada data tersimpan, inisialisasi dari default
@@ -477,8 +477,8 @@ export class RekapHarianService {
     const key = this.getStorageKey(unitName, year, monthIndex);
     try {
       localStorage.setItem(key, JSON.stringify(data));
-    } catch (e) {
-      console.warn('Failed to save rekap harian:', e);
+    } catch {
+      // Ignore localStorage write error
     }
   }
 

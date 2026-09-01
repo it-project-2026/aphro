@@ -5,7 +5,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
 import './index.css';
 
 // Register Service Worker for PWA / Offline caching
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {
       // Gracefully ignore SW registration errors in dev/sandbox iframe

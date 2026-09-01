@@ -68,7 +68,6 @@ export const compressImage = (base64Str: string): Promise<string> => {
         currentSize = getBase64Size(resultBase64);
       }
 
-      console.log(`Image Compressed: ${img.width}x${img.height} -> ${width}x${height}, Size: ${Math.round(currentSize/1024)}KB`);
       resolve(resultBase64);
     };
 

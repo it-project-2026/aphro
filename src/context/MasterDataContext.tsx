@@ -113,8 +113,8 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
       } else {
         await GASApiService.deleteMasterData(settings.gasWebAppUrl, settings.spreadsheetId, sheetName, itemOrId);
       }
-    } catch (err) {
-      console.warn(`Sync ${sheetName} failed:`, err);
+    } catch {
+      // Graceful offline fallback
     }
   }, [settings.gasWebAppUrl, settings.spreadsheetId]);
 

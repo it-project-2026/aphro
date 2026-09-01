@@ -305,8 +305,8 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               woData: { ...woData, id: newWo?.id || '' }
             })
           });
-        } catch (notifErr) {
-          console.warn('Failed to trigger push notification:', notifErr);
+        } catch {
+          // Push notification is optional, continue normally
         }
       }
       

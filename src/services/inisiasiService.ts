@@ -179,8 +179,8 @@ export class InisiasiService {
           };
         }
       }
-    } catch (e) {
-      console.warn('Gviz fetch sheet inisiasi failed, trying fallback...', e);
+    } catch {
+      // Fallback strategy if specific sheet query fails
     }
 
     // Strategy 2: Coba juga fetch tanpa param sheet (default first sheet) jika nama sheet beda kapitalisasi
@@ -205,8 +205,8 @@ export class InisiasiService {
           };
         }
       }
-    } catch (e) {
-      console.warn('Gviz fallback fetch failed:', e);
+    } catch {
+      // Ignore fallback failure
     }
 
     // Strategy 3: Ambil dari Cache LocalStorage
@@ -349,8 +349,7 @@ export class InisiasiService {
       }
 
       return units;
-    } catch (e) {
-      console.warn('Error parsing Gviz response for Inisiasi UL:', e);
+    } catch {
       return [];
     }
   }
@@ -368,8 +367,8 @@ export class InisiasiService {
   static saveToCache(units: InisiasiUnit[]): void {
     try {
       localStorage.setItem('aphro_cached_inisiasi_units', JSON.stringify(units));
-    } catch (e) {
-      console.warn('Failed to save inisiasi units cache:', e);
+    } catch {
+      // Ignore localStorage errors
     }
   }
 
@@ -380,8 +379,8 @@ export class InisiasiService {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (e) {
-      console.warn('Failed to read inisiasi units cache:', e);
+    } catch {
+      // Fallback to null
     }
     return null;
   }
@@ -392,8 +391,8 @@ export class InisiasiService {
       if (saved) {
         return JSON.parse(saved);
       }
-    } catch (e) {
-      console.warn('Failed to read selected inisiasi UL:', e);
+    } catch {
+      // Fallback to null
     }
     return null;
   }
@@ -402,8 +401,8 @@ export class InisiasiService {
     try {
       localStorage.setItem('aphro_selected_inisiasi_ul', JSON.stringify(unit));
       localStorage.setItem('aphro_has_initiated', 'true');
-    } catch (e) {
-      console.warn('Failed to save selected inisiasi UL:', e);
+    } catch {
+      // Ignore localStorage errors
     }
   }
 }
