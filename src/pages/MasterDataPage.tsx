@@ -792,7 +792,9 @@ export const MasterDataPage: React.FC = () => {
                 .filter((p) => (p.namaPenyulang || '').toLowerCase().includes(searchTerm.toLowerCase()))
                 .map((p, idx) => (
                   <tr key={`${p.id}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
-                    <td className="p-3.5 pl-5 font-bold text-[#00A2B9]">{p.kodePenyulang}</td>
+                    <td className="p-3.5 pl-5 font-bold text-[#00A2B9]">
+                      PYL-{String(idx + 1).padStart(2, '0')}
+                    </td>
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">
                       {p.namaPenyulang}
                     </td>
