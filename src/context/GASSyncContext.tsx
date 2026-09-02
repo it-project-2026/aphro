@@ -235,6 +235,20 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       // 2. Perform version check & sync changed tables
       const syncedTables = await syncManager.syncAllRequired();
 
+      if (syncedTables) {
+        if (syncedTables.WORK_ORDER) setWorkOrders(syncedTables.WORK_ORDER);
+        if (syncedTables.REALISASI) setRealisasiList(syncedTables.REALISASI);
+        if (syncedTables.ABSENSI) setAbsensiList(syncedTables.ABSENSI);
+
+        setMasterData({
+          ulp: syncedTables.ULP,
+          penyulang: syncedTables.PENYULANG,
+          regu: syncedTables.REGU_ROW,
+          petugas: syncedTables.PETUGAS,
+          users: syncedTables.USERS,
+        });
+      }
+
       setIsGasConnected(true);
       setSyncStage('success');
       setSyncMessage('Data terbaru berhasil diperbarui.');

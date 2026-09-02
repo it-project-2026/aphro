@@ -7,6 +7,40 @@
 
 import { idbService, AuditLogRecord, PendingOperation } from './indexedDbService';
 import { GASApiService, GASApiResponse } from './gasApiService';
+import {
+  normalizeUser,
+  normalizeULP,
+  normalizePenyulang,
+  normalizeRegu,
+  normalizePetugas,
+  normalizeWorkOrder,
+  normalizeRealisasi,
+  normalizeAbsensi,
+} from './syncService';
+import { getActiveGasConfig } from '../config/gasConfig';
+
+export function normalizeTableData(tableName: string, data: any[]): any[] {
+  if (!Array.isArray(data)) return [];
+  const key = tableName.toUpperCase();
+  if (key === 'WORK_ORDER' || key === 'WORK_ORDERS' || key === 'WO') {
+    return data.map(normalizeWorkOrder).filter(wo => wo.nomorWO || wo.ulpName || wo.reguName || wo.penyulangName || wo.id);
+  } else if (key === 'REALISASI') {
+    return data.map(normalizeRealisasi).filter(rel => rel.workOrderId || rel.nomorWO || rel.id);
+  } else if (key === 'ABSENSI') {
+    return data.map(normalizeAbsensi).filter(abs => abs.reguName || abs.ulpName || abs.id);
+  } else if (key === 'USERS') {
+    return data.map(normalizeUser);
+  } else if (key === 'ULP') {
+    return data.map(normalizeULP);
+  } else if (key === 'PENYULANG') {
+    return data.map(normalizePenyulang);
+  } else if (key === 'REGU_ROW' || key === 'REGU') {
+    return data.map(normalizeRegu);
+  } else if (key === 'PETUGAS') {
+    return data.map(normalizePetugas);
+  }
+  return data;
+}
 
 export interface TableVersionsResponse {
   globalVersion: number | string;
@@ -62,10 +96,16 @@ export class SyncManager {
 
   private loadSettingsFromStorage() {
     try {
+      const activeConfig = getActiveGasConfig();
+      if (activeConfig.gasWebAppUrl) this.gasUrl = activeConfig.gasWebAppUrl;
+      if (activeConfig.spreadsheetId) this.spreadsheetId = activeConfig.spreadsheetId;
+
       const raw = localStorage.getItem('aphro_app_settings');
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.gasWebAppUrl) this.gasUrl = parsed.gasWebAppUrl;
+        if (parsed.gasWebAppUrl && parsed.gasWebAppUrl.startsWith('https://script.google.com/')) {
+          this.gasUrl = parsed.gasWebAppUrl;
+        }
         if (parsed.spreadsheetId) this.spreadsheetId = parsed.spreadsheetId;
       }
       const rawUser = localStorage.getItem('aphro_current_user');
@@ -137,8 +177,8 @@ export class SyncManager {
 
     for (const table of tableNames) {
       const data = await idbService.getTable(table);
-      if (data) {
-        cachedData[table] = data;
+      if (data && Array.isArray(data)) {
+        cachedData[table] = normalizeTableData(table, data);
       }
     }
 
@@ -196,7 +236,7 @@ export class SyncManager {
   public async syncTable(tableName: string, force = false): Promise<any[]> {
     if (!this.gasUrl) {
       const cached = await idbService.getTable(tableName);
-      return cached || [];
+      return cached ? normalizeTableData(tableName, cached) : [];
     }
 
     // Deduplicate in-flight sync for the same table
@@ -222,7 +262,7 @@ export class SyncManager {
         }
 
         if (response && response.status === 'success' && Array.isArray(response.data)) {
-          const freshData = response.data;
+          const freshData = normalizeTableData(tableName, response.data);
           await idbService.saveTable(tableName, freshData);
           await idbService.saveTableVersion(tableName, Date.now());
 
@@ -238,12 +278,12 @@ export class SyncManager {
           return freshData;
         } else {
           const cached = await idbService.getTable(tableName);
-          return cached || [];
+          return cached ? normalizeTableData(tableName, cached) : [];
         }
       } catch (err: any) {
         console.warn(`Sync table ${tableName} error:`, err);
         const cached = await idbService.getTable(tableName);
-        return cached || [];
+        return cached ? normalizeTableData(tableName, cached) : [];
       } finally {
         this.inFlightSyncs.delete(inFlightKey);
       }
@@ -288,7 +328,8 @@ export class SyncManager {
 
           const tableNames = ['WORK_ORDER', 'REALISASI', 'ABSENSI', 'USERS', 'ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS'];
           for (const t of tableNames) {
-            result[t] = (await idbService.getTable(t)) || [];
+            const cached = await idbService.getTable(t);
+            result[t] = cached ? normalizeTableData(t, cached) : [];
           }
           return result;
         }
@@ -296,13 +337,17 @@ export class SyncManager {
         // Fetch only changed tables
         for (const table of tablesToSync) {
           result[table] = await this.syncTable(table, true);
+          if (remoteVersions[table]) {
+            await idbService.saveTableVersion(table, remoteVersions[table]);
+          }
         }
 
         // Load remaining cached tables
         const allTables = ['WORK_ORDER', 'REALISASI', 'ABSENSI', 'USERS', 'ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS'];
         for (const t of allTables) {
           if (!result[t]) {
-            result[t] = (await idbService.getTable(t)) || [];
+            const cached = await idbService.getTable(t);
+            result[t] = cached ? normalizeTableData(t, cached) : [];
           }
         }
 
@@ -322,10 +367,11 @@ export class SyncManager {
         const allData = res.data;
         for (const [table, rows] of Object.entries(allData)) {
           if (Array.isArray(rows)) {
-            await idbService.saveTable(table, rows);
+            const normalized = normalizeTableData(table, rows);
+            await idbService.saveTable(table, normalized);
             await idbService.saveTableVersion(table, Date.now());
-            result[table] = rows;
-            this.notifyListeners({ type: 'DATA_UPDATED', tableName: table, data: rows });
+            result[table] = normalized;
+            this.notifyListeners({ type: 'DATA_UPDATED', tableName: table, data: normalized });
           }
         }
       }

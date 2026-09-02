@@ -588,6 +588,22 @@ export class GASApiService {
     return this.deleteMasterData(gasUrl, spreadsheetId, sheetName, id);
   }
 
+  private static getActionName(type: string): string {
+    const actionMap: Record<string, string> = {
+      ULP: 'getULP',
+      PENYULANG: 'getPenyulang',
+      REGU_ROW: 'getRegu',
+      REGU: 'getRegu',
+      PETUGAS: 'getPetugas',
+      USERS: 'getUsers',
+      WORK_ORDER: 'getWorkOrders',
+      WORK_ORDERS: 'getWorkOrders',
+      REALISASI: 'getRealisasi',
+      ABSENSI: 'getAbsensi',
+    };
+    return actionMap[type] || type;
+  }
+
   /**
    * Fetch Master Data (ULP, Penyulang, Regu, Petugas) (cached & deduplicated)
    */
@@ -597,7 +613,8 @@ export class GASApiService {
     spreadsheetId?: string
   ): Promise<GASApiResponse> {
     try {
-      let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=${type}` : `${gasUrl}?action=${type}`;
+      const actionName = this.getActionName(type);
+      let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=${actionName}` : `${gasUrl}?action=${actionName}`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
       const response = await this.cachedFetch(targetUrl, true);
       return await this.handleResponse(response);

@@ -205,31 +205,31 @@ function doGet(e) {
       return createJsonResponse({ status: "success", spreadsheetId: initializedSsId, message: "Database created & initialized successfully!" });
     }
 
-    if (action === "getWorkOrders") {
+    if (action === "getWorkOrders" || action === "WORK_ORDER" || action === "WORK_ORDERS") {
       var woData = sheetToObjects("WORK_ORDER", ssId);
       if (!woData.length) woData = sheetToObjects("WORK_ORDERS", ssId);
       return createJsonResponse({ status: "success", data: woData });
     }
 
-    if (action === "getRealisasi") {
+    if (action === "getRealisasi" || action === "REALISASI") {
       return createJsonResponse({ status: "success", data: sheetToObjects("REALISASI", ssId) });
     }
 
-    if (action === "getAbsensi") {
+    if (action === "getAbsensi" || action === "ABSENSI") {
       return createJsonResponse({ status: "success", data: sheetToObjects("ABSENSI", ssId) });
     }
 
-    if (action === "getUsers") {
+    if (action === "getUsers" || action === "USERS") {
       return createJsonResponse({ status: "success", data: sheetToObjects("USERS", ssId) });
     }
 
-    if (action === "getULP") return createJsonResponse({ status: "success", data: sheetToObjects("ULP", ssId) });
-    if (action === "getPenyulang") return createJsonResponse({ status: "success", data: sheetToObjects("PENYULANG", ssId) });
-    if (action === "getRegu") return createJsonResponse({ status: "success", data: sheetToObjects("REGU_ROW", ssId) });
-    if (action === "getPetugas") return createJsonResponse({ status: "success", data: sheetToObjects("PETUGAS", ssId) });
-    if (action === "getSetting") return createJsonResponse({ status: "success", data: sheetToObjects("SETTING", ssId) });
-    if (action === "getLogs") return createJsonResponse({ status: "success", data: sheetToObjects("LOG_ACTIVITY", ssId) });
-    if (action === "getNotifications") return createJsonResponse({ status: "success", data: sheetToObjects("NOTIFICATION", ssId) });
+    if (action === "getULP" || action === "ULP") return createJsonResponse({ status: "success", data: sheetToObjects("ULP", ssId) });
+    if (action === "getPenyulang" || action === "PENYULANG") return createJsonResponse({ status: "success", data: sheetToObjects("PENYULANG", ssId) });
+    if (action === "getRegu" || action === "REGU_ROW" || action === "REGU") return createJsonResponse({ status: "success", data: sheetToObjects("REGU_ROW", ssId) });
+    if (action === "getPetugas" || action === "PETUGAS") return createJsonResponse({ status: "success", data: sheetToObjects("PETUGAS", ssId) });
+    if (action === "getSetting" || action === "SETTING") return createJsonResponse({ status: "success", data: sheetToObjects("SETTING", ssId) });
+    if (action === "getLogs" || action === "LOG_ACTIVITY") return createJsonResponse({ status: "success", data: sheetToObjects("LOG_ACTIVITY", ssId) });
+    if (action === "getNotifications" || action === "NOTIFICATION") return createJsonResponse({ status: "success", data: sheetToObjects("NOTIFICATION", ssId) });
 
     if (action === "getAllData" || action === "getDatabase") {
       var woDataAll = sheetToObjects("WORK_ORDER", ssId);
