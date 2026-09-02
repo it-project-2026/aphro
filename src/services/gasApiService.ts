@@ -19,6 +19,12 @@ export class GASApiService {
     const text = await response.text();
 
     if (!response.ok) {
+      if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
+        return { 
+          status: 'error', 
+          message: `Koneksi Google Apps Script gagal (HTTP ${response.status}). Pastikan Web App dideploy dengan izin "Anyone".` 
+        };
+      }
       return { 
         status: 'error', 
         message: `HTTP Error ${response.status}: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}` 
@@ -27,13 +33,13 @@ export class GASApiService {
 
     if (contentType && contentType.includes('text/html')) {
       // Check if it looks like a Google Login page or Error page
-      if (text.includes('google-signin') || text.includes('<!DOCTYPE html>')) {
+      if (text.includes('google-signin') || text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
         return { 
           status: 'error', 
           message: 'Menerima balasan HTML. Pastikan URL Web App sudah benar dan Izin skrip disetel ke "Anyone".' 
         };
       }
-      return { status: 'error', message: `Menerima balasan tidak terduga (HTML): ${text.substring(0, 50)}...` };
+      return { status: 'error', message: `Menerima balasan tidak terduga (HTML). Pastikan skrip GAS aktif.` };
     }
 
     try {

@@ -107,9 +107,18 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   const [rekapYear, setRekapYear] = useState(new Date().getFullYear());
 
   // Filters for Monitoring & Rekap Absensi Table
+  const getTodayDateString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
+  const [filterDate, setFilterDate] = useState(getTodayDateString());
 
   // Logic to calculate days and presence for Rekap Absensi
   const rekapData = useMemo(() => {
@@ -319,6 +328,9 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         if (!belongsToUser) return false;
       }
 
+      // Date Filter
+      const matchesDate = !filterDate || itemDateNormalized === filterDate;
+
       // ULP Filter
       const matchesUlp = filterUlp === 'ALL' || cleanStr(item.ulpName) === cleanStr(filterUlp);
 
@@ -335,7 +347,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         (item.reguName || '').toLowerCase().includes(query) ||
         item.petugasList?.some((p) => (p.nama || '').toLowerCase().includes(query));
 
-      return matchesUlp && matchesRegu && matchesSearch;
+      return matchesDate && matchesUlp && matchesRegu && matchesSearch;
     });
 
     // 2. Deduplicate: Ensure only one row per (Tanggal + Regu)
@@ -376,7 +388,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       const dateB = new Date(b.tanggal || 0).getTime();
       return dateB - dateA;
     });
-  }, [absensiList, isUserRole, reguName, userReguClean, currentUser, filterUlp, filterRegu, searchQuery]);
+  }, [absensiList, isUserRole, reguName, userReguClean, currentUser, filterUlp, filterRegu, filterDate, searchQuery]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -845,23 +857,37 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
             </div>
 
             {/* Filters & Actions */}
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              {!isUserRole && (
-                <button
-                  onClick={() => setEditingAbsensi({
-                    tanggal: todayStr,
-                    ulpName: ulpList[0]?.namaULP || '',
-                    reguName: '',
-                    petugasList: [],
-                    isManual: true
-                  })}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#005a9c] text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 hover:bg-[#004a80] transition-all w-full sm:w-auto justify-center"
-                >
-                  <Plus className="w-4 h-4" />
-                  Tambah Manual
-                </button>
-              )}
-              <div className="relative w-full sm:w-52">
+            <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+              <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border-0 bg-transparent text-slate-800 dark:text-slate-100 font-medium focus:outline-none"
+                  title="Filter Tanggal Absensi"
+                />
+                {filterDate ? (
+                  <button
+                    type="button"
+                    onClick={() => setFilterDate('')}
+                    className="px-2 py-1.5 text-[10px] bg-slate-200 dark:bg-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-300 transition-colors whitespace-nowrap"
+                    title="Tampilkan Semua Tanggal"
+                  >
+                    Semua
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setFilterDate(getTodayDateString())}
+                    className="px-2 py-1.5 text-[10px] bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 rounded-lg font-bold hover:bg-teal-100 transition-colors whitespace-nowrap"
+                    title="Filter Hari Ini"
+                  >
+                    Hari Ini
+                  </button>
+                )}
+              </div>
+
+              <div className="relative flex-1 sm:flex-initial min-w-[200px]">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
@@ -878,7 +904,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                   setFilterUlp(e.target.value);
                   setFilterRegu('ALL');
                 }}
-                className="w-full sm:w-36 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
               >
                 <option value="ALL">Semua ULP</option>
                 {ulpList.map((u, idx) => (
@@ -892,7 +918,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 <select
                   value={filterRegu}
                   onChange={(e) => setFilterRegu(e.target.value)}
-                  className="w-full sm:w-44 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
                 >
                   <option value="ALL">Semua Nama Regu</option>
                   {allReguOptions
@@ -907,6 +933,22 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                     </option>
                   ))}
                 </select>
+              )}
+
+              {!isUserRole && (
+                <button
+                  onClick={() => setEditingAbsensi({
+                    tanggal: todayStr,
+                    ulpName: ulpList[0]?.namaULP || '',
+                    reguName: '',
+                    petugasList: [],
+                    isManual: true
+                  })}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#005a9c] text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 hover:bg-[#004a80] transition-all whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Tambah Manual
+                </button>
               )}
             </div>
           </div>

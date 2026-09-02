@@ -123,12 +123,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin'],
     },
     {
-      id: 'settings',
-      label: 'Setting Aplikasi',
-      icon: Settings,
-      roles: ['SuperAdmin'],
-    },
-    {
       id: 'inisiasi',
       label: 'Inisiasi Unit Layanan',
       icon: Building2,

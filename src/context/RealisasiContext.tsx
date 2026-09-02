@@ -48,7 +48,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('REALISASI', payloadToSave);
-      showToast(`⚡ Tersimpan di perangkat (Offline). Tekan tombol Sync Data untuk mengirim ke Spreadsheet.`, 'info');
+      showToast(`⚡ Realisasi WO ${relData.nomorWO || ''} tersimpan aman di perangkat (Mode Offline). Akan otomatis tersinkron saat terhubung sinyal.`, 'success');
     } else {
       try {
         const res = await GASApiService.saveRealisasi(settings.gasWebAppUrl, settings.spreadsheetId, payloadToSave);
@@ -69,12 +69,12 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
           }));
         } else {
           addToOfflineQueue('REALISASI', payloadToSave);
-          showToast(`⚡ Tersimpan di perangkat. Tekan tombol Sync Data untuk mengirim ke Spreadsheet.`, 'warning');
+          showToast(`⚡ Realisasi tersimpan di perangkat. Otomatis disinkronkan saat sinyal tersedia.`, 'info');
         }
       } catch (err) {
         console.error('GAS Save Realisasi error:', err);
         addToOfflineQueue('REALISASI', payloadToSave);
-        showToast('⚡ Data tersimpan di perangkat. Tekan tombol Sync Data untuk mengirim ke Spreadsheet.', 'warning');
+        showToast('⚡ Realisasi tersimpan di perangkat. Otomatis disinkronkan saat sinyal tersedia.', 'info');
       }
     }
 

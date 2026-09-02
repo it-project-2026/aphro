@@ -51,8 +51,17 @@ export const getActiveGasConfig = (): EmbeddedGASConfig => {
     const saved = localStorage.getItem('aphro_embedded_gas_config');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed && parsed.gasWebAppUrl) {
-        return parsed;
+      if (
+        parsed &&
+        parsed.gasWebAppUrl &&
+        typeof parsed.gasWebAppUrl === 'string' &&
+        parsed.gasWebAppUrl.startsWith('https://script.google.com/macros/s/') &&
+        !parsed.gasWebAppUrl.includes('AKfycbz_9e5n4Jb4Jz')
+      ) {
+        return {
+          ...EMBEDDED_GAS_CONFIG,
+          ...parsed,
+        };
       }
     }
   } catch {

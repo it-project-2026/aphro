@@ -10,7 +10,7 @@ import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { MapReportCapture, MapReportCaptureRef } from '../components/MapReportCapture';
 import { MapPreviewModal } from '../components/MapPreviewModal';
 import { formatDateTime, formatDateOnly, formatExecutionDateTime } from '../utils/dateFormatter';
-import { formatDateDisplay } from '../utils/dateUtils';
+import { formatDateDisplay, normalizeDateISO } from '../utils/dateUtils';
 import {
   generateLaporanPetaPDF,
   exportWorkOrdersToExcel,
@@ -193,11 +193,20 @@ export const CetakLaporanPage: React.FC = () => {
   const { syncWithGAS, isSyncing } = useGASSync();
   const { showToast } = useToast();
 
+  const getTodayDateString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [activeReportTab, setActiveReportTab] = useState<'foto' | 'peta'>('foto');
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterNoWo, setFilterNoWo] = useState('ALL');
+  const [filterDate, setFilterDate] = useState(getTodayDateString());
   const [latestMapImage, setLatestMapImage] = useState<string | null>(null);
   const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
   const mapCaptureRef = useRef<MapReportCaptureRef>(null);
@@ -330,9 +339,12 @@ export const CetakLaporanPage: React.FC = () => {
 
       const matchesRegu = filterRegu === 'ALL' || cleanStr(rel.reguName) === cleanStr(filterRegu) || cleanStr(wo?.reguName) === cleanStr(filterRegu);
 
-      return matchesUlp && matchesPenyulang && matchesNoWo && matchesRegu;
+      const itemDate = normalizeDateISO(rel.tanggalRealisasi || rel.createdAt);
+      const matchesDate = !filterDate || itemDate === filterDate;
+
+      return matchesDate && matchesUlp && matchesPenyulang && matchesNoWo && matchesRegu;
     });
-  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterNoWo, filterRegu, isAdmbktUser, ulpList, penyulangList]);
+  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterNoWo, filterRegu, filterDate, isAdmbktUser, ulpList, penyulangList]);
 
   const filteredWOs = useMemo(() => {
     return workOrders.filter((wo) => {
@@ -709,6 +721,26 @@ export const CetakLaporanPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 sm:flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer"
+                  title="Filter Tanggal"
+                />
+                {filterDate && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterDate('')}
+                    className="px-2.5 py-2 text-[10px] bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors whitespace-nowrap"
+                    title="Tampilkan Semua Tanggal"
+                  >
+                    Semua
+                  </button>
+                )}
+              </div>
+
               <select
                 value={filterUlp}
                 onChange={(e) => {

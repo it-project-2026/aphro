@@ -18,15 +18,23 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     SettingsContextData.defaultSettings
   );
 
-  // Guarantee that gasWebAppUrl and critical properties fall back to active embedded config if empty
+  // Guarantee that gasWebAppUrl and critical properties fall back to active embedded config if empty or invalid
   const embeddedConfig = getActiveGasConfig();
   const settings: AppSettings = React.useMemo(() => {
+    const rawGasUrl = (rawSettings?.gasWebAppUrl || '').trim();
+    const isGasUrlValid = rawGasUrl.startsWith('https://script.google.com/macros/s/') && !rawGasUrl.includes('AKfycbz_9e5n4Jb4Jz');
+    const validGasUrl = isGasUrlValid ? rawGasUrl : embeddedConfig.gasWebAppUrl;
+
+    const rawSpreadsheetId = (rawSettings?.spreadsheetId || '').trim();
+    const isSpreadsheetIdValid = rawSpreadsheetId && !rawSpreadsheetId.includes('1L2Z_eT5u6r0k');
+    const validSpreadsheetId = isSpreadsheetIdValid ? rawSpreadsheetId : embeddedConfig.spreadsheetId;
+
     return {
       ...SettingsContextData.defaultSettings,
       ...embeddedConfig,
       ...rawSettings,
-      gasWebAppUrl: rawSettings?.gasWebAppUrl?.trim() || embeddedConfig.gasWebAppUrl || SettingsContextData.defaultSettings.gasWebAppUrl,
-      spreadsheetId: rawSettings?.spreadsheetId?.trim() || embeddedConfig.spreadsheetId || SettingsContextData.defaultSettings.spreadsheetId,
+      gasWebAppUrl: validGasUrl,
+      spreadsheetId: validSpreadsheetId,
       driveFolderId: rawSettings?.driveFolderId?.trim() || embeddedConfig.driveFolderId || SettingsContextData.defaultSettings.driveFolderId,
       absensiFolderId: rawSettings?.absensiFolderId?.trim() || embeddedConfig.absensiFolderId || SettingsContextData.defaultSettings.absensiFolderId,
     };

@@ -32,7 +32,7 @@ import {
   CloudOff,
   RefreshCw,
 } from 'lucide-react';
-import { formatDateDisplay } from '../utils/dateUtils';
+import { formatDateDisplay, normalizeDateISO } from '../utils/dateUtils';
 
 interface WorkOrderPageProps {
   onAdd?: () => void;
@@ -74,12 +74,20 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
     return () => clearInterval(interval);
   }, []);
 
+  const getTodayDateString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [filterDate, setFilterDate] = useState('');
+  const [filterDate, setFilterDate] = useState(getTodayDateString());
 
   const [selectedWO, setSelectedWO] = useState<WorkOrder | null>(null);
   const [qrModalWO, setQrModalWO] = useState<WorkOrder | null>(null);
@@ -142,7 +150,8 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       cleanStr(wo.reguName) === cleanStr(filterRegu);
       
     const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
-    const matchesDate = !filterDate || (wo.tanggal && wo.tanggal.includes(filterDate));
+    const itemDate = normalizeDateISO(wo.tanggal || wo.createdAt);
+    const matchesDate = !filterDate || itemDate === filterDate;
 
     return matchesSearch && matchesUlp && matchesPenyulang && matchesRegu && matchesStatus && matchesDate;
   }).sort((a, b) => {
@@ -291,12 +300,25 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
 
           {/* Filter Date */}
           <div>
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
-            />
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
+                title="Filter Tanggal Work Order"
+              />
+              {filterDate && (
+                <button
+                  type="button"
+                  onClick={() => setFilterDate('')}
+                  className="px-2 py-2 text-[10px] bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors whitespace-nowrap"
+                  title="Tampilkan Semua Tanggal"
+                >
+                  Semua
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

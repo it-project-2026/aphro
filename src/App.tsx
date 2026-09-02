@@ -25,7 +25,7 @@ import { InputRealisasiPage } from './pages/InputRealisasiPage';
 import { MonitoringPage } from './pages/MonitoringPage';
 import { CetakLaporanPage } from './pages/CetakLaporanPage';
 import { MasterDataPage } from './pages/MasterDataPage';
-import { SettingAplikasiPage } from './pages/SettingAplikasiPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { UserWelcomePage } from './pages/UserWelcomePage';
 import { AbsensiKerjaPage } from './pages/AbsensiKerjaPage';
 import { AbsensiMainPage } from './pages/AbsensiMainPage';
@@ -43,7 +43,7 @@ const AppContent: React.FC = () => {
   const { activeTab, setActiveTab } = useUI();
   const { settings } = useSettings();
   const { hasCheckedInToday } = useAbsensi();
-  const { isSyncing, syncWithGAS, isGasConnected } = useGASSync();
+  const { isSyncing, syncWithGAS, isGasConnected, triggerActivitySync } = useGASSync();
   const { showToast } = useToast();
   
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
@@ -53,7 +53,12 @@ const AppContent: React.FC = () => {
     return localStorage.getItem('aphro_has_initiated') === 'true';
   });
 
-  // Manual sync mode: App loads from local storage/cache instantly on startup without automatic network sync
+  // Auto-sync data on tab changes and key navigation actions
+  React.useEffect(() => {
+    if (user && navigator.onLine) {
+      triggerActivitySync(true).catch(() => {});
+    }
+  }, [activeTab, user, triggerActivitySync]);
 
 
   const isAdmRole = user && (
@@ -112,8 +117,7 @@ const AppContent: React.FC = () => {
         if ((user?.role || '').toUpperCase() === 'USER') return <DashboardPage />;
         return <RekapPenyulangHarianPage />;
       case 'master_data': return <MasterDataPage />;
-      case 'settings':
-      case 'logs': return <SettingAplikasiPage />;
+      case 'logs': return <AuditLogPage />;
       case 'inisiasi': return <InisiasiPage isFromMenu={true} />;
       default: return <DashboardPage />;
     }

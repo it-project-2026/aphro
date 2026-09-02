@@ -41,6 +41,7 @@ interface GASSyncContextType {
   processPendingQueue: (showToast?: (msg: string, type?: any) => void, isAuto?: boolean) => Promise<void>;
   checkConnection: () => Promise<boolean>;
   refreshPendingCount: () => void;
+  triggerActivitySync: (isSilent?: boolean) => Promise<void>;
 }
 
 const GASSyncContext = React.createContext<GASSyncContextType | undefined>(undefined);
@@ -389,18 +390,20 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       // Ignore cache read error
     }
 
-    const count = refreshPendingCount();
-    if (count > 0) {
-      setShowSyncBanner(true);
-    }
+    refreshPendingCount();
 
-    // MANUAL SYNC MODE: Only update connection status when online, do not auto-upload
+    // AUTO-SYNC ON SIGNAL RESTORATION (from no-signal to connected)
     const handleOnline = () => {
       setIsOnline(true);
       checkConnection().catch(() => {});
-      const pending = refreshPendingCount();
-      if (pending > 0) {
-        setShowSyncBanner(true);
+      
+      const count = getOfflineQueue().length;
+      if (settings.gasWebAppUrl && count > 0) {
+        // Automatic sync when finding signal
+        processPendingQueue(undefined, true).catch(() => {});
+      } else if (settings.gasWebAppUrl) {
+        // Light refresh
+        syncWithGAS(undefined, true).catch(() => {});
       }
     };
 
@@ -416,26 +419,44 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     checkConnection().catch(() => {});
 
-    // Periodic lightweight connection test only (no automatic queue uploading)
+    // Auto-sync on startup / initialization
+    if (settings.gasWebAppUrl && navigator.onLine) {
+      syncWithGAS(undefined, true).catch(() => {});
+    }
+
+    // Periodic automatic queue check & sync every 45 seconds
     const interval = setInterval(() => {
-      if (navigator.onLine) {
+      if (navigator.onLine && settings.gasWebAppUrl) {
         checkConnection().catch(() => {});
-        const pending = refreshPendingCount();
-        if (pending > 0 && !showSyncBanner) {
-          setShowSyncBanner(true);
+        const count = getOfflineQueue().length;
+        if (count > 0) {
+          processPendingQueue(undefined, true).catch(() => {});
         }
       } else {
         setIsOnline(false);
         setIsGasConnected(false);
       }
-    }, 60 * 1000); // Check connectivity every 1 minute
+    }, 45 * 1000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, [checkConnection, refreshPendingCount, showSyncBanner, setMasterData, setRealisasiList, setAbsensiList]);
+  }, [checkConnection, processPendingQueue, refreshPendingCount, settings.gasWebAppUrl, syncWithGAS, setMasterData, setRealisasiList, setAbsensiList]);
+
+  // General trigger for any activity in the app (Login, Logout, Save, Delete, Page change)
+  const triggerActivitySync = React.useCallback(async (isSilent = true) => {
+    if (!navigator.onLine || !settings.gasWebAppUrl) {
+      refreshPendingCount();
+      return;
+    }
+    const count = getOfflineQueue().length;
+    if (count > 0) {
+      await processPendingQueue(undefined, isSilent);
+    }
+    await syncWithGAS(undefined, isSilent);
+  }, [settings.gasWebAppUrl, processPendingQueue, syncWithGAS, refreshPendingCount]);
 
   return (
     <GASSyncContext.Provider
@@ -455,6 +476,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
         processPendingQueue,
         checkConnection,
         refreshPendingCount,
+        triggerActivitySync,
       }}
     >
       {children}

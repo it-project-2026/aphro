@@ -60,6 +60,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const handleLogout = async () => {
+    if (navigator.onLine) {
+      try {
+        if (pendingCount > 0) {
+          await processPendingQueue(undefined, true);
+        }
+        await syncWithGAS(undefined, true);
+      } catch {
+        // Continue logout smoothly
+      }
+    }
+    logout();
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200">
       <div className="flex items-center justify-between px-2.5 sm:px-6 py-2 sm:py-3">
@@ -355,7 +369,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               </p>
             </div>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors ml-1"
               title="Keluar / Logout"
             >

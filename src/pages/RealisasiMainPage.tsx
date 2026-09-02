@@ -15,6 +15,7 @@ import { useWorkOrders } from '../context/WorkOrderContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatExecutionDateTime } from '../utils/dateFormatter';
+import { normalizeDateISO } from '../utils/dateUtils';
 import { InputRealisasiPage } from './InputRealisasiPage';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 
@@ -40,9 +41,18 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   const [previewPhoto, setPreviewPhoto] = useState<{ url: string; title: string; driveUrl?: string } | null>(null);
 
   // Filters for History Tab
+  const getTodayDateString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
+  const [filterDate, setFilterDate] = useState(getTodayDateString());
   const [searchQuery, setSearchQuery] = useState('');
 
   const isAdmbktUser = useMemo(() => {
@@ -78,6 +88,8 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         }
       }
 
+      const itemDate = normalizeDateISO(rel.tanggalRealisasi || rel.createdAt);
+      const matchesDate = !filterDate || itemDate === filterDate;
       const matchesUlp = filterUlp === 'ALL' || rel.ulpName === filterUlp || wo?.ulpName === filterUlp;
       const matchesPenyulang = filterPenyulang === 'ALL' || rel.penyulangName === filterPenyulang || wo?.penyulangName === filterPenyulang;
       const matchesRegu = filterRegu === 'ALL' || rel.reguName === filterRegu || wo?.reguName === filterRegu;
@@ -89,9 +101,9 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         (rel.noTiang || '').toLowerCase().includes(searchLower) ||
         (rel.lokasiKerja || '').toLowerCase().includes(searchLower);
 
-      return matchesUlp && matchesPenyulang && matchesRegu && matchesSearch;
+      return matchesDate && matchesUlp && matchesPenyulang && matchesRegu && matchesSearch;
     });
-  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterRegu, searchQuery, isAdmbktUser]);
+  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterRegu, filterDate, searchQuery, isAdmbktUser]);
 
   const selectedAreaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
   const selectedUlpName = filterUlp !== 'ALL' ? filterUlp : (filteredRealisasi[0]?.ulpName || 'UNIT LAYANAN');
@@ -176,7 +188,29 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
           <div className="space-y-6">
             {/* Filters Bar for History */}
             <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm no-print">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter Tanggal</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
+                    />
+                    {filterDate && (
+                      <button
+                        type="button"
+                        onClick={() => setFilterDate('')}
+                        className="px-2 py-2 text-[10px] bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors whitespace-nowrap"
+                        title="Tampilkan Semua Tanggal"
+                      >
+                        Semua
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Cari Data</label>
                   <div className="relative">
