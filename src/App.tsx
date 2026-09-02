@@ -53,12 +53,7 @@ const AppContent: React.FC = () => {
     return localStorage.getItem('aphro_has_initiated') === 'true';
   });
 
-  // Auto-sync data on tab changes and key navigation actions
-  React.useEffect(() => {
-    if (user && navigator.onLine) {
-      triggerActivitySync(true).catch(() => {});
-    }
-  }, [activeTab, user, triggerActivitySync]);
+
 
 
   const isAdmRole = user && (

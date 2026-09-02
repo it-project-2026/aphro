@@ -12,6 +12,28 @@ export interface GASApiResponse<T = any> {
 
 export class GASApiService {
   /**
+   * Fetch with AbortController timeout (default 20 seconds) to prevent hanging requests
+   */
+  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 20000): Promise<Response> {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(id);
+      return response;
+    } catch (err: any) {
+      clearTimeout(id);
+      if (err.name === 'AbortError') {
+        throw new Error('Koneksi ke Google Spreadsheet Timeout (>20 detik). Periksa koneksi internet atau status Web App GAS.');
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Safe response handler to prevent JSON parsing errors when GAS returns HTML
    */
   private static async handleResponse(response: Response): Promise<GASApiResponse> {
