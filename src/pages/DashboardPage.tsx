@@ -244,7 +244,7 @@ export const DashboardPage: React.FC = () => {
       }, 0);
       
       return {
-        id: r.id,
+        id: r.id ? `regu-${r.id}-${idx}` : `regu-idx-${idx}`,
         name: `TIM: ROW ${String(idx + 1).padStart(2, '0')} ${ (r.namaRegu || '').toUpperCase() }`,
         realisasi: Number(realisasi.toFixed(1)),
         target: 50.2
@@ -437,7 +437,7 @@ export const DashboardPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredRealisasi.slice(0, 5).map((rel, idx) => (
-                    <tr key={`${rel.id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                    <tr key={rel.id ? `rel-${rel.id}-${idx}` : `rel-idx-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
                       <td className="p-3 pl-5 font-bold text-teal-600">{rel.nomorWO}</td>
                       <td className="p-3">{rel.tanggalRealisasi}</td>
                       <td className="p-3 font-medium">{rel.penyulangName}</td>
@@ -556,8 +556,8 @@ export const DashboardPage: React.FC = () => {
             className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           >
             <option value="ALL">Semua ULP</option>
-            {ulpList.map((ulp) => (
-              <option key={ulp.id} value={ulp.namaULP || ulp.id}>
+            {ulpList.map((ulp, idx) => (
+              <option key={ulp.id ? `ulp-opt-${ulp.id}-${idx}` : `ulp-opt-${idx}`} value={ulp.namaULP || ulp.id || `ulp-${idx}`}>
                 {ulp.namaULP}
               </option>
             ))}
@@ -575,8 +575,8 @@ export const DashboardPage: React.FC = () => {
             <option value="ALL">Semua Penyulang</option>
             {penyulangList
               .filter(p => filterUlp === 'ALL' || p.ulpName === filterUlp || p.ulpId === filterUlp)
-              .map((p) => (
-                <option key={p.id} value={p.namaPenyulang || p.id}>
+              .map((p, idx) => (
+                <option key={p.id ? `p-opt-${p.id}-${idx}` : `p-opt-${idx}`} value={p.namaPenyulang || p.id || `p-${idx}`}>
                   {p.namaPenyulang}
                 </option>
               ))}
@@ -822,7 +822,7 @@ export const DashboardPage: React.FC = () => {
             <div className="space-y-3">
               {reguList.slice(0, 3).map((regu, idx) => (
                 <div
-                  key={`${regu.id}-${idx}`}
+                  key={regu.id ? `performer-${regu.id}-${idx}` : `performer-${idx}`}
                   className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60"
                 >
                   <div className="flex items-center space-x-3">
@@ -899,7 +899,7 @@ export const DashboardPage: React.FC = () => {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredWOs.slice(0, 10).map((wo, idx) => (
                 <tr
-                  key={`${wo.id}-${idx}`}
+                  key={wo.id ? `wo-${wo.id}-${idx}` : `wo-idx-${idx}`}
                   className="hover:bg-teal-50/50 dark:hover:bg-slate-800/50 transition-colors group"
                 >
                   <td className="p-4 pl-6">

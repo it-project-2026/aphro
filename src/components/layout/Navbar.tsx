@@ -37,6 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
     isGasConnected,
     isOnline,
     pendingCount,
+    lastUpdatedText,
     isSyncing,
     syncWithGAS,
     processPendingQueue,
@@ -205,6 +206,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                       <span>Koneksi Internet:</span>
                       <span className={`font-bold ${isOnline ? 'text-[#008396] dark:text-teal-400' : 'text-rose-600 dark:text-rose-400'}`}>
                         {isOnline ? 'Aktif / Terhubung' : 'Terputus (Offline)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">
+                      <span>Data Terakhir Diperbarui:</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">
+                        {lastUpdatedText || 'Belum diperbarui'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px]">

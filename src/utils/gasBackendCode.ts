@@ -172,6 +172,34 @@ function doGet(e) {
       return createJsonResponse({ status: "success", message: "APHRO GAS REST API Connected!", timestamp: new Date().toISOString() });
     }
 
+    if (action === "healthCheck" || action === "health_check") {
+      return createJsonResponse({
+        success: true,
+        database: "ONLINE",
+        cache: "AVAILABLE",
+        version: Date.now(),
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (action === "getVersions") {
+      var versions = {
+        WORK_ORDER: sheetToObjects("WORK_ORDER", ssId).length,
+        REALISASI: sheetToObjects("REALISASI", ssId).length,
+        ABSENSI: sheetToObjects("ABSENSI", ssId).length,
+        USERS: sheetToObjects("USERS", ssId).length,
+        ULP: sheetToObjects("ULP", ssId).length,
+        PENYULANG: sheetToObjects("PENYULANG", ssId).length,
+        REGU_ROW: sheetToObjects("REGU_ROW", ssId).length,
+        PETUGAS: sheetToObjects("PETUGAS", ssId).length,
+      };
+      return createJsonResponse({
+        status: "success",
+        globalVersion: Date.now(),
+        versions: versions
+      });
+    }
+
     if (action === "initDatabase") {
       var initializedSsId = setupDatabase();
       return createJsonResponse({ status: "success", spreadsheetId: initializedSsId, message: "Database created & initialized successfully!" });

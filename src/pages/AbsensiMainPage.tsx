@@ -1304,7 +1304,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1 py-1 font-bold outline-none focus:ring-1 focus:ring-teal-500"
                       >
                         <option value="">Pilih ULP</option>
-                        {ulpList.map(u => <option key={u.id} value={u.namaULP}>{u.namaULP}</option>)}
+                        {ulpList.map((u, idx) => <option key={u.id ? `u-opt-${u.id}-${idx}` : `u-opt-${idx}`} value={u.namaULP}>{u.namaULP}</option>)}
                       </select>
                     ) : (
                       <p className="font-bold text-slate-700 dark:text-slate-200">{editingAbsensi.ulpName}</p>
@@ -1337,8 +1337,8 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                       <option value="">-- Pilih Regu --</option>
                       {reguList
                         .filter(r => !editingAbsensi.ulpName || r.ulpName === editingAbsensi.ulpName)
-                        .map(r => (
-                          <option key={r.id} value={r.namaRegu}>{r.namaRegu}</option>
+                        .map((r, idx) => (
+                          <option key={r.id ? `r-opt-${r.id}-${idx}` : `r-opt-${idx}`} value={r.namaRegu}>{r.namaRegu}</option>
                         ))
                       }
                     </select>

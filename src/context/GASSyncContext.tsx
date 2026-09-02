@@ -1,7 +1,6 @@
 import * as React from 'react';
-import { SyncService } from '../services/syncService';
-import { GASApiService } from '../services/gasApiService';
-import { processOfflineSyncQueue, getOfflineQueue, getItemReadableDescription } from '../services/offlineSyncQueue';
+import { syncManager, HealthCheckResult } from '../services/syncManager';
+import { idbService } from '../services/indexedDbService';
 import { useSettings } from './SettingsContext';
 import { useMasterData } from './MasterDataContext';
 import { useWorkOrders } from './WorkOrderContext';
@@ -34,12 +33,14 @@ interface GASSyncContextType {
   isGasConnected: boolean;
   isOnline: boolean;
   pendingCount: number;
+  lastUpdatedText: string;
   showSyncBanner: boolean;
   setShowSyncBanner: (show: boolean) => void;
   dismissSyncBanner: () => void;
   syncWithGAS: (showToast?: (msg: string, type?: any) => void, isSilent?: boolean) => Promise<any>;
   processPendingQueue: (showToast?: (msg: string, type?: any) => void, isAuto?: boolean) => Promise<void>;
   checkConnection: () => Promise<boolean>;
+  healthCheck: () => Promise<HealthCheckResult>;
   refreshPendingCount: () => void;
   triggerActivitySync: (isSilent?: boolean) => Promise<void>;
 }
@@ -49,7 +50,7 @@ const GASSyncContext = React.createContext<GASSyncContextType | undefined>(undef
 export function GASSyncProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { setMasterData } = useMasterData();
-  const { workOrders, setWorkOrders } = useWorkOrders();
+  const { setWorkOrders } = useWorkOrders();
   const { setRealisasiList } = useRealisasi();
   const { setAbsensiList } = useAbsensi();
 
@@ -63,8 +64,14 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
   const [isGasConnected, setIsGasConnected] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [pendingCount, setPendingCount] = React.useState(0);
+  const [lastUpdatedText, setLastUpdatedText] = React.useState('Belum diperbarui');
 
   const autoDismissTimerRef = React.useRef<any>(null);
+
+  // Configure syncManager whenever settings change
+  React.useEffect(() => {
+    syncManager.configure(settings.gasWebAppUrl, settings.spreadsheetId);
+  }, [settings.gasWebAppUrl, settings.spreadsheetId]);
 
   const dismissSyncBanner = React.useCallback(() => {
     setShowSyncBanner(false);
@@ -74,34 +81,100 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const refreshPendingCount = React.useCallback(() => {
-    const count = getOfflineQueue().length;
-    setPendingCount(count);
-    return count;
+  const refreshPendingCount = React.useCallback(async () => {
+    const ops = await idbService.getPendingOperations();
+    setPendingCount(ops.length);
+    return ops.length;
+  }, []);
+
+  const healthCheck = React.useCallback(async () => {
+    const result = await syncManager.healthCheck();
+    setIsGasConnected(result.database === 'ONLINE');
+    return result;
   }, []);
 
   const checkConnection = React.useCallback(async () => {
-    if (!navigator.onLine || !settings.gasWebAppUrl) {
-      setIsGasConnected(false);
-      return false;
+    const res = await healthCheck();
+    return res.database === 'ONLINE';
+  }, [healthCheck]);
+
+  // Initial load from IndexedDB (< 1s render)
+  React.useEffect(() => {
+    let isMounted = true;
+
+    async function init() {
+      try {
+        const { cachedData, lastUpdatedText: text, pendingCount: pCount } = await syncManager.initialize();
+        if (!isMounted) return;
+
+        setLastUpdatedText(text);
+        setPendingCount(pCount);
+
+        if (cachedData) {
+          if (cachedData.WORK_ORDER) setWorkOrders(cachedData.WORK_ORDER);
+          if (cachedData.REALISASI) setRealisasiList(cachedData.REALISASI);
+          if (cachedData.ABSENSI) setAbsensiList(cachedData.ABSENSI);
+
+          setMasterData({
+            ulp: cachedData.ULP,
+            penyulang: cachedData.PENYULANG,
+            regu: cachedData.REGU_ROW,
+            petugas: cachedData.PETUGAS,
+            users: cachedData.USERS,
+          });
+        }
+      } catch (err) {
+        console.warn('SyncManager initial cache load warning:', err);
+      }
     }
 
-    const connected = await GASApiService.testConnection(settings.gasWebAppUrl);
-    setIsGasConnected(connected);
-    return connected;
-  }, [settings.gasWebAppUrl]);
+    init();
 
+    // Subscribe to SyncManager updates
+    const unsubscribe = syncManager.subscribe((event) => {
+      if (!isMounted) return;
+
+      if (event.lastUpdatedText) {
+        setLastUpdatedText(event.lastUpdatedText);
+      }
+
+      if (event.type === 'DATA_UPDATED' && event.tableName && event.data) {
+        const tName = event.tableName;
+        const data = event.data;
+
+        if (tName === 'WORK_ORDER' || tName === 'WORK_ORDERS') setWorkOrders(data);
+        else if (tName === 'REALISASI') setRealisasiList(data);
+        else if (tName === 'ABSENSI') setAbsensiList(data);
+        else if (['ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS', 'USERS'].includes(tName)) {
+          const key = tName === 'REGU_ROW' ? 'regu' : (tName.toLowerCase() as 'ulp' | 'penyulang' | 'petugas' | 'users');
+          setMasterData({
+            [key]: data,
+          });
+        }
+      } else if (event.type === 'PENDING_QUEUE_CHANGED') {
+        const ops = Array.isArray(event.data) ? event.data : [];
+        setPendingCount(ops.length);
+      } else if (event.type === 'SYNC_STATUS_CHANGED') {
+        if (event.status === 'SYNCHRONIZING' || event.status === 'PROCESSING_QUEUE') {
+          setIsSyncing(true);
+        } else if (event.status === 'IDLE') {
+          setIsSyncing(false);
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [setMasterData, setWorkOrders, setRealisasiList, setAbsensiList]);
+
+  // Process offline pending queue
   const processPendingQueue = React.useCallback(async (
     showToast?: (msg: string, type?: any) => void,
     isAuto = false
   ) => {
-    if (!settings.gasWebAppUrl || !navigator.onLine) {
-      refreshPendingCount();
-      return;
-    }
-
-    const currentQueue = getOfflineQueue();
-    if (currentQueue.length === 0) {
+    if (!navigator.onLine) {
       refreshPendingCount();
       return;
     }
@@ -109,106 +182,34 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     setIsSyncing(true);
     setSyncStage('syncing');
     setShowSyncBanner(true);
-    setSyncProgress({
-      current: 1,
-      total: currentQueue.length,
-      percent: 0,
-      currentItemDescription: getItemReadableDescription(currentQueue[0]),
-    });
-    setSyncMessage(
-      isAuto
-        ? `📡 Sinyal Terdeteksi! Menyinkronkan ${currentQueue.length} data offline ke Spreadsheet...`
-        : `Menyinkronkan ${currentQueue.length} data offline ke Spreadsheet...`
-    );
-
-    if (showToast) {
-      showToast(
-        isAuto
-          ? `📡 Sinyal ditemukan! Mengirim ${currentQueue.length} data ke Spreadsheet...`
-          : `Menyinkronkan ${currentQueue.length} data offline ke Spreadsheet...`,
-        'info'
-      );
-    }
+    setSyncMessage('Memproses antrean transaksi offline...');
 
     try {
-      const res = await processOfflineSyncQueue(
-        settings.gasWebAppUrl,
-        settings.spreadsheetId,
-        (prog) => {
-          setSyncProgress({
-            current: prog.current,
-            total: prog.total,
-            percent: prog.percent,
-            currentItemDescription: prog.description,
-          });
-          setSyncMessage(`Mengirim data ${prog.current} dari ${prog.total}: ${prog.description}`);
-        }
-      );
+      const processedCount = await syncManager.processPendingOperations();
+      await refreshPendingCount();
 
-      refreshPendingCount();
-
-      // Update local state to mark items as synced to prevent re-syncing or duplicate display
-      if (res.syncedItems && res.syncedItems.length > 0) {
-        res.syncedItems.forEach(item => {
-          if (item.type === 'REALISASI') {
-            setRealisasiList(prev => prev.map(rel => {
-              if (rel.syncId === item.syncId || rel.id === item.payloadId) {
-                return { ...rel, isSynced: true };
-              }
-              return rel;
-            }));
-          }
-        });
-      }
-
-      const stats: LastSyncStats = {
-        successCount: res.successCount,
-        failCount: res.failCount,
-        totalCount: currentQueue.length,
-        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        isAutoSync: isAuto,
-      };
-      setLastSyncStats(stats);
-
-      if (res.successCount > 0 && res.failCount === 0) {
+      if (processedCount > 0) {
         setSyncStage('success');
-        setSyncMessage(`✅ ${res.successCount} data offline berhasil dikirim ke Google Spreadsheet!`);
-        setIsGasConnected(true);
-
-        if (showToast) {
-          showToast(`✅ ${res.successCount} data offline berhasil disinkronkan ke Spreadsheet!`, 'success');
-        }
-
-        // Auto dismiss banner after 6 seconds
-        if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
-        autoDismissTimerRef.current = setTimeout(() => {
-          setShowSyncBanner(false);
-          setSyncStage('idle');
-        }, 6000);
-      } else if (res.successCount > 0 && res.failCount > 0) {
-        setSyncStage('error');
-        setSyncMessage(`Sinkronisasi parsial: ${res.successCount} berhasil, ${res.failCount} gagal.`);
-        if (showToast) {
-          showToast(`Sinkronisasi parsial: ${res.successCount} berhasil, ${res.failCount} gagal.`, 'warning');
-        }
-      } else if (res.failCount > 0) {
-        setSyncStage('error');
-        setSyncMessage(`Gagal menyinkronkan data offline: ${res.errors[0] || 'Periksa koneksi'}`);
-        if (showToast) {
-          showToast(`Gagal menyinkronkan data offline: ${res.errors[0] || 'Periksa koneksi'}`, 'error');
-        }
+        setSyncMessage(`✅ Berhasil menyinkronkan ${processedCount} data transaksi ke database.`);
+        if (showToast) showToast(`✅ ${processedCount} data offline berhasil disinkronkan!`, 'success');
+      } else {
+        setSyncStage('idle');
       }
-    } catch (err: any) {
+    } catch {
       setSyncStage('error');
-      setSyncMessage('Terjadi kendala saat menyinkronkan data.');
+      setSyncMessage('Gagal memproses transaksi offline.');
     } finally {
       setIsSyncing(false);
     }
-  }, [settings.gasWebAppUrl, settings.spreadsheetId, setRealisasiList, refreshPendingCount]);
+  }, [refreshPendingCount]);
 
-  const syncWithGAS = React.useCallback(async (showToast?: (msg: string, type?: any) => void, isSilent = false) => {
+  // Main sync function (version-based via SyncManager)
+  const syncWithGAS = React.useCallback(async (
+    showToast?: (msg: string, type?: any) => void,
+    isSilent = false
+  ) => {
     if (isSyncing) return null;
-    
+
     if (!settings.gasWebAppUrl) {
       if (showToast && !isSilent) showToast('GAS Web App URL belum dikonfigurasi', 'warning');
       setIsGasConnected(false);
@@ -216,262 +217,86 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!navigator.onLine) {
-      if (showToast && !isSilent) showToast('Perangkat dalam mode Offline. Data tersimpan di perangkat.', 'warning');
+      if (showToast && !isSilent) showToast('Mode Offline. Menggunakan data cache lokal.', 'warning');
       setIsGasConnected(false);
       return null;
     }
 
     setIsSyncing(true);
-    const initialPendingCount = getOfflineQueue().length;
-    if (initialPendingCount > 0) {
-      setSyncStage('syncing');
-      setShowSyncBanner(true);
-      setSyncMessage(`Mengirim ${initialPendingCount} data dari perangkat ke Spreadsheet...`);
-    } else {
-      setSyncMessage('Menyinkronkan data dengan Google Spreadsheet...');
-    }
-    if (showToast && !isSilent) showToast('Menghubungkan ke Spreadsheet...', 'info');
+    setSyncStage('syncing');
+    if (!isSilent) setShowSyncBanner(true);
+    setSyncMessage('Memeriksa versi database...');
 
     try {
-      // 1. Process pending offline queue first
-      const queueRes = await processOfflineSyncQueue(
-        settings.gasWebAppUrl,
-        settings.spreadsheetId,
-        (prog) => {
-          setSyncProgress({
-            current: prog.current,
-            total: prog.total,
-            percent: prog.percent,
-            currentItemDescription: prog.description,
-          });
-          setSyncMessage(`Mengirim data offline (${prog.current}/${prog.total}): ${prog.description}`);
-        }
-      );
-      refreshPendingCount();
+      // 1. Process pending operations first
+      await syncManager.processPendingOperations();
+      await refreshPendingCount();
 
-      // Update local state to mark items as synced from queue
-      if (queueRes.syncedItems && queueRes.syncedItems.length > 0) {
-        queueRes.syncedItems.forEach(item => {
-          if (item.type === 'REALISASI') {
-            setRealisasiList(prev => prev.map(rel => {
-              if (rel.syncId === item.syncId || rel.id === item.payloadId) {
-                return { ...rel, isSynced: true };
-              }
-              return rel;
-            }));
-          }
-        });
-      }
-
-      setSyncMessage('Memuat data terbaru dari Google Spreadsheet...');
-
-      // 2. Fetch full updated dataset
-      const data = await SyncService.fetchAllData(settings.gasWebAppUrl, settings.spreadsheetId);
-
-      if (data.masterData) {
-        setMasterData({
-          ulp: Array.isArray(data.masterData.ulp) ? data.masterData.ulp : undefined,
-          penyulang: Array.isArray(data.masterData.penyulang) ? data.masterData.penyulang : undefined,
-          regu: Array.isArray(data.masterData.regu) ? data.masterData.regu : undefined,
-          petugas: Array.isArray(data.masterData.petugas) ? data.masterData.petugas : undefined,
-          users: Array.isArray(data.masterData.users) ? data.masterData.users : undefined,
-        });
-      }
-
-      // Helper for normalization
-      const clean = (s?: string | null) => (s || '').trim().toUpperCase();
-
-      let finalWOs = workOrders;
-      let finalRealisasi = [];
-      let finalAbsensi = [];
-
-      if (Array.isArray(data.workOrders)) {
-        finalWOs = data.workOrders.filter((wo: any) => wo && wo.nomorWO);
-        setWorkOrders(finalWOs);
-      }
-
-      if (Array.isArray(data.realisasi)) {
-        const uniqueRel = new Map<string, any>();
-        data.realisasi.forEach((rel: any) => {
-          if (!rel) return;
-          const key = `${rel.id}_${rel.workOrderId}_${rel.tanggalRealisasi}_${rel.latitude}_${rel.longitude}_${clean(rel.keterangan)}`;
-          uniqueRel.set(key, rel);
-        });
-        finalRealisasi = Array.from(uniqueRel.values());
-        setRealisasiList(finalRealisasi);
-      }
-
-      if (Array.isArray(data.absensi)) {
-        const uniqueAbs = new Map<string, any>();
-        data.absensi.forEach((abs: any) => {
-          if (!abs) return;
-          const datePart = (abs.tanggal || '').slice(0, 10);
-          const key = `${datePart}_${clean(abs.reguName)}`;
-          if (!uniqueAbs.has(key)) {
-            uniqueAbs.set(key, abs);
-          } else {
-            const existing = uniqueAbs.get(key);
-            uniqueAbs.set(key, {
-              ...existing,
-              fotoMasuk: existing.fotoMasuk || abs.fotoMasuk,
-              fotoKeluar: existing.fotoKeluar || abs.fotoKeluar,
-              petugasList: (existing.petugasList && existing.petugasList.length > 0) ? existing.petugasList : abs.petugasList,
-              timestampMasuk: existing.timestampMasuk || abs.timestampMasuk,
-              timestampKeluar: existing.timestampKeluar || abs.timestampKeluar,
-            });
-          }
-        });
-        finalAbsensi = Array.from(uniqueAbs.values());
-        setAbsensiList(finalAbsensi);
-      }
-
-      // 3. Cache the full dataset for instantaneous future loads
-      try {
-        localStorage.setItem('aphro_cached_synced_data', JSON.stringify({
-          masterData: data.masterData,
-          realisasi: finalRealisasi,
-          absensi: finalAbsensi,
-          timestamp: new Date().toISOString()
-        }));
-      } catch {
-        // Ignore cache storage error
-      }
+      // 2. Perform version check & sync changed tables
+      const syncedTables = await syncManager.syncAllRequired();
 
       setIsGasConnected(true);
       setSyncStage('success');
-      setSyncMessage('Data berhasil disinkronkan dengan Google Spreadsheet!');
+      setSyncMessage('Data terbaru berhasil diperbarui.');
+      setLastUpdatedText(syncManager.getLastUpdatedText());
 
       if (showToast && !isSilent) {
-        if (data.errors.length > 0) {
-          showToast(`Sinkronisasi parsial. ${data.errors.length} sumber gagal.`, 'warning');
-        } else {
-          showToast('Data berhasil disinkronkan dengan Google Spreadsheet!', 'success');
-        }
+        showToast('Data berhasil diperbarui!', 'success');
       }
 
       if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
       autoDismissTimerRef.current = setTimeout(() => {
         if (!isSilent) setShowSyncBanner(false);
         setSyncStage('idle');
-      }, 5000);
-      
-      return data;
-    } catch (error) {
-      console.error('GAS Sync error:', error);
+      }, 4000);
+
+      return syncedTables;
+    } catch (err) {
+      console.error('syncWithGAS error:', err);
       setSyncStage('error');
-      setSyncMessage('Gagal terhubung ke Google Spreadsheet');
-      if (showToast && !isSilent) showToast('Gagal terhubung ke Google Spreadsheet Web App', 'error');
+      setSyncMessage('Gagal menyinkronkan data.');
+      if (showToast && !isSilent) showToast('Gagal terhubung ke database.', 'error');
       return null;
     } finally {
       setIsSyncing(false);
-      setSyncProgress(null);
     }
-  }, [settings.gasWebAppUrl, settings.spreadsheetId, setMasterData, setWorkOrders, setRealisasiList, setAbsensiList, refreshPendingCount]);
+  }, [isSyncing, settings.gasWebAppUrl, refreshPendingCount]);
 
-  // Keep refs for callbacks so event listeners and timers are stable
-  const syncWithGASRef = React.useRef(syncWithGAS);
-  React.useEffect(() => {
-    syncWithGASRef.current = syncWithGAS;
-  }, [syncWithGAS]);
-
-  const processPendingQueueRef = React.useRef(processPendingQueue);
-  React.useEffect(() => {
-    processPendingQueueRef.current = processPendingQueue;
-  }, [processPendingQueue]);
-
-  const checkConnectionRef = React.useRef(checkConnection);
-  React.useEffect(() => {
-    checkConnectionRef.current = checkConnection;
-  }, [checkConnection]);
-
-  // Initial cache load ONCE on mount
-  React.useEffect(() => {
-    try {
-      const cachedStr = localStorage.getItem('aphro_cached_synced_data');
-      if (cachedStr) {
-        const cached = JSON.parse(cachedStr);
-        if (cached.masterData) {
-          setMasterData({
-            ulp: Array.isArray(cached.masterData.ulp) ? cached.masterData.ulp : undefined,
-            penyulang: Array.isArray(cached.masterData.penyulang) ? cached.masterData.penyulang : undefined,
-            regu: Array.isArray(cached.masterData.regu) ? cached.masterData.regu : undefined,
-            petugas: Array.isArray(cached.masterData.petugas) ? cached.masterData.petugas : undefined,
-            users: Array.isArray(cached.masterData.users) ? cached.masterData.users : undefined,
-          });
-        }
-        if (Array.isArray(cached.realisasi)) setRealisasiList(cached.realisasi);
-        if (Array.isArray(cached.absensi)) setAbsensiList(cached.absensi);
-      }
-    } catch {
-      // Ignore cache read error
-    }
-  }, [setMasterData, setRealisasiList, setAbsensiList]);
-
-  // Network listeners & periodic background sync
+  // Network status listeners
   React.useEffect(() => {
     refreshPendingCount();
 
     const handleOnline = () => {
       setIsOnline(true);
-      checkConnectionRef.current().catch(() => {});
-      
-      const count = getOfflineQueue().length;
-      if (settings.gasWebAppUrl && count > 0) {
-        processPendingQueueRef.current(undefined, true).catch(() => {});
-      } else if (settings.gasWebAppUrl) {
-        syncWithGASRef.current(undefined, true).catch(() => {});
-      }
+      checkConnection().catch(() => {});
+      syncManager.processPendingOperations().then(() => {
+        refreshPendingCount();
+      });
     };
 
     const handleOffline = () => {
       setIsOnline(false);
       setIsGasConnected(false);
       setSyncStage('idle');
-      setSyncMessage('Perangkat dalam mode Offline (Tanpa Sinyal). Data tersimpan di perangkat.');
+      setSyncMessage('Mode Offline (Tanpa Koneksi). Menggunakan cache lokal.');
     };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    checkConnectionRef.current().catch(() => {});
-
-    // Auto-sync on startup
-    if (settings.gasWebAppUrl && navigator.onLine) {
-      syncWithGASRef.current(undefined, true).catch(() => {});
-    }
-
-    const interval = setInterval(() => {
-      if (navigator.onLine && settings.gasWebAppUrl) {
-        checkConnectionRef.current().catch(() => {});
-        const count = getOfflineQueue().length;
-        if (count > 0) {
-          processPendingQueueRef.current(undefined, true).catch(() => {});
-        }
-      } else {
-        setIsOnline(false);
-        setIsGasConnected(false);
-      }
-    }, 45 * 1000);
+    checkConnection().catch(() => {});
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      clearInterval(interval);
     };
-  }, [settings.gasWebAppUrl, refreshPendingCount]);
+  }, [checkConnection, refreshPendingCount]);
 
-  // General trigger for any activity in the app (Login, Logout, Save, Delete, Page change)
   const triggerActivitySync = React.useCallback(async (isSilent = true) => {
-    if (!navigator.onLine || !settings.gasWebAppUrl) {
-      refreshPendingCount();
-      return;
-    }
-    const count = getOfflineQueue().length;
-    if (count > 0) {
-      await processPendingQueue(undefined, isSilent);
-    }
-    await syncWithGAS(undefined, isSilent);
-  }, [settings.gasWebAppUrl, processPendingQueue, syncWithGAS, refreshPendingCount]);
+    if (!navigator.onLine || !settings.gasWebAppUrl) return;
+    await syncManager.processPendingOperations();
+    await syncManager.syncAllRequired();
+  }, [settings.gasWebAppUrl]);
 
   return (
     <GASSyncContext.Provider
@@ -484,12 +309,14 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
         isGasConnected,
         isOnline,
         pendingCount,
+        lastUpdatedText,
         showSyncBanner,
         setShowSyncBanner,
         dismissSyncBanner,
         syncWithGAS,
         processPendingQueue,
         checkConnection,
+        healthCheck,
         refreshPendingCount,
         triggerActivitySync,
       }}
@@ -506,4 +333,3 @@ export function useGASSync() {
   }
   return context;
 }
-

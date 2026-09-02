@@ -95,7 +95,7 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
             
             <div className="p-1.5 flex flex-col gap-0.5">
               {data.map((item, idx) => (
-                <div key={item.id} className="flex items-center gap-2.5 p-1 rounded-lg hover:bg-teal-50 transition-colors group">
+                <div key={item.id ? `target-item-${item.id}-${idx}` : `target-item-${idx}`} className="flex items-center gap-2.5 p-1 rounded-lg hover:bg-teal-50 transition-colors group">
                   <div className="p-1 rounded bg-teal-600 text-white shadow-sm shadow-teal-100">
                     <CheckCircle2 className="w-2.5 h-2.5" />
                   </div>

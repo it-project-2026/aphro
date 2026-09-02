@@ -531,8 +531,8 @@ export class GASApiService {
    */
   static async saveMasterData(
     gasUrl: string,
-    spreadsheetId: string,
-    sheetName: 'ULP' | 'PENYULANG' | 'REGU_ROW' | 'PETUGAS' | 'USERS' | 'SETTING' | 'LOG_ACTIVITY',
+    spreadsheetId: string | undefined,
+    sheetName: string,
     item: any
   ): Promise<GASApiResponse> {
     try {
@@ -548,13 +548,22 @@ export class GASApiService {
     }
   }
 
+  static async saveMasterItem(
+    gasUrl: string,
+    spreadsheetId: string | undefined,
+    sheetName: string,
+    item: any
+  ): Promise<GASApiResponse> {
+    return this.saveMasterData(gasUrl, spreadsheetId, sheetName, item);
+  }
+
   /**
    * Delete item from generic sheet by ID
    */
   static async deleteMasterData(
     gasUrl: string,
-    spreadsheetId: string,
-    sheetName: 'ULP' | 'PENYULANG' | 'REGU_ROW' | 'PETUGAS' | 'USERS',
+    spreadsheetId: string | undefined,
+    sheetName: string,
     id: string
   ): Promise<GASApiResponse> {
     try {
@@ -568,6 +577,15 @@ export class GASApiService {
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
+  }
+
+  static async deleteMasterItem(
+    gasUrl: string,
+    spreadsheetId: string | undefined,
+    sheetName: string,
+    id: string
+  ): Promise<GASApiResponse> {
+    return this.deleteMasterData(gasUrl, spreadsheetId, sheetName, id);
   }
 
   /**
