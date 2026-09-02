@@ -9,7 +9,6 @@ import {
   INITIAL_USERS
 } from '../data/initialData';
 import { useSettings } from './SettingsContext';
-import { useAuth } from './AuthContext';
 import { GASApiService } from '../services/gasApiService';
 
 interface MasterDataContextType {
@@ -51,14 +50,11 @@ interface MasterDataContextType {
 const MasterDataContext = React.createContext<MasterDataContextType | undefined>(undefined);
 
 export function MasterDataProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  const userId = user?.id || user?.nip || user?.userName || 'general';
-
-  const [ulpList, setUlpList] = usePersistState<ULP[]>(`aphro_user_ulp_${userId}`, INITIAL_ULP);
-  const [penyulangList, setPenyulangList] = usePersistState<Penyulang[]>(`aphro_user_penyulang_${userId}`, INITIAL_PENYULANG);
-  const [reguList, setReguList] = usePersistState<ReguROW[]>(`aphro_user_regu_${userId}`, INITIAL_REGU);
-  const [petugasList, setPetugasList] = usePersistState<Petugas[]>(`aphro_user_ptg_${userId}`, INITIAL_PETUGAS);
-  const [users, setUsers] = usePersistState<User[]>(`aphro_user_synced_users_${userId}`, INITIAL_USERS);
+  const [ulpList, setUlpList] = usePersistState<ULP[]>('aphro_ulp', INITIAL_ULP);
+  const [penyulangList, setPenyulangList] = usePersistState<Penyulang[]>('aphro_penyulang', INITIAL_PENYULANG);
+  const [reguList, setReguList] = usePersistState<ReguROW[]>('aphro_regu', INITIAL_REGU);
+  const [petugasList, setPetugasList] = usePersistState<Petugas[]>('aphro_ptg', INITIAL_PETUGAS);
+  const [users, setUsers] = usePersistState<User[]>('aphro_synced_users', INITIAL_USERS);
 
   const setMasterData = React.useCallback((data: {
     ulp?: ULP[];
