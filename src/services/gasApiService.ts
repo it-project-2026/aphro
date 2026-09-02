@@ -12,6 +12,28 @@ export interface GASApiResponse<T = any> {
 
 export class GASApiService {
   /**
+   * Fetch with AbortController timeout (default 10 seconds) to prevent hanging on weak mobile signals
+   */
+  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 10000): Promise<Response> {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(id);
+      return response;
+    } catch (err: any) {
+      clearTimeout(id);
+      if (err.name === 'AbortError') {
+        throw new Error('Koneksi timeout. Waktu tunggu habis (sinyal lemah atau server lambat).');
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Safe response handler to prevent JSON parsing errors when GAS returns HTML
    */
   private static async handleResponse(response: Response): Promise<GASApiResponse> {
@@ -32,7 +54,6 @@ export class GASApiService {
     }
 
     if (contentType && contentType.includes('text/html')) {
-      // Check if it looks like a Google Login page or Error page
       if (text.includes('google-signin') || text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
         return { 
           status: 'error', 
@@ -60,7 +81,7 @@ export class GASApiService {
     if (!gasUrl || !gasUrl.startsWith('http')) return false;
     try {
       const targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=ping` : `${gasUrl}?action=ping`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' }, 8000);
       
       if (response.ok) {
         const result = await this.handleResponse(response);
@@ -78,7 +99,7 @@ export class GASApiService {
   static async initDatabase(gasUrl: string): Promise<GASApiResponse> {
     try {
       const targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=initDatabase` : `${gasUrl}?action=initDatabase`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' }, 12000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message || 'Gagal menginisialisasi database GAS' };
@@ -90,7 +111,7 @@ export class GASApiService {
    */
   static async login(gasUrl: string, username: string, password: string): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
@@ -98,10 +119,24 @@ export class GASApiService {
           username,
           password,
         }),
-      });
+      }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message || 'Gagal terhubung ke server GAS Login' };
+    }
+  }
+
+  /**
+   * Fetch users from USERS sheet
+   */
+  static async fetchUsers(gasUrl: string, spreadsheetId?: string): Promise<GASApiResponse> {
+    try {
+      let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getUsers` : `${gasUrl}?action=getUsers`;
+      if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' }, 10000);
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message };
     }
   }
 
@@ -112,7 +147,7 @@ export class GASApiService {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getWorkOrders` : `${gasUrl}?action=getWorkOrders`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -126,7 +161,6 @@ export class GASApiService {
     try {
       const mappedWo = {
         ...workOrder,
-        // Match Spreadsheet Headers exactly (Case Sensitive in some GAS scripts)
         NOMOR_WO: workOrder.nomorWO || '',
         TANGGAL: workOrder.tanggal || '',
         ULP: workOrder.ulpName || '',
@@ -140,7 +174,6 @@ export class GASApiService {
         DEADLINE: workOrder.deadline || '',
         WO_AWAL: workOrder.woMulai || '',
         WO_AKHIR: workOrder.woAkhir || '',
-        // Fix 46265 bug: Explicitly send "0.00" string for non-completed to avoid GAS truthy/date bug
         TOTAL_REALISASI: (workOrder.status || '').toUpperCase() === 'SELESAI' 
           ? Number(workOrder.totalRealisasi || 0).toFixed(2) 
           : "0.00",
@@ -152,15 +185,11 @@ export class GASApiService {
         CREATED_AT: workOrder.createdAt || new Date().toISOString(),
       };
 
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'createWorkOrder',
-          spreadsheetId,
-          workOrder: mappedWo,
-        }),
-      });
+        body: JSON.stringify({ action: 'createWorkOrder', spreadsheetId, workOrder: mappedWo }),
+      }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -168,107 +197,76 @@ export class GASApiService {
   }
 
   /**
-   * Upload Photo to Google Drive (FOTO/YYYY/Month/WO_ID/)
-   */
-  static async uploadPhoto(
-    gasUrl: string,
-    payload: {
-      base64Data: string;
-      nomorWO?: string;
-      reguName?: string;
-      photoType: string;
-      folderId?: string;
-      year?: string;
-      month?: string;
-    }
-  ): Promise<GASApiResponse> {
-    try {
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'uploadPhoto',
-          base64Data: payload.base64Data,
-          nomorWO: payload.nomorWO || payload.reguName,
-          reguName: payload.reguName,
-          photoType: payload.photoType,
-          folderId: payload.folderId,
-          year: payload.year || new Date().getFullYear().toString(),
-          month:
-            payload.month ||
-            ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][
-              new Date().getMonth()
-            ],
-        }),
-      });
-      return await this.handleResponse(response);
-    } catch (err: any) {
-      return { status: 'error', message: err.message };
-    }
-  }
-
-  /**
-   * Save Realisasi Entry to Google Spreadsheet REALISASI sheet
-   */
-  static async saveRealisasi(gasUrl: string, spreadsheetId: string | undefined, realisasi: any): Promise<GASApiResponse> {
-    try {
-      const { id, ...rest } = realisasi;
-      const mappedRel = {
-        id: id || '', // Ensure ID is the first column
-        ...rest,
-        // Ensure volume is always 2 decimal string to prevent GAS truthy/date bug (46265)
-        volume: Number(realisasi.volume || 0).toFixed(2),
-        Lokasi_kerja: realisasi.lokasiKerja || '',
-      };
-
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'saveRealisasi',
-          spreadsheetId,
-          realisasi: mappedRel,
-        }),
-      });
-      return await this.handleResponse(response);
-    } catch (err: any) {
-      return { status: 'error', message: err.message };
-    }
-  }
-
-  /**
-   * Fetch all Users from Google Spreadsheet USERS sheet
-   */
-  static async fetchUsers(gasUrl: string, spreadsheetId?: string): Promise<GASApiResponse> {
-    try {
-      let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getUsers` : `${gasUrl}?action=getUsers`;
-      if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
-      return await this.handleResponse(response);
-    } catch (err: any) {
-      return { status: 'error', message: err.message };
-    }
-  }
-
-  /**
-   * Fetch all Realisasi from Google Spreadsheet REALISASI sheet
+   * Fetch Realisasi from REALISASI sheet
    */
   static async fetchRealisasi(gasUrl: string, spreadsheetId?: string): Promise<GASApiResponse> {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getRealisasi` : `${gasUrl}?action=getRealisasi`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
   }
 
+  /**
+   * Create or Save Realisasi
+   */
+  static async createRealisasi(gasUrl: string, spreadsheetId: string | undefined, realisasi: any): Promise<GASApiResponse> {
+    try {
+      const response = await this.fetchWithTimeout(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'createRealisasi', spreadsheetId, realisasi }),
+      }, 12000);
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message };
+    }
+  }
+
+  static async saveRealisasi(gasUrl: string, spreadsheetId: string | undefined, realisasi: any): Promise<GASApiResponse> {
+    return this.createRealisasi(gasUrl, spreadsheetId, realisasi);
+  }
+
+  static async updateRealisasi(gasUrl: string, spreadsheetId: string | undefined, id: string, realisasi: any): Promise<GASApiResponse> {
+    try {
+      const response = await this.fetchWithTimeout(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'updateRealisasi', spreadsheetId, id, realisasi }),
+      }, 10000);
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message };
+    }
+  }
+
+  /**
+   * Fetch Absensi from ABSENSI sheet
+   */
   static async fetchAbsensi(gasUrl: string, spreadsheetId?: string): Promise<GASApiResponse> {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getAbsensi` : `${gasUrl}?action=getAbsensi`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' }, 10000);
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message };
+    }
+  }
+
+  /**
+   * Create or Save Absensi
+   */
+  static async createAbsensi(gasUrl: string, spreadsheetId: string | undefined, absensi: any): Promise<GASApiResponse> {
+    try {
+      const response = await this.fetchWithTimeout(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'createAbsensi', spreadsheetId, absensi }),
+      }, 12000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -276,59 +274,16 @@ export class GASApiService {
   }
 
   static async saveAbsensi(gasUrl: string, spreadsheetId: string | undefined, absensi: any): Promise<GASApiResponse> {
-    try {
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'saveAbsensi',
-          spreadsheetId,
-          absensi,
-        }),
-      });
-      return await this.handleResponse(response);
-    } catch (err: any) {
-      return { status: 'error', message: err.message };
-    }
+    return this.createAbsensi(gasUrl, spreadsheetId, absensi);
   }
 
   static async deleteAbsensi(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'deleteAbsensi',
-          spreadsheetId,
-          id,
-        }),
-      });
-      return await this.handleResponse(response);
-    } catch (err: any) {
-      return { status: 'error', message: err.message };
-    }
-  }
-
-  static async updateRealisasi(gasUrl: string, spreadsheetId: string, id: string, rel: any): Promise<GASApiResponse> {
-    try {
-      const { id: relId, ...rest } = rel;
-      const mappedRel = {
-        id: id || relId || '', // Ensure ID is the first column
-        ...rest,
-        // Ensure volume is always 2 decimal string to prevent GAS truthy/date bug (46265)
-        volume: Number(rel.volume || 0).toFixed(2),
-      };
-
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'updateRealisasi',
-          spreadsheetId,
-          id,
-          realisasi: mappedRel,
-        }),
-      });
+        body: JSON.stringify({ action: 'deleteAbsensi', spreadsheetId, id }),
+      }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -337,7 +292,7 @@ export class GASApiService {
 
   static async deleteRealisasi(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
@@ -345,7 +300,7 @@ export class GASApiService {
           spreadsheetId,
           id,
         }),
-      });
+      }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -353,14 +308,14 @@ export class GASApiService {
   }
 
   /**
-   * Fetch ALL Data from all 10 sheets in a single API call
+   * Fetch ALL Data from all sheets in a single API call (with 12s timeout)
    */
   static async fetchAllData(gasUrl: string, spreadsheetId?: string): Promise<GASApiResponse> {
     try {
       const action = 'getAllData';
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=${action}` : `${gasUrl}?action=${action}`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' }, 12000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message || 'Gagal mengambil data lengkap dari Spreadsheet' };
@@ -374,7 +329,6 @@ export class GASApiService {
     try {
       const mappedWo = {
         ...wo,
-        // Match Spreadsheet Headers exactly (Case Sensitive in some GAS scripts)
         NOMOR_WO: wo.nomorWO || '',
         TANGGAL: wo.tanggal || '',
         ULP: wo.ulpName || '',
@@ -388,7 +342,6 @@ export class GASApiService {
         DEADLINE: wo.deadline || '',
         WO_AWAL: wo.woMulai || '',
         WO_AKHIR: wo.woAkhir || '',
-        // Fix 46265 bug: Explicitly send "0.00" string for non-completed to avoid GAS truthy/date bug
         TOTAL_REALISASI: (wo.status || '').toUpperCase() === 'SELESAI' 
           ? Number(wo.totalRealisasi || 0).toFixed(2) 
           : "0.00",
@@ -397,14 +350,14 @@ export class GASApiService {
           : '',
         LOKASI_START: wo.lokasiStart || '',
         LOKASI_FINISH: wo.lokasiFinish || '',
-        CREATED_AT: wo.createdAt || '', // Should already exist on update
+        CREATED_AT: wo.createdAt || '',
       };
 
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'updateWorkOrder', spreadsheetId, id, workOrder: mappedWo }),
-      });
+      }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -416,11 +369,11 @@ export class GASApiService {
    */
   static async deleteWorkOrder(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'deleteWorkOrder', spreadsheetId, id }),
-      });
+      }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -437,11 +390,11 @@ export class GASApiService {
     item: any
   ): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'saveMasterData', spreadsheetId, sheetName, item }),
-      });
+      }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -458,11 +411,11 @@ export class GASApiService {
     id: string
   ): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'deleteMasterData', spreadsheetId, sheetName, id }),
-      });
+      }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -480,7 +433,7 @@ export class GASApiService {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=${type}` : `${gasUrl}?action=${type}`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' }, 10000);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
