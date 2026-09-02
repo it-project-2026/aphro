@@ -53,17 +53,8 @@ const AppContent: React.FC = () => {
     return localStorage.getItem('aphro_has_initiated') === 'true';
   });
 
-  // Automatically sync data when user logs in or app is initiated
-  React.useEffect(() => {
-    if (isInitiated && settings.gasWebAppUrl && navigator.onLine) {
-      // Small delay to ensure all providers are updated with latest settings
-      const timer = setTimeout(() => {
-        // Use silent sync (true) to avoid annoying popups on every refresh
-        syncWithGAS(undefined, true).catch(() => {});
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [isInitiated, user?.id, settings.gasWebAppUrl]);
+  // Manual sync mode: App loads from local storage/cache instantly on startup without automatic network sync
+
 
   const isAdmRole = user && (
     (user.role || '').toUpperCase() === 'ADM' ||

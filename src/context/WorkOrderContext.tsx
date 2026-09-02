@@ -107,7 +107,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('WORK_ORDER_CREATE', newWo);
-      showToast(`⚡ Work Order ${newWo.nomorWO} tersimpan lokal (Offline).`, 'info');
+      showToast(`⚡ Work Order ${newWo.nomorWO} tersimpan di perangkat (Offline). Tekan Sync Data untuk mengirim ke Spreadsheet.`, 'info');
     } else {
       try {
         // Ensure we are using the latest settings URL and Spreadsheet ID
@@ -118,12 +118,12 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         } else {
           console.error('GAS Save failed:', res?.message);
           addToOfflineQueue('WORK_ORDER_CREATE', newWo);
-          showToast(`⚡ Work Order tersimpan lokal. Gagal sync ke Spreadsheet: ${res?.message || 'Unknown Error'}`, 'warning');
+          showToast(`⚡ Work Order tersimpan di perangkat. Tekan Sync Data untuk mengirim ke Spreadsheet.`, 'warning');
         }
       } catch (err) {
         console.error('Save WO error:', err);
         addToOfflineQueue('WORK_ORDER_CREATE', newWo);
-        showToast(`⚡ Gagal terhubung ke Spreadsheet. Data disimpan lokal di perangkat.`, 'info');
+        showToast(`⚡ Tersimpan di perangkat. Tekan Sync Data untuk mengirim ke Spreadsheet.`, 'info');
       }
     }
 
@@ -142,7 +142,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
-      showToast('Work Order diperbarui secara lokal (Offline)', 'info');
+      showToast('Work Order diperbarui di perangkat. Tekan Sync Data untuk sinkron.', 'info');
     } else {
         try {
           const res = await GASApiService.updateWorkOrder(settings.gasWebAppUrl, settings.spreadsheetId, id, updatedWo);
@@ -150,12 +150,12 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
             showToast('Work Order berhasil diperbarui di Spreadsheet', 'success');
           } else {
             addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
-            showToast('Gagal sinkron, disimpan di antrean offline', 'warning');
+            showToast('Tersimpan di antrean perangkat. Tekan Sync Data untuk sinkron.', 'warning');
           }
         } catch (err) {
           console.error('Update WO error:', err);
           addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
-          showToast('Koneksi bermasalah, disimpan di antrean offline', 'info');
+          showToast('Koneksi terputus, tersimpan di antrean perangkat.', 'info');
         }
       }
   }, [setWorkOrders, settings.gasWebAppUrl, settings.spreadsheetId, showToast, workOrders]);
@@ -169,7 +169,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('WORK_ORDER_DELETE', { id });
-      showToast('Work Order dihapus secara lokal (Offline)', 'info');
+      showToast('Work Order dihapus di perangkat (Offline). Tekan Sync Data untuk sinkron.', 'info');
     } else {
       try {
         const res = await GASApiService.deleteWorkOrder(settings.gasWebAppUrl, settings.spreadsheetId, id);
@@ -177,12 +177,12 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           showToast('Work Order berhasil dihapus dari Spreadsheet', 'success');
         } else {
           addToOfflineQueue('WORK_ORDER_DELETE', { id });
-          showToast('Gagal hapus di Spreadsheet, disimpan di antrean offline', 'warning');
+          showToast('Tersimpan di antrean perangkat. Tekan Sync Data untuk sinkron.', 'warning');
         }
       } catch (err) {
         console.error('Delete WO error:', err);
         addToOfflineQueue('WORK_ORDER_DELETE', { id });
-        showToast('Koneksi bermasalah, antrean hapus disimpan', 'info');
+        showToast('Koneksi terputus, tersimpan di antrean perangkat.', 'info');
       }
     }
   }, [setWorkOrders, settings.gasWebAppUrl, settings.spreadsheetId, workOrders, showToast]);

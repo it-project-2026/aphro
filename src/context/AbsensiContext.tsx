@@ -111,7 +111,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('ABSENSI', payloadToSave);
-      showToast('⚡ Absensi tersimpan di perangkat (Offline). Akan otomatis disinkronkan saat terhubung internet.', 'info');
+      showToast('⚡ Absensi tersimpan di perangkat (Offline). Tekan tombol Sync Data untuk mengirim ke Spreadsheet.', 'info');
     } else {
       try {
         const res = await GASApiService.saveAbsensi(settings.gasWebAppUrl, settings.spreadsheetId, payloadToSave);
@@ -132,12 +132,12 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
           }
         } else {
           addToOfflineQueue('ABSENSI', payloadToSave);
-          showToast(`⚡ Tersimpan lokal. ${res.message || 'Gagal ke Spreadsheet, masuk antrean sinkronisasi.'}`, 'warning');
+          showToast(`⚡ Tersimpan di perangkat. Tekan tombol Sync Data untuk mengirim ke Spreadsheet.`, 'warning');
         }
       } catch (err) {
         console.error('Sync Absensi error:', err);
         addToOfflineQueue('ABSENSI', payloadToSave);
-        showToast('⚡ Data tersimpan lokal di HP/Perangkat. Akan disinkronkan saat terhubung internet.', 'warning');
+        showToast('⚡ Data tersimpan di perangkat. Tekan tombol Sync Data untuk mengirim ke Spreadsheet.', 'warning');
       }
     }
 

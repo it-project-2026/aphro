@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGASSync } from '../../context/GASSyncContext';
+import { useToast } from '../../hooks/useToast';
 import {
   FileSpreadsheet,
   RefreshCw,
@@ -7,15 +8,13 @@ import {
   AlertTriangle,
   X,
   Radio,
-  ArrowUpRight,
   HardDrive,
+  Zap,
 } from 'lucide-react';
 
 /**
- * Indikator Pengiriman Data dari Penyimpanan Perangkat (Local Storage Queue) ke Spreadsheet
- * HANYA muncul saat:
- * 1. Aplikasi mendeteksi sinyal internet / online, DAN
- * 2. Terdapat data di penyimpanan perangkat (Local Storage Queue) yang sedang dikirim ke Google Spreadsheet
+ * Indikator & Kontrol Pengiriman Data dari Penyimpanan Perangkat (Local Storage Queue) ke Spreadsheet.
+ * Sekarang mendukung mode SINKRONISASI MANUAL dengan menekan Tombol Sync Data.
  */
 export const SyncStatusBanner: React.FC = () => {
   const {
@@ -24,17 +23,94 @@ export const SyncStatusBanner: React.FC = () => {
     syncProgress,
     syncMessage,
     lastSyncStats,
+    pendingCount,
     showSyncBanner,
     dismissSyncBanner,
     processPendingQueue,
+    syncWithGAS,
+    isOnline,
   } = useGASSync();
+  const { showToast } = useToast();
 
-  // HANYA tampil jika sedang dalam proses sync queue atau baru saja menyelesaikan pengiriman queue
-  if (!showSyncBanner) {
+  const handleManualSyncClick = async () => {
+    try {
+      if (pendingCount > 0) {
+        await processPendingQueue(showToast);
+      }
+      await syncWithGAS(showToast);
+    } catch {
+      showToast('Gagal menyinkronkan data dengan Google Spreadsheet', 'error');
+    }
+  };
+
+  // HANYA tampil jika ada data pending atau sedang proses sync atau ada notifikasi hasil sync
+  if (!showSyncBanner && pendingCount === 0) {
     return null;
   }
 
-  // 1. Sedang Mengirim Data dari Local Storage Queue ke Google Spreadsheet
+  // 1. STATE MANUAL PROMPT: Ada data di penyimpanan lokal perangkat yang menunggu untuk disinkronkan manual
+  if (pendingCount > 0 && !isSyncing && syncStage !== 'success') {
+    return (
+      <aside
+        aria-label="Notifikasi Sinkronisasi Data Manual"
+        className="fixed bottom-20 md:bottom-6 right-3 sm:right-6 z-50 max-w-md w-[calc(100vw-1.5rem)] sm:w-[440px] bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md text-white rounded-2xl shadow-2xl border border-amber-500/60 p-4 animate-in slide-in-from-bottom-5 duration-300 ring-1 ring-amber-500/20"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start space-x-3 min-w-0">
+            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 shrink-0 mt-0.5">
+              <HardDrive className="w-5 h-5 text-amber-400" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center space-x-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5" />
+                  Penyimpanan Perangkat
+                </span>
+                <span className="text-[11px] font-extrabold text-amber-200">
+                  {pendingCount} Data Antrean
+                </span>
+              </div>
+              <h4 className="text-xs font-bold text-slate-100 mt-1">
+                Data Siap Disinkronkan ke Spreadsheet
+              </h4>
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-2">
+                Terdapat data baru tersimpan di memori perangkat. Tekan tombol <strong className="text-amber-300">Sync Data</strong> untuk mengirim ke Google Spreadsheet.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={dismissSyncBanner}
+            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors shrink-0"
+            title="Sembunyikan Notifikasi"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Tombol Sync Data Manual */}
+        <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between gap-2">
+          <span className="text-[10px] text-slate-400 italic">
+            {isOnline ? '🟢 Sinyal Online Tersedia' : '🔴 Sedang Offline (Data Aman di HP)'}
+          </span>
+          <button
+            type="button"
+            onClick={handleManualSyncClick}
+            disabled={!isOnline}
+            className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 via-[#00A2B9] to-[#008396] hover:from-amber-600 hover:to-[#006e7e] text-white rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-200 fill-amber-200" />
+            <span>Tombol Sync Data ({pendingCount})</span>
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  // 2. Sedang Mengirim Data dari Local Storage Queue ke Google Spreadsheet
   if (isSyncing || syncStage === 'syncing') {
     return (
       <aside
@@ -53,7 +129,7 @@ export const SyncStatusBanner: React.FC = () => {
               <div className="flex items-center space-x-2">
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-400/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-ping mr-1.5" />
-                  Sinyal Ditemukan
+                  Menyinkronkan
                 </span>
                 {syncProgress && syncProgress.total > 0 && (
                   <span className="text-xs font-bold text-teal-200">
@@ -92,7 +168,7 @@ export const SyncStatusBanner: React.FC = () => {
     );
   }
 
-  // 2. Sukses Mengirim Seluruh Data Local Storage Queue ke Spreadsheet
+  // 3. Sukses Mengirim Seluruh Data Local Storage Queue ke Spreadsheet
   if (syncStage === 'success' && lastSyncStats && lastSyncStats.totalCount > 0) {
     return (
       <aside
@@ -135,7 +211,7 @@ export const SyncStatusBanner: React.FC = () => {
     );
   }
 
-  // 3. Terkendala / Sebagian Gagal
+  // 4. Terkendala / Sebagian Gagal
   if (syncStage === 'error' && lastSyncStats && lastSyncStats.totalCount > 0) {
     return (
       <aside
@@ -152,7 +228,7 @@ export const SyncStatusBanner: React.FC = () => {
                 Pengiriman Data Tertunda
               </h4>
               <p className="text-[11px] text-rose-200 mt-0.5">
-                {syncMessage || 'Sinyal tidak stabil. Data tetap aman di penyimpanan perangkat dan akan dikirim ulang saat sinyal stabil.'}
+                {syncMessage || 'Sinyal tidak stabil. Data tetap aman di penyimpanan perangkat dan dapat disinkronkan kembali dengan menekan tombol Sync Data.'}
               </p>
             </div>
           </div>
@@ -160,7 +236,7 @@ export const SyncStatusBanner: React.FC = () => {
           <div className="flex items-center space-x-1 shrink-0">
             <button
               type="button"
-              onClick={() => processPendingQueue(undefined, true)}
+              onClick={handleManualSyncClick}
               className="px-2.5 py-1 bg-white text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1"
             >
               <RefreshCw className="w-3 h-3" />

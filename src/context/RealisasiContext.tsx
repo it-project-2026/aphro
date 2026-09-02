@@ -48,7 +48,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('REALISASI', payloadToSave);
-      showToast(`⚡ Tersimpan di perangkat (Mode Offline). Akan disinkronkan otomatis.`, 'info');
+      showToast(`⚡ Tersimpan di perangkat (Offline). Tekan tombol Sync Data untuk mengirim ke Spreadsheet.`, 'info');
     } else {
       try {
         const res = await GASApiService.saveRealisasi(settings.gasWebAppUrl, settings.spreadsheetId, payloadToSave);
@@ -69,12 +69,12 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
           }));
         } else {
           addToOfflineQueue('REALISASI', payloadToSave);
-          showToast(`⚡ Gagal kirim ke Spreadsheet, masuk antrean sinkronisasi.`, 'warning');
+          showToast(`⚡ Tersimpan di perangkat. Tekan tombol Sync Data untuk mengirim ke Spreadsheet.`, 'warning');
         }
       } catch (err) {
         console.error('GAS Save Realisasi error:', err);
         addToOfflineQueue('REALISASI', payloadToSave);
-        showToast('⚡ Data tersimpan di HP. Akan disinkronkan otomatis saat online.', 'warning');
+        showToast('⚡ Data tersimpan di perangkat. Tekan tombol Sync Data untuk mengirim ke Spreadsheet.', 'warning');
       }
     }
 
@@ -113,7 +113,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('REALISASI_DELETE', { id });
-      showToast('⚡ Realisasi dihapus lokal (Offline). Akan disinkronkan otomatis.', 'info');
+      showToast('⚡ Realisasi dihapus lokal (Offline). Tekan tombol Sync Data untuk sinkron.', 'info');
     } else {
       try {
         const res = await GASApiService.deleteRealisasi(settings.gasWebAppUrl, settings.spreadsheetId, id);
@@ -121,11 +121,11 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
           showToast('Realisasi berhasil dihapus dari Spreadsheet', 'success');
         } else {
           addToOfflineQueue('REALISASI_DELETE', { id });
-          showToast('Gagal menghapus di Spreadsheet, antrean offline disimpan.', 'warning');
+          showToast('Tersimpan di antrean perangkat. Tekan tombol Sync Data untuk sinkron.', 'warning');
         }
       } catch (err) {
         addToOfflineQueue('REALISASI_DELETE', { id });
-        showToast('Koneksi terputus, antrean hapus disimpan.', 'warning');
+        showToast('Koneksi terputus, tersimpan di antrean perangkat.', 'warning');
       }
     }
   }, [setRealisasiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);

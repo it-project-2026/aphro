@@ -389,20 +389,18 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       // Ignore cache read error
     }
 
-    refreshPendingCount();
+    const count = refreshPendingCount();
+    if (count > 0) {
+      setShowSyncBanner(true);
+    }
 
-    // AUTO-SYNC ON SIGNAL RESTORATION (from no-signal to connected)
+    // MANUAL SYNC MODE: Only update connection status when online, do not auto-upload
     const handleOnline = () => {
       setIsOnline(true);
       checkConnection().catch(() => {});
-      
-      const count = getOfflineQueue().length;
-      if (settings.gasWebAppUrl && count > 0) {
-        // Automatic sync when finding signal
-        processPendingQueue(undefined, true).catch(() => {});
-      } else if (settings.gasWebAppUrl) {
-        // Light refresh
-        syncWithGAS(undefined, true).catch(() => {});
+      const pending = refreshPendingCount();
+      if (pending > 0) {
+        setShowSyncBanner(true);
       }
     };
 
@@ -410,7 +408,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       setIsOnline(false);
       setIsGasConnected(false);
       setSyncStage('idle');
-      setSyncMessage('Perangkat dalam mode Offline (Tanpa Sinyal). Data tersimpan di HP.');
+      setSyncMessage('Perangkat dalam mode Offline (Tanpa Sinyal). Data tersimpan di perangkat.');
     };
 
     window.addEventListener('online', handleOnline);
@@ -418,29 +416,26 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     checkConnection().catch(() => {});
 
-    if (settings.autoSyncOnStart && settings.gasWebAppUrl && navigator.onLine) {
-      syncWithGAS(undefined, true).catch(() => {});
-    }
-
+    // Periodic lightweight connection test only (no automatic queue uploading)
     const interval = setInterval(() => {
       if (navigator.onLine) {
         checkConnection().catch(() => {});
-        const count = getOfflineQueue().length;
-        if (count > 0 && settings.gasWebAppUrl) {
-          processPendingQueue(undefined, true).catch(() => {});
+        const pending = refreshPendingCount();
+        if (pending > 0 && !showSyncBanner) {
+          setShowSyncBanner(true);
         }
       } else {
         setIsOnline(false);
         setIsGasConnected(false);
       }
-    }, 2 * 60 * 1000); // Check every 2 minutes
+    }, 60 * 1000); // Check connectivity every 1 minute
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, [checkConnection, processPendingQueue, refreshPendingCount, settings.autoSyncOnStart, settings.gasWebAppUrl, syncWithGAS, setMasterData, setRealisasiList, setAbsensiList]);
+  }, [checkConnection, refreshPendingCount, showSyncBanner, setMasterData, setRealisasiList, setAbsensiList]);
 
   return (
     <GASSyncContext.Provider

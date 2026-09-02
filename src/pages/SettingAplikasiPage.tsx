@@ -36,12 +36,25 @@ import {
 export const SettingAplikasiPage: React.FC = () => {
   const { settings, updateSettings } = useSettings();
   const { auditLogs, notifications } = useNotifications();
-  const { isGasConnected, syncWithGAS } = useGASSync();
+  const { isGasConnected, syncWithGAS, pendingCount, processPendingQueue, isSyncing } = useGASSync();
   const { showToast } = useToast();
   const { users, ulpList, penyulangList, reguList, petugasList } = useMasterData();
   const { workOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
   const { absensiList } = useAbsensi();
+
+  const handleManualSyncAll = async () => {
+    try {
+      showToast('Memulai sinkronisasi data manual...', 'info');
+      if (pendingCount > 0) {
+        await processPendingQueue(showToast);
+      }
+      await syncWithGAS(showToast);
+      showToast('Sinkronisasi Berhasil Selesai!', 'success');
+    } catch {
+      showToast('Gagal melakukan sinkronisasi dengan Google Spreadsheet', 'error');
+    }
+  };
 
   const [namaUnitLayanan, setNamaUnitLayanan] = useState(settings.namaUnitLayanan);
   const [logoAplikasiUrl, setLogoAplikasiUrl] = useState(settings.logoAplikasiUrl);
@@ -334,25 +347,29 @@ export const SettingAplikasiPage: React.FC = () => {
             </p>
           </div>
 
-          {/* 11-Sheet Realtime Sync Monitor */}
+          {/* 11-Sheet Realtime Sync Monitor & Manual Sync Trigger */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center space-x-2 text-xs font-bold text-slate-800 dark:text-slate-200">
                 <FileSpreadsheet className="w-4 h-4 text-teal-600" />
-                <span>Status Sinkronisasi 11 Sheet Google Spreadsheet:</span>
+                <span>Sinkronisasi Data Google Spreadsheet (Mode Manual):</span>
               </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  showToast('Menyinkronkan semua 11 sheet dari Google Spreadsheet...', 'info');
-                  await syncWithGAS();
-                  showToast('Sinkronisasi 11 Sheet Berhasil Selesai!', 'success');
-                }}
-                className="inline-flex items-center space-x-1 px-3 py-1 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 transition-colors shadow-2xs"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>Sinkronkan Semua Sheet</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                {pendingCount > 0 && (
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-xs font-bold border border-amber-300 dark:border-amber-800">
+                    📂 {pendingCount} data antrean perangkat
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleManualSyncAll}
+                  disabled={isSyncing}
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 via-[#00A2B9] to-[#008396] hover:from-amber-600 hover:to-[#006e7e] text-white rounded-xl text-xs font-black transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Menyinkronkan...' : pendingCount > 0 ? `Tombol Sync Data (${pendingCount})` : 'Tombol Sync Data'}</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-6 gap-2 text-xs">
