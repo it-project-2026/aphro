@@ -366,10 +366,26 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       setIsSyncing(false);
       setSyncProgress(null);
     }
-  }, [isSyncing, settings.gasWebAppUrl, settings.spreadsheetId, setMasterData, workOrders, setWorkOrders, setRealisasiList, setAbsensiList, refreshPendingCount]);
+  }, [settings.gasWebAppUrl, settings.spreadsheetId, setMasterData, setWorkOrders, setRealisasiList, setAbsensiList, refreshPendingCount]);
 
+  // Keep refs for callbacks so event listeners and timers are stable
+  const syncWithGASRef = React.useRef(syncWithGAS);
   React.useEffect(() => {
-    // 0. Load cached data from local storage immediately
+    syncWithGASRef.current = syncWithGAS;
+  }, [syncWithGAS]);
+
+  const processPendingQueueRef = React.useRef(processPendingQueue);
+  React.useEffect(() => {
+    processPendingQueueRef.current = processPendingQueue;
+  }, [processPendingQueue]);
+
+  const checkConnectionRef = React.useRef(checkConnection);
+  React.useEffect(() => {
+    checkConnectionRef.current = checkConnection;
+  }, [checkConnection]);
+
+  // Initial cache load ONCE on mount
+  React.useEffect(() => {
     try {
       const cachedStr = localStorage.getItem('aphro_cached_synced_data');
       if (cachedStr) {
@@ -389,21 +405,21 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore cache read error
     }
+  }, [setMasterData, setRealisasiList, setAbsensiList]);
 
+  // Network listeners & periodic background sync
+  React.useEffect(() => {
     refreshPendingCount();
 
-    // AUTO-SYNC ON SIGNAL RESTORATION (from no-signal to connected)
     const handleOnline = () => {
       setIsOnline(true);
-      checkConnection().catch(() => {});
+      checkConnectionRef.current().catch(() => {});
       
       const count = getOfflineQueue().length;
       if (settings.gasWebAppUrl && count > 0) {
-        // Automatic sync when finding signal
-        processPendingQueue(undefined, true).catch(() => {});
+        processPendingQueueRef.current(undefined, true).catch(() => {});
       } else if (settings.gasWebAppUrl) {
-        // Light refresh
-        syncWithGAS(undefined, true).catch(() => {});
+        syncWithGASRef.current(undefined, true).catch(() => {});
       }
     };
 
@@ -417,20 +433,19 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    checkConnection().catch(() => {});
+    checkConnectionRef.current().catch(() => {});
 
-    // Auto-sync on startup / initialization
+    // Auto-sync on startup
     if (settings.gasWebAppUrl && navigator.onLine) {
-      syncWithGAS(undefined, true).catch(() => {});
+      syncWithGASRef.current(undefined, true).catch(() => {});
     }
 
-    // Periodic automatic queue check & sync every 45 seconds
     const interval = setInterval(() => {
       if (navigator.onLine && settings.gasWebAppUrl) {
-        checkConnection().catch(() => {});
+        checkConnectionRef.current().catch(() => {});
         const count = getOfflineQueue().length;
         if (count > 0) {
-          processPendingQueue(undefined, true).catch(() => {});
+          processPendingQueueRef.current(undefined, true).catch(() => {});
         }
       } else {
         setIsOnline(false);
@@ -443,7 +458,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, [checkConnection, processPendingQueue, refreshPendingCount, settings.gasWebAppUrl, syncWithGAS, setMasterData, setRealisasiList, setAbsensiList]);
+  }, [settings.gasWebAppUrl, refreshPendingCount]);
 
   // General trigger for any activity in the app (Login, Logout, Save, Delete, Page change)
   const triggerActivitySync = React.useCallback(async (isSilent = true) => {

@@ -10,27 +10,100 @@ export interface GASApiResponse<T = any> {
   [key: string]: any;
 }
 
+// Memory cache & Request deduplication map
+const apiCache = new Map<string, { data: any; timestamp: number }>();
+const activeRequests = new Map<string, Promise<Response>>();
+const CACHE_TTL_MS = 15000; // 15 seconds memory cache to prevent redundant requests
+
 export class GASApiService {
   /**
-   * Fetch with AbortController timeout (default 20 seconds) to prevent hanging requests
+   * Fetch with AbortController timeout and exponential backoff retry
    */
-  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 20000): Promise<Response> {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-      });
-      clearTimeout(id);
-      return response;
-    } catch (err: any) {
-      clearTimeout(id);
-      if (err.name === 'AbortError') {
-        throw new Error('Koneksi ke Google Spreadsheet Timeout (>20 detik). Periksa koneksi internet atau status Web App GAS.');
+  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 25000, retries = 2): Promise<Response> {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+        });
+        clearTimeout(id);
+        return response;
+      } catch (err: any) {
+        clearTimeout(id);
+        const isLastAttempt = attempt === retries;
+        if (isLastAttempt) {
+          if (err.name === 'AbortError') {
+            throw new Error('Koneksi ke Google Spreadsheet Timeout (>25 detik). Periksa koneksi internet atau status Web App GAS.');
+          }
+          throw err;
+        }
+        // Wait with exponential backoff before retry
+        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
       }
+    }
+    throw new Error('Gagal terhubung ke server setelah beberapa kali percobaan.');
+  }
+
+  /**
+   * Cached GET fetch with request deduplication
+   */
+  private static async cachedFetch(url: string, useCache = true, ttl = CACHE_TTL_MS): Promise<Response> {
+    const cacheKey = url;
+    const now = Date.now();
+
+    if (useCache && apiCache.has(cacheKey)) {
+      const cached = apiCache.get(cacheKey)!;
+      if (now - cached.timestamp < ttl) {
+        // Return a mock Response object using cached text/json
+        return new Response(JSON.stringify(cached.data), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } else {
+        apiCache.delete(cacheKey);
+      }
+    }
+
+    // Request deduplication for simultaneous identical GET requests
+    if (activeRequests.has(cacheKey)) {
+      const res = await activeRequests.get(cacheKey)!;
+      return res.clone();
+    }
+
+    const requestPromise = this.fetchWithTimeout(url, { method: 'GET' });
+    activeRequests.set(cacheKey, requestPromise);
+
+    try {
+      const response = await requestPromise;
+      activeRequests.delete(cacheKey);
+
+      if (response.ok && useCache) {
+        const cloned = response.clone();
+        try {
+          const json = await cloned.json();
+          apiCache.set(cacheKey, { data: json, timestamp: now });
+          return new Response(JSON.stringify(json), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        } catch {
+          return response;
+        }
+      }
+      return response;
+    } catch (err) {
+      activeRequests.delete(cacheKey);
       throw err;
     }
+  }
+
+  /**
+   * Clear client API memory cache when mutations occur
+   */
+  static clearCache() {
+    apiCache.clear();
   }
 
   /**
@@ -128,13 +201,13 @@ export class GASApiService {
   }
 
   /**
-   * Fetch all Work Orders from Google Spreadsheet WORK_ORDER sheet
+   * Fetch all Work Orders from Google Spreadsheet WORK_ORDER sheet (cached & deduplicated)
    */
   static async fetchWorkOrders(gasUrl: string, spreadsheetId?: string): Promise<GASApiResponse> {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getWorkOrders` : `${gasUrl}?action=getWorkOrders`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.cachedFetch(targetUrl, true);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -146,6 +219,7 @@ export class GASApiService {
    */
   static async createWorkOrder(gasUrl: string, spreadsheetId: string | undefined, workOrder: any): Promise<GASApiResponse> {
     try {
+      this.clearCache();
       const mappedWo = {
         ...workOrder,
         // Match Spreadsheet Headers exactly (Case Sensitive in some GAS scripts)
@@ -357,32 +431,15 @@ export class GASApiService {
     }
   }
 
-  static async deleteRealisasi(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
-    try {
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'deleteRealisasi',
-          spreadsheetId,
-          id,
-        }),
-      });
-      return await this.handleResponse(response);
-    } catch (err: any) {
-      return { status: 'error', message: err.message };
-    }
-  }
-
   /**
-   * Fetch ALL Data from all 10 sheets in a single API call
+   * Fetch ALL Data from all sheets in a single API call (cached & deduplicated)
    */
   static async fetchAllData(gasUrl: string, spreadsheetId?: string): Promise<GASApiResponse> {
     try {
       const action = 'getAllData';
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=${action}` : `${gasUrl}?action=${action}`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.cachedFetch(targetUrl, true, 10000); // 10s cache for getAllData
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message || 'Gagal mengambil data lengkap dari Spreadsheet' };
@@ -394,6 +451,7 @@ export class GASApiService {
    */
   static async updateWorkOrder(gasUrl: string, spreadsheetId: string | undefined, id: string, wo: any): Promise<GASApiResponse> {
     try {
+      this.clearCache();
       const mappedWo = {
         ...wo,
         // Match Spreadsheet Headers exactly (Case Sensitive in some GAS scripts)
@@ -438,10 +496,29 @@ export class GASApiService {
    */
   static async deleteWorkOrder(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
+      this.clearCache();
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'deleteWorkOrder', spreadsheetId, id }),
+      });
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message };
+    }
+  }
+
+  static async deleteRealisasi(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
+    try {
+      this.clearCache();
+      const response = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'deleteRealisasi',
+          spreadsheetId,
+          id,
+        }),
       });
       return await this.handleResponse(response);
     } catch (err: any) {
@@ -459,6 +536,7 @@ export class GASApiService {
     item: any
   ): Promise<GASApiResponse> {
     try {
+      this.clearCache();
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -480,6 +558,7 @@ export class GASApiService {
     id: string
   ): Promise<GASApiResponse> {
     try {
+      this.clearCache();
       const response = await fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -492,7 +571,7 @@ export class GASApiService {
   }
 
   /**
-   * Fetch Master Data (ULP, Penyulang, Regu, Petugas)
+   * Fetch Master Data (ULP, Penyulang, Regu, Petugas) (cached & deduplicated)
    */
   static async fetchMasterData(
     gasUrl: string,
@@ -502,7 +581,7 @@ export class GASApiService {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=${type}` : `${gasUrl}?action=${type}`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.cachedFetch(targetUrl, true);
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
