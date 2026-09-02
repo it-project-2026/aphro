@@ -51,6 +51,19 @@ export function usePersistState<T>(key: string, defaultValue: T): [T, React.Disp
     return defaultValue;
   });
 
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved !== null) {
+        setState(JSON.parse(saved));
+      } else {
+        setState(defaultValue);
+      }
+    } catch {
+      setState(defaultValue);
+    }
+  }, [key]);
+
   const setPersistentState = React.useCallback((value: React.SetStateAction<T>) => {
     setState((prev) => {
       const nextValue = value instanceof Function ? value(prev) : value;

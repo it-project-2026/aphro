@@ -3,6 +3,7 @@ import { WorkOrder } from '../types';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
+import { usePersistState } from '../hooks/usePersistState';
 import { GASApiService } from '../services/gasApiService';
 import { addToOfflineQueue } from '../services/offlineSyncQueue';
 import { getLocalDateTimeString } from '../utils/dateUtils';
@@ -25,8 +26,10 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { showToast } = useToast();
   
-  // Work Orders are initialized as empty and only populated from Spreadsheet sync
-  const [workOrders, setWorkOrders] = React.useState<WorkOrder[]>([]);
+  const userId = user?.id || user?.nip || user?.userName || 'general';
+  const workOrderKey = `aphro_user_workorders_${userId}`;
+
+  const [workOrders, setWorkOrders] = usePersistState<WorkOrder[]>(workOrderKey, []);
   const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = React.useState<string | null>(null);
 
   const displayedWorkOrders = React.useMemo(() => {
