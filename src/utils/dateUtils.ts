@@ -10,20 +10,22 @@ export const formatDateDisplay = (dateVal: any): string => {
   // If it's already YYYY-MM-DD
   const ymdMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (ymdMatch) {
-    return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
+    return `${ymdMatch[3].padStart(2, '0')}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[1]}`;
   }
 
   // Handle common Indonesia formats: DD-MM-YYYY or DD/MM/YYYY
   const dmyMatch = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
   if (dmyMatch) {
-    return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
+    return `${dmyMatch[1].padStart(2, '0')}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[3]}`;
   }
 
   // If ISO string or date
   try {
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
-      return getWIBDateString(d);
+      const wibStr = getWIBDateString(d);
+      const [y, m, day] = wibStr.split('-');
+      return `${day}-${m}-${y}`;
     }
   } catch (e) {
     // fallback

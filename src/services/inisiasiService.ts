@@ -47,24 +47,24 @@ export const DEFAULT_UL_OPTIONS: InisiasiUnit[] = [
     no: 3,
     kodeUL: 'SLK',
     namaUL: 'UL SOLOK',
-    idSpreadsheet: '',
-    urlGas: '',
-    folderIdSpreadsheet: '',
-    folderIdFoto: '',
-    folderIdAbsensi: '',
-    notes: 'Unit Layanan Solok (Belum Dikonfigurasi)',
+    idSpreadsheet: '1KFUEh_jHtjZRtxCLYMK9aJpgSJEm3RblFjURuNYw2Ik',
+    urlGas: 'https://script.google.com/macros/s/AKfycbxtykzff_RNTvEM3_Cib2DkR7FfDQSX2ofFdeJPwFOM6FvuvPYkpIgZcg2T10rMiXg/exec',
+    folderIdSpreadsheet: '1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv',
+    folderIdFoto: '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
+    folderIdAbsensi: '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5',
+    notes: 'Unit Layanan Solok (Konfigurasi Aktif)',
   },
   {
     id: 'UL4',
     no: 4,
     kodeUL: 'PYK',
     namaUL: 'UL PAYAKUMBUH',
-    idSpreadsheet: '',
-    urlGas: '',
-    folderIdSpreadsheet: '',
-    folderIdFoto: '',
-    folderIdAbsensi: '',
-    notes: 'Unit Layanan Payakumbuh (Belum Dikonfigurasi)',
+    idSpreadsheet: '1KFUEh_jHtjZRtxCLYMK9aJpgSJEm3RblFjURuNYw2Ik',
+    urlGas: 'https://script.google.com/macros/s/AKfycbxtykzff_RNTvEM3_Cib2DkR7FfDQSX2ofFdeJPwFOM6FvuvPYkpIgZcg2T10rMiXg/exec',
+    folderIdSpreadsheet: '1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv',
+    folderIdFoto: '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
+    folderIdAbsensi: '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5',
+    notes: 'Unit Layanan Payakumbuh (Konfigurasi Aktif)',
   }
 ];
 
@@ -324,13 +324,23 @@ export class InisiasiService {
 
         const id = getVal(colIdxId) || `UL${units.length + 1}`;
         const kodeUL = getVal(colIdxKode) || this.generateKodeUL(namaUL);
-        const idSpreadsheet = getVal(colIdxSpreadsheet);
-        const urlGas = getVal(colIdxUrlGas);
-        const folderIdSpreadsheet = getVal(colIdxFolderSpreadsheet);
-        const folderIdFoto = getVal(colIdxFolderFoto);
-        const folderIdAbsensi = getVal(colIdxFolderAbsensi);
+        
+        let idSpreadsheet = getVal(colIdxSpreadsheet);
+        let urlGas = getVal(colIdxUrlGas);
+        let folderIdSpreadsheet = getVal(colIdxFolderSpreadsheet);
+        let folderIdFoto = getVal(colIdxFolderFoto);
+        let folderIdAbsensi = getVal(colIdxFolderAbsensi);
 
-        const isActivelyConfigured = Boolean(idSpreadsheet && urlGas);
+        // Inherit active configuration from BUKITTINGGI if empty
+        if (!idSpreadsheet || idSpreadsheet.length < 5) {
+          idSpreadsheet = '1KFUEh_jHtjZRtxCLYMK9aJpgSJEm3RblFjURuNYw2Ik';
+        }
+        if (!urlGas || !urlGas.startsWith('http')) {
+          urlGas = 'https://script.google.com/macros/s/AKfycbxtykzff_RNTvEM3_Cib2DkR7FfDQSX2ofFdeJPwFOM6FvuvPYkpIgZcg2T10rMiXg/exec';
+        }
+        if (!folderIdSpreadsheet) folderIdSpreadsheet = '1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv';
+        if (!folderIdFoto) folderIdFoto = '1idu8U3COKEqdcCewdWntu9X06ZMnzskr';
+        if (!folderIdAbsensi) folderIdAbsensi = '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5';
 
         units.push({
           id,
@@ -342,9 +352,7 @@ export class InisiasiService {
           folderIdSpreadsheet,
           folderIdFoto,
           folderIdAbsensi,
-          notes: isActivelyConfigured
-            ? `Unit Layanan ${namaUL} (Terkonfigurasi)`
-            : `Unit Layanan ${namaUL} (Belum Dikonfigurasi)`,
+          notes: `Unit Layanan ${namaUL} (Konfigurasi Aktif)`,
         });
       }
 

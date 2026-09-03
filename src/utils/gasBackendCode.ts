@@ -143,23 +143,40 @@ function sheetToObjects(sheetName, id, existingSs) {
   var ss = existingSs || getSpreadsheet(id);
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
+  var dataRange = sheet.getDataRange();
+  var data = dataRange.getValues();
   if (data.length <= 1) return [];
 
-  var tz = ss.getSpreadsheetTimeZone() || "Asia/Jakarta";
+  var displayData = [];
+  try {
+    displayData = dataRange.getDisplayValues();
+  } catch (eDisp) {
+    displayData = [];
+  }
+
   var headers = data[0];
   var results = [];
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
+    var displayRow = (displayData && displayData.length > r) ? displayData[r] : null;
     var obj = {};
     for (var c = 0; c < headers.length; c++) {
       var val = row[c];
+      var displayVal = (displayRow && displayRow.length > c) ? String(displayRow[c] || "").trim() : "";
+      var hName = String(headers[c] || "").toUpperCase();
+
       if (val instanceof Date) {
-        var formatted = Utilities.formatDate(val, tz, "yyyy-MM-dd HH:mm:ss");
-        if (formatted.indexOf("00:00:00") > -1) {
-          formatted = Utilities.formatDate(val, tz, "yyyy-MM-dd");
+        if (displayVal && displayVal !== "") {
+          val = displayVal;
+        } else {
+          var formatted = Utilities.formatDate(val, "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss");
+          if (formatted.indexOf("00:00:00") > -1) {
+            formatted = Utilities.formatDate(val, "Asia/Jakarta", "yyyy-MM-dd");
+          }
+          val = formatted;
         }
-        val = formatted;
+      } else if (displayVal && (hName.indexOf("TANGGAL") > -1 || hName.indexOf("TIMESTAMP") > -1 || hName.indexOf("CREATED") > -1 || hName.indexOf("DEADLINE") > -1)) {
+        val = displayVal;
       }
       obj[headers[c]] = val;
     }

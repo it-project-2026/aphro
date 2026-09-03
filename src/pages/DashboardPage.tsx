@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useRealisasi } from '../context/RealisasiContext';
@@ -60,6 +61,7 @@ ChartJS.register(
 
 export const DashboardPage: React.FC = () => {
   const draggable = useDraggableScroll();
+  const { settings } = useSettings();
   const { user: currentUser } = useAuth();
   const { workOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
@@ -757,7 +759,7 @@ export const DashboardPage: React.FC = () => {
         <RealisasiTargetDashboard 
           data={reguDashboardData} 
           title="REALISASI & TARGET PROGRAM"
-          subtitle="UP3 BUKITTINGGI"
+          subtitle={settings.namaUnitLayanan ? (settings.namaUnitLayanan.toUpperCase().startsWith('UP3') ? settings.namaUnitLayanan.toUpperCase() : `UP3 ${settings.namaUnitLayanan.replace(/^UL\s*/i, '').toUpperCase()}`) : "UP3 BUKITTINGGI"}
         />
       </div>
 
