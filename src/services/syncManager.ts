@@ -18,6 +18,7 @@ import {
   normalizeAbsensi,
 } from './syncService';
 import { getActiveGasConfig } from '../config/gasConfig';
+import { getWIBDateString } from '../utils/dateUtils';
 
 export function normalizeTableData(tableName: string, data: any[]): any[] {
   if (!Array.isArray(data)) return [];
@@ -156,7 +157,7 @@ export class SyncManager {
   /**
    * 1. initialize()
    * Loads cached data instantly from IndexedDB (<1 second UI render)
-   * Then triggers non-blocking background version check.
+   * Checks if 00:00 WIB reset was missed, then triggers non-blocking background version check.
    */
   public async initialize(): Promise<{
     cachedData: Record<string, any[]>;
@@ -164,6 +165,21 @@ export class SyncManager {
     pendingCount: number;
   }> {
     this.loadSettingsFromStorage();
+
+    // Check if 00:00 WIB Midnight reset was missed overnight
+    const todayWib = getWIBDateString();
+    const lastResetDate = (await idbService.getMetadata<string>('last_wib_reset_date')) ||
+      (typeof window !== 'undefined' ? localStorage.getItem('aphro_last_wib_reset_date') : null);
+
+    if (lastResetDate && lastResetDate !== todayWib) {
+      console.log(`🧹 New day detected in WIB (${todayWib} vs last reset ${lastResetDate}). Executing automated 00:00 WIB cache reset...`);
+      await this.executeMidnightWibReset();
+    } else if (!lastResetDate) {
+      await idbService.setMetadata('last_wib_reset_date', todayWib);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('aphro_last_wib_reset_date', todayWib);
+      }
+    }
 
     // Read stored last updated time
     const lastUpdatedMeta = await idbService.getMetadata<string>('last_updated_timestamp');
@@ -672,6 +688,78 @@ export class SyncManager {
       version: this.globalVersion,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Executes 00:00 WIB Midnight Cache Clear & Fresh Data Sync.
+   * Ensures:
+   * 1. Offline pending operations are processed first so no user work is lost.
+   * 2. All local table caches, versions, and localStorage caches are completely wiped clean.
+   * 3. Fresh data for the new day is fetched cleanly from GAS backend.
+   */
+  public async executeMidnightWibReset(): Promise<boolean> {
+    try {
+      console.log('🧹 Executing 00:00 WIB Automated Midnight Local Cache Reset...');
+
+      // 1. Flush any pending offline queue first to prevent data loss
+      if (typeof window !== 'undefined' && navigator.onLine && this.gasUrl) {
+        await this.processPendingOperations();
+      }
+
+      // 2. Clear IndexedDB cache stores completely
+      await idbService.clearAll();
+
+      // 3. Clear data-cache keys in localStorage while preserving essential session/settings
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const keysToKeep = [
+          'aphro_user',
+          'aphro_current_user',
+          'aphro_app_settings',
+          'aphro_embedded_gas_config',
+          'aphro_has_initiated',
+          'aphro_dark_mode',
+          'aphro_selected_inisiasi_ul'
+        ];
+        
+        const allKeys: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key) allKeys.push(key);
+        }
+
+        allKeys.forEach((key) => {
+          if (!keysToKeep.includes(key)) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+
+      // 4. Clear GASApiService in-memory cache
+      GASApiService.clearCache();
+
+      // 5. Perform fresh sync with Google Apps Script
+      if (typeof window !== 'undefined' && navigator.onLine && this.gasUrl) {
+        await this.syncAllRequired(true);
+      }
+
+      // 6. Record today's WIB reset date
+      const todayWib = getWIBDateString();
+      await idbService.setMetadata('last_wib_reset_date', todayWib);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('aphro_last_wib_reset_date', todayWib);
+      }
+
+      this.notifyListeners({
+        type: 'SYNC_STATUS_CHANGED',
+        status: 'IDLE',
+        lastUpdatedText: this.getLastUpdatedText(),
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Error executing midnight WIB reset:', err);
+      return false;
+    }
   }
 
   private updateLastUpdatedTime() {

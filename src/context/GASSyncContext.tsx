@@ -6,6 +6,7 @@ import { useMasterData } from './MasterDataContext';
 import { useWorkOrders } from './WorkOrderContext';
 import { useRealisasi } from './RealisasiContext';
 import { useAbsensi } from './AbsensiContext';
+import { getMsUntilNextWIBMidnight, getWIBDateString } from '../utils/dateUtils';
 
 export type SyncStage = 'idle' | 'detecting' | 'syncing' | 'success' | 'error';
 
@@ -276,15 +277,59 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isSyncing, settings.gasWebAppUrl, refreshPendingCount]);
 
-  // Network status listeners & Smart background polling with jitter & visibility awareness
+  // 00:00 WIB Automated Midnight Local Cache Clear & Data Sync Scheduler
+  React.useEffect(() => {
+    let midnightTimer: any = null;
+
+    const scheduleMidnightReset = () => {
+      const msToMidnight = getMsUntilNextWIBMidnight();
+      const minutesToMidnight = Math.round(msToMidnight / 1000 / 60);
+      console.log(`⏰ Scheduled automated 00:00 WIB midnight reset in ${minutesToMidnight} minutes.`);
+
+      midnightTimer = setTimeout(async () => {
+        setSyncStage('syncing');
+        setSyncMessage('🧹 Membersihkan cache lokal & menyinkronkan data jam 00:00 WIB...');
+        setShowSyncBanner(true);
+
+        const ok = await syncManager.executeMidnightWibReset();
+        if (ok) {
+          setSyncStage('success');
+          setSyncMessage('✅ Cache lokal dibersihkan & data jam 00:00 WIB berhasil disinkronkan.');
+        } else {
+          setSyncStage('idle');
+        }
+
+        setTimeout(() => {
+          setShowSyncBanner(false);
+          setSyncStage('idle');
+        }, 6000);
+
+        scheduleMidnightReset();
+      }, msToMidnight);
+    };
+
+    scheduleMidnightReset();
+
+    return () => {
+      if (midnightTimer) clearTimeout(midnightTimer);
+    };
+  }, []);
+
+  // Network status listeners & Smart background polling with Mobile Thermal & Battery Jitter
   React.useEffect(() => {
     refreshPendingCount();
+
+    const isMobileDevice = typeof navigator !== 'undefined' && (
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+      (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
+    );
 
     const handleOnline = () => {
       setIsOnline(true);
       checkConnection().catch(() => {});
       syncManager.processPendingOperations().then(() => {
         refreshPendingCount();
+        syncWithGAS(undefined, true).catch(() => {});
       });
     };
 
@@ -300,19 +345,19 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     checkConnection().catch(() => {});
 
-    // Periodic Background Sync with Jitter for Multi-User Concurrency
+    // Periodic Background Sync with Mobile Thermal & Jitter Optimization
     let syncTimer: any = null;
 
     const scheduleNextSync = () => {
-      // Base interval: 45 seconds when tab is active, 3 minutes when hidden
-      const isHidden = document.hidden;
-      const baseInterval = isHidden ? 180000 : 45000;
-      // Add random jitter (+/- 0 to 10 seconds) to prevent Thundering Herd on server
-      const jitter = Math.floor(Math.random() * 10000);
+      const isHidden = typeof document !== 'undefined' && document.hidden;
+      // Mobile thermal optimization: 120s active on mobile, 60s active on desktop, 300s when hidden
+      const baseInterval = isHidden ? 300000 : (isMobileDevice ? 120000 : 60000);
+      // Random jitter (+/- 0 to 15 seconds) to spread CPU load and avoid thundering herd
+      const jitter = Math.floor(Math.random() * 15000);
       const delay = baseInterval + jitter;
 
       syncTimer = setTimeout(async () => {
-        if (navigator.onLine && !document.hidden) {
+        if (typeof navigator !== 'undefined' && navigator.onLine && !document.hidden) {
           try {
             await syncWithGAS(undefined, true);
           } catch (e) {}
@@ -323,19 +368,35 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     scheduleNextSync();
 
-    // Trigger instant check when user switches back to active tab
+    // Trigger instant sync on App Update, tab focus, or visibility change
     const handleVisibilityChange = () => {
-      if (!document.hidden && navigator.onLine) {
+      if (typeof document !== 'undefined' && !document.hidden && navigator.onLine) {
+        syncWithGAS(undefined, true).catch(() => {});
+      }
+    };
+
+    const handleAppFocus = () => {
+      if (navigator.onLine) {
         syncWithGAS(undefined, true).catch(() => {});
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleAppFocus);
+
+    // Listen to Service Worker controller changes (if app code updates)
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('🔄 Application code update detected! Syncing latest data...');
+        syncWithGAS(undefined, true).catch(() => {});
+      });
+    }
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleAppFocus);
       if (syncTimer) clearTimeout(syncTimer);
     };
   }, [checkConnection, refreshPendingCount, syncWithGAS]);
