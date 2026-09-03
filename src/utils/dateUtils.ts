@@ -82,18 +82,18 @@ export const normalizeDateISO = (dateVal: any): string => {
     return `${year}-${month}-${day}`;
   }
 
-  // Handle YYYY-MM-DD plain string pattern (possibly with time, without T)
+  // Handle YYYY-MM-DD plain string pattern (without Z or explicit offset)
   const ymdMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  if (ymdMatch && !s.includes('T')) {
+  if (ymdMatch && !s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) {
     const year = ymdMatch[1];
     const month = ymdMatch[2].padStart(2, '0');
     const day = ymdMatch[3].padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
 
-  // Handle ISO strings or numeric timestamps
+  // Handle ISO strings with Z or numeric timestamps
   try {
-    const d = new Date(s);
+    const d = new Date(isNaN(Number(s)) ? s : Number(s));
     if (!isNaN(d.getTime())) {
       return getWIBDateString(d);
     }
