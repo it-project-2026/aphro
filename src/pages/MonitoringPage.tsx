@@ -165,7 +165,7 @@ export const MonitoringPage: React.FC = () => {
           reguName: r.reguName || '-',
           status: r.status || 'Selesai',
           progressPercent: 100,
-          createdAt: r.createdAt || new Date().toISOString(),
+          createdAt: r.createdAt || getLocalDateTimeString(),
         });
       }
     });

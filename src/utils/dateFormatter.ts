@@ -14,11 +14,11 @@ export function formatDateTime(dateInput?: string | Date): string {
   const s = String(dateInput).trim();
   if (!s || s === 'null' || s === 'undefined') return '-';
 
-  // 1. If string is an ISO UTC timestamp (ends with 'Z' or contains timezone offset like +00:00 / -00:00)
-  const isIsoUtc = /T\d{2}:\d{2}:\d{2}.*(Z|[+-]\d{2}:?\d{2})/i.test(s) || (s.includes('T') && s.toUpperCase().endsWith('Z'));
-  if (isIsoUtc) {
+  // 1. Handle ISO strings containing 'T' (e.g. YYYY-MM-DDTHH:mm:ss, ISO UTC)
+  if (s.includes('T')) {
     try {
-      const d = new Date(s);
+      const isoStr = (s.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(s)) ? s : `${s}Z`;
+      const d = new Date(isoStr);
       if (!isNaN(d.getTime())) {
         const loc = getLocalDateTimeString(d);
         const [datePart, timePart] = loc.split(' ');

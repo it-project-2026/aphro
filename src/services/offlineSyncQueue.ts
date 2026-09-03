@@ -1,4 +1,5 @@
 import { GASApiService } from './gasApiService';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 
 export interface PendingSyncItem {
   id: string;
@@ -44,7 +45,7 @@ export function addToOfflineQueue(
     id: `sync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     type,
     payload,
-    timestamp: new Date().toISOString(),
+    timestamp: getLocalDateTimeString(),
     retryCount: 0,
   };
 

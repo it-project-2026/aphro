@@ -4,6 +4,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from './useToast';
 import { useNotifications as useNotificationContext } from '../context/NotificationContext';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 
 export const useNotifications = () => {
   const { user: currentUser } = useAuth();
@@ -21,7 +22,7 @@ export const useNotifications = () => {
               token,
               userId: currentUser.id,
               reguName: currentUser.reguName || null,
-              updatedAt: new Date().toISOString()
+              updatedAt: getLocalDateTimeString()
             }, { merge: true });
           }
         } catch {

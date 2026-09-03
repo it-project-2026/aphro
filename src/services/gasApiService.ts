@@ -3,6 +3,8 @@
  * Connects frontend React application with Google Spreadsheet & Google Drive
  */
 
+import { getLocalDateTimeString } from '../utils/dateUtils';
+
 export interface GASApiResponse<T = any> {
   status: 'success' | 'error';
   message?: string;
@@ -140,7 +142,7 @@ export class GASApiService {
       const payload = {
         ...bodyObj,
         authUser: authUser || bodyObj.authUser || null,
-        clientTimestamp: new Date().toISOString(),
+        clientTimestamp: getLocalDateTimeString(),
       };
 
       const response = await this.fetchWithTimeout(gasUrl, {
@@ -290,7 +292,7 @@ export class GASApiService {
           : '',
         LOKASI_START: workOrder.lokasiStart || '',
         LOKASI_FINISH: workOrder.lokasiFinish || '',
-        CREATED_AT: workOrder.createdAt || new Date().toISOString(),
+        CREATED_AT: workOrder.createdAt || getLocalDateTimeString(),
       };
 
       return await this.postRequest(gasUrl, {

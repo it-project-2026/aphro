@@ -3,6 +3,8 @@
  * Provides client-side persistent storage for table data, versions, pending operations, and audit logs.
  */
 
+import { getLocalDateTimeString } from '../utils/dateUtils';
+
 const DB_NAME = 'aphro_app_db';
 const DB_VERSION = 1;
 
@@ -108,7 +110,7 @@ class IndexedDBService {
         const record: CachedTableRecord<T> = {
           tableName,
           data,
-          updatedAt: new Date().toISOString(),
+          updatedAt: getLocalDateTimeString(),
         };
         const req = store.put(record);
         req.onsuccess = () => resolve();
@@ -173,7 +175,7 @@ class IndexedDBService {
       tx.objectStore('versions').put({
         tableName,
         version,
-        updatedAt: new Date().toISOString(),
+        updatedAt: getLocalDateTimeString(),
       });
     } catch (e) {
       console.warn(`Failed to save version for ${tableName}`, e);
@@ -199,7 +201,7 @@ class IndexedDBService {
   async addPendingOperation(op: Omit<PendingOperation, 'timestamp' | 'retryCount' | 'status'> & { timestamp?: string }): Promise<PendingOperation> {
     const fullOp: PendingOperation = {
       ...op,
-      timestamp: op.timestamp || new Date().toISOString(),
+      timestamp: op.timestamp || getLocalDateTimeString(),
       retryCount: 0,
       status: 'PENDING',
     };
@@ -256,7 +258,7 @@ class IndexedDBService {
   async addAuditLog(entry: Omit<AuditLogRecord, 'id' | 'timestamp'> & { timestamp?: string; id?: string }): Promise<AuditLogRecord> {
     const log: AuditLogRecord = {
       id: entry.id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: entry.timestamp || new Date().toISOString(),
+      timestamp: entry.timestamp || getLocalDateTimeString(),
       user: entry.user || 'Sistem',
       action: entry.action,
       module: entry.module,
@@ -278,7 +280,7 @@ class IndexedDBService {
     try {
       const db = await this.initDB();
       const tx = db.transaction('metadata', 'readwrite');
-      tx.objectStore('metadata').put({ key, value, updatedAt: new Date().toISOString() });
+      tx.objectStore('metadata').put({ key, value, updatedAt: getLocalDateTimeString() });
     } catch (e) {
       console.warn(`Failed to set metadata ${key}`, e);
     }

@@ -177,8 +177,16 @@ function doGet(e) {
     var action = params.action || "ping";
     var ssId = params.spreadsheetId;
     
+    var tz = "Asia/Jakarta";
+    if (ssId) {
+      try {
+        var ssTz = getSpreadsheet(ssId);
+        if (ssTz) tz = ssTz.getSpreadsheetTimeZone() || "Asia/Jakarta";
+      } catch (eTz) {}
+    }
+
     if (action === "ping") {
-      return createJsonResponse({ status: "success", message: "APHRO GAS REST API Connected!", timestamp: new Date().toISOString() });
+      return createJsonResponse({ status: "success", message: "APHRO GAS REST API Connected!", timestamp: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss") });
     }
 
     if (action === "healthCheck" || action === "health_check") {
@@ -187,7 +195,7 @@ function doGet(e) {
         database: "ONLINE",
         cache: "AVAILABLE",
         version: Date.now(),
-        timestamp: new Date().toISOString()
+        timestamp: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss")
       });
     }
 
@@ -414,8 +422,9 @@ function doPost(e) {
           logSheet.appendRow(["Timestamp", "User", "Aktivitas", "Modul", "IP", "Device"]);
           logSheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#00529C").setFontColor("#FFFFFF");
         }
+        var logTz = activeSs ? (activeSs.getSpreadsheetTimeZone() || "Asia/Jakarta") : "Asia/Jakarta";
         logSheet.appendRow([
-          new Date().toISOString(),
+          Utilities.formatDate(new Date(), logTz, "yyyy-MM-dd HH:mm:ss"),
           actorName + " [" + actorRole + "]",
           actName,
           detailsStr || "-",
@@ -583,7 +592,7 @@ function doPost(e) {
         rel.reguName || "",                             // 5. REGU_ROW (Col E)
         rel.penyulangName || "",                        // 6. PENYULANG (Col F)
         rel.noTiang || "-",                             // 7. NO_TIANG (Col G)
-        rel.tanggalRealisasi || rel.tanggal || new Date().toISOString().slice(0, 10), // 8. TANGGAL (Col H)
+        rel.tanggalRealisasi || rel.tanggal || Utilities.formatDate(new Date(), tz, "yyyy-MM-dd"), // 8. TANGGAL (Col H)
         fotoSebelumLink,                                // 9. Foto_Sebelum (Col I)
         fotoSesudahLink,                                // 10. Foto_Sesudah (Col J)
         rel.jenisTanaman || "-",                        // 11. Jenis_Tanaman (Col K)
@@ -912,12 +921,15 @@ function doPost(e) {
         rowValues = [item.id, item.kodeRegu || item.id, item.namaRegu, item.penanggungJawab || "-", item.jumlahAnggota || 0, item.kontak || "-", "Aktif"];
       } else if (sheetName === "PETUGAS") {
         rowValues = [item.id, item.nip || item.id, item.nama, item.reguName || "-", item.ulpName || "-", item.nomorHp || "-", item.role || "User", "Aktif"];
+      var masterTz = ss ? (ss.getSpreadsheetTimeZone() || "Asia/Jakarta") : "Asia/Jakarta";
+      var nowStr = Utilities.formatDate(new Date(), masterTz, "yyyy-MM-dd HH:mm:ss");
+
       } else if (sheetName === "USERS") {
-        rowValues = [item.id, item.username || item.nip, hashSHA256(item.password || "user123"), item.reguName || "-", item.role || "User", item.ulpName || "PLN UP3 Padang", "Aktif", new Date().toISOString(), new Date().toISOString()];
+        rowValues = [item.id, item.username || item.nip, hashSHA256(item.password || "user123"), item.reguName || "-", item.role || "User", item.ulpName || "PLN UP3 Padang", "Aktif", nowStr, nowStr];
       } else if (sheetName === "SETTING") {
-        rowValues = [item.namaUnitLayanan, item.logoAplikasiUrl || "", item.themeColor || "sky", item.footerText || "", item.whatsapp || "", item.email || "", new Date().toISOString()];
+        rowValues = [item.namaUnitLayanan, item.logoAplikasiUrl || "", item.themeColor || "sky", item.footerText || "", item.whatsapp || "", item.email || "", nowStr];
       } else if (sheetName === "LOG_ACTIVITY") {
-        rowValues = [new Date().toISOString(), item.actorName || "Sistem", item.action, item.details, "-", "-"];
+        rowValues = [nowStr, item.actorName || "Sistem", item.action, item.details, "-", "-"];
       }
 
       if (existingRow > 0) {

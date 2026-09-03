@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, ZoomIn, ZoomOut, RotateCcw, Download, CheckCircle, MapPin } from 'lucide-react';
+import { getWIBDateString } from '../utils/dateUtils';
 
 interface MapPreviewModalProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export const MapPreviewModal: React.FC<MapPreviewModalProps> = ({
 
   const safeUlp = ulpName.replace(/[^a-zA-Z0-9]/g, '_');
   const safeFeeder = penyulangName.replace(/[^a-zA-Z0-9]/g, '_');
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = getWIBDateString();
   const fileName = `Peta_Pohon_ROW_${safeUlp}_${safeFeeder}_${dateStr}.pdf`;
 
   const handleConfirmClick = () => {

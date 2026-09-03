@@ -10,6 +10,7 @@ import { generateWatermarkedImage } from '../utils/watermark';
 import { compressImage } from '../utils/imageCompression';
 import { GASApiService } from '../services/gasApiService';
 import { formatDriveViewUrl } from '../utils/driveUtils';
+import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
 import {
   Camera,
   Upload,
@@ -75,7 +76,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
       // --- DATE & STATUS RESTRICTIONS ---
       // 1. Get today's date string (YYYY-MM-DD)
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getWIBDateString();
       const woDate = wo.tanggal; // YYYY-MM-DD
 
       const isToday = woDate === todayStr;
@@ -129,7 +130,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   const selectedWO = availableWorkOrders.find((w) => w.id === selectedWoId);
 
   const [tanggalRealisasi, setTanggalRealisasi] = React.useState(
-    editMode && initialData ? initialData.tanggalRealisasi : new Date().toISOString().slice(0, 10)
+    editMode && initialData ? initialData.tanggalRealisasi : getWIBDateString()
   );
   const [petugasName, setPetugasName] = React.useState(editMode && initialData ? initialData.petugasName : (currentUser?.name || 'Rahmat Hidayat'));
   const [latitude, setLatitude] = React.useState(editMode && initialData ? initialData.latitude : -0.9142);
@@ -433,7 +434,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         setLokasiKerja('');
         setPhotosSebelum([]);
         setPhotosSesudah([]);
-        setTanggalRealisasi(new Date().toISOString().slice(0, 10));
+        setTanggalRealisasi(getWIBDateString());
 
         setSubmissionStatus('success');
         showToast('Realisasi berhasil diinput.', 'success');

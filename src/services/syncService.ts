@@ -1,7 +1,7 @@
 import { GASApiService } from './gasApiService';
 import { User, UserRole, WorkOrder, ULP, Penyulang, ReguROW, Petugas } from '../types';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
-import { getLocalDateTimeString } from '../utils/dateUtils';
+import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
 
 export function normalizeUser(u: any): User {
   if (!u || typeof u !== 'object') {
@@ -128,7 +128,7 @@ export function normalizeWorkOrder(w: any): WorkOrder {
     id: String(w.id || w.WO_ID || w.ID || 'wo-' + Math.random().toString(36).substring(2, 7)),
     pekerjaan: (w.pekerjaan || w.PEKERJAAN || 'NORMAL') as 'NORMAL' | 'GOROW',
     nomorWO: String(w.nomorWO || w.NOMOR_WO || w.Nomor_WO || w.WO_Number || w.id || w.WO_ID || ''),
-    tanggal: String(w.tanggal || w.TANGGAL || w.Tanggal || new Date().toISOString().slice(0, 10)),
+    tanggal: String(w.tanggal || w.TANGGAL || w.Tanggal || getWIBDateString()),
     ulpId: String(w.ulpId || w.ULPId || w.ULP_ID || ''),
     ulpName: String(w.ulpName || w.NAMA_ULP || w.Nama_ULP || w.ULP || ''),
     penyulangId: String(w.penyulangId || w.PenyulangId || ''),
@@ -148,7 +148,7 @@ export function normalizeWorkOrder(w: any): WorkOrder {
     lokasi: String(w.lokasi || w.LOKASI || w.Lokasi || ''),
     petugasName: String(w.petugasName || w.PETUGAS || w.Petugas || w.NAMA_PETUGAS || ''),
     progressPercent: Number(w.progressPercent || w.PROGRESS || w.progress || w.Progress || 0),
-    createdAt: String(w.createdAt || w.Created_At || new Date().toISOString()),
+    createdAt: String(w.createdAt || w.Created_At || getLocalDateTimeString()),
   };
 }
 
@@ -156,11 +156,11 @@ export function normalizeAbsensi(a: any): any {
   if (!a || typeof a !== 'object') {
     return {
       id: 'abs-' + Math.random().toString(36).substring(2, 7),
-      tanggal: new Date().toISOString().slice(0, 10),
+      tanggal: getWIBDateString(),
       reguName: '',
       ulpName: '',
       petugasList: [],
-      createdAt: new Date().toISOString(),
+      createdAt: getLocalDateTimeString(),
     };
   }
 
@@ -181,7 +181,7 @@ export function normalizeAbsensi(a: any): any {
   return {
     ...a,
     id: String(a.id || a.ID || a.ABS_ID || 'abs-' + Math.random().toString(36).substring(2, 7)),
-    tanggal: String(a.tanggal || a.TANGGAL || a.Tanggal || new Date().toISOString().slice(0, 10)),
+    tanggal: String(a.tanggal || a.TANGGAL || a.Tanggal || getWIBDateString()),
     reguName: String(a.reguName || a.NAMA_REGU || a.Nama_Regu || a.Regu || ''),
     ulpName: String(a.ulpName || a.NAMA_ULP || a.Nama_ULP || a.ULP || ''),
     userName: String(a.userName || a.USER_NAME || a.Username || a.username || ''),
@@ -194,7 +194,7 @@ export function normalizeAbsensi(a: any): any {
     timestampKeluar: String(a.timestampKeluar || a['TIMESTAMP KELUAR'] || a.TIMESTAMP_KELUAR || ''),
     latitude: Number(a.latitude || a.Latitude || a.LATITUDE || a.lat || 0),
     longitude: Number(a.longitude || a.Longitude || a.LONGITUDE || a.lon || 0),
-    createdAt: String(a.createdAt || a.CREATED_AT || a.Created_At || new Date().toISOString()),
+    createdAt: String(a.createdAt || a.CREATED_AT || a.Created_At || getLocalDateTimeString()),
   };
 }
 
@@ -225,7 +225,7 @@ export function normalizeRealisasi(r: any): any {
     reguName: String(r.REGU_ROW || r.reguName || r.REGU || ''),
     penyulangName: String(r.PENYULANG || r.penyulangName || ''),
     noTiang: String(r.NO_TIANG || r.noTiang || ''),
-    tanggalRealisasi: String(r.TANGGAL || r.tanggalRealisasi || new Date().toISOString().slice(0, 10)),
+    tanggalRealisasi: String(r.TANGGAL || r.tanggalRealisasi || getWIBDateString()),
     petugasId: String(r.petugasId || 'usr-3'),
     petugasName: String(r.Petugas || r.petugasName || r.REGU_ROW || ''),
     jenisTanaman: String(r.Jenis_Tanaman || r.jenisTanaman || ''),

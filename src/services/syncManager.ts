@@ -18,6 +18,7 @@ import {
   normalizeAbsensi,
 } from './syncService';
 import { getActiveGasConfig } from '../config/gasConfig';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 import { getWIBDateString } from '../utils/dateUtils';
 
 export function normalizeTableData(tableName: string, data: any[]): any[] {
@@ -686,7 +687,7 @@ export class SyncManager {
       database: dbStatus,
       cache: cacheStatus,
       version: this.globalVersion,
-      timestamp: new Date().toISOString(),
+      timestamp: getLocalDateTimeString(),
     };
   }
 

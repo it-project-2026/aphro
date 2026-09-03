@@ -8,6 +8,7 @@ import { useToast } from '../hooks/useToast';
 import { GASApiService } from '../services/gasApiService';
 import { addToOfflineQueue } from '../services/offlineSyncQueue';
 import { formatDriveViewUrl } from '../utils/driveUtils';
+import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
 
 interface AbsensiContextType {
   absensiList: Absensi[];
@@ -27,8 +28,8 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   const [absensiList, setAbsensiList] = usePersistState<Absensi[]>('aphro_absensi', INITIAL_ABSENSI);
 
   const addAbsensi = React.useCallback(async (absData: Omit<Absensi, 'id' | 'createdAt'>) => {
-    const todayStr = absData.tanggal || (new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0'));
-    const nowStr = new Date().toLocaleString('id-ID');
+    const todayStr = absData.tanggal || getWIBDateString();
+    const nowStr = getLocalDateTimeString();
 
     // Helper to normalize date for comparison
     const normalizeDate = (d: any) => {
@@ -69,7 +70,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
           timestampKeluar: absData.timestampKeluar || nowStr,
           latitude: absData.latitude || existing.latitude,
           longitude: absData.longitude || existing.longitude,
-          updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+          updatedAt: getLocalDateTimeString(),
         };
       } else {
         // Normal update or re-clock-in (though usually shouldn't happen same day)
@@ -80,7 +81,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
           timestampMasuk: existing.timestampMasuk || (absData.fotoMasuk ? nowStr : undefined),
           fotoKeluar: absData.fotoKeluar || existing.fotoKeluar,
           timestampKeluar: absData.fotoKeluar ? (absData.timestampKeluar || nowStr) : existing.timestampKeluar,
-          updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+          updatedAt: getLocalDateTimeString(),
         };
       }
     } else {
@@ -89,7 +90,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         id: 'ABS-' + Date.now(),
         timestampMasuk: absData.fotoMasuk ? nowStr : undefined,
         timestampKeluar: absData.fotoKeluar ? nowStr : undefined,
-        createdAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+        createdAt: getLocalDateTimeString(),
       };
     }
 
@@ -151,7 +152,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     const updatedAbs = {
       ...absensiList[existingIndex],
       ...absData,
-      updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      updatedAt: getLocalDateTimeString(),
     };
 
     // Update local state

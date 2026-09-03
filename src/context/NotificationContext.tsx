@@ -4,6 +4,7 @@ import { AuditLog, NotificationItem } from '../types';
 import { INITIAL_LOGS, INITIAL_NOTIFICATIONS } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 
 interface NotificationContextType {
   auditLogs: AuditLog[];
@@ -54,7 +55,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const logActivity = React.useCallback((action: string, details: string) => {
     const newLog: AuditLog = {
       id: 'log-' + Date.now(),
-      timestamp: new Date().toISOString(),
+      timestamp: getLocalDateTimeString(),
       action,
       details,
       userId: user?.id || 'system',
@@ -66,7 +67,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const newNotification: NotificationItem = {
       ...notification,
       id: 'notif-' + Date.now(),
-      timestamp: new Date().toISOString(),
+      timestamp: getLocalDateTimeString(),
       read: false
     };
     setNotifications(prev => [newNotification, ...prev].slice(0, 100)); // Keep last 100

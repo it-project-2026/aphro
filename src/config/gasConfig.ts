@@ -3,6 +3,8 @@
  * Sistem APHRO - PLN ES UP4 Sumatera Barat UP3 Padang
  */
 
+import { getLocalDateTimeString } from '../utils/dateUtils';
+
 export interface EmbeddedGASConfig {
   gasWebAppUrl: string;
   spreadsheetId: string;
@@ -31,7 +33,7 @@ export const saveAndEmbedGasConfig = (config: Partial<EmbeddedGASConfig>): Embed
   const newConfig: EmbeddedGASConfig = {
     ...EMBEDDED_GAS_CONFIG,
     ...config,
-    lastUpdated: new Date().toISOString(),
+    lastUpdated: getLocalDateTimeString(),
   };
 
   // Save to persistent localStorage key for embedded configs

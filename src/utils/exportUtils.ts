@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { WorkOrder, Realisasi, AppSettings } from '../types';
 import { formatDateTime, formatDateOnly, formatExecutionDateTime } from './dateFormatter';
+import { getWIBDateString } from './dateUtils';
 
 /**
  * Utility to convert an image URL or dataUrl into base64 for ExcelJS embedding
@@ -336,7 +337,7 @@ export async function exportCetakPhotoToExcel(
   const downloadUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = downloadUrl;
-  link.download = `Eviden_ROW_Photo_Area_${areaName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  link.download = `Eviden_ROW_Photo_Area_${areaName}_${getWIBDateString()}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -523,7 +524,7 @@ export function generateCetakPhotoPDF(
     },
   });
 
-  doc.save(`Eviden_ROW_Photo_Area_${areaName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  doc.save(`Eviden_ROW_Photo_Area_${areaName}_${getWIBDateString()}.pdf`);
 }
 
 /**
@@ -683,7 +684,7 @@ export async function exportCetakPetaToExcel(
   const downloadUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = downloadUrl;
-  link.download = `Peta_Pohon_ROW_Area_${areaName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  link.download = `Peta_Pohon_ROW_Area_${areaName}_${getWIBDateString()}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -715,7 +716,7 @@ export function exportWorkOrdersToExcel(workOrders: WorkOrder[], unitName: strin
 
   worksheet['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 30 }, { wch: 35 }, { wch: 25 }, { wch: 25 }, { wch: 12 }, { wch: 22 }, { wch: 20 }];
 
-  XLSX.writeFile(workbook, `WorkOrders_${unitName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(workbook, `WorkOrders_${unitName.replace(/\s+/g, '_')}_${getWIBDateString()}.xlsx`);
 }
 
 /**
@@ -891,7 +892,7 @@ export function generateLaporanPetaPDF(
   // Save PDF file
   const safeUlp = ulpTitle.replace(/[^a-zA-Z0-9]/g, '_');
   const safeFeeder = feederTitle.replace(/[^a-zA-Z0-9]/g, '_');
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = getWIBDateString();
   const filename = customFilename || `Peta_Pohon_ROW_${safeUlp}_${safeFeeder}_${dateStr}.pdf`;
   doc.save(filename);
 }
