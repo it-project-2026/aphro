@@ -392,6 +392,31 @@ function doPost(e) {
     }
 
     var action = postData.action;
+    var authUser = postData.authUser || postData.user || {};
+    var actorName = authUser.name || authUser.userName || authUser.nip || postData.actorName || "Guest User";
+    var actorRole = authUser.role || "User";
+
+    function logServerActivity(actName, detailsStr, ssRef) {
+      try {
+        var activeSs = ssRef || getSpreadsheet(postData.spreadsheetId);
+        var logSheet = activeSs.getSheetByName("LOG_ACTIVITY");
+        if (!logSheet) {
+          logSheet = activeSs.insertSheet("LOG_ACTIVITY");
+          logSheet.appendRow(["Timestamp", "User", "Aktivitas", "Modul", "IP", "Device"]);
+          logSheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#00529C").setFontColor("#FFFFFF");
+        }
+        logSheet.appendRow([
+          new Date().toISOString(),
+          actorName + " [" + actorRole + "]",
+          actName,
+          detailsStr || "-",
+          "-",
+          "-"
+        ]);
+      } catch (eLog) {
+        Logger.log("Error writing server log activity: " + eLog);
+      }
+    }
 
     // LOGIN ACTION
     if (action === "login") {

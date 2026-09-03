@@ -108,8 +108,52 @@ export class GASApiService {
   }
 
   /**
-   * Safe response handler to prevent JSON parsing errors when GAS returns HTML
+   * Helper to retrieve active user identity and role for authorization & server logging
    */
+  private static getAuthUserPayload() {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    try {
+      const raw = localStorage.getItem('aphro_user') || localStorage.getItem('aphro_current_user') || localStorage.getItem('pln_mobile_user');
+      if (!raw) return null;
+      const u = JSON.parse(raw);
+      if (!u || typeof u !== 'object') return null;
+      return {
+        id: u.id || u.userId || '',
+        nip: u.nip || u.username || u.userName || '',
+        name: u.name || u.userName || u.nip || '',
+        userName: u.userName || u.username || u.nip || '',
+        role: u.role || 'User',
+        reguName: u.reguName || u.regu || '',
+        ulpName: u.ulpName || u.ulp || '',
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Helper to execute POST request with explicit authUser payload & multi-user concurrency header
+   */
+  private static async postRequest(gasUrl: string, bodyObj: any, timeoutMs = 30000): Promise<GASApiResponse> {
+    try {
+      const authUser = this.getAuthUserPayload();
+      const payload = {
+        ...bodyObj,
+        authUser: authUser || bodyObj.authUser || null,
+        clientTimestamp: new Date().toISOString(),
+      };
+
+      const response = await this.fetchWithTimeout(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      }, timeoutMs);
+
+      return await this.handleResponse(response);
+    } catch (err: any) {
+      return { status: 'error', message: err.message || 'Gagal mengirim data ke server GAS' };
+    }
+  }
   private static async handleResponse(response: Response): Promise<GASApiResponse> {
     const contentType = response.headers.get('content-type');
     const text = await response.text();
@@ -249,16 +293,11 @@ export class GASApiService {
         CREATED_AT: workOrder.createdAt || new Date().toISOString(),
       };
 
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'createWorkOrder',
-          spreadsheetId,
-          workOrder: mappedWo,
-        }),
+      return await this.postRequest(gasUrl, {
+        action: 'createWorkOrder',
+        spreadsheetId,
+        workOrder: mappedWo,
       });
-      return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -280,25 +319,20 @@ export class GASApiService {
     }
   ): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'uploadPhoto',
-          base64Data: payload.base64Data,
-          nomorWO: payload.nomorWO || payload.reguName,
-          reguName: payload.reguName,
-          photoType: payload.photoType,
-          folderId: payload.folderId,
-          year: payload.year || new Date().getFullYear().toString(),
-          month:
-            payload.month ||
-            ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][
-              new Date().getMonth()
-            ],
-        }),
+      return await this.postRequest(gasUrl, {
+        action: 'uploadPhoto',
+        base64Data: payload.base64Data,
+        nomorWO: payload.nomorWO || payload.reguName,
+        reguName: payload.reguName,
+        photoType: payload.photoType,
+        folderId: payload.folderId,
+        year: payload.year || new Date().getFullYear().toString(),
+        month:
+          payload.month ||
+          ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][
+            new Date().getMonth()
+          ],
       });
-      return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -318,16 +352,11 @@ export class GASApiService {
         Lokasi_kerja: realisasi.lokasiKerja || '',
       };
 
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'saveRealisasi',
-          spreadsheetId,
-          realisasi: mappedRel,
-        }),
+      return await this.postRequest(gasUrl, {
+        action: 'saveRealisasi',
+        spreadsheetId,
+        realisasi: mappedRel,
       });
-      return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -374,16 +403,11 @@ export class GASApiService {
 
   static async saveAbsensi(gasUrl: string, spreadsheetId: string | undefined, absensi: any): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'saveAbsensi',
-          spreadsheetId,
-          absensi,
-        }),
+      return await this.postRequest(gasUrl, {
+        action: 'saveAbsensi',
+        spreadsheetId,
+        absensi,
       });
-      return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -391,16 +415,11 @@ export class GASApiService {
 
   static async deleteAbsensi(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'deleteAbsensi',
-          spreadsheetId,
-          id,
-        }),
+      return await this.postRequest(gasUrl, {
+        action: 'deleteAbsensi',
+        spreadsheetId,
+        id,
       });
-      return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -416,17 +435,12 @@ export class GASApiService {
         volume: Number(rel.volume || 0).toFixed(2),
       };
 
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'updateRealisasi',
-          spreadsheetId,
-          id,
-          realisasi: mappedRel,
-        }),
+      return await this.postRequest(gasUrl, {
+        action: 'updateRealisasi',
+        spreadsheetId,
+        id,
+        realisasi: mappedRel,
       });
-      return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -481,12 +495,7 @@ export class GASApiService {
         CREATED_AT: wo.createdAt || '', // Should already exist on update
       };
 
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'updateWorkOrder', spreadsheetId, id, workOrder: mappedWo }),
-      });
-      return await this.handleResponse(response);
+      return await this.postRequest(gasUrl, { action: 'updateWorkOrder', spreadsheetId, id, workOrder: mappedWo });
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -498,12 +507,7 @@ export class GASApiService {
   static async deleteWorkOrder(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
       this.clearCache();
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'deleteWorkOrder', spreadsheetId, id }),
-      });
-      return await this.handleResponse(response);
+      return await this.postRequest(gasUrl, { action: 'deleteWorkOrder', spreadsheetId, id });
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -512,16 +516,11 @@ export class GASApiService {
   static async deleteRealisasi(gasUrl: string, spreadsheetId: string, id: string): Promise<GASApiResponse> {
     try {
       this.clearCache();
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'deleteRealisasi',
-          spreadsheetId,
-          id,
-        }),
+      return await this.postRequest(gasUrl, {
+        action: 'deleteRealisasi',
+        spreadsheetId,
+        id,
       });
-      return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -538,12 +537,7 @@ export class GASApiService {
   ): Promise<GASApiResponse> {
     try {
       this.clearCache();
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'saveMasterData', spreadsheetId, sheetName, item }),
-      });
-      return await this.handleResponse(response);
+      return await this.postRequest(gasUrl, { action: 'saveMasterData', spreadsheetId, sheetName, item });
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
@@ -569,12 +563,7 @@ export class GASApiService {
   ): Promise<GASApiResponse> {
     try {
       this.clearCache();
-      const response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'deleteMasterData', spreadsheetId, sheetName, id }),
-      });
-      return await this.handleResponse(response);
+      return await this.postRequest(gasUrl, { action: 'deleteMasterData', spreadsheetId, sheetName, id });
     } catch (err: any) {
       return { status: 'error', message: err.message };
     }
