@@ -10,7 +10,7 @@ import { generateWatermarkedImage } from '../utils/watermark';
 import { compressImage } from '../utils/imageCompression';
 import { GASApiService } from '../services/gasApiService';
 import { formatDriveViewUrl } from '../utils/driveUtils';
-import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
+import { getWIBDateString, getLocalDateTimeString, normalizeDateISO, formatDateDisplay } from '../utils/dateUtils';
 import {
   Camera,
   Upload,
@@ -66,53 +66,96 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   }, [isGasConnected, workOrders.length]);
 
   // Helper to clean string for better matching
-  const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+  const cleanStr = (s: any) =>
+    String(s || '')
+      .toLowerCase()
+      .replace(/^(regu|tim|petugas)\s+/gi, '')
+      .replace(/[^a-z0-9]/gi, '')
+      .trim();
 
-  // Filter Work Orders for the current user's regu, unless admin
+  // Filter Work Orders strictly for TODAY with STATUS "BELUM SELESAI" for the logged-in user
   const availableWorkOrders = workOrders
     .filter((wo) => {
-      // Always show current WO if in edit mode to prevent form breaking
+      // Always show current WO if in edit mode or explicitly selected via UI context to prevent form breaking
       if (editMode && initialData && wo.id === initialData.workOrderId) return true;
+      if (!editMode && selectedWoIdForRealisasi && wo.id === selectedWoIdForRealisasi) return true;
 
-      // --- DATE & STATUS RESTRICTIONS ---
-      // 1. Get today's date string (YYYY-MM-DD)
+      // --- 1. DATE RESTRICTION: HARI INI SAJA (WIB) ---
       const todayStr = getWIBDateString();
-      const woDate = wo.tanggal; // YYYY-MM-DD
+      const woDate = normalizeDateISO(wo.tanggal || wo.createdAt);
 
       const isToday = woDate === todayStr;
-      const isPast = woDate < todayStr;
-      const isFuture = woDate > todayStr;
+      if (!isToday) return false;
 
-      // Status check: any status that is NOT finished
-      const isNotFinished = wo.status !== 'Selesai' && wo.status !== 'SELESAI';
+      // --- 2. STATUS RESTRICTION: STATUS "BELUM SELESAI" ---
+      const statusUpper = String(wo.status || '').toUpperCase().trim();
+      const isFinished =
+        statusUpper === 'SELESAI' ||
+        statusUpper === 'FINISHED' ||
+        statusUpper === 'DONE' ||
+        statusUpper === 'COMPLETE' ||
+        (wo.progressPercent !== undefined && wo.progressPercent >= 100);
 
-      // Rule: Today's WO OR (Past WO AND Not Finished)
-      // Future WO is automatically excluded because isToday and isPast will be false
-      const isSelectable = isToday || (isPast && isNotFinished);
+      const isBelumSelesai = !isFinished;
+      if (!isBelumSelesai) return false;
 
-      if (!isSelectable) return false;
-      // ----------------------------------
-      
-      // Admins / Adm / SuperAdmin see all work orders that pass the date/status filter
-      if (currentUser && !isUserRole) return true;
-      
-      // Regular "User" only sees WOs matching their Regu Name
-      if (isUserRole) {
-        const userRegu = cleanStr(currentUser.reguName || '');
-        const userName = cleanStr(currentUser.name || '');
-        const woRegu = cleanStr(wo.reguName || '');
-        const woPetugas = cleanStr(wo.petugasName || '');
-        
-        // Match by Regu Name, Regu ID, or if specifically assigned to this User Name
-        const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu));
-        const matchReguId = (wo.reguId && currentUser.reguId && String(wo.reguId) === String(currentUser.reguId));
-        const matchPetugas = userName !== '' && (woPetugas === userName || woPetugas.includes(userName));
-        
-        // Show if matches regu or assigned petugas
-        return matchRegu || matchReguId || matchPetugas;
+      // --- 3. USER RESTRICTION: PER USER YANG LOGIN ---
+      // Admins / Adm / SuperAdmin see all work orders for today with status BELUM SELESAI
+      if (currentUser && !isUserRole) {
+        // If Admin has a specific ULP assigned, check ULP match
+        if (currentUser.ulpName && wo.ulpName) {
+          const u1 = cleanStr(currentUser.ulpName);
+          const u2 = cleanStr(wo.ulpName);
+          if (u1 && u2 && !u1.includes(u2) && !u2.includes(u1)) return false;
+        }
+        return true;
       }
 
-      return false;
+      // Regular "User" only sees WOs assigned to their Regu / Petugas Name / User ID
+      if (currentUser && isUserRole) {
+        // Direct ID match
+        if (currentUser.reguId && wo.reguId && String(currentUser.reguId) === String(wo.reguId)) return true;
+        if (currentUser.id && wo.petugasId && String(currentUser.id) === String(wo.petugasId)) return true;
+
+        const userCandidates = [
+          cleanStr(currentUser.reguName),
+          cleanStr(currentUser.userName),
+          cleanStr(currentUser.name),
+          cleanStr(currentUser.nip),
+          cleanStr(currentUser.id),
+        ].filter(Boolean);
+
+        const woReguClean = cleanStr(wo.reguName || (wo as any).regu);
+        const woPetugasClean = cleanStr(wo.petugasName || (wo as any).petugas);
+        const woCreatedByClean = cleanStr((wo as any).createdBy);
+
+        const isMatched = userCandidates.some((uCand) => {
+          if (!uCand) return false;
+          if (woReguClean && (woReguClean === uCand || (woReguClean.length >= 2 && uCand.length >= 2 && (woReguClean.includes(uCand) || uCand.includes(woReguClean))))) {
+            return true;
+          }
+          if (woPetugasClean && (woPetugasClean === uCand || (woPetugasClean.length >= 2 && uCand.length >= 2 && (woPetugasClean.includes(uCand) || uCand.includes(woPetugasClean))))) {
+            return true;
+          }
+          if (woCreatedByClean && woCreatedByClean === uCand) {
+            return true;
+          }
+          return false;
+        });
+
+        if (isMatched) return true;
+
+        // Fallback: If user has no reguName set, check if matched by ULP name
+        if (!currentUser.reguName && currentUser.ulpName && wo.ulpName) {
+          const u1 = cleanStr(currentUser.ulpName);
+          const u2 = cleanStr(wo.ulpName);
+          if (u1 && u2 && (u1.includes(u2) || u2.includes(u1))) return true;
+        }
+
+        return false;
+      }
+
+      return true;
     })
     .sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.tanggal).getTime();
@@ -679,7 +722,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
             
             {isUserRole && (
               <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">
-                Menampilkan WO untuk Regu: <span className="font-bold text-teal-600 dark:text-teal-400">{currentUser?.reguName || 'Belum Diatur'}</span>
+                Menampilkan Work Order Hari Ini (Belum Selesai) untuk: <span className="font-bold text-teal-600 dark:text-teal-400">{currentUser?.reguName || currentUser?.name || 'User Login'}</span>
               </p>
             )}
             <select
@@ -690,15 +733,17 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
               {workOrders.length === 0 ? (
                 <option value="">-- Menunggu Data Dari Spreadsheet... --</option>
               ) : availableWorkOrders.length === 0 ? (
-                <option value="">-- Tidak Ada WO Aktif Untuk Regu: {currentUser?.reguName || 'Belum Diatur'} --</option>
+                <option value="">
+                  -- Tidak Ada Work Order Hari Ini ({formatDateDisplay(getWIBDateString())}) dengan Status "BELUM SELESAI" --
+                </option>
               ) : (
                 <>
                   {(!selectedWoId || !availableWorkOrders.find(w => w.id === selectedWoId)) && (
-                    <option value="">-- Pilih Work Order --</option>
+                    <option value="">-- Pilih Work Order Hari Ini (Belum Selesai) --</option>
                   )}
                   {availableWorkOrders.map((wo, wIdx) => (
                     <option key={`${wo.id}-${wIdx}`} value={wo.id}>
-                      {wo.nomorWO} - {wo.penyulangName} ({wo.ulpName}) - [{wo.status}]
+                      {wo.nomorWO} - {wo.penyulangName} ({wo.ulpName}) - [{wo.status || 'BELUM SELESAI'}]
                     </option>
                   ))}
                 </>
