@@ -11,7 +11,7 @@ import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { OptimizedMapView, MapPointItem } from '../components/common/OptimizedMapView';
 import { WorkOrder, Realisasi } from '../types';
-import { getLocalDateTimeString, formatDateDisplay, normalizeDateISO } from '../utils/dateUtils';
+import { getLocalDateTimeString, formatDateDisplay, normalizeDateISO, getWIBDateString } from '../utils/dateUtils';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -99,8 +99,8 @@ export const MonitoringPage: React.FC = () => {
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  // Default empty for Admin to see all, today for User
-  const [filterDate, setFilterDate] = useState(currentUser?.role === 'User' ? getLocalDateTimeString().slice(0, 10) : '');
+  // Default today in WIB for User, empty for Admin to see all
+  const [filterDate, setFilterDate] = useState(currentUser?.role === 'User' ? getWIBDateString() : '');
   const [searchQuery, setSearchQuery] = useState('');
 
   const isAdmRole = (currentUser?.role || '').toUpperCase() === 'ADM' || (currentUser?.role || '').toUpperCase() === 'ADMIN' || (currentUser?.userName || '').toLowerCase() === 'admbkt';
@@ -116,7 +116,7 @@ export const MonitoringPage: React.FC = () => {
       .replace(/[^a-z0-9]/gi, '');
   };
 
-  // 1. Deduplicate Work Orders to ensure each Nomor WO only appears once
+  // 1. Deduplicate Work Orders to ensure each Nomor WO only appears once, and synthetic WOs from Realisasi are included
   const uniqueWorkOrders = useMemo(() => {
     const baseList = isUserRole ? displayedWorkOrders : workOrders;
     const seen = new Map<string, WorkOrder>();
@@ -146,8 +146,32 @@ export const MonitoringPage: React.FC = () => {
       }
     });
 
+    // Also inject synthetic Work Orders for any Realisasi whose nomorWO / workOrderId is not in seen
+    realisasiList.forEach((r) => {
+      if (!r) return;
+      const rKey = (r.nomorWO || '').trim().toUpperCase() || (r.workOrderId || '').trim().toUpperCase();
+      if (!rKey) return;
+
+      if (!seen.has(rKey)) {
+        seen.set(rKey, {
+          id: r.workOrderId || `wo-syn-${rKey}`,
+          nomorWO: r.nomorWO || rKey,
+          tanggal: r.tanggalRealisasi || r.createdAt || getWIBDateString(),
+          ulpId: '',
+          ulpName: r.ulpName || '-',
+          penyulangId: '',
+          penyulangName: r.penyulangName || '-',
+          reguId: '',
+          reguName: r.reguName || '-',
+          status: r.status || 'Selesai',
+          progressPercent: 100,
+          createdAt: r.createdAt || new Date().toISOString(),
+        });
+      }
+    });
+
     return Array.from(seen.values());
-  }, [isUserRole, displayedWorkOrders, workOrders]);
+  }, [isUserRole, displayedWorkOrders, workOrders, realisasiList]);
 
   // 2. Filtered unique WOs
   const filteredWOs = useMemo(() => {
@@ -156,7 +180,27 @@ export const MonitoringPage: React.FC = () => {
       const matchesPenyulang = filterPenyulang === 'ALL' || cleanStr(wo.penyulangId) === cleanStr(filterPenyulang) || cleanStr(wo.penyulangName) === cleanStr(filterPenyulang);
       const matchesRegu = filterRegu === 'ALL' || cleanStr(wo.reguName) === cleanStr(filterRegu);
       const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
-      const matchesDate = !filterDate || (wo.tanggal && wo.tanggal.includes(filterDate));
+
+      // Robust date matching
+      const woDateIso = normalizeDateISO(wo.tanggal);
+      const matchesWoDate = Boolean(filterDate) && (
+        woDateIso === filterDate ||
+        Boolean(wo.tanggal && String(wo.tanggal).includes(filterDate))
+      );
+
+      const woNomorClean = (wo.nomorWO || '').trim().toUpperCase();
+      const hasRealisasiOnDate = Boolean(filterDate) && realisasiList.some((r) => {
+        if (!r) return false;
+        const matchId = r.workOrderId && r.workOrderId === wo.id;
+        const rNoWoClean = (r.nomorWO || '').trim().toUpperCase();
+        const matchNoWo = Boolean(woNomorClean && rNoWoClean && rNoWoClean === woNomorClean);
+        if (!matchId && !matchNoWo) return false;
+
+        const rDateIso = normalizeDateISO(r.tanggalRealisasi || r.createdAt);
+        return rDateIso === filterDate || Boolean(r.tanggalRealisasi && String(r.tanggalRealisasi).includes(filterDate));
+      });
+
+      const matchesDate = !filterDate || matchesWoDate || hasRealisasiOnDate;
       
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -168,7 +212,7 @@ export const MonitoringPage: React.FC = () => {
 
       return matchesUlp && matchesPenyulang && matchesRegu && matchesStatus && matchesDate && matchesSearch;
     });
-  }, [uniqueWorkOrders, filterUlp, filterPenyulang, filterRegu, filterStatus, filterDate, searchQuery]);
+  }, [uniqueWorkOrders, realisasiList, filterUlp, filterPenyulang, filterRegu, filterStatus, filterDate, searchQuery]);
 
   // 3. Calculate totals across filtered WOs with deduplicated realisasi items
   const woMonitoringRows = useMemo(() => {
@@ -180,13 +224,22 @@ export const MonitoringPage: React.FC = () => {
         const matchId = r.workOrderId && r.workOrderId === wo.id;
         const rNoWoClean = (r.nomorWO || '').trim().toUpperCase();
         const matchNoWo = Boolean(woNomorClean && rNoWoClean && rNoWoClean === woNomorClean);
-        return matchId || matchNoWo;
+        if (!matchId && !matchNoWo) return false;
+
+        if (filterDate) {
+          const rDateIso = normalizeDateISO(r.tanggalRealisasi || r.createdAt);
+          const woDateIso = normalizeDateISO(wo.tanggal);
+          if (rDateIso === filterDate) return true;
+          if (woDateIso === filterDate && (!r.tanggalRealisasi || rDateIso === woDateIso)) return true;
+          return false;
+        }
+
+        return true;
       });
 
       // Deduplicate realisasi items to prevent double counting
       const seenRel = new Set<string>();
       const uniqueRelList = matchedRealisasi.filter((r) => {
-        // Use ID if available, otherwise combine fields including createdAt to ensure uniqueness
         const key = r.id || `${r.nomorWO}-${r.createdAt || ''}-${r.fotoSebelumUrl}-${r.fotoSesudahUrl}-${r.noTiang || ''}-${r.keterangan || ''}`;
         if (seenRel.has(key)) return false;
         seenRel.add(key);
@@ -203,7 +256,6 @@ export const MonitoringPage: React.FC = () => {
         return ket.includes('POTONG') || ket.includes('PANGKAS');
       }).length;
 
-      // TOTAL REALISASI should at least be the count of unique records
       const totalRealisasiCount = Math.max(uniqueRelList.length, totalTebang + totalPotong);
 
       return {
@@ -217,7 +269,7 @@ export const MonitoringPage: React.FC = () => {
         totalPotong,
       };
     });
-  }, [filteredWOs, realisasiList]);
+  }, [filteredWOs, realisasiList, filterDate]);
 
   const grandTotalRealisasi = useMemo(
     () => woMonitoringRows.reduce((acc, row) => acc + row.totalRealisasiCount, 0),
@@ -235,8 +287,8 @@ export const MonitoringPage: React.FC = () => {
   // Map Center (Padang, West Sumatra default)
   const mapCenter: [number, number] = [-0.92, 100.4];
 
-  // Today ISO date (YYYY-MM-DD)
-  const todayISO = useMemo(() => getLocalDateTimeString().slice(0, 10), []);
+  // Today ISO date in WIB (YYYY-MM-DD)
+  const todayISO = useMemo(() => getWIBDateString(), []);
 
   // 4. Dedicated Work Orders for GIS Field: ONLY TODAY & Status BELUM SELESAI
   const mapWOs = useMemo(() => {
