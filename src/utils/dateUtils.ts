@@ -5,83 +5,75 @@
 export const formatDateDisplay = (dateVal: any): string => {
   if (!dateVal) return '-';
   const s = String(dateVal).trim();
-  if (!s || s === '-') return '-';
+  if (!s || s === 'null' || s === 'undefined') return '-';
 
-  // 1. Handle common Indonesia/Excel formats first: DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
-  const dmyMatch = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
-  if (dmyMatch) {
-    const day = dmyMatch[1].padStart(2, '0');
-    const month = dmyMatch[2].padStart(2, '0');
-    const year = dmyMatch[3];
-    return `${year}-${month}-${day}`;
-  }
-
-  // 2. YYYY-MM-DD or YYYY/MM/DD
+  // If it's already YYYY-MM-DD
   const ymdMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (ymdMatch) {
-    const year = ymdMatch[1];
-    const month = ymdMatch[2].padStart(2, '0');
-    const day = ymdMatch[3].padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
   }
 
-  // 3. Handle ISO strings or Date objects in WIB (Asia/Jakarta)
+  // Handle common Indonesia formats: DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (dmyMatch) {
+    return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
+  }
+
+  // If ISO string or date
   try {
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
-      return new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Jakarta',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(d);
+      return getWIBDateString(d);
     }
-  } catch (e) {}
-
+  } catch (e) {
+    // fallback
+  }
+  
   return s.slice(0, 10);
 };
 
-export const getLocalDateTimeString = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+export const getLocalDateTimeString = (dateInput = new Date()): string => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(dateInput);
+
+    const map: Record<string, string> = {};
+    parts.forEach((p) => {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    });
+
+    const hh = map.hour === '24' ? '00' : (map.hour || '00');
+    return `${map.year}-${map.month}-${map.day} ${hh}:${map.minute}:${map.second}`;
+  } catch (e) {
+    const wibDate = new Date(dateInput.getTime() + (7 * 60 * 60 * 1000));
+    return wibDate.toISOString().replace('T', ' ').slice(0, 19);
+  }
 };
 
 /**
  * Normalizes various date string formats (ISO, DD-MM-YYYY, DD/MM/YYYY, or Numbers)
  * into a standard YYYY-MM-DD string for comparison.
- * Optimized for accuracy in WIB (Asia/Jakarta).
+ * Optimized for accuracy in local timezones (like WIB).
  */
 export const normalizeDateISO = (dateVal: any): string => {
   if (!dateVal) return '';
 
-  // If it's already a Date object, format in WIB
   if (dateVal instanceof Date) {
-    try {
-      return new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Jakarta',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(dateVal);
-    } catch {
-      const year = dateVal.getFullYear();
-      const month = String(dateVal.getMonth() + 1).padStart(2, '0');
-      const day = String(dateVal.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
+    return getWIBDateString(dateVal);
   }
 
   const s = String(dateVal).trim();
-  if (!s || s === '-') return '';
+  if (!s || s === 'null' || s === 'undefined') return '';
 
-  // 1. Handle common Indonesia/Excel formats first: DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+  // Handle common Indonesia/Excel formats first: DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
   const dmyMatch = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
   if (dmyMatch) {
     const day = dmyMatch[1].padStart(2, '0');
@@ -90,25 +82,20 @@ export const normalizeDateISO = (dateVal: any): string => {
     return `${year}-${month}-${day}`;
   }
 
-  // 2. Check for YYYY-MM-DD plain string pattern
+  // Handle YYYY-MM-DD plain string pattern (possibly with time, without T)
   const ymdMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  if (ymdMatch) {
+  if (ymdMatch && !s.includes('T')) {
     const year = ymdMatch[1];
     const month = ymdMatch[2].padStart(2, '0');
     const day = ymdMatch[3].padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
 
-  // 3. Handle full ISO strings or timestamps
+  // Handle ISO strings or numeric timestamps
   try {
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
-      return new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Jakarta',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(d);
+      return getWIBDateString(d);
     }
   } catch (e) {}
 
