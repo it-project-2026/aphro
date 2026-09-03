@@ -146,13 +146,22 @@ function sheetToObjects(sheetName, id, existingSs) {
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
 
+  var tz = ss.getSpreadsheetTimeZone() || "Asia/Jakarta";
   var headers = data[0];
   var results = [];
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
     var obj = {};
     for (var c = 0; c < headers.length; c++) {
-      obj[headers[c]] = row[c];
+      var val = row[c];
+      if (val instanceof Date) {
+        var formatted = Utilities.formatDate(val, tz, "yyyy-MM-dd HH:mm:ss");
+        if (formatted.indexOf("00:00:00") > -1) {
+          formatted = Utilities.formatDate(val, tz, "yyyy-MM-dd");
+        }
+        val = formatted;
+      }
+      obj[headers[c]] = val;
     }
     results.push(obj);
   }
@@ -563,7 +572,8 @@ function doPost(e) {
         latLng = (rel.latitude || 0) + ", " + (rel.longitude || 0);
       }
 
-      var timestampStr = rel.timestamp || rel.createdAt || new Date().toISOString();
+      var tz = ss.getSpreadsheetTimeZone() || "Asia/Jakarta";
+      var timestampStr = rel.timestamp || rel.createdAt || Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss");
 
       var relValues = [
         relId,                                          // 1. ID (Col A)

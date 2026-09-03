@@ -1,6 +1,7 @@
 import { GASApiService } from './gasApiService';
 import { User, UserRole, WorkOrder, ULP, Penyulang, ReguROW, Petugas } from '../types';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
+import { getLocalDateTimeString } from '../utils/dateUtils';
 
 export function normalizeUser(u: any): User {
   if (!u || typeof u !== 'object') {
@@ -264,7 +265,8 @@ export function normalizeRealisasi(r: any): any {
       userName: String(r.Petugas || r.REGU_ROW || ''),
       ulpName: String(r.ULP || '')
     }] : [],
-    createdAt: String(r.Timestamp || r.createdAt || new Date().toISOString()),
+    timestamp: String(r.Timestamp || r.timestamp || r.createdAt || ''),
+    createdAt: String(r.Timestamp || r.createdAt || getLocalDateTimeString()),
   };
 }
 
