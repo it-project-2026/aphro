@@ -68,9 +68,20 @@ export const compressImage = (base64Str: string): Promise<string> => {
         currentSize = getBase64Size(resultBase64);
       }
 
-      resolve(resultBase64);
+      // Clean up canvas memory immediately
+      const dataUrl = resultBase64;
+      canvas.width = 0;
+      canvas.height = 0;
+      img.onload = null;
+      img.onerror = null;
+
+      resolve(dataUrl);
     };
 
-    img.onerror = (err) => reject(err);
+    img.onerror = (err) => {
+      img.onload = null;
+      img.onerror = null;
+      reject(err);
+    };
   });
 };

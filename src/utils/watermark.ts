@@ -111,10 +111,21 @@ export function generateWatermarkedImage(params: WatermarkParams): Promise<strin
 
       // Convert to compressed jpeg data URL
       const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      
+      // Clean up canvas memory immediately
+      canvas.width = 0;
+      canvas.height = 0;
+      img.onload = null;
+      img.onerror = null;
+
       resolve(dataUrl);
     };
 
-    img.onerror = (err) => reject(err);
+    img.onerror = (err) => {
+      img.onload = null;
+      img.onerror = null;
+      reject(err);
+    };
 
     if (typeof params.imageFile === 'string') {
       img.src = params.imageFile;

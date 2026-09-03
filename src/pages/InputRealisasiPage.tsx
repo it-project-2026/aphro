@@ -231,7 +231,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         (err) => {
           showToast(`Gagal membaca GPS: ${err.message}`, 'error');
         },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
       );
     } else {
       showToast('Perangkat tidak mendukung GPS', 'warning');
@@ -320,7 +320,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           showToast(`Gagal membaca GPS foto: ${err.message}. Menggunakan GPS terakhir.`, 'warning');
           processPhoto(latitude, longitude); // fallback to state
         },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
       );
     } else {
       processPhoto(latitude, longitude);
