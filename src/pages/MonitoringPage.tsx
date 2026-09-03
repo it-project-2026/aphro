@@ -9,6 +9,7 @@ import { useGASSync } from '../context/GASSyncContext';
 import { useUI } from '../context/UIContext';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { OptimizedMapView, MapPointItem } from '../components/common/OptimizedMapView';
 import { WorkOrder, Realisasi } from '../types';
 import { getLocalDateTimeString, formatDateDisplay, normalizeDateISO } from '../utils/dateUtils';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
@@ -369,6 +370,52 @@ export const MonitoringPage: React.FC = () => {
     return null;
   };
 
+  const mapPointItems = useMemo<MapPointItem[]>(() => {
+    const items: MapPointItem[] = [];
+
+    // 1. Work Orders Hari Ini (Status Belum Selesai)
+    mapWOs.forEach((wo) => {
+      if (wo.latitude && wo.longitude) {
+        items.push({
+          id: `wo-${wo.id}`,
+          lat: wo.latitude,
+          lng: wo.longitude,
+          type: 'wo',
+          title: wo.nomorWO || 'Work Order',
+          subtitle: `${wo.penyulangName || ''} - ${wo.ulpName || ''}`,
+          status: wo.status || 'Belum Dikerjakan',
+          ulpName: wo.ulpName,
+          penyulangName: wo.penyulangName,
+          reguName: wo.reguName,
+          lokasi: wo.lokasi || 'Lokasi Field',
+          tanggal: wo.tanggal,
+          raw: wo,
+        });
+      }
+    });
+
+    // 2. Active Regu ROW
+    activeReguLocations.forEach((regu: any) => {
+      if (regu && regu.lat && regu.lon) {
+        items.push({
+          id: `regu-${regu.name}`,
+          lat: regu.lat,
+          lng: regu.lon,
+          type: 'regu',
+          title: regu.name,
+          subtitle: `Sumber: ${regu.type}`,
+          status: 'Regu',
+          reguName: regu.name,
+          lokasi: regu.keterangan || regu.type,
+          lastUpdate: regu.lastUpdate,
+          raw: regu,
+        });
+      }
+    });
+
+    return items;
+  }, [mapWOs, activeReguLocations]);
+
   // Auto-refresh coordinates every 5 minutes when page is active
   useEffect(() => {
     if (!navigator.onLine || !settings.gasWebAppUrl) return;
@@ -688,168 +735,16 @@ export const MonitoringPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            /* MAP GIS VIEW */
+            /* MAP GIS VIEW (LIGHTWEIGHT CANVAS & BOUNDING-BOX CLUSTERING) */
             <div className="space-y-6 no-print">
               <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden p-2">
-                <div className="h-[560px] w-full rounded-2xl overflow-hidden relative">
-                  {/* Floating Overlay Badge */}
-                  <div className="absolute top-3 right-3 z-[400] bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm p-3.5 rounded-2xl border border-slate-300 dark:border-slate-700 shadow-lg text-[11px] space-y-2 font-sans text-slate-800 dark:text-slate-200 min-w-[240px]">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-700">
-                      <p className="font-extrabold text-[#008396] dark:text-teal-400 flex items-center space-x-1">
-                        <span>⚡ PETA GIS FIELD</span>
-                      </p>
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-extrabold text-[10px]">
-                        HARI INI (TODAY)
-                      </span>
-                    </div>
-
-                    <div className="space-y-1 text-slate-600 dark:text-slate-400 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Status WO:</span>
-                        <span className="font-extrabold text-amber-600 dark:text-amber-400">BELUM SELESAI</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">WO Belum Selesai:</span>
-                        <span className="font-extrabold text-[#00A2B9] dark:text-teal-400">{mapWOs.length} Titik</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Regu ROW Terpantau:</span>
-                        <span className="font-extrabold text-[#00A2B9] dark:text-teal-400">{activeReguLocations.length} Regu</span>
-                      </div>
-                    </div>
-
-                    <div className="pt-1.5 border-t border-slate-200 dark:border-slate-700 text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center space-x-1">
-                      <span>⚡ Jalur Jaringan TR (Tegangan Rendah)</span>
-                    </div>
-                  </div>
-
-                  {mapWOs.length === 0 && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl text-center max-w-md">
-                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        Tidak ada Work Order berstatus <span className="text-amber-600 font-extrabold">Belum Selesai</span> untuk hari ini ({formatDateDisplay(todayISO)}).
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        Semua pekerjaan hari ini telah selesai atau belum ada jadwal baru.
-                      </p>
-                    </div>
-                  )}
-
-                  <MapContainer
-                    center={mapCenter}
-                    zoom={11}
-                    scrollWheelZoom={true}
-                    style={{ height: '100%', width: '100%' }}
-                  >
-                    <MapBoundsHandler locations={allMapLocations.length > 0 ? allMapLocations : activeReguLocations} />
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      crossOrigin="anonymous"
-                    />
-
-                    {mapPolylinePositions.length > 1 && (
-                      <>
-                        {/* Dark Casing Outer Line */}
-                        <Polyline
-                          positions={mapPolylinePositions}
-                          color="#0f172a"
-                          weight={6}
-                          opacity={0.85}
-                        />
-                        {/* Orange-Yellow Jaringan TR PLN Line */}
-                        <Polyline
-                          positions={mapPolylinePositions}
-                          color="#f59e0b"
-                          weight={3.5}
-                          opacity={1}
-                          dashArray="8, 6"
-                        />
-                      </>
-                    )}
-
-                    {/* Titik Lokasi Work Order Hari Ini (Status Belum Selesai) */}
-                    {mapWOs.map((wo, idx) => {
-                      const customIcon = createCustomMarkerIcon(wo.status || 'Belum Dikerjakan');
-
-                      return (
-                        <Marker
-                          key={`map-wo-${wo.id}-${idx}`}
-                          position={[wo.latitude || -0.92, wo.longitude || 100.4]}
-                          icon={customIcon}
-                        >
-                          <Popup>
-                            <div className="p-1.5 space-y-2 max-w-xs font-sans">
-                              <div className="border-b border-slate-200 dark:border-slate-700 pb-1.5 flex items-center justify-between">
-                                <span className="font-black text-[#008396] text-xs">
-                                  {wo.nomorWO}
-                                </span>
-                                <StatusBadge status={wo.status || 'Belum Dikerjakan'} size="sm" />
-                              </div>
-
-                              <div className="space-y-1 text-xs">
-                                <p className="font-bold text-slate-900 leading-tight">
-                                  {wo.penyulangName} - {wo.ulpName}
-                                </p>
-                                <p className="text-slate-600 text-[11px]">📍 {wo.lokasi || 'Lokasi Field'}</p>
-                                <p className="text-slate-700 text-[11px] font-semibold">
-                                  👷‍♂️ Regu ROW: <span className="font-black text-[#008396]">{wo.reguName}</span>
-                                </p>
-                                <p className="text-slate-500 text-[10px]">
-                                  📅 Tanggal: {formatDateDisplay(wo.tanggal)}
-                                </p>
-                              </div>
-                            </div>
-                          </Popup>
-                        </Marker>
-                      );
-                    })}
-
-                    {/* Titik Koordinat Live Regu ROW Hari Ini */}
-                    {activeReguLocations.map((regu: any, idx: number) => (
-                      <Marker
-                        key={`regu-live-${regu.name}-${idx}`}
-                        position={[regu.lat, regu.lon]}
-                        icon={createCustomMarkerIcon('Regu')}
-                      >
-                        <Tooltip permanent direction="top" offset={[0, -20]} className="bg-[#EF4444] text-white font-extrabold border-none rounded-lg px-2.5 py-1 shadow-md text-[11px]">
-                          {regu.name}
-                        </Tooltip>
-                        <Popup>
-                          <div className="p-2 space-y-2 min-w-[200px] font-sans">
-                            <div className="border-b border-slate-200 dark:border-slate-700 pb-1.5 flex items-center justify-between">
-                              <span className="font-black text-[#EF4444] text-xs tracking-wide">
-                                📍 REGUS ROW HARI INI
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase">
-                                AKTIF
-                              </span>
-                            </div>
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-black text-slate-900 uppercase">
-                                {regu.name}
-                              </p>
-                              <div className="text-[11px] text-slate-600 space-y-1">
-                                <div className="flex items-center space-x-1.5">
-                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>Update: {new Date(regu.lastUpdate).toLocaleTimeString('id-ID')}</span>
-                                </div>
-                                <div className="flex items-center space-x-1.5">
-                                  <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>Sumber: {regu.type}</span>
-                                </div>
-                                {regu.nomorWO && regu.nomorWO !== '-' && (
-                                  <p className="text-[10px] text-slate-500 font-semibold">
-                                    📋 WO: {regu.nomorWO}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    ))}
-                  </MapContainer>
-                </div>
+                <OptimizedMapView
+                  points={mapPointItems}
+                  polylinePositions={mapPolylinePositions}
+                  badgeTitle="⚡ PETA GIS ROW (CANVAS & CLUSTERING)"
+                  height="560px"
+                  tileProvider="osm"
+                />
               </div>
             </div>
           )}

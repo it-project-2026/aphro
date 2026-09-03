@@ -39,8 +39,9 @@ export class GASApiService {
           }
           throw err;
         }
-        // Wait with exponential backoff before retry
-        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        // Wait with exponential backoff and random jitter before retry
+        const delay = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 500);
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
     throw new Error('Gagal terhubung ke server setelah beberapa kali percobaan.');
@@ -49,7 +50,7 @@ export class GASApiService {
   /**
    * Cached GET fetch with request deduplication
    */
-  private static async cachedFetch(url: string, useCache = true, ttl = CACHE_TTL_MS): Promise<Response> {
+  public static async cachedFetch(url: string, useCache = true, ttl = CACHE_TTL_MS): Promise<Response> {
     const cacheKey = url;
     const now = Date.now();
 

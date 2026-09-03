@@ -276,7 +276,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isSyncing, settings.gasWebAppUrl, refreshPendingCount]);
 
-  // Network status listeners
+  // Network status listeners & Smart background polling with jitter & visibility awareness
   React.useEffect(() => {
     refreshPendingCount();
 
@@ -300,11 +300,45 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     checkConnection().catch(() => {});
 
+    // Periodic Background Sync with Jitter for Multi-User Concurrency
+    let syncTimer: any = null;
+
+    const scheduleNextSync = () => {
+      // Base interval: 45 seconds when tab is active, 3 minutes when hidden
+      const isHidden = document.hidden;
+      const baseInterval = isHidden ? 180000 : 45000;
+      // Add random jitter (+/- 0 to 10 seconds) to prevent Thundering Herd on server
+      const jitter = Math.floor(Math.random() * 10000);
+      const delay = baseInterval + jitter;
+
+      syncTimer = setTimeout(async () => {
+        if (navigator.onLine && !document.hidden) {
+          try {
+            await syncWithGAS(undefined, true);
+          } catch (e) {}
+        }
+        scheduleNextSync();
+      }, delay);
+    };
+
+    scheduleNextSync();
+
+    // Trigger instant check when user switches back to active tab
+    const handleVisibilityChange = () => {
+      if (!document.hidden && navigator.onLine) {
+        syncWithGAS(undefined, true).catch(() => {});
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (syncTimer) clearTimeout(syncTimer);
     };
-  }, [checkConnection, refreshPendingCount]);
+  }, [checkConnection, refreshPendingCount, syncWithGAS]);
 
   const triggerActivitySync = React.useCallback(async (isSilent = true) => {
     if (!navigator.onLine || !settings.gasWebAppUrl) return;

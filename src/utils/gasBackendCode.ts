@@ -139,8 +139,8 @@ function getSpreadsheet(id) {
 /**
  * Convert Sheet data to Array of Objects
  */
-function sheetToObjects(sheetName, id) {
-  var ss = getSpreadsheet(id);
+function sheetToObjects(sheetName, id, existingSs) {
+  var ss = existingSs || getSpreadsheet(id);
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -183,16 +183,15 @@ function doGet(e) {
     }
 
     if (action === "getVersions") {
-      var versions = {
-        WORK_ORDER: sheetToObjects("WORK_ORDER", ssId).length,
-        REALISASI: sheetToObjects("REALISASI", ssId).length,
-        ABSENSI: sheetToObjects("ABSENSI", ssId).length,
-        USERS: sheetToObjects("USERS", ssId).length,
-        ULP: sheetToObjects("ULP", ssId).length,
-        PENYULANG: sheetToObjects("PENYULANG", ssId).length,
-        REGU_ROW: sheetToObjects("REGU_ROW", ssId).length,
-        PETUGAS: sheetToObjects("PETUGAS", ssId).length,
-      };
+      var ssVersions = getSpreadsheet(ssId);
+      var tableList = ["WORK_ORDER", "REALISASI", "ABSENSI", "USERS", "ULP", "PENYULANG", "REGU_ROW", "PETUGAS"];
+      var versions = {};
+      for (var v = 0; v < tableList.length; v++) {
+        var tName = tableList[v];
+        var sObj = ssVersions.getSheetByName(tName);
+        if (!sObj && tName === "WORK_ORDER") sObj = ssVersions.getSheetByName("WORK_ORDERS");
+        versions[tName] = sObj ? sObj.getLastRow() : 0;
+      }
       return createJsonResponse({
         status: "success",
         globalVersion: Date.now(),
@@ -205,51 +204,53 @@ function doGet(e) {
       return createJsonResponse({ status: "success", spreadsheetId: initializedSsId, message: "Database created & initialized successfully!" });
     }
 
+    var activeSs = getSpreadsheet(ssId);
+
     if (action === "getWorkOrders" || action === "WORK_ORDER" || action === "WORK_ORDERS") {
-      var woData = sheetToObjects("WORK_ORDER", ssId);
-      if (!woData.length) woData = sheetToObjects("WORK_ORDERS", ssId);
+      var woData = sheetToObjects("WORK_ORDER", ssId, activeSs);
+      if (!woData.length) woData = sheetToObjects("WORK_ORDERS", ssId, activeSs);
       return createJsonResponse({ status: "success", data: woData });
     }
 
     if (action === "getRealisasi" || action === "REALISASI") {
-      return createJsonResponse({ status: "success", data: sheetToObjects("REALISASI", ssId) });
+      return createJsonResponse({ status: "success", data: sheetToObjects("REALISASI", ssId, activeSs) });
     }
 
     if (action === "getAbsensi" || action === "ABSENSI") {
-      return createJsonResponse({ status: "success", data: sheetToObjects("ABSENSI", ssId) });
+      return createJsonResponse({ status: "success", data: sheetToObjects("ABSENSI", ssId, activeSs) });
     }
 
     if (action === "getUsers" || action === "USERS") {
-      return createJsonResponse({ status: "success", data: sheetToObjects("USERS", ssId) });
+      return createJsonResponse({ status: "success", data: sheetToObjects("USERS", ssId, activeSs) });
     }
 
-    if (action === "getULP" || action === "ULP") return createJsonResponse({ status: "success", data: sheetToObjects("ULP", ssId) });
-    if (action === "getPenyulang" || action === "PENYULANG") return createJsonResponse({ status: "success", data: sheetToObjects("PENYULANG", ssId) });
-    if (action === "getRegu" || action === "REGU_ROW" || action === "REGU") return createJsonResponse({ status: "success", data: sheetToObjects("REGU_ROW", ssId) });
-    if (action === "getPetugas" || action === "PETUGAS") return createJsonResponse({ status: "success", data: sheetToObjects("PETUGAS", ssId) });
-    if (action === "getSetting" || action === "SETTING") return createJsonResponse({ status: "success", data: sheetToObjects("SETTING", ssId) });
-    if (action === "getLogs" || action === "LOG_ACTIVITY") return createJsonResponse({ status: "success", data: sheetToObjects("LOG_ACTIVITY", ssId) });
-    if (action === "getNotifications" || action === "NOTIFICATION") return createJsonResponse({ status: "success", data: sheetToObjects("NOTIFICATION", ssId) });
+    if (action === "getULP" || action === "ULP") return createJsonResponse({ status: "success", data: sheetToObjects("ULP", ssId, activeSs) });
+    if (action === "getPenyulang" || action === "PENYULANG") return createJsonResponse({ status: "success", data: sheetToObjects("PENYULANG", ssId, activeSs) });
+    if (action === "getRegu" || action === "REGU_ROW" || action === "REGU") return createJsonResponse({ status: "success", data: sheetToObjects("REGU_ROW", ssId, activeSs) });
+    if (action === "getPetugas" || action === "PETUGAS") return createJsonResponse({ status: "success", data: sheetToObjects("PETUGAS", ssId, activeSs) });
+    if (action === "getSetting" || action === "SETTING") return createJsonResponse({ status: "success", data: sheetToObjects("SETTING", ssId, activeSs) });
+    if (action === "getLogs" || action === "LOG_ACTIVITY") return createJsonResponse({ status: "success", data: sheetToObjects("LOG_ACTIVITY", ssId, activeSs) });
+    if (action === "getNotifications" || action === "NOTIFICATION") return createJsonResponse({ status: "success", data: sheetToObjects("NOTIFICATION", ssId, activeSs) });
 
     if (action === "getAllData" || action === "getDatabase") {
-      var woDataAll = sheetToObjects("WORK_ORDER", ssId);
-      if (!woDataAll.length) woDataAll = sheetToObjects("WORK_ORDERS", ssId);
+      var woDataAll = sheetToObjects("WORK_ORDER", ssId, activeSs);
+      if (!woDataAll.length) woDataAll = sheetToObjects("WORK_ORDERS", ssId, activeSs);
 
       return createJsonResponse({
         status: "success",
         data: {
-          USERS: sheetToObjects("USERS", ssId),
+          USERS: sheetToObjects("USERS", ssId, activeSs),
           WORK_ORDER: woDataAll,
           WORK_ORDERS: woDataAll,
-          REALISASI: sheetToObjects("REALISASI", ssId),
-          ABSENSI: sheetToObjects("ABSENSI", ssId),
-          ULP: sheetToObjects("ULP", ssId),
-          PENYULANG: sheetToObjects("PENYULANG", ssId),
-          REGU_ROW: sheetToObjects("REGU_ROW", ssId),
-          PETUGAS: sheetToObjects("PETUGAS", ssId),
-          SETTING: sheetToObjects("SETTING", ssId),
-          NOTIFICATION: sheetToObjects("NOTIFICATION", ssId),
-          LOG_ACTIVITY: sheetToObjects("LOG_ACTIVITY", ssId)
+          REALISASI: sheetToObjects("REALISASI", ssId, activeSs),
+          ABSENSI: sheetToObjects("ABSENSI", ssId, activeSs),
+          ULP: sheetToObjects("ULP", ssId, activeSs),
+          PENYULANG: sheetToObjects("PENYULANG", ssId, activeSs),
+          REGU_ROW: sheetToObjects("REGU_ROW", ssId, activeSs),
+          PETUGAS: sheetToObjects("PETUGAS", ssId, activeSs),
+          SETTING: sheetToObjects("SETTING", ssId, activeSs),
+          NOTIFICATION: sheetToObjects("NOTIFICATION", ssId, activeSs),
+          LOG_ACTIVITY: sheetToObjects("LOG_ACTIVITY", ssId, activeSs)
         }
       });
     }
@@ -369,10 +370,22 @@ function formatDriveViewUrlGAS(url) {
 }
 
 /**
- * POST Handler (REST API)
+ * POST Handler (REST API) - Multi-User Concurrency & Lock Protected
  */
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  var acquired = false;
+  
   try {
+    // Acquire lock with 20 second timeout to handle concurrent multi-user writes safely
+    acquired = lock.tryLock(20000);
+    if (!acquired) {
+      return createJsonResponse({ 
+        status: "error", 
+        message: "Sistem sedang memproses transaksi pengguna lain. Silakan coba beberapa detik lagi." 
+      });
+    }
+
     var postData = {};
     if (e && e.postData && e.postData.contents) {
       postData = JSON.parse(e.postData.contents);
@@ -428,11 +441,11 @@ function doPost(e) {
       });
     }
 
-    // SAVE WORK ORDER
+    // SAVE WORK ORDER (Idempotent: Update if WO ID/Nomor WO exists, Append if new)
     if (action === "createWorkOrder" || action === "saveWorkOrder") {
       var wo = postData.workOrder || postData;
       var ss = getSpreadsheet(postData.spreadsheetId);
-      var sheet = ss.getSheetByName("WORK_ORDER") || ss.insertSheet("WORK_ORDER");
+      var sheet = ss.getSheetByName("WORK_ORDER") || ss.getSheetByName("WORK_ORDERS") || ss.insertSheet("WORK_ORDER");
 
       var woId = wo.id || wo.WO_ID || ("wo-" + new Date().getTime());
       var now = new Date();
@@ -451,35 +464,51 @@ function doPost(e) {
       var satuanVal = String(wo.satuan || wo.SATUAN || "KMS").toUpperCase();
       var statusVal = String(wo.status || wo.STATUS || "BELUM SELESAI").toUpperCase();
 
-      sheet.appendRow([
-        woId,                                 // 1 (A) WO_ID
-        wo.pekerjaan || wo.PEKERJAAN || "NORMAL", // 2 (B) PEKERJAAN
+      var woData = sheet.getDataRange().getValues();
+      var existingRow = -1;
+      for (var r = 1; r < woData.length; r++) {
+        if (String(woData[r][0]) === String(woId) || (wo.nomorWO && String(woData[r][2]) === String(wo.nomorWO))) {
+          existingRow = r + 1;
+          break;
+        }
+      }
+
+      var rowValues = [
+        woId,                                           // 1 (A) WO_ID
+        wo.pekerjaan || wo.PEKERJAAN || "NORMAL",       // 2 (B) PEKERJAAN
         wo.nomorWO || wo.NOMOR_WO || wo.Nomor_WO || "", // 3 (C) Nomor_WO
-        tglStr,                               // 4 (D) Tanggal
-        wo.ulpName || wo.ULP || wo.ulp || "", // 5 (E) ULP
+        tglStr,                                         // 4 (D) Tanggal
+        wo.ulpName || wo.ULP || wo.ulp || "",           // 5 (E) ULP
         wo.penyulangName || wo.PENYULANG || wo.Penyulang || "", // 6 (F) Penyulang
-        wo.reguName || wo.REGU || wo.Regu_ROW || "", // 7 (G) Regu_ROW
-        volPekerjaan,                         // 8 (H) VOLUME
-        satuanVal,                            // 9 (I) SATUAN
-        wo.woMulai || wo.WO_MULAI || wo.WO_AWAL || "", // 10 (J) WO_AWAL
-        wo.woAkhir || wo.WO_AKHIR || "",      // 11 (K) WO_AKHIR
-        statusVal,                            // 12 (L) STATUS
-        wo.LOKASI_START || wo.lokasiStart || "", // 13 (M) LOKASI_START
-        wo.LOKASI_FINISH || wo.lokasiFinish || "", // 14 (N) LOKASI_FINISH
-        wo.TOTAL_REALISASI || wo.totalRealisasi || 0, // 15 (O) TOTAL_REALISASI
+        wo.reguName || wo.REGU || wo.Regu_ROW || "",    // 7 (G) Regu_ROW
+        volPekerjaan,                                   // 8 (H) VOLUME
+        satuanVal,                                      // 9 (I) SATUAN
+        wo.woMulai || wo.WO_MULAI || wo.WO_AWAL || "",   // 10 (J) WO_AWAL
+        wo.woAkhir || wo.WO_AKHIR || "",                // 11 (K) WO_AKHIR
+        statusVal,                                      // 12 (L) STATUS
+        wo.LOKASI_START || wo.lokasiStart || "",        // 13 (M) LOKASI_START
+        wo.LOKASI_FINISH || wo.lokasiFinish || "",      // 14 (N) LOKASI_FINISH
+        wo.TOTAL_REALISASI || wo.totalRealisasi || 0,   // 15 (O) TOTAL_REALISASI
         wo.SATUAN_TOTAL_REALISASI || wo.satuanTotalRealisasi || "", // 16 (P) SATUAN_TOTAL_REALISASI
-        createdTime                           // 17 (Q) Created_At
-      ]);
+        createdTime                                     // 17 (Q) Created_At
+      ];
+
+      if (existingRow > 0) {
+        sheet.getRange(existingRow, 1, 1, rowValues.length).setValues([rowValues]);
+      } else {
+        sheet.appendRow(rowValues);
+      }
 
       return createJsonResponse({ status: "success", id: woId, nomorWO: wo.nomorWO || wo.NOMOR_WO || wo.Nomor_WO });
     }
 
-    // SAVE REALISASI
+    // SAVE REALISASI (Idempotent: Update if ID exists, Append if new)
     if (action === "saveRealisasi") {
       var rel = postData.realisasi || postData;
       var ss = getSpreadsheet(postData.spreadsheetId);
       var sheet = ss.getSheetByName("REALISASI") || ss.insertSheet("REALISASI");
 
+      var relId = rel.id || ("rel-" + new Date().getTime());
       var woId = rel.workOrderId || rel.woId || "";
       var nomorWO = rel.nomorWO || rel.noWO || "WO-UNKNOWN";
 
@@ -511,8 +540,8 @@ function doPost(e) {
 
       var timestampStr = rel.timestamp || rel.createdAt || new Date().toISOString();
 
-      sheet.appendRow([
-        rel.id || ("rel-" + new Date().getTime()),      // 1. ID (Col A)
+      var relValues = [
+        relId,                                          // 1. ID (Col A)
         woId,                                           // 2. WO_ID (Col B)
         nomorWO,                                        // 3. Nomor_WO (Col C)
         rel.ulpName || "",                              // 4. ULP (Col D)
@@ -529,7 +558,31 @@ function doPost(e) {
         latLng,                                         // 15. Latitude_Longitude (Col O)
         rel.Lokasi_kerja || "",                         // 16. Lokasi_kerja (Col P)
         timestampStr                                    // 17. Timestamp (Col Q)
-      ]);
+      ];
+
+      var relData = sheet.getDataRange().getValues();
+      var existingRelRow = -1;
+      for (var r = 1; r < relData.length; r++) {
+        if (String(relData[r][0]) === String(relId)) {
+          existingRelRow = r + 1;
+          break;
+        }
+      }
+
+      if (existingRelRow > 0) {
+        sheet.getRange(existingRelRow, 1, 1, relValues.length).setValues([relValues]);
+      } else {
+        sheet.appendRow(relValues);
+      }
+
+      return createJsonResponse({
+        status: "success",
+        id: relId,
+        message: "Realisasi berhasil disimpan ke Google Spreadsheet!",
+        fotoSebelumUrl: fotoSebelumLink,
+        fotoSesudahUrl: fotoSesudahLink
+      });
+    }
 
       /* 
       // Update progress in WORK_ORDER sheet
@@ -863,6 +916,10 @@ function doPost(e) {
 
   } catch (error) {
     return createJsonResponse({ status: "error", message: error.toString() });
+  } finally {
+    if (acquired) {
+      try { lock.releaseLock(); } catch (eLock) {}
+    }
   }
 }
 

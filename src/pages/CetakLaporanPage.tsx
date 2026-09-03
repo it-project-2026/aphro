@@ -1003,6 +1003,7 @@ export const CetakLaporanPage: React.FC = () => {
                   <MapContainer
                     center={mapCenter}
                     zoom={13}
+                    preferCanvas={true}
                     scrollWheelZoom={true}
                     style={{ height: '100%', width: '100%' }}
                   >

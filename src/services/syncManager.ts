@@ -211,7 +211,7 @@ export class SyncManager {
       let targetUrl = this.gasUrl.includes('?') ? `${this.gasUrl}&action=getVersions` : `${this.gasUrl}?action=getVersions`;
       if (this.spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(this.spreadsheetId)}`;
 
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await GASApiService.cachedFetch(targetUrl, true, 5000);
       if (!response.ok) return null;
 
       const res = await response.json();
@@ -334,13 +334,16 @@ export class SyncManager {
           return result;
         }
 
-        // Fetch only changed tables
-        for (const table of tablesToSync) {
-          result[table] = await this.syncTable(table, true);
-          if (remoteVersions[table]) {
-            await idbService.saveTableVersion(table, remoteVersions[table]);
-          }
-        }
+        // Fetch only changed tables in parallel
+        await Promise.all(
+          tablesToSync.map(async (table) => {
+            const data = await this.syncTable(table, true);
+            result[table] = data;
+            if (remoteVersions[table]) {
+              await idbService.saveTableVersion(table, remoteVersions[table]);
+            }
+          })
+        );
 
         // Load remaining cached tables
         const allTables = ['WORK_ORDER', 'REALISASI', 'ABSENSI', 'USERS', 'ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS'];
