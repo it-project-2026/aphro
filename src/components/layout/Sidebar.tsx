@@ -94,7 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
     },
     {
       id: 'monitoring',
-      label: role === 'User' ? 'Monitoring' : 'Monitoring & Peta Maps',
+      label: 'Monitoring',
       icon: MapPin,
       roles: ['SuperAdmin', 'Admin', 'User'],
     },

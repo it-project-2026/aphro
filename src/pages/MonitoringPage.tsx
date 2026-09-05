@@ -9,12 +9,8 @@ import { useGASSync } from '../context/GASSyncContext';
 import { useUI } from '../context/UIContext';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { StatusBadge } from '../components/common/StatusBadge';
-import { OptimizedMapView, MapPointItem } from '../components/common/OptimizedMapView';
 import { WorkOrder, Realisasi } from '../types';
 import { getLocalDateTimeString, formatDateDisplay, normalizeDateISO, getWIBDateString } from '../utils/dateUtils';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import {
   MapPin,
   Filter,
@@ -24,57 +20,11 @@ import {
   Clock,
   Scissors,
   TreeDeciduous,
-  Table as TableIcon,
-  Map as MapIcon,
   Eye,
   FileSpreadsheet,
   BarChart3,
   TrendingUp,
 } from 'lucide-react';
-
-// Custom Marker Icon Generator using SVG
-function createCustomMarkerIcon(status: string) {
-  let color = '#64748b'; // Slate Belum
-  if (status === 'Selesai' || status === 'SELESAI') color = '#00A2B9'; // Teal Selesai
-  else if (status === 'Sedang Dikerjakan') color = '#F59E0B'; // Amber Progress
-  else if (status === 'Regu') color = '#EF4444'; // Red for Regu
-  else color = '#3B82F6'; // Blue Belum Dikerjakan
-
-  if (status === 'Regu') {
-    const reguHtml = `
-      <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
-        <span style="position: absolute; width: 100%; height: 100%; border-radius: 9999px; background-color: rgba(239, 68, 68, 0.35); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
-        <div style="position: relative; width: 30px; height: 30px; border-radius: 9999px; background-color: #EF4444; border: 2px solid #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25); display: flex; align-items: center; justify-content: center; color: white;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-        </div>
-      </div>
-    `;
-    return L.divIcon({
-      className: 'custom-regu-leaflet-marker',
-      html: reguHtml,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18],
-      popupAnchor: [0, -18],
-    });
-  }
-
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="28" height="42">
-      <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 24 12 24s12-15 12-24c0-6.63-5.37-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
-      <circle cx="12" cy="12" r="5" fill="#ffffff" />
-    </svg>
-  `;
-
-  return L.divIcon({
-    className: 'custom-leaflet-marker',
-    html: svg,
-    iconSize: [28, 42],
-    iconAnchor: [14, 42],
-    popupAnchor: [0, -24],
-  });
-}
 
 export const MonitoringPage: React.FC = () => {
   const draggable1 = useDraggableScroll();
@@ -90,10 +40,6 @@ export const MonitoringPage: React.FC = () => {
   const { setActiveTab } = useUI();
 
   const isUserRole = currentUser?.role === 'User';
-
-  const [activeViewMode, setActiveViewMode] = useState<'table' | 'map'>(
-    isUserRole ? 'table' : 'table'
-  );
 
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
@@ -284,190 +230,6 @@ export const MonitoringPage: React.FC = () => {
     [woMonitoringRows]
   );
 
-  // Map Center (Padang, West Sumatra default)
-  const mapCenter: [number, number] = [-0.92, 100.4];
-
-  // Today ISO date in WIB (YYYY-MM-DD)
-  const todayISO = useMemo(() => getWIBDateString(), []);
-
-  // 4. Dedicated Work Orders for GIS Field: ONLY TODAY & Status BELUM SELESAI
-  const mapWOs = useMemo(() => {
-    return uniqueWorkOrders.filter((wo) => {
-      // Must be TODAY
-      const isToday = normalizeDateISO(wo.tanggal) === todayISO;
-      if (!isToday) return false;
-
-      // Must be Status BELUM SELESAI (exclude Selesai / SELESAI)
-      const s = (wo.status || '').trim().toUpperCase();
-      const isBelumSelesai = s !== 'SELESAI';
-      if (!isBelumSelesai) return false;
-
-      // Match dropdown filter selections
-      const matchesUlp = filterUlp === 'ALL' || cleanStr(wo.ulpId) === cleanStr(filterUlp) || cleanStr(wo.ulpName) === cleanStr(filterUlp);
-      const matchesPenyulang = filterPenyulang === 'ALL' || cleanStr(wo.penyulangId) === cleanStr(filterPenyulang) || cleanStr(wo.penyulangName) === cleanStr(filterPenyulang);
-      const matchesRegu = filterRegu === 'ALL' || cleanStr(wo.reguName) === cleanStr(filterRegu);
-      
-      const query = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !query ||
-        (wo.nomorWO || '').toLowerCase().includes(query) ||
-        (wo.ulpName || '').toLowerCase().includes(query) ||
-        (wo.penyulangName || '').toLowerCase().includes(query) ||
-        (wo.jenisPekerjaan || '').toLowerCase().includes(query);
-
-      return matchesUlp && matchesPenyulang && matchesRegu && matchesSearch;
-    });
-  }, [uniqueWorkOrders, todayISO, filterUlp, filterPenyulang, filterRegu, searchQuery]);
-
-  // 5. Active Regu ROW Locations for TODAY with Status BELUM SELESAI
-  const activeReguLocations = useMemo(() => {
-    // Unique Regu from today's Belum Selesai Work Orders
-    const reguNamesFromTodayUnfinishedWOs = Array.from(
-      new Set(mapWOs.map(wo => (wo.reguName || '').trim()))
-    ).filter(Boolean);
-
-    if (reguNamesFromTodayUnfinishedWOs.length === 0) return [];
-
-    return reguNamesFromTodayUnfinishedWOs.map(name => {
-      const targetName = name.toUpperCase();
-
-      // Find latest realization of TODAY with coordinates for this Regu
-      const latestRelToday = realisasiList
-        .filter(r => {
-          if ((r.reguName || '').trim().toUpperCase() !== targetName) return false;
-          if (!r.latitude || !r.longitude) return false;
-          const relDate = normalizeDateISO(r.tanggalRealisasi || r.createdAt);
-          return relDate === todayISO;
-        })
-        .sort((a, b) => new Date(b.createdAt || b.tanggalRealisasi || 0).getTime() - new Date(a.createdAt || a.tanggalRealisasi || 0).getTime())[0];
-
-      if (latestRelToday) {
-        return {
-          name,
-          lat: latestRelToday.latitude,
-          lon: latestRelToday.longitude,
-          lastUpdate: latestRelToday.createdAt || latestRelToday.tanggalRealisasi,
-          type: 'Realisasi Lapangan Hari Ini',
-          nomorWO: latestRelToday.nomorWO || '-',
-          keterangan: latestRelToday.keterangan || '-'
-        };
-      }
-
-      // Fallback to latest attendance of TODAY with coordinates
-      const latestAbsToday = absensiList
-        .filter(a => {
-          if ((a.reguName || '').trim().toUpperCase() !== targetName) return false;
-          if (!a.latitude || !a.longitude) return false;
-          const absDate = normalizeDateISO(a.tanggal || a.createdAt);
-          return absDate === todayISO;
-        })
-        .sort((a, b) => new Date(b.createdAt || b.tanggal || 0).getTime() - new Date(a.createdAt || a.tanggal || 0).getTime())[0];
-
-      if (latestAbsToday) {
-        return {
-          name,
-          lat: latestAbsToday.latitude,
-          lon: latestAbsToday.longitude,
-          lastUpdate: latestAbsToday.createdAt || latestAbsToday.tanggal,
-          type: 'Absensi Regu (Check-In Hari Ini)',
-          petugas: latestAbsToday.namaPetugas || '-'
-        };
-      }
-
-      // Fallback: If no realization/attendance recorded today yet, use WO coordinates for today's unfinished work
-      const woWithCoords = mapWOs.find(wo => (wo.reguName || '').trim().toUpperCase() === targetName && wo.latitude && wo.longitude);
-      if (woWithCoords) {
-        return {
-          name,
-          lat: woWithCoords.latitude,
-          lon: woWithCoords.longitude,
-          lastUpdate: woWithCoords.tanggal,
-          type: 'Titik Rencana WO Hari Ini',
-          nomorWO: woWithCoords.nomorWO
-        };
-      }
-
-      return null;
-    }).filter(Boolean);
-  }, [mapWOs, realisasiList, absensiList, todayISO]);
-
-  const mapPolylinePositions: [number, number][] = useMemo(() => {
-    return mapWOs
-      .filter((wo) => wo.latitude && wo.longitude)
-      .map((wo) => [wo.latitude as number, wo.longitude as number]);
-  }, [mapWOs]);
-
-  const allMapLocations = useMemo(() => {
-    const pts: { lat: number; lon: number }[] = [];
-    activeReguLocations.forEach((r: any) => {
-      if (r && r.lat && r.lon) pts.push({ lat: r.lat, lon: r.lon });
-    });
-    mapWOs.forEach((w) => {
-      if (w.latitude && w.longitude) pts.push({ lat: w.latitude, lon: w.longitude });
-    });
-    return pts;
-  }, [activeReguLocations, mapWOs]);
-
-  // Helper component to handle map bounds/zoom
-  const MapBoundsHandler = ({ locations }: { locations: any[] }) => {
-    const map = useMap();
-    
-    useEffect(() => {
-      if (locations.length > 0) {
-        const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lon]));
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-      }
-    }, [locations, map]);
-    
-    return null;
-  };
-
-  const mapPointItems = useMemo<MapPointItem[]>(() => {
-    const items: MapPointItem[] = [];
-
-    // 1. Work Orders Hari Ini (Status Belum Selesai)
-    mapWOs.forEach((wo) => {
-      if (wo.latitude && wo.longitude) {
-        items.push({
-          id: `wo-${wo.id}`,
-          lat: wo.latitude,
-          lng: wo.longitude,
-          type: 'wo',
-          title: wo.nomorWO || 'Work Order',
-          subtitle: `${wo.penyulangName || ''} - ${wo.ulpName || ''}`,
-          status: wo.status || 'Belum Dikerjakan',
-          ulpName: wo.ulpName,
-          penyulangName: wo.penyulangName,
-          reguName: wo.reguName,
-          lokasi: wo.lokasi || 'Lokasi Field',
-          tanggal: wo.tanggal,
-          raw: wo,
-        });
-      }
-    });
-
-    // 2. Active Regu ROW
-    activeReguLocations.forEach((regu: any) => {
-      if (regu && regu.lat && regu.lon) {
-        items.push({
-          id: `regu-${regu.name}`,
-          lat: regu.lat,
-          lng: regu.lon,
-          type: 'regu',
-          title: regu.name,
-          subtitle: `Sumber: ${regu.type}`,
-          status: 'Regu',
-          reguName: regu.name,
-          lokasi: regu.keterangan || regu.type,
-          lastUpdate: regu.lastUpdate,
-          raw: regu,
-        });
-      }
-    });
-
-    return items;
-  }, [mapWOs, activeReguLocations]);
-
   // Auto-refresh coordinates every 5 minutes when page is active
   useEffect(() => {
     if (!navigator.onLine || !settings.gasWebAppUrl) return;
@@ -507,41 +269,8 @@ export const MonitoringPage: React.FC = () => {
         </div>
       </div>
 
-      <>
-        {/* View Mode Toggle (Table / Map) */}
-          {!isUserRole && (
-            <div className="flex justify-end no-print">
-              <div className="flex items-center bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setActiveViewMode('table')}
-                  className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
-                    activeViewMode === 'table'
-                      ? 'bg-[#00A2B9]/10 text-[#008396] border border-[#00A2B9]/20'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  <TableIcon className="w-4 h-4" />
-                  <span>Tabel Realisasi</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveViewMode('map')}
-                  className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
-                    activeViewMode === 'map'
-                      ? 'bg-[#00A2B9]/10 text-[#008396] border border-[#00A2B9]/20'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  <MapIcon className="w-4 h-4" />
-                  <span>Peta GIS Field</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Overview Stat Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 no-print">
+      {/* Overview Stat Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 no-print">
             <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-1">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Work Order</span>
               <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-display">
@@ -680,12 +409,11 @@ export const MonitoringPage: React.FC = () => {
           </div>
 
           {/* Main Content Area */}
-          {activeViewMode === 'table' ? (
-            /* TABLE REALISASI PER WORK ORDER */
-            <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between no-print">
-                <div className="flex items-center space-x-2">
-                  <TableIcon className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
+          {/* TABLE REALISASI PER WORK ORDER */}
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between no-print">
+              <div className="flex items-center space-x-2">
+                <FileSpreadsheet className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
                   <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
                     Tabel Realisasi per Work Order ({woMonitoringRows.length})
                   </h3>
@@ -786,21 +514,6 @@ export const MonitoringPage: React.FC = () => {
                 </table>
               </div>
             </div>
-          ) : (
-            /* MAP GIS VIEW (LIGHTWEIGHT CANVAS & BOUNDING-BOX CLUSTERING) */
-            <div className="space-y-6 no-print">
-              <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden p-2">
-                <OptimizedMapView
-                  points={mapPointItems}
-                  polylinePositions={mapPolylinePositions}
-                  badgeTitle="⚡ PETA GIS ROW (CANVAS & CLUSTERING)"
-                  height="560px"
-                  tileProvider="osm"
-                />
-              </div>
-            </div>
-          )}
-        </>
     </div>
   );
 };

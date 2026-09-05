@@ -80,7 +80,7 @@ export const MobileBottomNav: React.FC = () => {
         },
         {
           id: 'monitoring',
-          label: 'Peta',
+          label: 'Monitoring',
           icon: MapPin,
         },
       ];

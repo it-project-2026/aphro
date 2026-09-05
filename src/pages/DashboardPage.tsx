@@ -511,7 +511,7 @@ export const DashboardPage: React.FC = () => {
               className="inline-flex items-center space-x-2 px-5 py-2.5 bg-teal-950/40 backdrop-blur-sm border border-[#00A2B9]/30 text-white hover:bg-teal-950/60 font-black text-xs rounded-xl transition-all active:scale-95 shadow-sm"
             >
               <FileCheck2 className="w-4 h-4 text-teal-400" />
-              <span>Lihat Peta Operations</span>
+              <span>Lihat Monitoring Operations</span>
             </button>
           </div>
         </div>
