@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { usePersistState } from '../hooks/usePersistState';
 import { Realisasi } from '../types';
 import { INITIAL_REALISASI } from '../data/initialData';
 import { useSettings } from './SettingsContext';
@@ -8,6 +7,7 @@ import { GASApiService } from '../services/gasApiService';
 import { addToOfflineQueue } from '../services/offlineSyncQueue';
 import { formatDriveViewUrl } from '../utils/driveUtils';
 import { getLocalDateTimeString } from '../utils/dateUtils';
+import { idbService } from '../services/indexedDbService';
 
 interface RealisasiContextType {
   realisasiList: Realisasi[];
@@ -22,7 +22,20 @@ const RealisasiContext = React.createContext<RealisasiContextType | undefined>(u
 export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { showToast } = useToast();
-  const [realisasiList, setRealisasiList] = usePersistState<Realisasi[]>('aphro_realisasi', INITIAL_REALISASI);
+  const [realisasiList, setRealisasiList] = React.useState<Realisasi[]>(INITIAL_REALISASI);
+
+  // Load from IndexedDB on initial mount and clean up old bloated localStorage
+  React.useEffect(() => {
+    try {
+      localStorage.removeItem('aphro_realisasi');
+    } catch {}
+
+    idbService.getTable<Realisasi>('REALISASI').then(cached => {
+      if (cached && cached.length > 0) {
+        setRealisasiList(cached);
+      }
+    }).catch(() => {});
+  }, []);
 
   const addRealisasi = React.useCallback(async (relData: Omit<Realisasi, 'id' | 'createdAt' | 'isSynced' | 'syncId'>) => {
     const syncId = `SYNC-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -34,8 +47,12 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
       isSynced: false
     };
     
-    // Always update local state optimistically so data is immediately saved on device
-    setRealisasiList(prev => [newRel, ...prev]);
+    // Update local state and persist to IndexedDB asynchronously
+    setRealisasiList(prev => {
+      const next = [newRel, ...prev];
+      idbService.saveTable('REALISASI', next).catch(() => {});
+      return next;
+    });
 
     const { photosSebelum, photosSesudah, ...gasRelData } = relData;
     const payloadToSave = {
@@ -56,17 +73,21 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
           showToast(`Realisasi WO ${relData.nomorWO} tersimpan di Spreadsheet!`, 'success');
           
           // Mark as synced locally
-          setRealisasiList(prev => prev.map(item => {
-            if (item.syncId === syncId) {
-              return {
-                ...item,
-                isSynced: true,
-                fotoSebelumUrl: res.fotoSebelumUrl ? formatDriveViewUrl(res.fotoSebelumUrl) : item.fotoSebelumUrl,
-                fotoSesudahUrl: res.fotoSesudahUrl ? formatDriveViewUrl(res.fotoSesudahUrl) : item.fotoSesudahUrl,
-              };
-            }
-            return item;
-          }));
+          setRealisasiList(prev => {
+            const next = prev.map(item => {
+              if (item.syncId === syncId) {
+                return {
+                  ...item,
+                  isSynced: true,
+                  fotoSebelumUrl: res.fotoSebelumUrl ? formatDriveViewUrl(res.fotoSebelumUrl) : item.fotoSebelumUrl,
+                  fotoSesudahUrl: res.fotoSesudahUrl ? formatDriveViewUrl(res.fotoSesudahUrl) : item.fotoSesudahUrl,
+                };
+              }
+              return item;
+            });
+            idbService.saveTable('REALISASI', next).catch(() => {});
+            return next;
+          });
         } else {
           addToOfflineQueue('REALISASI', payloadToSave);
           showToast(`⚡ Realisasi tersimpan di perangkat. Otomatis disinkronkan saat sinyal tersedia.`, 'info');
@@ -79,7 +100,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     }
 
     return newRel;
-  }, [setRealisasiList, settings.gasWebAppUrl, settings.spreadsheetId, settings.photoFolderId, settings.driveFolderId, showToast]);
+  }, [settings.gasWebAppUrl, settings.spreadsheetId, settings.photoFolderId, settings.driveFolderId, showToast]);
 
   const updateRealisasi = React.useCallback(async (id: string, updates: Partial<Realisasi>) => {
     const existing = realisasiList.find(r => r.id === id);
@@ -87,12 +108,16 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
 
     const updatedRel = { ...existing, ...updates };
 
-    setRealisasiList(prev => prev.map(rel => {
-      if (rel.id === id) {
-        return updatedRel;
-      }
-      return rel;
-    }));
+    setRealisasiList(prev => {
+      const next = prev.map(rel => {
+        if (rel.id === id) {
+          return updatedRel;
+        }
+        return rel;
+      });
+      idbService.saveTable('REALISASI', next).catch(() => {});
+      return next;
+    });
 
     if (settings.gasWebAppUrl) {
       try {
@@ -106,10 +131,14 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
         showToast('Gagal sinkronisasi, perubahan tersimpan lokal.', 'warning');
       }
     }
-  }, [realisasiList, setRealisasiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
+  }, [realisasiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
 
   const deleteRealisasi = React.useCallback(async (id: string) => {
-    setRealisasiList(prev => prev.filter(rel => rel.id !== id));
+    setRealisasiList(prev => {
+      const next = prev.filter(rel => rel.id !== id);
+      idbService.saveTable('REALISASI', next).catch(() => {});
+      return next;
+    });
 
     if (!navigator.onLine || !settings.gasWebAppUrl) {
       addToOfflineQueue('REALISASI_DELETE', { id });
@@ -128,7 +157,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
         showToast('Koneksi terputus, tersimpan di antrean perangkat.', 'warning');
       }
     }
-  }, [setRealisasiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
+  }, [settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
 
   return (
     <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, deleteRealisasi }}>

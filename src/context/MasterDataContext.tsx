@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { usePersistState } from '../hooks/usePersistState';
 import { ULP, Penyulang, ReguROW, Petugas, User } from '../types';
 import { 
   INITIAL_ULP, 
@@ -10,6 +9,7 @@ import {
 } from '../data/initialData';
 import { useSettings } from './SettingsContext';
 import { GASApiService } from '../services/gasApiService';
+import { idbService } from '../services/indexedDbService';
 
 interface MasterDataContextType {
   ulpList: ULP[];
@@ -50,11 +50,18 @@ interface MasterDataContextType {
 const MasterDataContext = React.createContext<MasterDataContextType | undefined>(undefined);
 
 export function MasterDataProvider({ children }: { children: React.ReactNode }) {
-  const [ulpList, setUlpList] = usePersistState<ULP[]>('aphro_ulp', INITIAL_ULP);
-  const [penyulangList, setPenyulangList] = usePersistState<Penyulang[]>('aphro_penyulang', INITIAL_PENYULANG);
-  const [reguList, setReguList] = usePersistState<ReguROW[]>('aphro_regu', INITIAL_REGU);
-  const [petugasList, setPetugasList] = usePersistState<Petugas[]>('aphro_ptg', INITIAL_PETUGAS);
-  const [users, setUsers] = usePersistState<User[]>('aphro_synced_users', INITIAL_USERS);
+  const [ulpList, setUlpList] = React.useState<ULP[]>(INITIAL_ULP);
+  const [penyulangList, setPenyulangList] = React.useState<Penyulang[]>(INITIAL_PENYULANG);
+  const [reguList, setReguList] = React.useState<ReguROW[]>(INITIAL_REGU);
+  const [petugasList, setPetugasList] = React.useState<Petugas[]>(INITIAL_PETUGAS);
+  const [users, setUsers] = React.useState<User[]>(INITIAL_USERS);
+
+  // Clean up legacy bloated localStorage keys on mount
+  React.useEffect(() => {
+    ['aphro_ulp', 'aphro_penyulang', 'aphro_regu', 'aphro_ptg', 'aphro_synced_users'].forEach(key => {
+      try { localStorage.removeItem(key); } catch {}
+    });
+  }, []);
 
   const setMasterData = React.useCallback((data: {
     ulp?: ULP[];
@@ -68,7 +75,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     if (data.regu) setReguList(data.regu);
     if (data.petugas) setPetugasList(data.petugas);
     if (data.users) setUsers(data.users);
-  }, [setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
+  }, []);
 
   const { settings } = useSettings();
 

@@ -75,25 +75,29 @@ export const DashboardPage: React.FC = () => {
   const [pendingIds, setPendingIds] = React.useState<string[]>([]);
 
   React.useEffect(() => {
+    let lastRaw = '';
     const checkPending = () => {
       try {
-        const raw = localStorage.getItem('aphro_pending_sync_queue');
+        const raw = localStorage.getItem('aphro_pending_sync_queue') || '';
+        if (raw === lastRaw) return;
+        lastRaw = raw;
         if (raw) {
           const queue = JSON.parse(raw);
           const ids = queue
             .filter((item: any) => item.type === 'WORK_ORDER_CREATE' || item.type === 'WORK_ORDER_UPDATE')
-            .map((item: any) => item.payload?.id || item.payload?.workOrder?.id);
+            .map((item: any) => item.payload?.id || item.payload?.workOrder?.id)
+            .filter(Boolean);
           setPendingIds(ids);
         } else {
           setPendingIds([]);
         }
-      } catch (e) {
+      } catch {
         setPendingIds([]);
       }
     };
 
     checkPending();
-    const interval = setInterval(checkPending, 3000);
+    const interval = setInterval(checkPending, 10000);
     return () => clearInterval(interval);
   }, []);
 

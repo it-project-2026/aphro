@@ -13,6 +13,7 @@ export const NotificationListener: React.FC = () => {
   // Keep track of seen IDs to prevent double notifications in the same session
   const seenWorkOrders = React.useRef<Set<string>>(new Set());
   const seenCompletions = React.useRef<Set<string>>(new Set());
+  const isInitializedRef = React.useRef(false);
 
   // Initialize seen sets from localStorage if available to persist across refreshes
   React.useEffect(() => {
@@ -22,26 +23,45 @@ export const NotificationListener: React.FC = () => {
       
       if (savedSeenWO) {
         const parsed = JSON.parse(savedSeenWO);
-        if (Array.isArray(parsed)) parsed.forEach(id => seenWorkOrders.current.add(id));
+        if (Array.isArray(parsed)) parsed.slice(-200).forEach(id => seenWorkOrders.current.add(id));
       }
       
       if (savedSeenComp) {
         const parsed = JSON.parse(savedSeenComp);
-        if (Array.isArray(parsed)) parsed.forEach(id => seenCompletions.current.add(id));
+        if (Array.isArray(parsed)) parsed.slice(-200).forEach(id => seenCompletions.current.add(id));
       }
     } catch {
       // Ignore if localStorage format is legacy
     }
   }, []);
 
-  // Update localStorage when sets change
+  // Update localStorage when sets change (cap to latest 200 to prevent bloat)
   const saveSeenToStorage = () => {
-    localStorage.setItem('aphro_notified_wo', JSON.stringify(Array.from(seenWorkOrders.current)));
-    localStorage.setItem('aphro_notified_completions', JSON.stringify(Array.from(seenCompletions.current)));
+    try {
+      const woArr = Array.from(seenWorkOrders.current).slice(-200);
+      const compArr = Array.from(seenCompletions.current).slice(-200);
+      localStorage.setItem('aphro_notified_wo', JSON.stringify(woArr));
+      localStorage.setItem('aphro_notified_completions', JSON.stringify(compArr));
+    } catch {
+      // Ignore storage errors
+    }
   };
 
   React.useEffect(() => {
     if (!user || !workOrders.length) return;
+
+    // First load in session: Mark all existing WOs as seen so we don't bombard user with historical notifications
+    if (!isInitializedRef.current) {
+      workOrders.forEach(wo => {
+        seenWorkOrders.current.add(wo.id);
+        if (wo.status === 'Selesai' || wo.status === 'SELESAI') {
+          seenCompletions.current.add(wo.id);
+        }
+      });
+      saveSeenToStorage();
+      isInitializedRef.current = true;
+      return;
+    }
 
     const userRole = (user.role || '').toUpperCase();
     const isAdmin = userRole === 'ADMIN' || userRole === 'ADM' || userRole === 'SUPERADMIN';
@@ -59,22 +79,33 @@ export const NotificationListener: React.FC = () => {
         return isForMe && isNotSeen && isRecent && wo.status !== 'Selesai' && wo.status !== 'SELESAI';
       });
 
-      myNewWorkOrders.forEach(wo => {
-        const title = 'Work Order Baru';
-        const message = `Ada Work Order baru untuk Regu ${wo.reguName}: ${wo.nomorWO} - ${wo.penyulangName}`;
-        
-        addNotification({
-          title,
-          message,
-          type: 'info',
-          ulpTarget: wo.ulpName
-        });
-        
-        showToast(message, 'info');
-        seenWorkOrders.current.add(wo.id);
-      });
-
-      if (myNewWorkOrders.length > 0) saveSeenToStorage();
+      if (myNewWorkOrders.length > 0) {
+        if (myNewWorkOrders.length <= 2) {
+          myNewWorkOrders.forEach(wo => {
+            addNotification({
+              title: 'Work Order Baru',
+              message: `Ada Work Order baru untuk Regu ${wo.reguName}: ${wo.nomorWO} - ${wo.penyulangName}`,
+              type: 'info',
+              ulpTarget: wo.ulpName
+            });
+            showToast(`Ada Work Order baru: ${wo.nomorWO}`, 'info');
+            seenWorkOrders.current.add(wo.id);
+          });
+        } else {
+          // Consolidate
+          myNewWorkOrders.forEach(wo => {
+            addNotification({
+              title: 'Work Order Baru',
+              message: `Ada Work Order baru untuk Regu ${wo.reguName}: ${wo.nomorWO} - ${wo.penyulangName}`,
+              type: 'info',
+              ulpTarget: wo.ulpName
+            });
+            seenWorkOrders.current.add(wo.id);
+          });
+          showToast(`Ada ${myNewWorkOrders.length} Work Order baru untuk Regu Anda`, 'info');
+        }
+        saveSeenToStorage();
+      }
     }
 
     // 2. Logic for ROLE ADMIN: Users completed a Work Order
@@ -82,28 +113,36 @@ export const NotificationListener: React.FC = () => {
       const recentlyCompleted = workOrders.filter(wo => {
         const isCompleted = wo.status === 'Selesai' || wo.status === 'SELESAI';
         const isNotSeen = !seenCompletions.current.has(wo.id);
-        // Only notify if it was updated/completed recently (within last hour for active notifications)
-        // If updatedAt is not available, we can't easily tell WHEN it was completed, 
-        // but we can at least notify once when we first see it as completed.
         return isCompleted && isNotSeen;
       });
 
-      recentlyCompleted.forEach(wo => {
-        const title = 'Work Order Selesai';
-        const message = `Regu ${wo.reguName} telah menyelesaikan Work Order ${wo.nomorWO} (${wo.penyulangName})`;
-        
-        addNotification({
-          title,
-          message,
-          type: 'success',
-          ulpTarget: wo.ulpName
-        });
-        
-        showToast(message, 'success');
-        seenCompletions.current.add(wo.id);
-      });
-
-      if (recentlyCompleted.length > 0) saveSeenToStorage();
+      if (recentlyCompleted.length > 0) {
+        if (recentlyCompleted.length <= 2) {
+          recentlyCompleted.forEach(wo => {
+            addNotification({
+              title: 'Work Order Selesai',
+              message: `Regu ${wo.reguName} telah menyelesaikan Work Order ${wo.nomorWO} (${wo.penyulangName})`,
+              type: 'success',
+              ulpTarget: wo.ulpName
+            });
+            showToast(`Regu ${wo.reguName} menyelesaikan WO ${wo.nomorWO}`, 'success');
+            seenCompletions.current.add(wo.id);
+          });
+        } else {
+          // Consolidate
+          recentlyCompleted.forEach(wo => {
+            addNotification({
+              title: 'Work Order Selesai',
+              message: `Regu ${wo.reguName} telah menyelesaikan Work Order ${wo.nomorWO} (${wo.penyulangName})`,
+              type: 'success',
+              ulpTarget: wo.ulpName
+            });
+            seenCompletions.current.add(wo.id);
+          });
+          showToast(`${recentlyCompleted.length} Work Order telah diselesaikan oleh Regu`, 'success');
+        }
+        saveSeenToStorage();
+      }
     }
   }, [user, workOrders, addNotification, showToast]);
 

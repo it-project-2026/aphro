@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { usePersistState } from '../hooks/usePersistState';
 import { Absensi } from '../types';
 import { INITIAL_ABSENSI } from '../data/initialData';
 import { useAuth } from './AuthContext';
@@ -9,6 +8,7 @@ import { GASApiService } from '../services/gasApiService';
 import { addToOfflineQueue } from '../services/offlineSyncQueue';
 import { formatDriveViewUrl } from '../utils/driveUtils';
 import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
+import { idbService } from '../services/indexedDbService';
 
 interface AbsensiContextType {
   absensiList: Absensi[];
@@ -25,7 +25,20 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
-  const [absensiList, setAbsensiList] = usePersistState<Absensi[]>('aphro_absensi', INITIAL_ABSENSI);
+  const [absensiList, setAbsensiList] = React.useState<Absensi[]>(INITIAL_ABSENSI);
+
+  // Load from IndexedDB on initial mount and clean up old bloated localStorage
+  React.useEffect(() => {
+    try {
+      localStorage.removeItem('aphro_absensi');
+    } catch {}
+
+    idbService.getTable<Absensi>('ABSENSI').then(cached => {
+      if (cached && cached.length > 0) {
+        setAbsensiList(cached);
+      }
+    }).catch(() => {});
+  }, []);
 
   const addAbsensi = React.useCallback(async (absData: Omit<Absensi, 'id' | 'createdAt'>) => {
     const todayStr = absData.tanggal || getWIBDateString();
@@ -94,7 +107,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    // Update local state optimistically
+    // Update local state optimistically and persist to IndexedDB asynchronously
     const newList = [...absensiList];
     if (existingIndex >= 0) {
       newList[existingIndex] = finalAbs;
@@ -102,6 +115,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       newList.unshift(finalAbs);
     }
     setAbsensiList(newList);
+    idbService.saveTable('ABSENSI', newList).catch(() => {});
 
     // Sync to GAS if URL exists
     const payloadToSave = {
@@ -120,16 +134,20 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         if (res.status === 'success') {
           showToast('Absensi berhasil disinkronkan ke Spreadsheet!', 'success');
           if (res.fotoMasukUrl || res.fotoKeluarUrl) {
-            setAbsensiList(prev => prev.map(item => {
-              if (item.id === finalAbs.id) {
-                return {
-                  ...item,
-                  fotoMasuk: res.fotoMasukUrl ? formatDriveViewUrl(res.fotoMasukUrl) : item.fotoMasuk,
-                  fotoKeluar: res.fotoKeluarUrl ? formatDriveViewUrl(res.fotoKeluarUrl) : item.fotoKeluar,
-                };
-              }
-              return item;
-            }));
+            setAbsensiList(prev => {
+              const updated = prev.map(item => {
+                if (item.id === finalAbs.id) {
+                  return {
+                    ...item,
+                    fotoMasuk: res.fotoMasukUrl ? formatDriveViewUrl(res.fotoMasukUrl) : item.fotoMasuk,
+                    fotoKeluar: res.fotoKeluarUrl ? formatDriveViewUrl(res.fotoKeluarUrl) : item.fotoKeluar,
+                  };
+                }
+                return item;
+              });
+              idbService.saveTable('ABSENSI', updated).catch(() => {});
+              return updated;
+            });
           }
         } else {
           addToOfflineQueue('ABSENSI', payloadToSave);
@@ -143,7 +161,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     }
 
     return finalAbs;
-  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.spreadsheetId, settings.absensiFolderId, showToast]);
+  }, [absensiList, settings.gasWebAppUrl, settings.spreadsheetId, settings.absensiFolderId, showToast]);
 
   const updateAbsensi = React.useCallback(async (id: string, absData: Partial<Absensi>) => {
     const existingIndex = absensiList.findIndex(a => a.id === id);
@@ -155,10 +173,11 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       updatedAt: getLocalDateTimeString(),
     };
 
-    // Update local state
+    // Update local state and persist to IndexedDB
     const newList = [...absensiList];
     newList[existingIndex] = updatedAbs;
     setAbsensiList(newList);
+    idbService.saveTable('ABSENSI', newList).catch(() => {});
 
     if (settings.gasWebAppUrl) {
       try {
@@ -173,12 +192,13 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return true;
-  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
+  }, [absensiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
 
   const deleteAbsensi = React.useCallback(async (id: string) => {
-    // Update local state
+    // Update local state and persist to IndexedDB
     const newList = absensiList.filter(a => a.id !== id);
     setAbsensiList(newList);
+    idbService.saveTable('ABSENSI', newList).catch(() => {});
 
     if (settings.gasWebAppUrl) {
       try {
@@ -193,7 +213,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return true;
-  }, [absensiList, setAbsensiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
+  }, [absensiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
 
   const hasCheckedInToday = React.useMemo(() => {
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;

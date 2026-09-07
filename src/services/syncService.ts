@@ -322,13 +322,10 @@ export class SyncService {
           errors: []
         };
 
-        // Cache in localStorage for instant future loads (Excluding Work Orders)
+        // Clean up legacy bloated localStorage key if present
         try {
-          const cacheResult = { ...result, workOrders: [] };
-          localStorage.setItem('aphro_cached_synced_data', JSON.stringify(cacheResult));
-        } catch (e) {
-          // ignore quote quota errors
-        }
+          localStorage.removeItem('aphro_cached_synced_data');
+        } catch {}
 
         return result;
       }
@@ -371,13 +368,6 @@ export class SyncService {
           : [],
         errors: errors
       };
-
-      try {
-        const cacheResult = { ...result, workOrders: [] };
-        localStorage.setItem('aphro_cached_synced_data', JSON.stringify(cacheResult));
-      } catch (e) {
-        // ignore
-      }
 
       return result;
     }

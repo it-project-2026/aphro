@@ -67,6 +67,9 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
   const [pendingCount, setPendingCount] = React.useState(0);
   const [lastUpdatedText, setLastUpdatedText] = React.useState('Belum diperbarui');
 
+  const isSyncingRef = React.useRef(false);
+  const settingsRef = React.useRef(settings);
+  settingsRef.current = settings;
   const autoDismissTimerRef = React.useRef<any>(null);
 
   // Configure syncManager whenever settings change
@@ -209,9 +212,10 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     showToast?: (msg: string, type?: any) => void,
     isSilent = false
   ) => {
-    if (isSyncing) return null;
+    if (isSyncingRef.current) return null;
 
-    if (!settings.gasWebAppUrl) {
+    const gasUrl = settingsRef.current.gasWebAppUrl;
+    if (!gasUrl) {
       if (showToast && !isSilent) showToast('GAS Web App URL belum dikonfigurasi', 'warning');
       setIsGasConnected(false);
       return null;
@@ -223,6 +227,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
 
+    isSyncingRef.current = true;
     setIsSyncing(true);
     setSyncStage('syncing');
     if (!isSilent) setShowSyncBanner(true);
@@ -273,9 +278,10 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       if (showToast && !isSilent) showToast('Gagal terhubung ke database.', 'error');
       return null;
     } finally {
+      isSyncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [isSyncing, settings.gasWebAppUrl, refreshPendingCount]);
+  }, [refreshPendingCount, setAbsensiList, setMasterData, setRealisasiList, setWorkOrders]);
 
   // 00:00 WIB Automated Midnight Local Cache Clear & Data Sync Scheduler
   React.useEffect(() => {
@@ -385,11 +391,13 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('focus', handleAppFocus);
 
     // Listen to Service Worker controller changes (if app code updates)
+    const handleControllerChange = () => {
+      console.log('🔄 Application code update detected! Syncing latest data...');
+      syncWithGAS(undefined, true).catch(() => {});
+    };
+
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker) {
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('🔄 Application code update detected! Syncing latest data...');
-        syncWithGAS(undefined, true).catch(() => {});
-      });
+      navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
     }
 
     return () => {
@@ -397,6 +405,9 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleAppFocus);
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker) {
+        navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+      }
       if (syncTimer) clearTimeout(syncTimer);
     };
   }, [checkConnection, refreshPendingCount, syncWithGAS]);

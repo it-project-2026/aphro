@@ -230,17 +230,6 @@ export const MonitoringPage: React.FC = () => {
     [woMonitoringRows]
   );
 
-  // Auto-refresh coordinates every 5 minutes when page is active
-  useEffect(() => {
-    if (!navigator.onLine || !settings.gasWebAppUrl) return;
-
-    const interval = setInterval(() => {
-      syncWithGAS();
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(interval);
-  }, [syncWithGAS, settings.gasWebAppUrl]);
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Banner */}
