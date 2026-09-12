@@ -15,8 +15,21 @@ try {
   console.warn("Firebase Admin already initialized or failed:", e);
 }
 
-const db = getFirestore();
-const messaging = getMessaging();
+const FIRESTORE_DATABASE_ID = process.env.FIRESTORE_DATABASE_ID || "ai-studio-aphroassetprotec-d28001e8-66ea-4678-abc8-62d11d5e3a61";
+
+let db: ReturnType<typeof getFirestore> | null = null;
+try {
+  db = getFirestore(FIRESTORE_DATABASE_ID);
+} catch (e) {
+  console.warn("Failed to initialize Firestore admin DB:", e);
+}
+
+let messaging: ReturnType<typeof getMessaging> | null = null;
+try {
+  messaging = getMessaging();
+} catch (e) {
+  console.warn("Failed to initialize Firebase Messaging admin:", e);
+}
 
 async function startServer() {
   const app = express();
@@ -36,16 +49,25 @@ async function startServer() {
     }
 
     try {
+      if (!db || !messaging) {
+        console.warn("Firebase Admin DB or Messaging not available.");
+        return res.json({ success: false, message: "Firebase Messaging not configured" });
+      }
+
       // 1. Get FCM tokens for this regu
       // We'll fetch all tokens and filter in code to handle case-insensitivity more easily
-      // OR we can store them in uppercase. Let's fetch all and filter for now as it's more robust.
-      const tokensSnapshot = await db.collection("fcm_tokens").get();
-      
-      const targetRegu = String(reguName).trim().toUpperCase();
-      const tokens = tokensSnapshot.docs
-        .map(doc => doc.data())
-        .filter(data => (data.reguName || "").trim().toUpperCase() === targetRegu)
-        .map(data => data.token);
+      let tokens: string[] = [];
+      try {
+        const tokensSnapshot = await db.collection("fcm_tokens").get();
+        const targetRegu = String(reguName).trim().toUpperCase();
+        tokens = tokensSnapshot.docs
+          .map(doc => doc.data())
+          .filter(data => (data.reguName || "").trim().toUpperCase() === targetRegu)
+          .map(data => data.token);
+      } catch (fcmDbError: any) {
+        console.warn("Unable to query fcm_tokens from Firestore:", fcmDbError?.message || fcmDbError);
+        return res.json({ success: false, message: "Firestore fcm_tokens unavailable", details: fcmDbError?.message });
+      }
 
       if (tokens.length === 0) {
         console.log(`No FCM tokens found for regu: ${reguName}`);
@@ -77,14 +99,14 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
       const response = await messaging.sendEachForMulticast(message);
       
       console.log(`Successfully sent ${response.successCount} notifications`);
-      res.json({ 
+      return res.json({ 
         success: true, 
         successCount: response.successCount, 
         failureCount: response.failureCount 
       });
     } catch (error: any) {
-      console.error("Error sending notification:", error);
-      res.status(500).json({ error: "Failed to send notification", details: error.message });
+      console.error("Error sending notification:", error?.message || error);
+      return res.json({ success: false, error: "Failed to send notification", details: error?.message });
     }
   });
 

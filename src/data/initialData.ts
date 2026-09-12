@@ -45,18 +45,18 @@ export const INITIAL_WORK_ORDERS: WorkOrder[] = [];
 export const INITIAL_REALISASI: Realisasi[] = [];
 
 export const INITIAL_SETTINGS: AppSettings = {
-  namaUnitLayanan: 'PLN Electricity Services UP3 Padang',
+  namaUnitLayanan: 'UL BUKITTINGGI',
   logoAplikasiUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=120&q=80',
   logoInstansiUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/97/Logo_PLN.png',
   loginBgUrl: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1600&q=80',
   themeColor: 'PLN Blue',
-  footerText: '© 13307BKT- 2026 APHRO - Asset Protection & Hazard Response Operations. PLN ES UP4 Sumatera Barat. All Rights Reserved.',
+  footerText: '© 13307BKT - 2026 APHRO - Asset Protection & Hazard Response Operations. PLN ES UP4 Sumatera Barat UL BUKITTINGGI. All Rights Reserved.',
   versiAplikasi: 'v2.4.0 Enterprise',
   gasWebAppUrl: getActiveGasConfig().gasWebAppUrl,
   kontakAdmin: {
     whatsapp: '6281234567890',
     email: 'helpdesk.aphro@pln.co.id',
-    alamat: 'Gedung Utama PLN UP3 Padang, Jl. Jend. A. Yani No. 19, Padang',
+    alamat: 'Kantor PLN UL BUKITTINGGI',
   },
 };
 

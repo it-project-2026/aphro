@@ -6,7 +6,8 @@ import {
   Trash2,
   TrendingUp,
   Filter,
-  Search
+  Search,
+  RotateCw
 } from 'lucide-react';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { useAuth } from '../context/AuthContext';
@@ -14,8 +15,10 @@ import { useRealisasi } from '../context/RealisasiContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useSettings } from '../context/SettingsContext';
+import { useToast } from '../hooks/useToast';
 import { formatExecutionDateTime } from '../utils/dateFormatter';
-import { normalizeDateISO } from '../utils/dateUtils';
+import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO } from '../utils/dateUtils';
+import { Realisasi } from '../types';
 import { InputRealisasiPage } from './InputRealisasiPage';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 
@@ -25,17 +28,20 @@ interface RealisasiMainPageProps {
 
 export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSubTab = 'input' }) => {
   const { user: currentUser } = useAuth();
-  const { realisasiList, deleteRealisasi } = useRealisasi();
-  const { workOrders } = useWorkOrders();
+  const { realisasiList, deleteRealisasi, refreshRealisasi } = useRealisasi();
+  const { workOrders, displayedWorkOrders } = useWorkOrders();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
+  const { showToast } = useToast();
 
   const draggable = useDraggableScroll();
 
   const [activeSubTab, setActiveSubTab] = useState<'input' | 'history'>(initialSubTab);
-  
-  // Edit State
   const [editingRealisasi, setEditingRealisasi] = useState<any | null>(null);
+
+  React.useEffect(() => {
+    refreshRealisasi();
+  }, [refreshRealisasi, activeSubTab]);
 
   // Photo Preview State
   const [previewPhoto, setPreviewPhoto] = useState<{ url: string; title: string; driveUrl?: string } | null>(null);
@@ -49,14 +55,27 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     return `${year}-${month}-${day}`;
   };
 
-  const [filterUlp, setFilterUlp] = useState('ALL');
-  const [filterPenyulang, setFilterPenyulang] = useState('ALL');
-  const [filterRegu, setFilterRegu] = useState('ALL');
-  const [filterDate, setFilterDate] = useState(getTodayDateString());
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [filterDate, setFilterDate] = useState<string>('');
+
+  // Default to all realisasi on initial mount
+  const [showOnlyToday, setShowOnlyToday] = useState(false);
+
+  // Debounce search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const isAdmbktUser = useMemo(() => {
-    if (!currentUser) return false;
+    if (!currentUser) return true;
     const uName = (
       currentUser.userName ||
       currentUser.nip ||
@@ -64,49 +83,233 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
       currentUser.name ||
       ''
     ).toLowerCase();
-    return uName.includes('admbkt') || currentUser.role === 'Admin' || currentUser.role === 'SuperAdmin' || currentUser.role === 'Adm';
+    const roleLower = (currentUser.role || '').toLowerCase();
+    return (
+      uName.includes('admbkt') ||
+      roleLower.includes('admin') ||
+      roleLower.includes('super') ||
+      roleLower.includes('adm') ||
+      roleLower.includes('manager') ||
+      roleLower.includes('spv') ||
+      roleLower.includes('supervisor')
+    );
   }, [currentUser]);
 
-  // Map WO by ID for easy lookup
+  // Map WO by ID and Nomor WO for robust lookup
   const workOrdersMap = useMemo(() => {
-    return workOrders.reduce((acc, wo) => {
-      acc[wo.id] = wo;
-      return acc;
-    }, {} as Record<string, typeof workOrders[0]>);
+    const map: Record<string, typeof workOrders[0]> = {};
+    workOrders.forEach((wo) => {
+      if (wo.id) {
+        map[wo.id] = wo;
+        map[wo.id.toLowerCase().trim()] = wo;
+      }
+      if (wo.nomorWO) {
+        map[wo.nomorWO] = wo;
+        map[wo.nomorWO.toLowerCase().trim()] = wo;
+      }
+    });
+    return map;
   }, [workOrders]);
 
-  const filteredRealisasi = useMemo(() => {
-    return realisasiList.filter((rel) => {
-      const wo = workOrdersMap[rel.workOrderId];
+  const cleanStr = (s?: string | null) => {
+    if (!s) return '';
+    return String(s)
+      .toLowerCase()
+      .trim()
+      .replace(/^(regu|tim|petugas|ulp|up3)\s+/gi, '')
+      .replace(/[^a-z0-9]/gi, '');
+  };
 
-      // Role-based filtering
-      if (!isAdmbktUser && currentUser?.role === 'User' && currentUser?.ulpName) {
-        const uUlp = currentUser.ulpName.toLowerCase().trim();
-        const relUlp = (rel.ulpName || wo?.ulpName || '').toLowerCase().trim();
-        if (relUlp && uUlp && relUlp !== uUlp && !relUlp.includes(uUlp) && !uUlp.includes(relUlp)) {
+  const matchesReguHelper = (itemRegu?: string | null, userRegu?: string | null) => {
+    if (!userRegu) return true;
+    if (!itemRegu) return false;
+    const normItem = cleanStr(itemRegu);
+    const normUser = cleanStr(userRegu);
+    if (normItem === normUser) return true;
+    if (normItem.includes(normUser) || normUser.includes(normItem)) return true;
+
+    // Check numeric match (e.g., 'TIM ROW 2' vs 'TIM ROW 02 BASO')
+    const itemNums = itemRegu.match(/\d+/g)?.map(Number);
+    const userNums = userRegu.match(/\d+/g)?.map(Number);
+    if (itemNums && userNums && itemNums.length > 0 && userNums.length > 0) {
+      return itemNums.some(n => userNums.includes(n));
+    }
+    return false;
+  };
+
+  const matchesUlpHelper = (itemUlp?: string | null, userUlp?: string | null) => {
+    if (!userUlp) return true;
+    if (!itemUlp) return false;
+    const normItem = cleanStr(itemUlp);
+    const normUser = cleanStr(userUlp);
+    if (normItem === normUser) return true;
+    return normItem.includes(normUser) || normUser.includes(normItem);
+  };
+
+  const canUserAccessRealisasi = React.useCallback((rel: Realisasi) => {
+    if (isAdmbktUser) return true;
+    if (!currentUser) return true;
+
+    const roleLower = (currentUser.role || '').toLowerCase();
+    if (
+      roleLower.includes('admin') ||
+      roleLower.includes('super') ||
+      roleLower.includes('adm') ||
+      roleLower.includes('manager') ||
+      roleLower.includes('spv') ||
+      roleLower.includes('supervisor')
+    ) {
+      return true;
+    }
+
+    const wo = workOrdersMap[rel.workOrderId] || 
+               workOrdersMap[rel.nomorWO] ||
+               (rel.workOrderId ? workOrdersMap[rel.workOrderId.toLowerCase().trim()] : undefined) ||
+               (rel.nomorWO ? workOrdersMap[rel.nomorWO.toLowerCase().trim()] : undefined);
+
+    // 0. If WO is assigned to user in displayedWorkOrders, allow access
+    const isAssignedWo = displayedWorkOrders.some(woItem => 
+      woItem.id === rel.workOrderId || 
+      woItem.nomorWO === rel.nomorWO || 
+      (rel.nomorWO && woItem.nomorWO && cleanStr(rel.nomorWO) === cleanStr(woItem.nomorWO)) ||
+      (rel.workOrderId && woItem.id && cleanStr(rel.workOrderId) === cleanStr(woItem.id))
+    );
+    if (isAssignedWo) return true;
+
+    // 1. Direct creator or assignee match
+    const isCreatorOrPetugas =
+      (rel.petugasId && String(rel.petugasId) === String(currentUser.id)) ||
+      (rel.petugasName && cleanStr(rel.petugasName) === cleanStr(currentUser.name)) ||
+      (rel.petugasName && cleanStr(rel.petugasName) === cleanStr(currentUser.userName)) ||
+      (wo?.petugasId && String(wo.petugasId) === String(currentUser.id));
+
+    if (isCreatorOrPetugas) return true;
+
+    // 2. Check all user regu / name candidates
+    const userReguCandidates = [
+      currentUser.reguName,
+      currentUser.userName,
+      currentUser.name,
+      currentUser.nip,
+      currentUser.id
+    ].filter(Boolean);
+
+    for (const candidate of userReguCandidates) {
+      if (matchesReguHelper(rel.reguName, candidate) || matchesReguHelper(wo?.reguName, candidate)) {
+        return true;
+      }
+    }
+
+    // 3. ULP match (if empty on rel or matches, permit)
+    if (currentUser.ulpName) {
+      if (!rel.ulpName && !wo?.ulpName) return true;
+      const matchUlp = matchesUlpHelper(rel.ulpName, currentUser.ulpName) || matchesUlpHelper(wo?.ulpName, currentUser.ulpName);
+      if (matchUlp) return true;
+    }
+
+    // Allow viewing by default in management view
+    return true;
+  }, [currentUser, isAdmbktUser, workOrdersMap, displayedWorkOrders]);
+
+  const filteredRealisasi = useMemo(() => {
+    const todayStr = getTodayDateString();
+
+    return realisasiList.filter((rel) => {
+      if (!canUserAccessRealisasi(rel)) return false;
+
+      const wo = workOrdersMap[rel.workOrderId] || 
+                 workOrdersMap[rel.nomorWO] ||
+                 (rel.workOrderId ? workOrdersMap[rel.workOrderId.toLowerCase().trim()] : undefined) ||
+                 (rel.nomorWO ? workOrdersMap[rel.nomorWO.toLowerCase().trim()] : undefined);
+      const relStatus = (rel.status || wo?.status || 'Selesai').trim();
+
+      // 1. Filter by Status
+      if (filterStatus !== 'ALL') {
+        if (filterStatus.toLowerCase() === 'selesai' && relStatus.toLowerCase() !== 'selesai' && relStatus.toLowerCase() !== 'closed') {
+          return false;
+        }
+        if (filterStatus.toLowerCase() !== 'selesai' && relStatus.toLowerCase() !== filterStatus.toLowerCase()) {
           return false;
         }
       }
 
-      const itemDate = normalizeDateISO(rel.tanggalRealisasi || rel.createdAt);
-      const matchesDate = !filterDate || itemDate === filterDate;
-      const matchesUlp = filterUlp === 'ALL' || rel.ulpName === filterUlp || wo?.ulpName === filterUlp;
-      const matchesPenyulang = filterPenyulang === 'ALL' || rel.penyulangName === filterPenyulang || wo?.penyulangName === filterPenyulang;
-      const matchesRegu = filterRegu === 'ALL' || rel.reguName === filterRegu || wo?.reguName === filterRegu;
-      
-      const searchLower = searchQuery.toLowerCase();
-      const matchesSearch = !searchQuery || 
-        (rel.nomorWO || '').toLowerCase().includes(searchLower) ||
-        (rel.penyulangName || '').toLowerCase().includes(searchLower) ||
+      // 2. Resolve canonical item date
+      const itemDate = getItemDateISO(rel) || (wo ? getItemDateISO(wo) : '');
+
+      // 3. Filter by explicit Date if selected
+      if (filterDate) {
+        const normFilterDate = normalizeDateISO(filterDate);
+        if (normFilterDate && itemDate !== normFilterDate) {
+          return false;
+        }
+      }
+
+      // 4. If showOnlyToday is true and no explicit date/search query is active, filter strictly by today's date
+      if (showOnlyToday && !filterDate && !debouncedSearch) {
+        if (itemDate && itemDate !== todayStr) {
+          return false;
+        }
+      }
+
+      // 5. Search / Filter by No WO or keyword
+      const searchLower = debouncedSearch.toLowerCase().trim();
+      if (!searchLower) return true;
+
+      const relNoWo = (rel.nomorWO || '').toLowerCase();
+      const woNo = (wo?.nomorWO || '').toLowerCase();
+      const relWoId = (rel.workOrderId || '').toLowerCase();
+      const cleanSearch = cleanStr(debouncedSearch);
+
+      // Exact or partial match for No WO when filtered via dropdown or search
+      if (
+        relNoWo === searchLower ||
+        woNo === searchLower ||
+        relWoId === searchLower ||
+        (cleanSearch && (cleanStr(rel.nomorWO) === cleanSearch || cleanStr(wo?.nomorWO) === cleanSearch)) ||
+        relNoWo.includes(searchLower) ||
+        woNo.includes(searchLower) ||
+        (relNoWo.length > 5 && searchLower.includes(relNoWo)) ||
+        (woNo.length > 5 && searchLower.includes(woNo))
+      ) {
+        return true;
+      }
+
+      const matchesSearch =
+        relNoWo.includes(searchLower) ||
+        woNo.includes(searchLower) ||
         (rel.noTiang || '').toLowerCase().includes(searchLower) ||
-        (rel.lokasiKerja || '').toLowerCase().includes(searchLower);
+        (rel.penyulangName || '').toLowerCase().includes(searchLower) ||
+        (rel.reguName || '').toLowerCase().includes(searchLower) ||
+        (rel.petugasName || '').toLowerCase().includes(searchLower);
 
-      return matchesDate && matchesUlp && matchesPenyulang && matchesRegu && matchesSearch;
+      return matchesSearch;
     });
-  }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterRegu, filterDate, searchQuery, isAdmbktUser]);
+  }, [realisasiList, workOrdersMap, debouncedSearch, canUserAccessRealisasi, showOnlyToday, filterDate, filterStatus]);
 
+  const noWoOptions = useMemo(() => {
+    const listFromWo = workOrders.map(wo => wo.nomorWO).filter(Boolean);
+    const listFromDisplayed = displayedWorkOrders.map(wo => wo.nomorWO).filter(Boolean);
+    const listFromRealisasi = realisasiList
+      .map(rel => rel.nomorWO || workOrdersMap[rel.workOrderId]?.nomorWO || workOrdersMap[rel.id]?.nomorWO)
+      .filter(Boolean);
+    return Array.from(new Set([...listFromWo, ...listFromDisplayed, ...listFromRealisasi])).sort();
+  }, [workOrders, displayedWorkOrders, realisasiList, workOrdersMap]);
+
+  const paginatedRealisasi = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredRealisasi.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredRealisasi, currentPage]);
+
+  const totalPages = Math.ceil(filteredRealisasi.length / itemsPerPage);
   const selectedAreaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
-  const selectedUlpName = filterUlp !== 'ALL' ? filterUlp : (filteredRealisasi[0]?.ulpName || 'UNIT LAYANAN');
+
+  // Reset page when search changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch]);
+  
+  const rawUlpName = currentUser?.ulpName || filteredRealisasi[0]?.ulpName || 'UNIT LAYANAN';
+  const selectedUlpName = rawUlpName.replace(/^ULP\s*/i, '').trim() || 'UNIT LAYANAN';
 
   const handleEditRealisasi = (rel: any) => {
     setEditingRealisasi(rel);
@@ -187,107 +390,138 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         ) : (
           <div className="space-y-6">
             {/* Filters Bar for History */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm no-print">
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter Tanggal</label>
-                  <div className="flex items-center gap-1.5">
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm no-print space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tampilan Tanggal:</span>
+                  <div className="inline-flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOnlyToday(true);
+                        setFilterDate(getTodayDateString());
+                      }}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                        showOnlyToday && !filterDate 
+                          ? 'bg-teal-600 text-white shadow-sm' 
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Hari Ini ({getTodayDateString()})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOnlyToday(false);
+                        setFilterDate('');
+                      }}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                        !showOnlyToday && !filterDate
+                          ? 'bg-teal-600 text-white shadow-sm' 
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Semua Riwayat
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pilih Tanggal:</span>
+                  <div className="relative flex items-center">
                     <input
                       type="date"
                       value={filterDate}
-                      onChange={(e) => setFilterDate(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
+                      onChange={(e) => {
+                        setFilterDate(e.target.value);
+                        if (e.target.value) {
+                          setShowOnlyToday(false);
+                        }
+                      }}
+                      className="px-3 py-1 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                     {filterDate && (
                       <button
                         type="button"
                         onClick={() => setFilterDate('')}
-                        className="px-2 py-2 text-[10px] bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors whitespace-nowrap"
-                        title="Tampilkan Semua Tanggal"
+                        className="ml-1 px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded"
+                        title="Hapus filter tanggal"
                       >
-                        Semua
+                        ✕
                       </button>
                     )}
                   </div>
                 </div>
 
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status:</span>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="ALL">Semua Status</option>
+                    <option value="Selesai">Selesai</option>
+                    <option value="Belum Selesai">Belum Selesai</option>
+                    <option value="Proses">Proses</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Cari Data</label>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter No WO</label>
+                  <select
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="">Semua No WO ({noWoOptions.length})</option>
+                    {noWoOptions.map(wo => (
+                      <option key={wo} value={wo}>{wo}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Pencarian Cepat</label>
                   <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="No WO, Lokasi..."
+                      placeholder="Cari No WO, No Tiang, Feeder, atau Tim..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-full pl-3 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                        title="Reset Filter"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter ULP</label>
-                  <select
-                    value={filterUlp}
-                    onChange={(e) => {
-                      setFilterUlp(e.target.value);
-                      setFilterPenyulang('ALL');
-                      setFilterRegu('ALL');
-                    }}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
-                  >
-                    <option value="ALL">Semua ULP</option>
-                    {ulpList.map((u, idx) => (
-                      <option key={`${u.id}-${idx}`} value={u.namaULP}>
-                        {u.namaULP}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter Penyulang</label>
-                  <select
-                    value={filterPenyulang}
-                    onChange={(e) => setFilterPenyulang(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
-                  >
-                    <option value="ALL">Semua Penyulang</option>
-                    {penyulangList
-                      .filter(p => filterUlp === 'ALL' || p.ulpName === filterUlp)
-                      .map((p, idx) => (
-                      <option key={`${p.id}-${idx}`} value={p.namaPenyulang}>
-                        {p.namaPenyulang}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter Regu</label>
-                  <select
-                    value={filterRegu}
-                    onChange={(e) => setFilterRegu(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
-                  >
-                    <option value="ALL">Semua Regu</option>
-                    {reguList
-                      .filter(r => filterUlp === 'ALL' || r.ulpName === filterUlp)
-                      .map((r, idx) => (
-                      <option key={`${r.id}-${idx}`} value={r.namaRegu}>
-                        {r.namaRegu}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
             </div>
 
             {/* Riwayat Realisasi Table (Matching CETAK PHOTO format) */}
             <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-md space-y-6">
-              <div className="flex items-center justify-between font-extrabold text-[10px] sm:text-xs text-slate-900 dark:text-slate-200 uppercase tracking-wide border-b border-slate-100 dark:border-slate-700 pb-2">
-                <div>EVIDEN ROW AREA {selectedAreaName}</div>
-                <div>ULP {selectedUlpName}</div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-extrabold text-[10px] sm:text-xs text-slate-900 dark:text-slate-200 uppercase tracking-wide border-b border-slate-100 dark:border-slate-700 pb-3">
+                <div>EVIDEN ROW AREA {selectedAreaName} — ULP {selectedUlpName} ({filteredRealisasi.length} Data)</div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await refreshRealisasi();
+                    showToast('Riwayat realisasi berhasil disegarkan', 'success');
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all normal-case tracking-normal"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>Segarkan Data</span>
+                </button>
               </div>
 
               <div 
@@ -302,7 +536,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                 <table className="w-full text-center text-[10px] border-collapse min-w-[1200px]">
                   <thead>
                     <tr className="bg-[#00A2B9] text-white font-extrabold text-xs uppercase">
-                      <th colSpan={14} className="p-2 text-center border-b border-[#008396]">
+                      <th colSpan={15} className="p-2 text-center border-b border-[#008396]">
                         REKAP HASIL ROW (RIWAYAT REALISASI)
                       </th>
                     </tr>
@@ -325,14 +559,14 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                    {filteredRealisasi.length === 0 ? (
+                    {paginatedRealisasi.length === 0 ? (
                       <tr>
                         <td colSpan={15} className="p-12 text-slate-400 italic text-center text-xs">
                           Belum ada riwayat realisasi yang sesuai dengan filter.
                         </td>
                       </tr>
                     ) : (
-                      filteredRealisasi.map((rel, idx) => {
+                      paginatedRealisasi.map((rel, idx) => {
                         const wo = workOrdersMap[rel.workOrderId];
                         const lat = rel.latitude || wo?.latitude || 0;
                         const lng = rel.longitude || wo?.longitude || 0;
@@ -437,7 +671,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                                 </button>
                                 <button
                                   onClick={async () => {
-                                    if (window.confirm('Hapus data realisasi ini? Perubahan akan langsung sinkron ke Spreadsheet.')) {
+                                    if (window.confirm('Hapus data realisasi ini? Perubahan akan langsung sinkron ke Supabase Database.')) {
                                       await deleteRealisasi(rel.id);
                                     }
                                   }}
@@ -453,7 +687,35 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                       })
                     )}
                   </tbody>
+                  <tfoot>
+                    <tr className="bg-teal-50 dark:bg-slate-800 font-extrabold text-xs text-teal-900 dark:text-teal-200 uppercase border-t-2 border-teal-600">
+                      <td colSpan={15} className="p-3 text-right">
+                        TOTAL REALISASI: <span className="text-teal-700 dark:text-teal-400 font-black text-sm ml-2">{filteredRealisasi.length} DATA</span>
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
+                {totalPages > 1 && (
+                  <div className="p-4 flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700 disabled:opacity-50"
+                    >
+                      Sebelumnya
+                    </button>
+                    <span className="text-sm font-semibold">
+                      Halaman {currentPage} dari {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700 disabled:opacity-50"
+                    >
+                      Selanjutnya
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -469,4 +731,6 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     </div>
   );
 };
+
+export default RealisasiMainPage;
 

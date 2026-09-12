@@ -235,6 +235,16 @@ class IndexedDBService {
     }
   }
 
+  async clearPendingOperations(): Promise<void> {
+    try {
+      const db = await this.initDB();
+      const tx = db.transaction('pendingOperations', 'readwrite');
+      tx.objectStore('pendingOperations').clear();
+    } catch (e) {
+      console.warn('Failed to clear pending operations store in IndexedDB', e);
+    }
+  }
+
   // --- AUDIT LOGS ---
   async getAuditLogs(): Promise<AuditLogRecord[]> {
     try {

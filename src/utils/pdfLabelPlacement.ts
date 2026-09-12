@@ -69,28 +69,56 @@ export function resolveLabelCollisions(
         placement
       };
 
-      // Keep within canvas bounds
-      if (candidate.x < 5 || candidate.x + boxWidth > canvasWidth - 5 || 
-          candidate.y < 5 || candidate.y + boxHeight > canvasHeight - 5) {
-        continue;
+      // Slide and push the box away if there is any overlap
+      let adjustedCandidate = { ...candidate };
+      const maxRetries = 15;
+      const step = 20; // Pushing steps
+      let overlapDetected = true;
+      let attempts = 0;
+
+      while (overlapDetected && attempts < maxRetries) {
+        overlapDetected = false;
+        for (const placed of labels) {
+          // Generous 8px padding to keep spacing pristine
+          if (boxesOverlap(adjustedCandidate, placed, 8)) {
+            overlapDetected = true;
+            if (placement === 'top') {
+              adjustedCandidate.y -= step;
+            } else if (placement === 'bottom') {
+              adjustedCandidate.y += step;
+            } else if (placement === 'left') {
+              adjustedCandidate.x -= step;
+            } else if (placement === 'right') {
+              adjustedCandidate.x += step;
+            } else {
+              adjustedCandidate.y -= step;
+            }
+            break;
+          }
+        }
+        attempts++;
       }
 
-      // Count overlaps with already placed labels
+      // Clamp within canvas bounds
+      adjustedCandidate.x = Math.max(10, Math.min(canvasWidth - boxWidth - 10, adjustedCandidate.x));
+      adjustedCandidate.y = Math.max(10, Math.min(canvasHeight - boxHeight - 10, adjustedCandidate.y));
+
+      // Calculate final overlap count for selection ranking
       let overlapCount = 0;
       for (const placed of labels) {
-        if (boxesOverlap(candidate, placed)) {
+        if (boxesOverlap(adjustedCandidate, placed, 4)) {
           overlapCount++;
         }
       }
 
       if (overlapCount === 0) {
-        bestLabel = candidate;
+        bestLabel = adjustedCandidate;
         break; 
       }
 
       if (overlapCount < minOverlaps) {
         minOverlaps = overlapCount;
-        bestLabel = candidate;
+        bestLabel = adjustedCandidate;
       }
     }
 

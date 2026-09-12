@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Download, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatDriveImageUrl } from '../../utils/driveUtils';
 
 interface ImagePreviewModalProps {
   isOpen: boolean;
@@ -91,7 +92,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
           {/* Image Stage */}
           <div className="p-2 bg-slate-50 dark:bg-slate-950 min-h-[300px] flex items-center justify-center">
             <img
-              src={imageUrl}
+              src={formatDriveImageUrl(imageUrl)}
               alt={title}
               className="max-w-full max-h-[70vh] object-contain rounded-xl shadow-lg border border-slate-200 dark:border-slate-800"
               referrerPolicy="no-referrer"

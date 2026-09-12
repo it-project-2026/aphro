@@ -36,6 +36,7 @@ interface OptimizedMapViewProps {
   customMarkerRenderer?: (point: MapPointItem) => L.DivIcon;
   badgeTitle?: string;
   tileProvider?: 'osm' | 'carto' | 'esri';
+  onMove?: (center: [number, number], zoom: number) => void;
 }
 
 // Custom Marker Icons for Default Types
@@ -112,13 +113,19 @@ const MapViewController: React.FC<{
   points: MapPointItem[];
   clusterEngine: Supercluster<any, any>;
   onViewportChange: (clusters: any[], zoom: number) => void;
-}> = ({ points, clusterEngine, onViewportChange }) => {
+  onMove?: (center: [number, number], zoom: number) => void;
+}> = ({ points, clusterEngine, onViewportChange, onMove }) => {
   const map = useMap();
 
   const updateViewport = useCallback(() => {
     if (!map) return;
     const bounds = map.getBounds();
     const zoom = Math.floor(map.getZoom());
+    const center = map.getCenter();
+
+    if (onMove) {
+      onMove([center.lat, center.lng], zoom);
+    }
 
     // Extend bounds slightly (15% padding) for smooth panning
     const padded = bounds.pad(0.15);
@@ -180,6 +187,7 @@ export const OptimizedMapView: React.FC<OptimizedMapViewProps> = ({
   customMarkerRenderer,
   badgeTitle = '⚡ PETA GIS ROW (CANVAS & BOUNDING-BOX)',
   tileProvider = 'osm',
+  onMove,
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const [visibleClusters, setVisibleClusters] = useState<any[]>([]);
@@ -295,6 +303,7 @@ export const OptimizedMapView: React.FC<OptimizedMapViewProps> = ({
           points={points}
           clusterEngine={clusterEngine}
           onViewportChange={handleViewportChange}
+          onMove={onMove}
         />
 
         <TileLayer

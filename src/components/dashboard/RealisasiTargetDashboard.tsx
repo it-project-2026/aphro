@@ -16,6 +16,7 @@ import {
   Legend,
 } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import { TARGET_KMS_PER_TIM_ROW } from '../../utils/metricUtils';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -38,10 +39,10 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
   subtitle = "Monitoring Penugasan"
 }) => {
   const totalRealisasi = data.reduce((sum, item) => sum + item.realisasi, 0);
-  const totalTarget = data.reduce((sum, item) => sum + item.target, 0);
+  const totalTarget = Number((data.length * TARGET_KMS_PER_TIM_ROW).toFixed(2));
   const percentage = totalTarget > 0 ? Math.round((totalRealisasi / totalTarget) * 100) : 0;
 
-  const doughnutData = {
+  const doughnutData = React.useMemo(() => ({
     labels: ['Realisasi', 'Sisa Target'],
     datasets: [
       {
@@ -51,7 +52,7 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
         hoverOffset: 4,
       },
     ],
-  };
+  }), [totalRealisasi, totalTarget]);
 
   return (
     <div className="bg-[#f8fafc] rounded-[2rem] border border-teal-100 shadow-2xl overflow-hidden font-display">
@@ -106,13 +107,13 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
                       </span>
                       <div className="flex gap-6 text-[9px] font-black">
                         <span className="text-[#008396] w-8 text-right">{Number(item.realisasi).toFixed(2)}</span>
-                        <span className="text-slate-400 w-8 text-right">{Number(item.target).toFixed(2)}</span>
+                        <span className="text-slate-400 w-8 text-right">{(TARGET_KMS_PER_TIM_ROW).toFixed(2)}</span>
                       </div>
                     </div>
                     <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative">
                       <div 
                         className="h-full bg-gradient-to-r from-teal-400 to-teal-600 rounded-full transition-all duration-1000 flex items-center justify-end pr-2"
-                        style={{ width: `${Math.min(100, (item.realisasi / (item.target || 1)) * 100)}%` }}
+                        style={{ width: `${Math.min(100, (item.realisasi / TARGET_KMS_PER_TIM_ROW) * 100)}%` }}
                       >
                         {item.realisasi > 5 && (
                           <span className="text-[8px] font-black text-white leading-none">
@@ -186,18 +187,24 @@ export const RealisasiTargetDashboard: React.FC<RealisasiTargetDashboardProps> =
             </div>
 
             {/* Donut Chart */}
-            <div className="relative h-48 flex items-center justify-center">
-              <Doughnut 
-                data={doughnutData} 
-                options={{
-                  cutout: '75%',
-                  plugins: {
-                    legend: { display: false },
-                  }
-                }} 
-              />
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-black text-slate-800">{percentage}%</span>
+            <div className="relative w-full h-48 flex items-center justify-center">
+              <div className="w-44 h-44 relative flex items-center justify-center">
+                <Doughnut 
+                  data={doughnutData} 
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    animation: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: { enabled: true }
+                    }
+                  }} 
+                />
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-3xl font-black text-slate-800">{percentage}%</span>
+                </div>
               </div>
             </div>
 

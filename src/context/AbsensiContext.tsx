@@ -1,14 +1,13 @@
 import * as React from 'react';
+import { usePersistState } from '../hooks/usePersistState';
 import { Absensi } from '../types';
 import { INITIAL_ABSENSI } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
-import { GASApiService } from '../services/gasApiService';
-import { addToOfflineQueue } from '../services/offlineSyncQueue';
-import { formatDriveViewUrl } from '../utils/driveUtils';
-import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
-import { idbService } from '../services/indexedDbService';
+import { SupabaseService } from '../services/supabaseService';
+import { syncManager } from '../services/syncManager';
+import { getLocalDateTimeString, getWIBDateString, normalizeDateISO } from '../utils/dateUtils';
 
 interface AbsensiContextType {
   absensiList: Absensi[];
@@ -16,6 +15,7 @@ interface AbsensiContextType {
   addAbsensi: (abs: Omit<Absensi, 'id' | 'createdAt'>) => Promise<Absensi>;
   updateAbsensi: (id: string, absData: Partial<Absensi>) => Promise<boolean>;
   deleteAbsensi: (id: string) => Promise<boolean>;
+  refreshAbsensi: () => Promise<void>;
   hasCheckedInToday: boolean;
 }
 
@@ -25,32 +25,34 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
-  const [absensiList, setAbsensiList] = React.useState<Absensi[]>(INITIAL_ABSENSI);
+  const [absensiList, setAbsensiList] = usePersistState<Absensi[]>('aphro_absensi', INITIAL_ABSENSI);
 
-  // Load from IndexedDB on initial mount and clean up old bloated localStorage
-  React.useEffect(() => {
+  const refreshAbsensi = React.useCallback(async () => {
     try {
-      localStorage.removeItem('aphro_absensi');
-    } catch {}
-
-    idbService.getTable<Absensi>('ABSENSI').then(cached => {
-      if (cached && cached.length > 0) {
-        setAbsensiList(cached);
+      const unitId = SupabaseService.getActiveUnitId();
+      const res = await SupabaseService.fetchAbsensi(unitId);
+      if (res.success && res.data) {
+        setAbsensiList(res.data);
       }
-    }).catch(() => {});
-  }, []);
+    } catch (err) {
+      console.warn('Error loading Absensi from Supabase:', err);
+    }
+  }, [setAbsensiList]);
+
+  React.useEffect(() => {
+    if (user) {
+      refreshAbsensi();
+    }
+  }, [refreshAbsensi, settings.namaUnitLayanan, user]);
 
   const addAbsensi = React.useCallback(async (absData: Omit<Absensi, 'id' | 'createdAt'>) => {
     const todayStr = absData.tanggal || getWIBDateString();
     const nowStr = getLocalDateTimeString();
 
-    // Helper to normalize date for comparison
     const normalizeDate = (d: any) => {
       if (!d) return '';
       const s = String(d).trim();
-      // ISO YYYY-MM-DD
       if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-      // Indo DD-MM-YYYY or DD/MM/YYYY
       const match = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
       if (match) {
         return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
@@ -60,7 +62,6 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
     const targetDate = normalizeDate(todayStr);
 
-    // Find existing entry for today & regu
     const existingIndex = absensiList.findIndex(a => {
       if (!a) return false;
       const rowDate = normalizeDate(a.tanggal);
@@ -76,7 +77,6 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       const isClockingOut = Boolean(absData.fotoKeluar);
       
       if (isClockingOut) {
-        // Strict clock-out update: only update clock-out fields and metadata
         finalAbs = {
           ...existing,
           fotoKeluar: absData.fotoKeluar,
@@ -86,7 +86,6 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
           updatedAt: getLocalDateTimeString(),
         };
       } else {
-        // Normal update or re-clock-in (though usually shouldn't happen same day)
         finalAbs = {
           ...existing,
           ...absData,
@@ -107,7 +106,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    // Update local state optimistically and persist to IndexedDB asynchronously
+    // Update local state optimistically
     const newList = [...absensiList];
     if (existingIndex >= 0) {
       newList[existingIndex] = finalAbs;
@@ -115,53 +114,31 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       newList.unshift(finalAbs);
     }
     setAbsensiList(newList);
-    idbService.saveTable('ABSENSI', newList).catch(() => {});
 
-    // Sync to GAS if URL exists
-    const payloadToSave = {
-      ...finalAbs,
-      isAbsenPulang: Boolean(absData.fotoKeluar),
-      folderId: settings.absensiFolderId || '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5',
-    };
-
-    if (!navigator.onLine || !settings.gasWebAppUrl) {
-      addToOfflineQueue('ABSENSI', payloadToSave);
-      showToast('⚡ Absensi tersimpan aman di perangkat (Mode Offline). Akan otomatis disinkronkan ke Spreadsheet saat terhubung sinyal.', 'success');
-    } else {
-      try {
-        const res = await GASApiService.saveAbsensi(settings.gasWebAppUrl, settings.spreadsheetId, payloadToSave);
-        
-        if (res.status === 'success') {
-          showToast('Absensi berhasil disinkronkan ke Spreadsheet!', 'success');
-          if (res.fotoMasukUrl || res.fotoKeluarUrl) {
-            setAbsensiList(prev => {
-              const updated = prev.map(item => {
-                if (item.id === finalAbs.id) {
-                  return {
-                    ...item,
-                    fotoMasuk: res.fotoMasukUrl ? formatDriveViewUrl(res.fotoMasukUrl) : item.fotoMasuk,
-                    fotoKeluar: res.fotoKeluarUrl ? formatDriveViewUrl(res.fotoKeluarUrl) : item.fotoKeluar,
-                  };
-                }
-                return item;
-              });
-              idbService.saveTable('ABSENSI', updated).catch(() => {});
-              return updated;
-            });
-          }
-        } else {
-          addToOfflineQueue('ABSENSI', payloadToSave);
-          showToast(`⚡ Absensi tersimpan di perangkat. Otomatis disinkronkan saat sinyal tersedia.`, 'info');
+    const unitId = SupabaseService.getActiveUnitId();
+    try {
+      const res = await syncManager.executeMutation({
+        type: existingIndex >= 0 ? 'UPDATE' : 'CREATE',
+        tableName: 'ABSENSI',
+        payload: finalAbs,
+        apiCall: async () => {
+          const result = await SupabaseService.saveAbsensi(unitId, finalAbs);
+          return { status: result.success ? 'success' : 'error', message: result.error };
         }
-      } catch (err) {
-        console.error('Sync Absensi error:', err);
-        addToOfflineQueue('ABSENSI', payloadToSave);
-        showToast('⚡ Absensi tersimpan di perangkat. Otomatis disinkronkan saat sinyal tersedia.', 'info');
+      });
+
+      if (!res.offline) {
+        showToast('Absensi berhasil disinkronkan ke Supabase!', 'success');
+      } else {
+        showToast('Absensi tersimpan (offline).', 'info');
       }
+    } catch (err) {
+      console.warn('Sync Absensi error:', err);
+      showToast('Absensi tersimpan di perangkat.', 'info');
     }
 
     return finalAbs;
-  }, [absensiList, settings.gasWebAppUrl, settings.spreadsheetId, settings.absensiFolderId, showToast]);
+  }, [absensiList, setAbsensiList, showToast]);
 
   const updateAbsensi = React.useCallback(async (id: string, absData: Partial<Absensi>) => {
     const existingIndex = absensiList.findIndex(a => a.id === id);
@@ -173,51 +150,58 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       updatedAt: getLocalDateTimeString(),
     };
 
-    // Update local state and persist to IndexedDB
     const newList = [...absensiList];
     newList[existingIndex] = updatedAbs;
     setAbsensiList(newList);
-    idbService.saveTable('ABSENSI', newList).catch(() => {});
 
-    if (settings.gasWebAppUrl) {
-      try {
-        const res = await GASApiService.saveAbsensi(settings.gasWebAppUrl, settings.spreadsheetId, updatedAbs);
-        if (res.status === 'success') {
-          showToast('Perubahan absensi berhasil disinkronkan!', 'success');
-          return true;
+    const unitId = SupabaseService.getActiveUnitId();
+    try {
+      await syncManager.executeMutation({
+        type: 'UPDATE',
+        tableName: 'ABSENSI',
+        payload: updatedAbs,
+        apiCall: async () => {
+          const result = await SupabaseService.saveAbsensi(unitId, updatedAbs);
+          return { status: result.success ? 'success' : 'error', message: result.error };
         }
-        showToast('Gagal sinkronisasi ke Spreadsheet, perubahan tersimpan lokal.', 'warning');
-      } catch (err) {
-        showToast('Gagal sinkronisasi, perubahan tersimpan lokal.', 'warning');
-      }
+      });
+      showToast('Perubahan absensi tersimpan', 'success');
+    } catch {
+      showToast('Perubahan tersimpan lokal.', 'info');
     }
     return true;
-  }, [absensiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
+  }, [absensiList, setAbsensiList, showToast]);
 
   const deleteAbsensi = React.useCallback(async (id: string) => {
-    // Update local state and persist to IndexedDB
+    const existing = absensiList.find(a => a.id === id);
     const newList = absensiList.filter(a => a.id !== id);
     setAbsensiList(newList);
-    idbService.saveTable('ABSENSI', newList).catch(() => {});
 
-    if (settings.gasWebAppUrl) {
+    if (existing) {
+      const unitId = SupabaseService.getActiveUnitId();
       try {
-        const res = await GASApiService.deleteAbsensi(settings.gasWebAppUrl, settings.spreadsheetId, id);
-        if (res.status === 'success') {
-          showToast('Absensi berhasil dihapus dari Spreadsheet!', 'success');
-          return true;
-        }
-        showToast('Gagal menghapus di Spreadsheet, terhapus lokal.', 'warning');
-      } catch (err) {
-        showToast('Gagal menghapus di Spreadsheet, terhapus lokal.', 'warning');
+        await syncManager.executeMutation({
+          type: 'DELETE',
+          tableName: 'ABSENSI',
+          payload: { id },
+          apiCall: async () => {
+            const result = await SupabaseService.deleteAbsensi(unitId, id);
+            return { status: result.success ? 'success' : 'error', message: result.error };
+          }
+        });
+      } catch (e) {
+        console.warn('Delete Absensi offline error:', e);
       }
     }
+
+    showToast('Absensi dihapus', 'info');
     return true;
-  }, [absensiList, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
+  }, [absensiList, setAbsensiList, showToast]);
 
   const hasCheckedInToday = React.useMemo(() => {
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
     
+    const todayISO = getWIBDateString();
     const now = new Date();
     const currentY = now.getFullYear();
     const currentM = now.getMonth();
@@ -235,7 +219,14 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         .replace(/[^a-z0-9]/gi, '');
     };
 
+    const extractRowNo = (s?: string | null): number | null => {
+      if (!s) return null;
+      const match = String(s).match(/row\s*0?(\d+)/i) || String(s).match(/(\d+)/);
+      return match ? parseInt(match[1], 10) : null;
+    };
+
     const userReguClean = cleanStr(user.reguName);
+    const userRowNo = extractRowNo(user.reguName) ?? extractRowNo(user.userName);
     const userCandidates = [
       userReguClean,
       cleanStr(user.userName),
@@ -248,8 +239,9 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       const absTanggal = String(abs.tanggal || abs.TANGGAL || abs.Tanggal || '');
       if (!absTanggal) return false;
 
-      // Check date match for today
+      const normDate = normalizeDateISO(absTanggal);
       const isToday = (
+        normDate === todayISO ||
         absTanggal.startsWith(isoPrefix) ||
         absTanggal.includes(`${currentY}-${padStr(currentM + 1)}-${padStr(currentD)}`) ||
         absTanggal.includes(`${currentD}/${currentM + 1}/${currentY}`) ||
@@ -261,10 +253,13 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
       if (!isToday) return false;
 
-      // Extract Regu Name from ABSENSI sheet (Column Nama_Regu / NAMA_REGU / Regu)
       const absReguClean = cleanStr(abs.reguName || abs.NAMA_REGU || abs.Nama_Regu || abs.Regu);
+      const absRowNo = extractRowNo(abs.reguName || abs.NAMA_REGU || abs.Nama_Regu || abs.Regu);
 
-      // 1. Direct match on Nama_Regu
+      if (userRowNo !== null && absRowNo !== null && userRowNo === absRowNo) {
+        return true;
+      }
+
       if (userReguClean && absReguClean) {
         if (
           userReguClean === absReguClean ||
@@ -274,7 +269,6 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // 2. Candidate fallback match across petugas/username/NIP
       const absCandidates = [
         absReguClean,
         cleanStr(abs.userName || abs.USER_NAME || abs.Username),
@@ -310,7 +304,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   }, [absensiList, user]);
 
   return (
-    <AbsensiContext.Provider value={{ absensiList, setAbsensiList, addAbsensi, updateAbsensi, deleteAbsensi, hasCheckedInToday }}>
+    <AbsensiContext.Provider value={{ absensiList, setAbsensiList, addAbsensi, updateAbsensi, deleteAbsensi, refreshAbsensi, hasCheckedInToday }}>
       {children}
     </AbsensiContext.Provider>
   );

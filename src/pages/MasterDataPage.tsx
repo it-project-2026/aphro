@@ -292,7 +292,7 @@ export const MasterDataPage: React.FC = () => {
       email: usrEmail || `${(usrUserName || usrNip).toLowerCase()}@pln.co.id`,
       phone: usrPhone || '081234567890',
       ulpId: usrUlpId,
-      ulpName: selUlp?.namaULP || 'PLN UP3 Padang',
+      ulpName: selUlp?.namaULP || 'UL BUKITTINGGI',
       reguId: usrReguId,
       reguName: selRegu?.namaRegu || '-',
       status: usrStatus,

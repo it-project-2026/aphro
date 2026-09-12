@@ -112,15 +112,19 @@ export function formatDateOnly(dateInput?: string | Date): string {
 export function formatExecutionDateTime(rel?: any, wo?: any): string {
   if (!rel && !wo) return '-';
 
-  // 1. Prefer rel.timestamp, rel.createdAt, or rel.tanggalRealisasi if it contains a full datetime
+  // 1. Prefer explicit date fields first
+  const explicitDate = rel?.tanggalRealisasi || rel?.TANGGAL || rel?.Tanggal;
+  if (explicitDate) {
+    return formatDateTime(explicitDate);
+  }
+
+  // 2. Prefer rel.timestamp, rel.createdAt if available
   const relTime =
     rel?.timestamp ||
     rel?.Timestamp ||
     rel?.createdAt ||
     rel?.CREATED_AT ||
-    rel?.Created_At ||
-    rel?.tanggalRealisasi ||
-    rel?.TANGGAL;
+    rel?.Created_At;
 
   if (relTime) {
     const formatted = formatDateTime(relTime);
@@ -129,7 +133,7 @@ export function formatExecutionDateTime(rel?: any, wo?: any): string {
     }
   }
 
-  // 2. Check photo timestamps
+  // 3. Check photo timestamps
   const photoTs =
     rel?.photosSebelum?.[0]?.timestamp ||
     rel?.photosSesudah?.[0]?.timestamp ||
@@ -143,7 +147,7 @@ export function formatExecutionDateTime(rel?: any, wo?: any): string {
     }
   }
 
-  // 3. Check wo.createdAt
+  // 4. Check wo.createdAt
   const woTime = wo?.createdAt || wo?.CREATED_AT || wo?.Created_At;
   if (woTime) {
     const formatted = formatDateTime(woTime);
@@ -152,12 +156,8 @@ export function formatExecutionDateTime(rel?: any, wo?: any): string {
     }
   }
 
-  // 4. Fallback to any base date
+  // 5. Fallback to any base date
   const dateBase =
-    rel?.tanggalRealisasi ||
-    rel?.TANGGAL ||
-    rel?.timestamp ||
-    rel?.Timestamp ||
     wo?.tanggal ||
     wo?.TANGGAL ||
     rel?.createdAt ||

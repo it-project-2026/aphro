@@ -15,27 +15,33 @@ import { Footer } from './components/layout/Footer';
 import { ToastContainer } from './components/common/ToastContainer';
 import { SyncStatusBanner } from './components/common/SyncStatusBanner';
 import { NotificationListener } from './components/layout/NotificationListener';
-import { FileSpreadsheet } from 'lucide-react';
+import { Database, Loader2 } from 'lucide-react';
 
-import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { WorkOrderPage } from './pages/WorkOrderPage';
-import { WorkOrderInputPage } from './pages/WorkOrderInputPage';
-import { InputRealisasiPage } from './pages/InputRealisasiPage';
-import { MonitoringPage } from './pages/MonitoringPage';
-import { CetakLaporanPage } from './pages/CetakLaporanPage';
-import { MasterDataPage } from './pages/MasterDataPage';
-import { AuditLogPage } from './pages/AuditLogPage';
-import { UserWelcomePage } from './pages/UserWelcomePage';
-import { AbsensiKerjaPage } from './pages/AbsensiKerjaPage';
-import { AbsensiMainPage } from './pages/AbsensiMainPage';
-import { InisiasiPage } from './pages/InisiasiPage';
-import { RekapPekerjaanHarianPage } from './pages/RekapPekerjaanHarianPage';
-import { RekapPenyulangHarianPage } from './pages/RekapPenyulangHarianPage';
-import { WorkOrderMainPage } from './pages/WorkOrderMainPage';
-import { RealisasiMainPage } from './pages/RealisasiMainPage';
+// Lazy Load Pages for Performance (P3 Poin 13)
+const LoginPage = React.lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
+const WorkOrderMainPage = React.lazy(() => import('./pages/WorkOrderMainPage').then(m => ({ default: m.WorkOrderMainPage })));
+const RealisasiMainPage = React.lazy(() => import('./pages/RealisasiMainPage').then(m => ({ default: m.RealisasiMainPage })));
+const MonitoringPage = React.lazy(() => import('./pages/MonitoringPage').then(m => ({ default: m.MonitoringPage })));
+const CetakLaporanPage = React.lazy(() => import('./pages/CetakLaporanPage').then(m => ({ default: m.CetakLaporanPage })));
+const MasterDataPage = React.lazy(() => import('./pages/MasterDataPage').then(m => ({ default: m.MasterDataPage })));
+const AuditLogPage = React.lazy(() => import('./pages/AuditLogPage').then(m => ({ default: m.AuditLogPage })));
+const UserWelcomePage = React.lazy(() => import('./pages/UserWelcomePage').then(m => ({ default: m.UserWelcomePage })));
+const AbsensiKerjaPage = React.lazy(() => import('./pages/AbsensiKerjaPage').then(m => ({ default: m.AbsensiKerjaPage })));
+const AbsensiMainPage = React.lazy(() => import('./pages/AbsensiMainPage').then(m => ({ default: m.AbsensiMainPage })));
+const InisiasiPage = React.lazy(() => import('./pages/InisiasiPage').then(m => ({ default: m.InisiasiPage })));
+const RekapPekerjaanHarianPage = React.lazy(() => import('./pages/RekapPekerjaanHarianPage').then(m => ({ default: m.RekapPekerjaanHarianPage })));
+const RekapPenyulangHarianPage = React.lazy(() => import('./pages/RekapPenyulangHarianPage').then(m => ({ default: m.RekapPenyulangHarianPage })));
+const SettingAplikasiPage = React.lazy(() => import('./pages/SettingAplikasiPage').then(m => ({ default: m.SettingAplikasiPage })));
 
 import { useNotifications } from './hooks/useNotifications';
+
+const LoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center p-12 space-y-4">
+    <Loader2 className="w-8 h-8 text-[#00A2B9] animate-spin" />
+    <p className="text-xs font-bold text-slate-400">Memuat Halaman...</p>
+  </div>
+);
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
@@ -70,7 +76,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
-    if (isAdmRole && !['cetak_laporan', 'rekap_harian', 'monitoring_absensi'].includes(activeTab)) {
+    if (isAdmRole && !['cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'settings'].includes(activeTab)) {
       setActiveTab('cetak_laporan');
     }
   }, [isAdmRole, activeTab, setActiveTab]);
@@ -84,6 +90,9 @@ const AppContent: React.FC = () => {
           return <RekapPenyulangHarianPage />;
         case 'monitoring_absensi':
           return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
+        case 'settings':
+        case 'setting':
+          return <SettingAplikasiPage />;
         case 'cetak_laporan':
         default:
           return <CetakLaporanPage />;
@@ -112,6 +121,8 @@ const AppContent: React.FC = () => {
         if ((user?.role || '').toUpperCase() === 'USER') return <DashboardPage />;
         return <RekapPenyulangHarianPage />;
       case 'master_data': return <MasterDataPage />;
+      case 'settings':
+      case 'setting': return <SettingAplikasiPage />;
       case 'logs': return <AuditLogPage />;
       case 'inisiasi': return <InisiasiPage isFromMenu={true} />;
       default: return <DashboardPage />;
@@ -140,20 +151,20 @@ const AppContent: React.FC = () => {
 
           <div className="space-y-1">
             <p className="text-xs font-extrabold text-teal-400 tracking-widest uppercase">
-              {settings.namaUnitLayanan || 'PLN ES UP4 Sumatera Barat UP3 Padang'}
+              {settings.namaUnitLayanan || 'UL BUKITTINGGI'}
             </p>
           </div>
 
           <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-3">
             <div className="flex items-center justify-center space-x-2 text-xs font-bold text-teal-400">
-              <FileSpreadsheet className="w-4 h-4 animate-bounce" />
-              <span>Menghubungkan ke Database Spreadsheet...</span>
+              <Database className="w-4 h-4 animate-bounce" />
+              <span>Menghubungkan ke Supabase APHRO-Database...</span>
             </div>
             <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5">
               <div className="bg-gradient-to-r from-[#00A2B9] via-teal-400 to-[#00A2B9] h-1.5 rounded-full animate-pulse w-3/4 mx-auto" />
             </div>
             <p className="text-[11px] text-slate-400">
-              Memuat data pengguna USERS, Work Order & Realisasi...
+              Memuat data USERS, Work Order, Realisasi & Absensi dari Supabase...
             </p>
           </div>
         </div>
@@ -166,7 +177,7 @@ const AppContent: React.FC = () => {
     const isUserRole = (user.role || '').toUpperCase() === 'USER';
     if (isUserRole && !isAdmRole && !hasCheckedInToday) {
       return (
-        <>
+        <React.Suspense fallback={<LoadingFallback />}>
           <NotificationListener />
           <SyncStatusBanner />
           {showAbsensiForm ? (
@@ -178,7 +189,7 @@ const AppContent: React.FC = () => {
             <UserWelcomePage onStartAbsensi={() => setShowAbsensiForm(true)} />
           )}
           <ToastContainer />
-        </>
+        </React.Suspense>
       );
     }
 
@@ -195,7 +206,9 @@ const AppContent: React.FC = () => {
           />
 
           <main className="flex-1 min-w-0">
-            {renderActivePage()}
+            <React.Suspense fallback={<LoadingFallback />}>
+              {renderActivePage()}
+            </React.Suspense>
           </main>
         </div>
 
@@ -209,19 +222,19 @@ const AppContent: React.FC = () => {
   // 3. JIKA BELUM LOGIN: Cek apakah perlu inisiasi awal atau langsung ke Halaman Login
   if (!isInitiated) {
     return (
-      <>
+      <React.Suspense fallback={<LoadingFallback />}>
         <InisiasiPage onInitiationComplete={() => setIsInitiated(true)} />
         <ToastContainer />
-      </>
+      </React.Suspense>
     );
   }
 
   // 4. Halaman Login (Belum login & sudah inisiasi)
   return (
-    <>
+    <React.Suspense fallback={<LoadingFallback />}>
       <LoginPage />
       <ToastContainer />
-    </>
+    </React.Suspense>
   );
 };
 

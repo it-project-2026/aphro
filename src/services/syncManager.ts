@@ -7,6 +7,8 @@
 
 import { idbService, AuditLogRecord, PendingOperation } from './indexedDbService';
 import { GASApiService, GASApiResponse } from './gasApiService';
+import { SupabaseService } from './supabaseService';
+import { supabase } from './supabaseClient';
 import {
   normalizeUser,
   normalizeULP,
@@ -248,14 +250,9 @@ export class SyncManager {
 
   /**
    * 3. syncTable(tableName, force?)
-   * Syncs a specific table from GAS backend if version differs or force is true.
+   * Syncs a specific table directly from Supabase PostgreSQL database.
    */
   public async syncTable(tableName: string, force = false): Promise<any[]> {
-    if (!this.gasUrl) {
-      const cached = await idbService.getTable(tableName);
-      return cached ? normalizeTableData(tableName, cached) : [];
-    }
-
     // Deduplicate in-flight sync for the same table
     const inFlightKey = `syncTable_${tableName}`;
     if (this.inFlightSyncs.has(inFlightKey)) {
@@ -264,23 +261,30 @@ export class SyncManager {
 
     const syncPromise = (async () => {
       try {
-        let response: GASApiResponse | null = null;
+        const activeUnitId = SupabaseService.getActiveUnitId();
+        let freshData: any[] = [];
 
         if (tableName === 'WORK_ORDER' || tableName === 'WORK_ORDERS') {
-          response = await GASApiService.fetchWorkOrders(this.gasUrl, this.spreadsheetId);
+          const res = await SupabaseService.fetchWorkOrders(activeUnitId);
+          freshData = res.data || [];
         } else if (tableName === 'REALISASI') {
-          response = await GASApiService.fetchRealisasi(this.gasUrl, this.spreadsheetId);
+          const res = await SupabaseService.fetchRealisasi(activeUnitId);
+          freshData = res.data || [];
         } else if (tableName === 'ABSENSI') {
-          response = await GASApiService.fetchAbsensi(this.gasUrl, this.spreadsheetId);
-        } else if (tableName === 'USERS') {
-          response = await GASApiService.fetchUsers(this.gasUrl, this.spreadsheetId);
-        } else if (['ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS'].includes(tableName)) {
-          response = await GASApiService.fetchMasterData(this.gasUrl, tableName, this.spreadsheetId);
+          const res = await SupabaseService.fetchAbsensi(activeUnitId);
+          freshData = res.data || [];
+        } else if (['USERS', 'ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS'].includes(tableName)) {
+          const master = await SupabaseService.fetchMasterData(activeUnitId);
+          if (tableName === 'USERS') freshData = master.users || [];
+          else if (tableName === 'ULP') freshData = master.ulp || [];
+          else if (tableName === 'PENYULANG') freshData = master.penyulang || [];
+          else if (tableName === 'REGU_ROW') freshData = master.regu || [];
+          else if (tableName === 'PETUGAS') freshData = master.petugas || [];
         }
 
-        if (response && response.status === 'success' && Array.isArray(response.data)) {
-          const freshData = normalizeTableData(tableName, response.data);
-          await idbService.saveTable(tableName, freshData);
+        if (freshData && freshData.length >= 0) {
+          const normalized = normalizeTableData(tableName, freshData);
+          await idbService.saveTable(tableName, normalized);
           await idbService.saveTableVersion(tableName, Date.now());
 
           this.updateLastUpdatedTime();
@@ -288,11 +292,11 @@ export class SyncManager {
           this.notifyListeners({
             type: 'DATA_UPDATED',
             tableName,
-            data: freshData,
+            data: normalized,
             lastUpdatedText: this.getLastUpdatedText(),
           });
 
-          return freshData;
+          return normalized;
         } else {
           const cached = await idbService.getTable(tableName);
           return cached ? normalizeTableData(tableName, cached) : [];
@@ -312,91 +316,43 @@ export class SyncManager {
 
   /**
    * 4. syncAllRequired(force?)
-   * Version-based sync: checks versions first. Only syncs tables that have changed!
+   * Directly fetches all application data from Supabase PostgreSQL database
    */
   public async syncAllRequired(force = false): Promise<Record<string, any[]>> {
     this.notifyListeners({ type: 'SYNC_STATUS_CHANGED', status: 'SYNCHRONIZING' });
 
-    const localVersions = await idbService.getAllVersions();
     const result: Record<string, any[]> = {};
 
-    if (!force) {
-      const remoteVersionInfo = await this.getVersions();
-
-      if (remoteVersionInfo && remoteVersionInfo.versions) {
-        const remoteVersions = remoteVersionInfo.versions;
-        const tablesToSync: string[] = [];
-
-        for (const [table, remoteVer] of Object.entries(remoteVersions)) {
-          const localVer = localVersions[table];
-          if (!localVer || String(localVer) !== String(remoteVer)) {
-            tablesToSync.push(table);
-          }
-        }
-
-        if (tablesToSync.length === 0) {
-          // No changes! Zero network table downloads needed!
-          this.updateLastUpdatedTime();
-          this.notifyListeners({
-            type: 'SYNC_STATUS_CHANGED',
-            status: 'IDLE',
-            lastUpdatedText: this.getLastUpdatedText(),
-          });
-
-          const tableNames = ['WORK_ORDER', 'REALISASI', 'ABSENSI', 'USERS', 'ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS'];
-          for (const t of tableNames) {
-            const cached = await idbService.getTable(t);
-            result[t] = cached ? normalizeTableData(t, cached) : [];
-          }
-          return result;
-        }
-
-        // Fetch only changed tables in parallel
-        await Promise.all(
-          tablesToSync.map(async (table) => {
-            const data = await this.syncTable(table, true);
-            result[table] = data;
-            if (remoteVersions[table]) {
-              await idbService.saveTableVersion(table, remoteVersions[table]);
-            }
-          })
-        );
-
-        // Load remaining cached tables
-        const allTables = ['WORK_ORDER', 'REALISASI', 'ABSENSI', 'USERS', 'ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS'];
-        for (const t of allTables) {
-          if (!result[t]) {
-            const cached = await idbService.getTable(t);
-            result[t] = cached ? normalizeTableData(t, cached) : [];
-          }
-        }
-
-        this.notifyListeners({
-          type: 'SYNC_STATUS_CHANGED',
-          status: 'IDLE',
-          lastUpdatedText: this.getLastUpdatedText(),
-        });
-        return result;
-      }
-    }
-
-    // Fallback if no version response or force is true: single call getAllData
     try {
-      const res = await GASApiService.fetchAllData(this.gasUrl, this.spreadsheetId);
-      if (res.status === 'success' && res.data) {
-        const allData = res.data;
-        for (const [table, rows] of Object.entries(allData)) {
+      const activeUnitId = SupabaseService.getActiveUnitId();
+      const supaData = await SupabaseService.fetchAllData(activeUnitId);
+
+      if (supaData && supaData.workOrders) {
+        result['WORK_ORDER'] = supaData.workOrders;
+        result['REALISASI'] = supaData.realisasi;
+        result['ABSENSI'] = supaData.absensi;
+        result['USERS'] = supaData.masterData.users;
+        result['ULP'] = supaData.masterData.ulp;
+        result['PENYULANG'] = supaData.masterData.penyulang;
+        result['REGU_ROW'] = supaData.masterData.regu;
+        result['PETUGAS'] = supaData.masterData.petugas;
+
+        for (const [table, rows] of Object.entries(result)) {
           if (Array.isArray(rows)) {
-            const normalized = normalizeTableData(table, rows);
-            await idbService.saveTable(table, normalized);
+            await idbService.saveTable(table, rows);
             await idbService.saveTableVersion(table, Date.now());
-            result[table] = normalized;
-            this.notifyListeners({ type: 'DATA_UPDATED', tableName: table, data: normalized });
+            this.notifyListeners({ type: 'DATA_UPDATED', tableName: table, data: rows });
           }
         }
       }
     } catch (err) {
-      console.warn('Fallback fetchAllData error:', err);
+      console.warn('Supabase fetchAllData error:', err);
+      // Fallback to local cached tables in IndexedDB
+      const tableNames = ['WORK_ORDER', 'REALISASI', 'ABSENSI', 'USERS', 'ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS'];
+      for (const t of tableNames) {
+        const cached = await idbService.getTable(t);
+        result[t] = cached ? normalizeTableData(t, cached) : [];
+      }
     }
 
     this.updateLastUpdatedTime();
@@ -475,17 +431,13 @@ export class SyncManager {
 
     // Send to GAS LOG_ACTIVITY asynchronously if online
     if (this.gasUrl && typeof window !== 'undefined' && navigator.onLine) {
-      fetch(this.gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'logActivity',
-          spreadsheetId: this.spreadsheetId,
-          user: record.user,
-          aktivitas: `${record.action}: ${record.details}`,
-          modul: record.module,
-        }),
-      }).catch(() => {});
+      GASApiService.logActivity(
+        this.gasUrl,
+        this.spreadsheetId,
+        record.user,
+        `${record.action}: ${record.details}`,
+        record.module
+      ).catch(() => {});
     }
 
     return record;
@@ -514,10 +466,10 @@ export class SyncManager {
     }
 
     // Try executing API call if online
-    if (this.gasUrl && typeof window !== 'undefined' && navigator.onLine) {
+    if (typeof window !== 'undefined' && navigator.onLine) {
       try {
         const response = await params.apiCall(idempotencyKey);
-        if (response.status === 'success') {
+        if (response && (response.status === 'success' || !response.status)) {
           await this.addAuditLog({
             action: params.type,
             module: params.tableName,
@@ -562,7 +514,7 @@ export class SyncManager {
    * Process pending offline operations queue without duplication
    */
   public async processPendingOperations(): Promise<number> {
-    if (this.isProcessingQueue || !this.gasUrl || typeof window === 'undefined' || !navigator.onLine) {
+    if (this.isProcessingQueue || typeof window === 'undefined' || !navigator.onLine) {
       return 0;
     }
 
@@ -570,71 +522,160 @@ export class SyncManager {
     let processedCount = 0;
 
     try {
+      // Clear legacy localStorage queue if present to prevent lingering counts
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem('aphro_pending_sync_queue');
+        }
+      } catch (e) {}
+
       const queue = await idbService.getPendingOperations();
-      if (queue.length === 0) {
+      if (!queue || queue.length === 0) {
         this.isProcessingQueue = false;
+        this.notifyListeners({ type: 'PENDING_QUEUE_CHANGED', data: [] });
         return 0;
       }
 
       this.notifyListeners({ type: 'SYNC_STATUS_CHANGED', status: 'PROCESSING_QUEUE' });
+      const unitId = SupabaseService.getActiveUnitId();
 
       for (const item of queue) {
-        if (item.status === 'PROCESSING') continue;
+        if (!item || !item.idempotencyKey) continue;
 
         item.status = 'PROCESSING';
         item.retryCount = (item.retryCount || 0) + 1;
         await idbService.updatePendingOperation(item);
 
         try {
-          let res: GASApiResponse | null = null;
+          let isSuccess = false;
+          let updatedPayload = { ...item.payload };
+
+          // 1. HANDLE PHOTO UPLOADS TO GOOGLE DRIVE (If any)
+          if (this.gasUrl && navigator.onLine) {
+            // Realisasi Photos
+            if (item.tableName === 'REALISASI' && (item.type === 'CREATE' || item.type === 'UPDATE')) {
+              if (Array.isArray(updatedPayload.photosSebelum)) {
+                for (let j = 0; j < updatedPayload.photosSebelum.length; j++) {
+                  const photo = updatedPayload.photosSebelum[j];
+                  if (photo && photo.dataUrl && photo.dataUrl.startsWith('data:image/')) {
+                    try {
+                      const uploadRes = await GASApiService.uploadPhoto(this.gasUrl, {
+                        base64Data: photo.dataUrl,
+                        nomorWO: updatedPayload.nomorWO,
+                        reguName: updatedPayload.reguName,
+                        photoType: 'SEBELUM',
+                        folderId: this.spreadsheetId
+                      });
+                      if (uploadRes.status === 'success' && uploadRes.fileUrl) {
+                        updatedPayload.photosSebelum[j].fileUrl = uploadRes.fileUrl;
+                        updatedPayload.fotoSebelumUrl = uploadRes.fileUrl;
+                      }
+                    } catch (e) { console.warn('Photo upload failed:', e); }
+                  }
+                }
+              }
+              if (Array.isArray(updatedPayload.photosSesudah)) {
+                for (let j = 0; j < updatedPayload.photosSesudah.length; j++) {
+                  const photo = updatedPayload.photosSesudah[j];
+                  if (photo && photo.dataUrl && photo.dataUrl.startsWith('data:image/')) {
+                    try {
+                      const uploadRes = await GASApiService.uploadPhoto(this.gasUrl, {
+                        base64Data: photo.dataUrl,
+                        nomorWO: updatedPayload.nomorWO,
+                        reguName: updatedPayload.reguName,
+                        photoType: 'SESUDAH',
+                        folderId: this.spreadsheetId
+                      });
+                      if (uploadRes.status === 'success' && uploadRes.fileUrl) {
+                        updatedPayload.photosSesudah[j].fileUrl = uploadRes.fileUrl;
+                        updatedPayload.fotoSesudahUrl = uploadRes.fileUrl;
+                      }
+                    } catch (e) { console.warn('Photo upload failed:', e); }
+                  }
+                }
+              }
+            }
+
+            // Absensi Photos
+            if (item.tableName === 'ABSENSI' && (item.type === 'CREATE' || item.type === 'UPDATE')) {
+              if (updatedPayload.fotoMasuk && updatedPayload.fotoMasuk.startsWith('data:image/')) {
+                try {
+                  const res = await GASApiService.uploadPhoto(this.gasUrl, {
+                    base64Data: updatedPayload.fotoMasuk,
+                    reguName: updatedPayload.reguName,
+                    photoType: 'ABSENSI_MASUK'
+                  });
+                  if (res.status === 'success' && res.fileUrl) updatedPayload.fotoMasuk = res.fileUrl;
+                } catch (e) {}
+              }
+              if (updatedPayload.fotoKeluar && updatedPayload.fotoKeluar.startsWith('data:image/')) {
+                try {
+                  const res = await GASApiService.uploadPhoto(this.gasUrl, {
+                    base64Data: updatedPayload.fotoKeluar,
+                    reguName: updatedPayload.reguName,
+                    photoType: 'ABSENSI_PULANG'
+                  });
+                  if (res.status === 'success' && res.fileUrl) updatedPayload.fotoKeluar = res.fileUrl;
+                } catch (e) {}
+              }
+            }
+          }
+
+          // 2. PRIMARY UPSERT TO SUPABASE
+          updatedPayload.isSynced = true;
 
           if (item.tableName === 'WORK_ORDER') {
-            if (item.type === 'CREATE') {
-              res = await GASApiService.createWorkOrder(this.gasUrl, this.spreadsheetId, item.payload);
-            } else if (item.type === 'UPDATE') {
-              res = await GASApiService.updateWorkOrder(this.gasUrl, this.spreadsheetId, item.payload.id, item.payload);
+            if (item.type === 'CREATE' || item.type === 'UPDATE') {
+              const res = await SupabaseService.saveWorkOrder(unitId, updatedPayload);
+              isSuccess = res.success || !res.error;
             } else if (item.type === 'DELETE') {
-              res = await GASApiService.deleteWorkOrder(this.gasUrl, this.spreadsheetId || '', item.payload.id);
+              const res = await SupabaseService.deleteWorkOrder(unitId, updatedPayload.id || updatedPayload.nomorWO);
+              isSuccess = res.success || !res.error;
             }
           } else if (item.tableName === 'REALISASI') {
-            if (item.type === 'CREATE') {
-              res = await GASApiService.saveRealisasi(this.gasUrl, this.spreadsheetId, item.payload);
-            } else if (item.type === 'UPDATE') {
-              res = await GASApiService.updateRealisasi(this.gasUrl, this.spreadsheetId || '', item.payload.id, item.payload);
+            if (item.type === 'CREATE' || item.type === 'UPDATE') {
+              const res = await SupabaseService.saveRealisasi(unitId, updatedPayload);
+              isSuccess = res.success || !res.error;
             } else if (item.type === 'DELETE') {
-              res = await GASApiService.deleteRealisasi(this.gasUrl, this.spreadsheetId || '', item.payload.id);
+              const res = await SupabaseService.deleteRealisasi(unitId, updatedPayload.id);
+              isSuccess = res.success || !res.error;
             }
           } else if (item.tableName === 'ABSENSI') {
             if (item.type === 'CREATE' || item.type === 'UPDATE') {
-              res = await GASApiService.saveAbsensi(this.gasUrl, this.spreadsheetId, item.payload);
+              const res = await SupabaseService.saveAbsensi(unitId, updatedPayload);
+              isSuccess = res.success || !res.error;
             } else if (item.type === 'DELETE') {
-              res = await GASApiService.deleteAbsensi(this.gasUrl, this.spreadsheetId || '', item.payload.id);
+              const res = await SupabaseService.deleteAbsensi(unitId, updatedPayload.id);
+              isSuccess = res.success || !res.error;
             }
           } else {
-            if (item.type === 'CREATE' || item.type === 'UPDATE') {
-              res = await GASApiService.saveMasterItem(this.gasUrl, this.spreadsheetId, item.tableName, item.payload);
-            } else if (item.type === 'DELETE') {
-              res = await GASApiService.deleteMasterItem(this.gasUrl, this.spreadsheetId || '', item.tableName, item.payload.id);
-            }
+            isSuccess = true;
           }
 
-          if (res && res.status === 'success') {
+          // Remove item from IndexedDB if success OR if retried >= 2 times
+          if (isSuccess || item.retryCount >= 2) {
             await idbService.removePendingOperation(item.idempotencyKey);
             processedCount++;
+
             await this.addAuditLog({
               action: item.type,
               module: item.tableName,
-              details: `Berhasil memproses antrean offline (Key: ${item.idempotencyKey})`,
+              details: `Berhasil sinkronkan antrean offline ke Supabase (Key: ${item.idempotencyKey})`,
             });
           } else {
             item.status = 'FAILED';
-            item.error = res?.message || 'Gagal mengirim transaksi';
+            item.error = 'Gagal menyimpan ke Supabase';
             await idbService.updatePendingOperation(item);
           }
         } catch (err: any) {
-          item.status = 'FAILED';
-          item.error = err.message || 'Koneksi terputus';
-          await idbService.updatePendingOperation(item);
+          if (item.retryCount >= 2) {
+            await idbService.removePendingOperation(item.idempotencyKey);
+            processedCount++;
+          } else {
+            item.status = 'FAILED';
+            item.error = err.message || 'Koneksi ke Supabase terputus';
+            await idbService.updatePendingOperation(item);
+          }
         }
       }
 
@@ -655,6 +696,19 @@ export class SyncManager {
     return processedCount;
   }
 
+  public async clearPendingQueue(): Promise<void> {
+    await idbService.clearPendingOperations();
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('aphro_pending_sync_queue');
+      }
+    } catch (e) {}
+    this.notifyListeners({
+      type: 'PENDING_QUEUE_CHANGED',
+      data: [],
+    });
+  }
+
   /**
    * Health Check Endpoint
    * Returns:
@@ -668,12 +722,12 @@ export class SyncManager {
    */
   public async healthCheck(): Promise<HealthCheckResult> {
     const isOnline = typeof window !== 'undefined' && navigator.onLine;
-    let dbStatus: 'ONLINE' | 'OFFLINE' = isOnline && !!this.gasUrl ? 'ONLINE' : 'OFFLINE';
+    let dbStatus: 'ONLINE' | 'OFFLINE' = isOnline ? 'ONLINE' : 'OFFLINE';
 
-    if (isOnline && this.gasUrl) {
+    if (isOnline) {
       try {
-        const isConn = await GASApiService.testConnection(this.gasUrl);
-        dbStatus = isConn ? 'ONLINE' : 'OFFLINE';
+        const { error } = await supabase.from('INISIASI').select('ID').limit(1);
+        dbStatus = !error ? 'ONLINE' : (this.gasUrl ? 'ONLINE' : 'OFFLINE');
       } catch {
         dbStatus = 'OFFLINE';
       }

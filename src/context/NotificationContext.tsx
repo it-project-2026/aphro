@@ -60,7 +60,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       details,
       userId: user?.id || 'system',
     };
-    setAuditLogs(prev => [newLog, ...prev].slice(0, 50)); // Keep last 50
+    setAuditLogs(prev => [newLog, ...prev].slice(0, 100)); // Keep last 100
   }, [setAuditLogs, user]);
 
   const addNotification = React.useCallback((notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => {
@@ -70,7 +70,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       timestamp: getLocalDateTimeString(),
       read: false
     };
-    setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Keep last 50
+    setNotifications(prev => [newNotification, ...prev].slice(0, 100)); // Keep last 100
   }, [setNotifications]);
 
   const markNotificationAsRead = React.useCallback((id: string) => {

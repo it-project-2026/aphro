@@ -11,6 +11,7 @@ export interface MapPoint {
   seqNo: number;
   ulpName?: string;
   penyulangName?: string;
+  tanggalRealisasi?: string;
 }
 
 export interface LocationInfo {

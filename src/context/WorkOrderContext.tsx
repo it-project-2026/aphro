@@ -3,19 +3,21 @@ import { WorkOrder } from '../types';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
-import { GASApiService } from '../services/gasApiService';
-import { addToOfflineQueue } from '../services/offlineSyncQueue';
-import { getLocalDateTimeString } from '../utils/dateUtils';
+import { SupabaseService } from '../services/supabaseService';
+import { syncManager } from '../services/syncManager';
+import { getLocalDateTimeString, parseDateFromNomorWO } from '../utils/dateUtils';
 
 interface WorkOrderContextType {
   workOrders: WorkOrder[];
   displayedWorkOrders: WorkOrder[];
   selectedWoIdForRealisasi: string | null;
+  isLoading: boolean;
   setSelectedWoIdForRealisasi: (id: string | null) => void;
   setWorkOrders: React.Dispatch<React.SetStateAction<WorkOrder[]>>;
   addWorkOrder: (wo: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WorkOrder>;
   updateWorkOrder: (id: string, wo: Partial<WorkOrder>) => Promise<void>;
-  deleteWorkOrder: (id: string) => Promise<void>;
+  deleteWorkOrder: (id: string, nomorWO?: string) => Promise<void>;
+  refreshWorkOrders: () => Promise<void>;
 }
 
 const WorkOrderContext = React.createContext<WorkOrderContextType | undefined>(undefined);
@@ -25,9 +27,68 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { showToast } = useToast();
   
-  // Work Orders are initialized as empty and only populated from Spreadsheet sync
   const [workOrders, setWorkOrders] = React.useState<WorkOrder[]>([]);
+  const lastSyncRef = React.useRef<string | undefined>(undefined);
   const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const isFetchingRef = React.useRef(false);
+
+  // Auto-fetch Work Orders from Supabase on mount and whenever unit settings change
+  const refreshWorkOrders = React.useCallback(async (page: number = 0) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    setIsLoading(true);
+    try {
+      const unitId = SupabaseService.getActiveUnitId();
+      const res = await SupabaseService.fetchWorkOrders(unitId, page, 1000, page === 0 ? undefined : lastSyncRef.current);
+      if (res.success && res.data) {
+        // Detect and fix any mismatches or NULL dates between nomorWO and tanggal
+        const corrected = res.data.map((wo) => {
+          const parsedDate = parseDateFromNomorWO(wo.nomorWO);
+          const isNullOrEmpty = !wo.tanggal || 
+                                wo.tanggal === 'null' || 
+                                wo.tanggal === 'undefined' || 
+                                String(wo.tanggal).trim() === '';
+          if (parsedDate && (isNullOrEmpty || wo.tanggal !== parsedDate)) {
+            return { ...wo, tanggal: parsedDate };
+          }
+          return wo;
+        });
+
+        // For first page, replace; for subsequent pages, append
+        setWorkOrders(prev => page === 0 ? corrected : [...prev, ...corrected]);
+        
+        // Update sync time only on first page fetch
+        if (page === 0) {
+          lastSyncRef.current = getLocalDateTimeString();
+        }
+      }
+    } catch (err) {
+      console.warn('Error loading Work Orders from Supabase:', err);
+    } finally {
+      setIsLoading(false);
+      isFetchingRef.current = false;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    lastSyncRef.current = undefined;
+    refreshWorkOrders(0);
+  }, [refreshWorkOrders, settings.namaUnitLayanan, settings.spreadsheetId, user]);
+
+  const correctedWorkOrders = React.useMemo(() => {
+    return workOrders.map((wo) => {
+      const parsedDate = parseDateFromNomorWO(wo.nomorWO);
+      const isNullOrEmpty = !wo.tanggal || 
+                            wo.tanggal === 'null' || 
+                            wo.tanggal === 'undefined' || 
+                            String(wo.tanggal).trim() === '';
+      if (parsedDate && (isNullOrEmpty || wo.tanggal !== parsedDate)) {
+        return { ...wo, tanggal: parsedDate };
+      }
+      return wo;
+    });
+  }, [workOrders]);
 
   const displayedWorkOrders = React.useMemo(() => {
     if (user && user.role === 'User') {
@@ -47,7 +108,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         cleanStr(user.id),
       ].filter(Boolean);
 
-      return workOrders.filter((wo) => {
+      return correctedWorkOrders.filter((wo) => {
         // Direct Regu ID match
         if (user.reguId && wo.reguId && user.reguId === wo.reguId) return true;
         if (user.id && wo.petugasId && user.id === wo.petugasId) return true;
@@ -89,10 +150,36 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         return false;
       });
     }
-    return workOrders;
-  }, [workOrders, user]);
+    return correctedWorkOrders;
+  }, [correctedWorkOrders, user]);
 
   const addWorkOrder = React.useCallback(async (woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const cleanStr = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+
+    // Prevent creation of duplicate Work Orders (Same Nomor WO AND Same Penyulang)
+    const isDuplicate = correctedWorkOrders.some(wo => {
+      const woNoWO = cleanStr(wo.nomorWO);
+      const dataNoWO = cleanStr(woData.nomorWO);
+      const woPenyulang = cleanStr(wo.penyulangName);
+      const dataPenyulang = cleanStr(woData.penyulangName);
+
+      const hasValidNoWO = woNoWO.length > 2 && dataNoWO.length > 2;
+      const hasValidPenyulang = woPenyulang.length > 2 && dataPenyulang.length > 2;
+
+      // Match same Nomor WO AND same Penyulang (Only if both have valid, non-empty values)
+      const matchNoWOAndPenyulang = hasValidNoWO && 
+                                    hasValidPenyulang && 
+                                    woNoWO === dataNoWO && 
+                                    woPenyulang === dataPenyulang;
+
+      return matchNoWOAndPenyulang;
+    });
+
+    if (isDuplicate) {
+      showToast(`Work Order "${woData.nomorWO || ''}" pada penyulang "${woData.penyulangName || ''}" ganda! Pembuatan dibatalkan.`, 'error');
+      throw new Error(`Work Order ${woData.nomorWO} ganda pada penyulang ${woData.penyulangName}.`);
+    }
+
     const nowStr = getLocalDateTimeString();
     const newWo: WorkOrder = {
       ...woData,
@@ -101,34 +188,43 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       updatedAt: nowStr,
     };
     
-    // Optimistic local update with 'pending' status if needed
-    // (In this app, we just add it to the state and try to sync)
-    setWorkOrders(prev => [newWo, ...prev]);
-
-    if (!navigator.onLine || !settings.gasWebAppUrl) {
-      addToOfflineQueue('WORK_ORDER_CREATE', newWo);
-      showToast(`⚡ Work Order ${newWo.nomorWO} tersimpan di perangkat (Offline). Tekan Sync Data untuk mengirim ke Spreadsheet.`, 'info');
-    } else {
+    // Optimistic local update & cache update
+    setWorkOrders(prev => {
+      const next = [newWo, ...prev];
       try {
-        // Ensure we are using the latest settings URL and Spreadsheet ID
-        const res = await GASApiService.createWorkOrder(settings.gasWebAppUrl, settings.spreadsheetId, newWo);
-        
-        if (res && res.status === 'success') {
-          showToast(`Work Order ${newWo.nomorWO} tersimpan ke Spreadsheet!`, 'success');
-        } else {
-          console.error('GAS Save failed:', res?.message);
-          addToOfflineQueue('WORK_ORDER_CREATE', newWo);
-          showToast(`⚡ Work Order tersimpan di perangkat. Tekan Sync Data untuk mengirim ke Spreadsheet.`, 'warning');
-        }
-      } catch (err) {
-        console.error('Save WO error:', err);
-        addToOfflineQueue('WORK_ORDER_CREATE', newWo);
-        showToast(`⚡ Tersimpan di perangkat. Tekan Sync Data untuk mengirim ke Spreadsheet.`, 'info');
+        const unitId = SupabaseService.getActiveUnitId();
+        localStorage.setItem(`aphro_workorders_${unitId}`, JSON.stringify(next));
+        localStorage.setItem('aphro_work_orders', JSON.stringify(next));
+      } catch (e) {
+        console.warn('Cache error:', e);
       }
+      return next;
+    });
+
+    const unitId = SupabaseService.getActiveUnitId();
+    try {
+      const res = await syncManager.executeMutation({
+        type: 'CREATE',
+        tableName: 'WORK_ORDER',
+        payload: newWo,
+        apiCall: async () => {
+          const result = await SupabaseService.saveWorkOrder(unitId, newWo);
+          return { status: result.success ? 'success' : 'error', message: result.error };
+        }
+      });
+
+      if (!res.offline) {
+        showToast(`Work Order ${newWo.nomorWO} berhasil tersimpan ke Database!`, 'success');
+      } else {
+        showToast(`Work Order tersimpan (offline).`, 'info');
+      }
+    } catch (err) {
+      console.warn('Save WO error:', err);
+      showToast(`Tersimpan di antrean offline.`, 'info');
     }
 
     return newWo;
-  }, [setWorkOrders, settings.gasWebAppUrl, settings.spreadsheetId, showToast]);
+  }, [correctedWorkOrders, showToast]);
 
   const updateWorkOrder = React.useCallback(async (id: string, updates: Partial<WorkOrder>) => {
     const nowStr = getLocalDateTimeString();
@@ -140,63 +236,77 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     // Update local state first (Optimistic)
     setWorkOrders(prev => prev.map(wo => wo.id === id ? updatedWo : wo));
 
-    if (!navigator.onLine || !settings.gasWebAppUrl) {
-      addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
-      showToast('Work Order diperbarui di perangkat. Tekan Sync Data untuk sinkron.', 'info');
-    } else {
-        try {
-          const res = await GASApiService.updateWorkOrder(settings.gasWebAppUrl, settings.spreadsheetId, id, updatedWo);
-          if (res.status === 'success') {
-            showToast('Work Order berhasil diperbarui di Spreadsheet', 'success');
-          } else {
-            addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
-            showToast('Tersimpan di antrean perangkat. Tekan Sync Data untuk sinkron.', 'warning');
-          }
-        } catch (err) {
-          console.error('Update WO error:', err);
-          addToOfflineQueue('WORK_ORDER_UPDATE', { id, workOrder: updatedWo });
-          showToast('Koneksi terputus, tersimpan di antrean perangkat.', 'info');
+    const unitId = SupabaseService.getActiveUnitId();
+    try {
+      const res = await syncManager.executeMutation({
+        type: 'UPDATE',
+        tableName: 'WORK_ORDER',
+        payload: updatedWo,
+        apiCall: async () => {
+          const result = await SupabaseService.updateWorkOrder(unitId, id, updatedWo);
+          return { status: result.success ? 'success' : 'error', message: result.error };
         }
-      }
-  }, [setWorkOrders, settings.gasWebAppUrl, settings.spreadsheetId, showToast, workOrders]);
+      });
 
-  const deleteWorkOrder = React.useCallback(async (id: string) => {
-    // Save WO for potential undo or offline queue
-    const woToDelete = workOrders.find(wo => wo.id === id);
-    
-    // Update local state (Optimistic)
-    setWorkOrders(prev => prev.filter(wo => wo.id !== id));
-
-    if (!navigator.onLine || !settings.gasWebAppUrl) {
-      addToOfflineQueue('WORK_ORDER_DELETE', { id });
-      showToast('Work Order dihapus di perangkat (Offline). Tekan Sync Data untuk sinkron.', 'info');
-    } else {
-      try {
-        const res = await GASApiService.deleteWorkOrder(settings.gasWebAppUrl, settings.spreadsheetId, id);
-        if (res.status === 'success') {
-          showToast('Work Order berhasil dihapus dari Spreadsheet', 'success');
-        } else {
-          addToOfflineQueue('WORK_ORDER_DELETE', { id });
-          showToast('Tersimpan di antrean perangkat. Tekan Sync Data untuk sinkron.', 'warning');
-        }
-      } catch (err) {
-        console.error('Delete WO error:', err);
-        addToOfflineQueue('WORK_ORDER_DELETE', { id });
-        showToast('Koneksi terputus, tersimpan di antrean perangkat.', 'info');
+      if (!res.offline) {
+        showToast('Work Order berhasil diperbarui', 'success');
+      } else {
+        showToast('Tersimpan di antrean offline.', 'info');
       }
+    } catch (err) {
+      console.warn('Update WO error:', err);
+      showToast('Koneksi terputus, tersimpan di antrean offline.', 'info');
     }
-  }, [setWorkOrders, settings.gasWebAppUrl, settings.spreadsheetId, workOrders, showToast]);
+  }, [workOrders, showToast]);
+
+  const deleteWorkOrder = React.useCallback(async (id: string, nomorWO?: string) => {
+    const cleanId = (id || '').trim();
+    const cleanNomor = (nomorWO || '').trim();
+
+    // Optimistic Delete
+    setWorkOrders(prev => prev.filter(wo => {
+      const woId = (wo.id || '').trim();
+      const woNomor = (wo.nomorWO || '').trim();
+      if (cleanId && (woId === cleanId || woNomor === cleanId)) return false;
+      if (cleanNomor && (woNomor === cleanNomor || woId === cleanNomor)) return false;
+      return true;
+    }));
+
+    const unitId = SupabaseService.getActiveUnitId();
+    try {
+      const res = await syncManager.executeMutation({
+        type: 'DELETE',
+        tableName: 'WORK_ORDER',
+        payload: { id: cleanId, nomorWO: cleanNomor },
+        apiCall: async () => {
+          const result = await SupabaseService.deleteWorkOrder(unitId, cleanId, cleanNomor);
+          return { status: result.success ? 'success' : 'error', message: result.error };
+        }
+      });
+
+      if (!res.offline) {
+        showToast('Work Order berhasil dihapus', 'success');
+      } else {
+        showToast('Hapus tersimpan (offline).', 'info');
+      }
+    } catch (err) {
+      console.warn('Delete WO error:', err);
+      showToast('Koneksi terputus, tersimpan di antrean offline.', 'info');
+    }
+  }, [showToast]);
 
   return (
     <WorkOrderContext.Provider value={{
-      workOrders,
+      workOrders: correctedWorkOrders,
       displayedWorkOrders,
       selectedWoIdForRealisasi,
+      isLoading,
       setSelectedWoIdForRealisasi,
       setWorkOrders,
       addWorkOrder,
       updateWorkOrder,
-      deleteWorkOrder
+      deleteWorkOrder,
+      refreshWorkOrders: (page?: number) => refreshWorkOrders(page)
     }}>
       {children}
     </WorkOrderContext.Provider>

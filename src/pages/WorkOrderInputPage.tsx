@@ -8,7 +8,7 @@ import { useGASSync } from '../hooks/useGASSync';
 import { GASApiService } from '../services/gasApiService';
 import { Save, ArrowLeft, FilePlus, Database, CheckCircle2, Sparkles, Layers, AlertTriangle } from 'lucide-react';
 import { WOStatus } from '../types';
-import { getLocalDateTimeString, normalizeDateISO } from '../utils/dateUtils';
+import { getLocalDateTimeString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
 
 const INDO_MONTHS = [
   'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
@@ -111,9 +111,9 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
       (r.namaRegu && ulpName && (r.namaRegu || '').toLowerCase().includes((ulpName || '').replace(/^ULP\s+/i, '').toLowerCase()))
   );
 
-  const availableRegu = pekerjaan === 'GOROW' 
+  const availableRegu = (pekerjaan === 'GOROW' || strictFilteredRegu.length === 0) 
     ? reguList 
-    : (strictFilteredRegu.length > 0 ? strictFilteredRegu : reguList.filter(r => !r.ulpId && !r.ulpName));
+    : strictFilteredRegu;
 
   // Auto-update Penyulang & Regu when ULP or Pekerjaan changes
   useEffect(() => {
@@ -187,20 +187,47 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
     return `${weekStr}/${dayStr}/${monthName}/${year}/${ulpCode}/${teamNum}`;
   };
 
-  // Helper: Detect duplicate Work Order with the same Nomor_WO AND same Penyulang
+  // Helper: Detect duplicate Work Order with the same (Nomor_WO + Penyulang) OR same (Penyulang + Regu + Tanggal + Pekerjaan)
   const existingDuplicateWO = useMemo(() => {
     const currentNoWoClean = cleanStr(nomorWO);
     const currentPenyulangClean = cleanStr(penyulangName);
-    if (!currentNoWoClean || !currentPenyulangClean) return null;
+    const currentReguClean = cleanStr(reguName);
+    const currentDateClean = cleanStr(tanggal);
+    const currentPekerjaanClean = cleanStr(pekerjaan);
+
+    if (currentNoWoClean.length <= 2 && currentPenyulangClean.length <= 2) return null;
 
     return (
       workOrders.find((wo) => {
         // If editing, don't flag itself as a duplicate
-        if (editMode && initialData && wo.id === initialData.id) return false;
-        return cleanStr(wo.nomorWO) === currentNoWoClean && cleanStr(wo.penyulangName) === currentPenyulangClean;
+        if (editMode && initialData) {
+          const isSameId = wo.id === initialData.id;
+          const isSameWoAndPenyulang =
+            cleanStr(wo.nomorWO) === cleanStr(initialData.nomorWO) &&
+            cleanStr(wo.penyulangName) === cleanStr(initialData.penyulangName);
+          if (isSameId || isSameWoAndPenyulang) return false;
+        }
+
+        const woNoWoClean = cleanStr(wo.nomorWO);
+        const woPenyulangClean = cleanStr(wo.penyulangName);
+
+        const hasValidNoWo = woNoWoClean.length > 2 && currentNoWoClean.length > 2;
+        const hasValidPenyulang = woPenyulangClean.length > 2 && currentPenyulangClean.length > 2;
+
+        // 1. Match same Nomor WO AND same Penyulang (Only if both have valid, non-empty values)
+        if (hasValidNoWo && hasValidPenyulang) {
+          if (
+            woNoWoClean === currentNoWoClean &&
+            woPenyulangClean === currentPenyulangClean
+          ) {
+            return true;
+          }
+        }
+
+        return false;
       }) || null
     );
-  }, [workOrders, nomorWO, penyulangName, editMode, initialData]);
+  }, [workOrders, nomorWO, penyulangName, reguName, tanggal, pekerjaan, editMode, initialData]);
 
   // Update Nomor_WO automatically when date, team, or ULP changes
   const handleTanggalChange = (newDate: string) => {
@@ -227,6 +254,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
   // 2. Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
 
     if (!nomorWO.trim()) {
       showToast('Nomor WO wajib diisi!', 'warning');
@@ -270,10 +298,14 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
       const currentPenyulangObj = penyulangList.find((p) => p.namaPenyulang === penyulangName) || penyulangList[0];
       const currentReguObj = reguList.find((r) => r.namaRegu === reguName) || reguList[0];
 
+        const finalNomorWO = (nomorWO || '').trim() || generateFormattedNomorWO(tanggal, reguName, ulpName);
+        const parsedDate = parseDateFromNomorWO(finalNomorWO);
+        const finalTanggal = parsedDate || tanggal;
+
         const woData = {
         pekerjaan: pekerjaan,
-        nomorWO: (nomorWO || '').trim() || generateFormattedNomorWO(tanggal, reguName, ulpName),
-        tanggal,
+        nomorWO: finalNomorWO,
+        tanggal: finalTanggal,
         ulpId: currentUlpObj?.id || 'ulp-1',
         ulpName,
         penyulangId: currentPenyulangObj?.id || 'peny-1',
@@ -335,7 +367,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
         {isGasConnected ? (
           <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-bold rounded-full">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#00A2B9]" />
-            <span>Tersinkron ke Spreadsheet</span>
+            <span>Tersinkron ke Supabase Database</span>
           </span>
         ) : (
           <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold rounded-full">
@@ -416,7 +448,14 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               required
               placeholder="Format: M1/05/AGUSTUS/2026/KTO/01"
               value={nomorWO || ''}
-              onChange={(e) => setNomorWO(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setNomorWO(val);
+                const parsedDate = parseDateFromNomorWO(val);
+                if (parsedDate) {
+                  setTanggal(parsedDate);
+                }
+              }}
               className={`w-full px-3.5 py-2.5 text-xs sm:text-sm font-mono font-bold rounded-xl border transition-colors ${
                 existingDuplicateWO
                   ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
@@ -476,27 +515,6 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               </select>
             </div>
           </div>
-
-          {/* DUPLICATE WARNING ALERT */}
-          {existingDuplicateWO && (
-            <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 rounded-2xl flex items-start space-x-3 text-rose-800 dark:text-rose-300 animate-in fade-in duration-200">
-              <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-extrabold text-rose-700 dark:text-rose-300 flex items-center space-x-1.5">
-                  <span>Tidak Dapat Membuat Work Order Duplikat!</span>
-                </p>
-                <p className="text-rose-700 dark:text-rose-300 leading-relaxed">
-                  Work Order dengan Nomor <span className="font-mono font-bold underline">{nomorWO}</span> pada Penyulang <span className="font-bold underline">{penyulangName}</span> sudah terdaftar dalam sistem.
-                </p>
-                <div className="mt-1.5 p-2 bg-white/70 dark:bg-slate-900/60 rounded-xl border border-rose-200/60 dark:border-rose-800/40 text-[11px] text-slate-700 dark:text-slate-300 space-y-0.5">
-                  <p><span className="font-semibold text-rose-600 dark:text-rose-400">Data Terdaftar:</span> Tanggal: {existingDuplicateWO.tanggal || '-'} | ULP: {existingDuplicateWO.ulpName || '-'} | Regu: {existingDuplicateWO.reguName || '-'}</p>
-                </div>
-                <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium pt-1">
-                  💡 <strong>Aturan:</strong> Anda tidak boleh membuat No Work Order yang sama pada Penyulang yang sama. Silakan ganti <strong>Penyulang</strong> yang berbeda atau gunakan <strong>Nomor WO</strong> yang baru.
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Row 4: Regu_ROW */}
           <div>
@@ -609,6 +627,27 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               <option value="SELESAI">SELESAI</option>
             </select>
           </div>
+
+          {/* DUPLICATE WARNING ALERT */}
+          {existingDuplicateWO && (
+            <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl flex items-start space-x-3 text-rose-800 dark:text-rose-300 animate-in fade-in duration-200">
+              <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1.5">
+                <p className="font-extrabold text-rose-700 dark:text-rose-300 text-sm flex items-center space-x-2">
+                  <span>Work Order Ganda Terdeteksi!</span>
+                </p>
+                <p className="text-rose-600 dark:text-rose-400 leading-relaxed">
+                  Nomor Work Order <span className="font-mono font-bold underline">{nomorWO}</span> dengan Penyulang <span className="font-bold underline">{penyulangName}</span> sudah pernah terdaftar di sistem.
+                </p>
+                <div className="p-2.5 bg-white/60 dark:bg-slate-900/40 rounded-xl border border-rose-200/60 dark:border-rose-800/40 text-[11px] text-slate-700 dark:text-slate-300">
+                  <span className="font-semibold text-rose-600 dark:text-rose-400">Data Terdaftar:</span> Tanggal: {existingDuplicateWO.tanggal || '-'} | ULP: {existingDuplicateWO.ulpName || '-'} | Regu: {existingDuplicateWO.reguName || '-'} | Pekerjaan: {existingDuplicateWO.pekerjaan || '-'}
+                </div>
+                <p className="text-[11px] text-rose-700 dark:text-rose-300 font-medium">
+                  💡 <strong>Aturan Sistem:</strong> Pembuatan Work Order ganda pada Penyulang yang sama dilarang. Silakan ubah Nomor WO, Penyulang, atau detail penugasan lainnya.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-700">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { useMasterData } from '../context/MasterDataContext';
@@ -9,6 +9,7 @@ import { APP_LOGO_URL } from '../data/initialData';
 import { saveAndEmbedGasConfig } from '../config/gasConfig';
 import { GASApiService } from '../services/gasApiService';
 import { normalizeUser } from '../services/syncService';
+import { SupabaseService } from '../services/supabaseService';
 import {
   Zap,
   ShieldCheck,
@@ -29,6 +30,11 @@ import {
   LogIn,
   WifiOff,
   Wifi,
+  Server,
+  UploadCloud,
+  Database,
+  Search,
+  Check,
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -37,7 +43,7 @@ interface LoginPageProps {
 export const LoginPage: React.FC<LoginPageProps> = () => {
   const { login } = useAuth();
   const { settings, updateSettings } = useSettings();
-  const { users, petugasList, reguList } = useMasterData();
+  const { users, setMasterData, petugasList, reguList } = useMasterData();
   const { setActiveTab } = useUI();
   const { isGasConnected, isSyncing, syncWithGAS } = useGASSync();
   const { showToast } = useToast();
@@ -46,6 +52,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOnlineState, setIsOnlineState] = useState(navigator.onLine);
+  const [isFetchingSupabaseUsers, setIsFetchingSupabaseUsers] = useState(false);
+  const [isSeedingUsers, setIsSeedingUsers] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOnlineState(true);
@@ -62,15 +72,60 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [showGasModal, setShowGasModal] = useState(false);
   const [tempGasUrl, setTempGasUrl] = useState('');
 
-  const hasSyncedLoginRef = React.useRef(false);
-
-  // Auto-fetch/sync Users from Spreadsheet when Login page loads
-  useEffect(() => {
-    if (!hasSyncedLoginRef.current && navigator.onLine) {
-      hasSyncedLoginRef.current = true;
-      syncWithGAS(undefined, true).catch(() => {});
+  // Fetch Users directly from Supabase USERS table
+  const loadSupabaseUsers = useCallback(async (showNotification = false) => {
+    if (!navigator.onLine) {
+      if (showNotification) showToast('Sedang offline. Menggunakan data akun lokal.', 'info');
+      return;
     }
-  }, [syncWithGAS]);
+    setIsFetchingSupabaseUsers(true);
+    try {
+      const res = await SupabaseService.fetchUsers();
+      if (res.data && res.data.length > 0) {
+        setMasterData({ users: res.data });
+        if (showNotification) {
+          showToast(`Berhasil memuat ${res.data.length} akun pengguna dari Supabase (Tabel USERS).`, 'success');
+        }
+      } else if (showNotification) {
+        showToast('Tabel USERS di Supabase masih kosong.', 'info');
+      }
+    } catch (err: any) {
+      if (showNotification) {
+        showToast(`Gagal memuat akun Supabase: ${err.message}`, 'error');
+      }
+    } finally {
+      setIsFetchingSupabaseUsers(false);
+    }
+  }, [setMasterData, showToast]);
+
+  const hasFetchedUsersRef = useRef(false);
+
+  // Auto-fetch Users from Supabase on component mount
+  useEffect(() => {
+    if (!hasFetchedUsersRef.current && navigator.onLine) {
+      hasFetchedUsersRef.current = true;
+      loadSupabaseUsers(false);
+    }
+  }, [loadSupabaseUsers]);
+
+  // Seed default master accounts to Supabase USERS table if empty
+  const handleSeedSupabaseUsers = async () => {
+    setIsSeedingUsers(true);
+    showToast('Mengunggah akun master pengguna ke Supabase tabel USERS...', 'info');
+    try {
+      const res = await SupabaseService.seedDatabaseToSupabase();
+      if (res.success || res.inserted['USERS']) {
+        showToast('Akun master pengguna berhasil diunggah ke Supabase USERS!', 'success');
+        await loadSupabaseUsers(true);
+      } else {
+        showToast('Gagal mengunggah akun: Periksa konfigurasi tabel USERS.', 'warning');
+      }
+    } catch (err: any) {
+      showToast(`Error seeding users: ${err.message}`, 'error');
+    } finally {
+      setIsSeedingUsers(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +137,39 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     
     const safeUsername = (username || '').trim().toLowerCase();
 
-    // 1. Try Direct GAS Login Endpoint if GAS URL is configured and online
+    // 1. Try Direct Supabase Login against USERS table
+    if (navigator.onLine) {
+      try {
+        const supaRes = await SupabaseService.loginWithSupabase(username, password);
+        if (supaRes.success && supaRes.user) {
+          const authenticatedUser = supaRes.user;
+          login(authenticatedUser);
+
+          // Trigger automatic background sync
+          syncWithGAS(undefined, true).catch(() => {});
+
+          const isAdm = (authenticatedUser.role || '').toUpperCase() === 'ADM' || (authenticatedUser.userName || authenticatedUser.nip || authenticatedUser.id || '').toLowerCase() === 'admbkt';
+          if (isAdm) {
+            setActiveTab('cetak_laporan');
+          } else if ((authenticatedUser.role || '').toUpperCase() === 'USER') {
+            setActiveTab('input_realisasi');
+          } else {
+            setActiveTab('dashboard');
+          }
+          showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Role: ${authenticatedUser.role}] (Terotentikasi via Supabase APHRO-Database)`, 'success');
+          setIsSubmitting(false);
+          return;
+        } else if (supaRes.message && (supaRes.message.includes('Password') || supaRes.message.includes('Non-Aktif'))) {
+          showToast(supaRes.message, 'error');
+          setIsSubmitting(false);
+          return;
+        }
+      } catch {
+        // Fallback to next auth method
+      }
+    }
+
+    // 2. Try Direct GAS Login Endpoint if GAS URL is configured and online
     if (settings.gasWebAppUrl && navigator.onLine) {
       try {
         const gasRes = await GASApiService.login(settings.gasWebAppUrl, username, password);
@@ -285,7 +372,23 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     setUsername(selectedUsername);
     setPassword(''); // Password diketik oleh pengguna
     showToast(`User dipilih: "${selectedUsername}" (Role: ${u.role || 'User'}). Silakan masukkan Password.`, 'info');
+    setTimeout(() => {
+      passwordInputRef.current?.focus();
+    }, 100);
   };
+
+  // Filter selectable users from Supabase USERS table
+  const selectableUsers = users.filter((u) => {
+    if (!userSearchTerm.trim()) return true;
+    const term = userSearchTerm.toLowerCase().trim();
+    return (
+      (u.userName || '').toLowerCase().includes(term) ||
+      (u.name || '').toLowerCase().includes(term) ||
+      (u.role || '').toLowerCase().includes(term) ||
+      (u.ulpName || '').toLowerCase().includes(term) ||
+      (u.nip || '').toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 bg-teal-50 overflow-hidden font-sans">
@@ -348,42 +451,40 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             </div>
           )}
 
-          {/* Spreadsheet Connection Indicator Banner */}
-          <div className="p-3.5 rounded-2xl bg-teal-50/50 border border-teal-100/50 flex items-center justify-between shadow-inner">
+          {/* Supabase & Backend Connection Indicator Banner */}
+          <div className="p-3.5 rounded-2xl bg-emerald-50/50 border border-emerald-200/60 flex items-center justify-between shadow-inner">
             <div className="flex items-center space-x-3 min-w-0 pr-2">
-              <div className={`p-2 rounded-xl shrink-0 ${isSyncing ? 'bg-teal-100 text-[#008396]' : isGasConnected ? 'bg-[#008396] text-white' : 'bg-rose-100 text-rose-600'}`}>
-                <FileSpreadsheet className="w-5 h-5" />
+              <div className={`p-2 rounded-xl shrink-0 ${isFetchingSupabaseUsers || isSyncing ? 'bg-emerald-100 text-emerald-700 animate-spin' : isOnlineState ? 'bg-emerald-600 text-white' : 'bg-rose-100 text-rose-600'}`}>
+                <Server className="w-5 h-5" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <span className="text-[11px] font-black text-black uppercase tracking-tighter">Spreadsheet Data</span>
+                  <span className="text-[11px] font-black text-slate-900 uppercase tracking-tighter">Database: Supabase</span>
                   <span
                     className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black ${
-                      isSyncing
-                        ? 'bg-teal-100 text-[#008396] border border-teal-200'
-                        : isGasConnected
-                        ? 'bg-[#008396] text-white border border-[#008396]'
+                      isFetchingSupabaseUsers || isSyncing
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : isOnlineState
+                        ? 'bg-emerald-600 text-white border border-emerald-600'
                         : 'bg-rose-100 text-rose-600 border border-rose-200'
                     }`}
                   >
                     <span
                       className={`w-1.5 h-1.5 rounded-full ${
-                        isSyncing
-                          ? 'bg-[#00A2B9] animate-ping'
-                          : isGasConnected
+                        isFetchingSupabaseUsers || isSyncing
+                          ? 'bg-emerald-500 animate-ping'
+                          : isOnlineState
                           ? 'bg-white animate-pulse'
                           : 'bg-rose-500'
                       }`}
                     />
-                    <span>{isSyncing ? 'SINKRONISASI...' : isGasConnected ? 'TERHUBUNG' : 'STANDBY'}</span>
+                    <span>{isFetchingSupabaseUsers || isSyncing ? 'SINKRONISASI...' : isOnlineState ? 'TERHUBUNG (APHRO-DB)' : 'OFFLINE'}</span>
                   </span>
                 </div>
-                <p className="text-[10px] text-black mt-0.5 truncate opacity-70">
-                  {isSyncing
-                    ? 'Proses menghubungkan & mengambil data USERS...'
-                    : isGasConnected
-                    ? 'Terhubung ke Google Spreadsheet'
-                    : 'Belum terhubung. Klik tombol refresh.'}
+                <p className="text-[10px] text-slate-600 mt-0.5 truncate">
+                  {isFetchingSupabaseUsers
+                    ? 'Memuat data akun dari Supabase tabel USERS...'
+                    : `${users.length} Akun Terdaftar • Tabel USERS Supabase`}
                 </p>
               </div>
             </div>
@@ -391,12 +492,12 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             <div className="flex items-center space-x-1.5 shrink-0">
               <button
                 type="button"
-                onClick={handleSyncGAS}
-                disabled={isSyncing}
-                className="p-2.5 rounded-xl bg-white hover:bg-teal-50 text-black hover:text-black transition-all border border-teal-100 shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
-                title="Refresh Connection & Sync Users"
+                onClick={() => loadSupabaseUsers(true)}
+                disabled={isFetchingSupabaseUsers}
+                className="p-2.5 rounded-xl bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-700 transition-all border border-emerald-200 shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                title="Refresh Akun dari Supabase Tabel USERS"
               >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-[#00A2B9]' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isFetchingSupabaseUsers ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
               </button>
             </div>
           </div>
@@ -407,9 +508,9 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
                   <UserIcon className="w-3.5 h-3.5 text-black" />
-                  <span>USERNAME (Sheet USERS) <span className="text-rose-500">*</span></span>
+                  <span>USERNAME (Supabase USERS) <span className="text-rose-500">*</span></span>
                 </label>
-                <span className="text-[9px] text-black font-bold bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded">Kolom: Username</span>
+                <span className="text-[9px] text-black font-bold bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded">Kolom: Username / UserID</span>
               </div>
               <div className="relative group">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-teal-50 text-black group-focus-within:text-black transition-colors">
@@ -419,7 +520,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Masukkan Username akun Anda..."
+                  placeholder="Masukkan Username atau pilih akun di bawah..."
                   required
                   autoFocus
                   className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white border border-teal-100 text-black text-sm focus:outline-none focus:border-[#00A2B9] focus:ring-1 focus:ring-[#00A2B9]/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
@@ -431,7 +532,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
                   <Lock className="w-3.5 h-3.5 text-rose-600" />
-                  <span>PASSWORD (Sheet USERS) <span className="text-rose-500">*</span></span>
+                  <span>PASSWORD (Supabase USERS) <span className="text-rose-500">*</span></span>
                 </label>
                 <span className="text-[9px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded">Kolom: Password</span>
               </div>
@@ -440,10 +541,11 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
+                  ref={passwordInputRef}
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan Password Anda..."
+                  placeholder="Masukkan Password akun Anda..."
                   required
                   className="w-full pl-12 pr-12 py-3 rounded-2xl bg-white border border-teal-100 text-black text-sm focus:outline-none focus:border-[#00A2B9] focus:ring-1 focus:ring-[#00A2B9]/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
                 />
@@ -460,118 +562,164 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 px-6 rounded-full text-base font-black text-white bg-gradient-to-r from-[#008396] via-[#00A2B9] to-[#00C2DE] hover:brightness-110 shadow-xl shadow-teal-900/20 flex items-center justify-center space-x-4 transition-all active:scale-[0.98] group mt-6 disabled:opacity-50 cursor-pointer border-b-2 border-black/20"
+              className="w-full py-3.5 px-6 rounded-full text-base font-black text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-[#00A2B9] hover:brightness-110 shadow-xl shadow-teal-900/20 flex items-center justify-center space-x-4 transition-all active:scale-[0.98] group mt-6 disabled:opacity-50 cursor-pointer border-b-2 border-black/20"
             >
               <LogIn className="w-6 h-6" />
-              <span className="uppercase tracking-[0.2em]">{isSubmitting ? '...' : 'MASUK'}</span>
+              <span className="uppercase tracking-[0.2em]">{isSubmitting ? 'MEMPROSES...' : 'MASUK KE APLIKASI'}</span>
             </button>
           </form>
 
-          {/* Synced Users Quick Select List */}
-          {(() => {
-            const selectableUsers = users.filter((u) => {
-              const uname = (u.userName || u.nip || u.id || u.name || '').toLowerCase().trim();
-              const role = (u.role || '').toLowerCase().trim();
-              return uname !== 'superadmin' && role !== 'superadmin' && !uname.includes('superadmin');
-            });
+          {/* Synced Users Quick Select List from Supabase */}
+          <div className="pt-4 border-t border-slate-100 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <div className="flex items-center space-x-2 text-[10px] font-black text-black uppercase tracking-widest">
+                <Users className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Daftar Akun Supabase (Tabel USERS)</span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  {selectableUsers.length} Akun
+                </span>
+              </div>
+              
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={() => loadSupabaseUsers(true)}
+                  disabled={isFetchingSupabaseUsers}
+                  className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                  title="Refresh Akun dari Supabase USERS"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isFetchingSupabaseUsers ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
+                  <span>{isFetchingSupabaseUsers ? 'Memuat...' : 'Refresh USERS'}</span>
+                </button>
+              </div>
+            </div>
 
-            return (
-              <div className="pt-4 border-t border-slate-100 space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center space-x-2 text-[10px] font-black text-black uppercase tracking-widest">
-                    <Users className="w-3.5 h-3.5 text-black" />
-                    <span>Daftar Akun Sheet USERS ({selectableUsers.length})</span>
-                  </div>
+            {/* Optional search filter if user list is long */}
+            {users.length > 4 && (
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  placeholder="Cari user berdasarkan nama, role, username..."
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
+                />
+                {userSearchTerm && (
                   <button
-                    type="button"
-                    onClick={handleSyncGAS}
-                    disabled={isSyncing}
-                    className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-[#00A2B9]/5 hover:bg-[#00A2B9]/10 text-black border border-[#00A2B9]/10 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                    title="Refresh Sheet USERS dari Spreadsheet"
+                    onClick={() => setUserSearchTerm('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-black' : ''}`} />
-                    <span>{isSyncing ? 'Memuat...' : 'Refresh USERS'}</span>
+                    <X className="w-3.5 h-3.5" />
                   </button>
-                </div>
-
-                {selectableUsers.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-                    {selectableUsers.map((u, i) => {
-                      const targetUser = (username || '').trim().toLowerCase();
-                      const isSelected = targetUser && (
-                        targetUser === (u.userName || '').trim().toLowerCase() ||
-                        targetUser === (u.nip || '').trim().toLowerCase() || 
-                        targetUser === (u.id || '').trim().toLowerCase() ||
-                        targetUser === (u.name || '').trim().toLowerCase()
-                      );
-
-                      const isSuperAdmin = (u.role || '').toLowerCase() === 'superadmin';
-                      const isAdmin = (u.role || '').toLowerCase() === 'admin';
-                      const isAdm = (u.role || '').toLowerCase() === 'adm';
-
-                      return (
-                        <button
-                          key={`${u.id || 'user'}-${i}`}
-                          type="button"
-                          onClick={() => handleSelectUser(u)}
-                          className={`p-3 rounded-2xl text-left border transition-all flex items-start justify-between group cursor-pointer ${
-                            isSelected
-                              ? 'bg-black text-white border-black shadow-sm ring-1 ring-black/20'
-                              : 'bg-white hover:bg-teal-50 border-teal-100 text-black hover:border-teal-300'
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1 pr-2">
-                            <div className="flex items-center space-x-1.5">
-                              <span className="text-[10px] text-black font-bold uppercase opacity-40">User:</span>
-                              <span className={`text-xs font-mono font-extrabold truncate ${
-                                isSelected ? 'text-white' : 'text-black group-hover:text-black'
-                              }`}>
-                                {u.userName || u.nip || u.id}
-                              </span>
-                            </div>
-                            <p className={`text-[11px] font-black truncate mt-0.5 ${isSelected ? 'text-slate-100' : 'text-black'}`}>
-                              {u.name || u.userName}
-                            </p>
-                            {(u.ulpName || u.reguName) && (
-                              <p className={`text-[9px] truncate mt-0.5 font-bold ${isSelected ? 'text-slate-300' : 'text-black/60'}`}>
-                                {u.ulpName || ''} {u.reguName ? `• ${u.reguName}` : ''}
-                              </p>
-                            )}
-                          </div>
-                          <span
-                            className={`px-2 py-0.5 rounded-lg text-[8px] font-black shrink-0 border uppercase tracking-tighter ${
-                              isSuperAdmin
-                                ? 'bg-purple-100 text-purple-700 border-purple-200'
-                                : isAdmin
-                                ? 'bg-black text-white border-black'
-                                : isAdm
-                                ? 'bg-[#008396]/10 text-[#008396] border-[#008396]/20'
-                                : 'bg-teal-100 text-black border-teal-200'
-                            }`}
-                          >
-                            {u.role || 'USER'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-6 text-center rounded-2xl bg-teal-50/50 border border-teal-100 border-dashed space-y-2">
-                    <p className="text-[10px] text-black font-black uppercase tracking-widest opacity-40">Belum ada data user</p>
-                    <button
-                      type="button"
-                      onClick={handleSyncGAS}
-                      disabled={isSyncing}
-                      className="px-4 py-2 rounded-xl bg-black text-white hover:bg-slate-900 border border-black text-xs font-bold transition-all inline-flex items-center space-x-2 cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                      <span>{isSyncing ? 'Sedang Memuat...' : 'Ambil User'}</span>
-                    </button>
-                  </div>
                 )}
               </div>
-            );
-          })()}
+            )}
+
+            {selectableUsers.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                {selectableUsers.map((u, i) => {
+                  const targetUser = (username || '').trim().toLowerCase();
+                  const isSelected = targetUser && (
+                    targetUser === (u.userName || '').trim().toLowerCase() ||
+                    targetUser === (u.nip || '').trim().toLowerCase() || 
+                    targetUser === (u.id || '').trim().toLowerCase() ||
+                    targetUser === (u.name || '').trim().toLowerCase()
+                  );
+
+                  const roleUpper = (u.role || '').toUpperCase();
+                  const isSuperAdmin = roleUpper === 'SUPERADMIN';
+                  const isAdmin = roleUpper === 'ADMIN';
+                  const isAdm = roleUpper === 'ADM';
+
+                  return (
+                    <button
+                      key={`${u.id || 'user'}-${i}`}
+                      type="button"
+                      onClick={() => handleSelectUser(u)}
+                      className={`p-3 rounded-2xl text-left border transition-all flex items-start justify-between group cursor-pointer ${
+                        isSelected
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-emerald-500/40'
+                          : 'bg-white hover:bg-emerald-50/70 border-slate-200 text-slate-800 hover:border-emerald-400'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">User:</span>
+                          <span className={`text-xs font-mono font-extrabold truncate ${
+                            isSelected ? 'text-emerald-300' : 'text-slate-900 group-hover:text-emerald-700'
+                          }`}>
+                            {u.userName || u.nip || u.id}
+                          </span>
+                        </div>
+                        <p className={`text-[11px] font-black truncate mt-0.5 ${isSelected ? 'text-slate-100' : 'text-slate-900'}`}>
+                          {u.name || u.userName}
+                        </p>
+                        {(u.ulpName || u.reguName) && (
+                          <p className={`text-[9px] truncate mt-0.5 font-bold ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                            {u.ulpName || ''} {u.reguName ? `• ${u.reguName}` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end space-y-1">
+                        <span
+                          className={`px-2 py-0.5 rounded-lg text-[8px] font-black shrink-0 border uppercase tracking-tighter ${
+                            isSuperAdmin
+                              ? 'bg-purple-100 text-purple-700 border-purple-200'
+                              : isAdmin
+                              ? 'bg-slate-800 text-white border-slate-700'
+                              : isAdm
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : 'bg-teal-100 text-teal-800 border-teal-200'
+                          }`}
+                        >
+                          {u.role || 'USER'}
+                        </span>
+                        {isSelected && (
+                          <span className="text-[9px] font-bold text-emerald-400 flex items-center space-x-0.5">
+                            <Check className="w-3 h-3" />
+                            <span>Dipilih</span>
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-5 text-center rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
+                <div className="p-2 bg-amber-100 rounded-full w-10 h-10 mx-auto flex items-center justify-center text-amber-700">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-amber-900">Belum ada akun di tabel USERS Supabase</p>
+                  <p className="text-[11px] text-amber-700">
+                    Klik tombol di bawah untuk mengunggah akun default ke database Supabase APHRO.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSeedSupabaseUsers}
+                    disabled={isSeedingUsers}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all inline-flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                  >
+                    <UploadCloud className={`w-3.5 h-3.5 ${isSeedingUsers ? 'animate-bounce' : ''}`} />
+                    <span>{isSeedingUsers ? 'Mengunggah...' : 'Upload Akun ke Supabase'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadSupabaseUsers(true)}
+                    disabled={isFetchingSupabaseUsers}
+                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold transition-all inline-flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isFetchingSupabaseUsers ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="text-center space-y-1">

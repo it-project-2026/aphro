@@ -208,13 +208,13 @@ export async function exportCetakPhotoToExcel(
         noWo: rel.nomorWO || wo?.nomorWO || '-',
         area: areaName,
         ulp: rel.ulpName || wo?.ulpName || ulpTitle,
-        namaTim: rel.reguName || wo?.reguName || rel.petugasName || 'TIM ROW BASO',
-        feeder: rel.penyulangName || wo?.penyulangName || 'F Baso',
+        namaTim: rel.reguName || wo?.reguName || rel.petugasName || '',
+        feeder: rel.penyulangName || wo?.penyulangName || '',
         noTiang: rel.noTiang || wo?.lokasi || '-',
         tanggalEksekusi: formatExecutionDateTime(rel, wo),
         fotoSebelumUrl: rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl,
         fotoSesudahUrl: rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl,
-        jenisTanaman: rel.jenisTanaman || wo?.jenisPekerjaan || 'PEMBERSIHAN HALAMAN GARDU',
+        jenisTanaman: rel.jenisTanaman || wo?.jenisPekerjaan || '',
         keterangan: rel.keterangan || 'POTONG',
         pertumbuhanTanaman: rel.pertumbuhanTanaman || 'SEDANG',
         kendala: rel.kendala || 'NIHIL',
@@ -229,8 +229,8 @@ export async function exportCetakPhotoToExcel(
         noWo: wo.nomorWO || '-',
         area: areaName,
         ulp: wo.ulpName || ulpTitle,
-        namaTim: wo.reguName || 'TIM ROW BASO',
-        feeder: wo.penyulangName || 'F Baso',
+        namaTim: wo.reguName || '',
+        feeder: wo.penyulangName || '',
         noTiang: wo.lokasi || '-',
         tanggalEksekusi: formatExecutionDateTime(undefined, wo),
         fotoSebelumUrl: wo.lampiranUrl,
@@ -760,19 +760,31 @@ export function generateLaporanPetaPDF(
   doc.line(241, 8, 241, 26);
 
   // Left Section: PLN Electricity Services box
-  doc.setFillColor(234, 179, 8); // Yellow background for lightning
-  doc.roundedRect(12, 11, 7, 12, 1, 1, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(15, 23, 42);
-  doc.text('⚡', 13.5, 19.5);
+  doc.setFillColor(255, 235, 0); // Yellow background
+  doc.roundedRect(12, 11, 10, 12, 0.5, 0.5, 'F');
 
+  // Wavy lines
+  doc.setDrawColor(0, 162, 185); // Blue waves #00A2B9
+  doc.setLineWidth(0.4);
+  // Wave 1
+  doc.line(13, 14, 15, 13.5); doc.line(15, 13.5, 17, 14.5); doc.line(17, 14.5, 19, 13.5); doc.line(19, 13.5, 21, 14);
+  // Wave 2
+  doc.line(13, 17, 15, 16.5); doc.line(15, 16.5, 17, 17.5); doc.line(17, 17.5, 19, 16.5); doc.line(19, 16.5, 21, 17);
+  // Wave 3
+  doc.line(13, 20, 15, 19.5); doc.line(15, 19.5, 17, 20.5); doc.line(17, 20.5, 19, 19.5); doc.line(19, 19.5, 21, 20);
+
+  // Red lightning bolt
+  doc.setFillColor(229, 62, 62); // Red #E53E3E
+  doc.triangle(18.5, 11.5, 14, 17.5, 17, 17.5, 'F');
+  doc.triangle(16.5, 17.5, 19.5, 17.5, 15, 22.5, 'F');
+
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.setTextColor(3, 105, 161); // teal-700
-  doc.text('PLN', 21, 16);
-  doc.setFontSize(8);
-  doc.setTextColor(30, 58, 138); // teal-900
-  doc.text('Electricity Services', 21, 22);
+  doc.setTextColor(0, 162, 185); // Blue #00A2B9
+  doc.text('PLN', 24, 15.5);
+  doc.setFontSize(7);
+  doc.setTextColor(0, 162, 185); // Blue #00A2B9
+  doc.text('Electricity Service', 24, 20);
 
   // Middle Section: GAMBAR PETA POHON (ROW) Title Box
   doc.setFont('helvetica', 'bold');

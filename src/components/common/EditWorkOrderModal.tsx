@@ -3,7 +3,7 @@ import { WorkOrder, WOStatus } from '../../types';
 import { useMasterData } from '../../context/MasterDataContext';
 import { useWorkOrders } from '../../context/WorkOrderContext';
 import { useToast } from '../../hooks/useToast';
-import { X, Save, AlertTriangle, RefreshCw } from 'lucide-react';
+import { X, Save, AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
 interface EditWorkOrderModalProps {
   workOrder: WorkOrder;
@@ -12,7 +12,7 @@ interface EditWorkOrderModalProps {
 
 export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrder, onClose }) => {
   const { ulpList, penyulangList, reguList } = useMasterData();
-  const { workOrders, updateWorkOrder } = useWorkOrders();
+  const { workOrders, updateWorkOrder, deleteWorkOrder } = useWorkOrders();
   const { showToast } = useToast();
 
   const [nomorWO, setNomorWO] = useState(workOrder.nomorWO);
@@ -28,6 +28,8 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
   const [woMulai, setWoMulai] = useState(workOrder.woMulai || '');
   const [woAkhir, setWoAkhir] = useState(workOrder.woAkhir || '');
   const [status, setStatus] = useState<WOStatus>((workOrder.status as WOStatus) || 'BELUM SELESAI');
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const cleanStr = (s: any) => String(s || '').trim().toUpperCase();
 
@@ -320,22 +322,64 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             </div>
           )}
 
-          <div className="flex justify-end pt-4 space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={Boolean(existingDuplicateWO) || isSubmitting}
-              className="inline-flex items-center space-x-2 px-5 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-teal-600/25 transition-all"
-            >
-              {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
-            </button>
+          <div className="flex flex-wrap gap-2 justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-800">
+            {showConfirmDelete ? (
+              <div className="flex items-center space-x-2 bg-rose-50 dark:bg-rose-950/40 p-1.5 px-2.5 rounded-xl border border-rose-200 dark:border-rose-800/60">
+                <span className="text-xs font-bold text-rose-700 dark:text-rose-300">Yakin hapus WO ini?</span>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setShowConfirmDelete(false)}
+                  className="px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      await deleteWorkOrder(workOrder.id, workOrder.nomorWO);
+                      onClose();
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  className="px-2.5 py-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors flex items-center space-x-1"
+                >
+                  {isDeleting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  <span>{isDeleting ? 'Menghapus...' : 'Ya, Hapus'}</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowConfirmDelete(true)}
+                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition-colors border border-rose-200 dark:border-rose-800/60"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Hapus WO</span>
+              </button>
+            )}
+
+            <div className="flex space-x-2 ml-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={Boolean(existingDuplicateWO) || isSubmitting}
+                className="inline-flex items-center space-x-2 px-5 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-teal-600/25 transition-all"
+              >
+                {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

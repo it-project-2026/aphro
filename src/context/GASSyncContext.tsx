@@ -43,6 +43,7 @@ interface GASSyncContextType {
   checkConnection: () => Promise<boolean>;
   healthCheck: () => Promise<HealthCheckResult>;
   refreshPendingCount: () => void;
+  clearPendingQueue: () => Promise<void>;
   triggerActivitySync: (isSilent?: boolean) => Promise<void>;
 }
 
@@ -67,9 +68,6 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
   const [pendingCount, setPendingCount] = React.useState(0);
   const [lastUpdatedText, setLastUpdatedText] = React.useState('Belum diperbarui');
 
-  const isSyncingRef = React.useRef(false);
-  const settingsRef = React.useRef(settings);
-  settingsRef.current = settings;
   const autoDismissTimerRef = React.useRef<any>(null);
 
   // Configure syncManager whenever settings change
@@ -207,19 +205,12 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshPendingCount]);
 
-  // Main sync function (version-based via SyncManager)
+  // Main sync function (Supabase & local cache synchronization)
   const syncWithGAS = React.useCallback(async (
     showToast?: (msg: string, type?: any) => void,
     isSilent = false
   ) => {
-    if (isSyncingRef.current) return null;
-
-    const gasUrl = settingsRef.current.gasWebAppUrl;
-    if (!gasUrl) {
-      if (showToast && !isSilent) showToast('GAS Web App URL belum dikonfigurasi', 'warning');
-      setIsGasConnected(false);
-      return null;
-    }
+    if (isSyncing) return null;
 
     if (!navigator.onLine) {
       if (showToast && !isSilent) showToast('Mode Offline. Menggunakan data cache lokal.', 'warning');
@@ -227,18 +218,17 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
 
-    isSyncingRef.current = true;
     setIsSyncing(true);
     setSyncStage('syncing');
     if (!isSilent) setShowSyncBanner(true);
-    setSyncMessage('Memeriksa versi database...');
+    setSyncMessage('Menghubungi Supabase APHRO-Database...');
 
     try {
       // 1. Process pending operations first
       await syncManager.processPendingOperations();
       await refreshPendingCount();
 
-      // 2. Perform version check & sync changed tables
+      // 2. Perform Supabase fetch & sync changed tables
       const syncedTables = await syncManager.syncAllRequired();
 
       if (syncedTables) {
@@ -257,11 +247,11 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
       setIsGasConnected(true);
       setSyncStage('success');
-      setSyncMessage('Data terbaru berhasil diperbarui.');
+      setSyncMessage('Data Supabase APHRO-Database berhasil diperbarui.');
       setLastUpdatedText(syncManager.getLastUpdatedText());
 
       if (showToast && !isSilent) {
-        showToast('Data berhasil diperbarui!', 'success');
+        showToast('Data berhasil disinkronkan dengan Supabase!', 'success');
       }
 
       if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
@@ -272,16 +262,15 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
       return syncedTables;
     } catch (err) {
-      console.error('syncWithGAS error:', err);
+      console.error('Supabase Sync error:', err);
       setSyncStage('error');
-      setSyncMessage('Gagal menyinkronkan data.');
-      if (showToast && !isSilent) showToast('Gagal terhubung ke database.', 'error');
+      setSyncMessage('Gagal menyinkronkan data dengan Supabase.');
+      if (showToast && !isSilent) showToast('Gagal terhubung ke database Supabase.', 'error');
       return null;
     } finally {
-      isSyncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [refreshPendingCount, setAbsensiList, setMasterData, setRealisasiList, setWorkOrders]);
+  }, [isSyncing, refreshPendingCount]);
 
   // 00:00 WIB Automated Midnight Local Cache Clear & Data Sync Scheduler
   React.useEffect(() => {
@@ -333,10 +322,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     const handleOnline = () => {
       setIsOnline(true);
       checkConnection().catch(() => {});
-      syncManager.processPendingOperations().then(() => {
-        refreshPendingCount();
-        syncWithGAS(undefined, true).catch(() => {});
-      });
+      refreshPendingCount();
     };
 
     const handleOffline = () => {
@@ -351,66 +337,16 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     checkConnection().catch(() => {});
 
-    // Periodic Background Sync with Mobile Thermal & Jitter Optimization
-    let syncTimer: any = null;
-
-    const scheduleNextSync = () => {
-      const isHidden = typeof document !== 'undefined' && document.hidden;
-      // Mobile thermal optimization: 120s active on mobile, 60s active on desktop, 300s when hidden
-      const baseInterval = isHidden ? 300000 : (isMobileDevice ? 120000 : 60000);
-      // Random jitter (+/- 0 to 15 seconds) to spread CPU load and avoid thundering herd
-      const jitter = Math.floor(Math.random() * 15000);
-      const delay = baseInterval + jitter;
-
-      syncTimer = setTimeout(async () => {
-        if (typeof navigator !== 'undefined' && navigator.onLine && !document.hidden) {
-          try {
-            await syncWithGAS(undefined, true);
-          } catch (e) {}
-        }
-        scheduleNextSync();
-      }, delay);
-    };
-
-    scheduleNextSync();
-
-    // Trigger instant sync on App Update, tab focus, or visibility change
-    const handleVisibilityChange = () => {
-      if (typeof document !== 'undefined' && !document.hidden && navigator.onLine) {
-        syncWithGAS(undefined, true).catch(() => {});
-      }
-    };
-
-    const handleAppFocus = () => {
-      if (navigator.onLine) {
-        syncWithGAS(undefined, true).catch(() => {});
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleAppFocus);
-
-    // Listen to Service Worker controller changes (if app code updates)
-    const handleControllerChange = () => {
-      console.log('🔄 Application code update detected! Syncing latest data...');
-      syncWithGAS(undefined, true).catch(() => {});
-    };
-
-    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker) {
-      navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
-    }
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleAppFocus);
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker) {
-        navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
-      }
-      if (syncTimer) clearTimeout(syncTimer);
     };
-  }, [checkConnection, refreshPendingCount, syncWithGAS]);
+  }, [checkConnection, refreshPendingCount]);
+
+  const clearPendingQueue = React.useCallback(async () => {
+    await syncManager.clearPendingQueue();
+    await refreshPendingCount();
+  }, [refreshPendingCount]);
 
   const triggerActivitySync = React.useCallback(async (isSilent = true) => {
     if (!navigator.onLine || !settings.gasWebAppUrl) return;
@@ -438,6 +374,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
         checkConnection,
         healthCheck,
         refreshPendingCount,
+        clearPendingQueue,
         triggerActivitySync,
       }}
     >

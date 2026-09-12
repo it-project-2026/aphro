@@ -526,8 +526,17 @@ function doPost(e) {
 
       var woData = sheet.getDataRange().getValues();
       var existingRow = -1;
+      var reqPenyulang = String(wo.penyulangName || wo.PENYULANG || wo.Penyulang || "").trim().toLowerCase();
+      var reqNomorWO = String(wo.nomorWO || wo.NOMOR_WO || wo.Nomor_WO || "").trim().toLowerCase();
       for (var r = 1; r < woData.length; r++) {
-        if (String(woData[r][0]) === String(woId) || (wo.nomorWO && String(woData[r][2]) === String(wo.nomorWO))) {
+        var rowId = String(woData[r][0]);
+        var rowNomorWO = String(woData[r][2] || "").trim().toLowerCase();
+        var rowPenyulang = String(woData[r][5] || "").trim().toLowerCase();
+
+        var isSameId = rowId === String(woId);
+        var isSameWoAndPenyulang = reqNomorWO !== "" && rowNomorWO === reqNomorWO && (reqPenyulang === "" || rowPenyulang === reqPenyulang);
+
+        if (isSameId || isSameWoAndPenyulang) {
           existingRow = r + 1;
           break;
         }
@@ -942,7 +951,7 @@ function doPost(e) {
       var nowStr = Utilities.formatDate(new Date(), masterTz, "yyyy-MM-dd HH:mm:ss");
 
       } else if (sheetName === "USERS") {
-        rowValues = [item.id, item.username || item.nip, hashSHA256(item.password || "user123"), item.reguName || "-", item.role || "User", item.ulpName || "PLN UP3 Padang", "Aktif", nowStr, nowStr];
+        rowValues = [item.id, item.username || item.nip, hashSHA256(item.password || "user123"), item.reguName || "-", item.role || "User", item.ulpName || "UL BUKITTINGGI", "Aktif", nowStr, nowStr];
       } else if (sheetName === "SETTING") {
         rowValues = [item.namaUnitLayanan, item.logoAplikasiUrl || "", item.themeColor || "sky", item.footerText || "", item.whatsapp || "", item.email || "", nowStr];
       } else if (sheetName === "LOG_ACTIVITY") {

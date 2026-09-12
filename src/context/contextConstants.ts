@@ -5,12 +5,12 @@ const embeddedConfig = getActiveGasConfig();
 
 export const SettingsContextData = {
   defaultSettings: {
-    namaUnitLayanan: 'PLN ES UP4 Sumatera Barat UP3 Padang',
+    namaUnitLayanan: 'UL BUKITTINGGI',
     logoAplikasiUrl: '',
     logoInstansiUrl: '',
     loginBgUrl: '',
     themeColor: 'PLN Blue',
-    footerText: '© 13307BKT- 2026 PLN ES UP4 Sumatera Barat. All rights reserved.',
+    footerText: '© 13307BKT - 2026 PLN ES UP4 Sumatera Barat UL BUKITTINGGI. All rights reserved.',
     versiAplikasi: '1.0.0',
     gasWebAppUrl: embeddedConfig.gasWebAppUrl || '',
     spreadsheetId: embeddedConfig.spreadsheetId || '',

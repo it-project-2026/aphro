@@ -35,16 +35,6 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   const { syncWithGAS, isSyncing } = useGASSync();
   const { showToast } = useToast();
 
-  const hasSyncedRef = React.useRef(false);
-
-  // Auto sync when Welcome Page loads to ensure latest WORK_ORDER data from Spreadsheet
-  useEffect(() => {
-    if (settings.gasWebAppUrl && !hasSyncedRef.current) {
-      hasSyncedRef.current = true;
-      syncWithGAS(undefined, true).catch(() => {});
-    }
-  }, [settings.gasWebAppUrl, syncWithGAS]);
-
   const handleRefreshWO = async () => {
     try {
       showToast('Memuat data Work Order terbaru dari Spreadsheet...', 'info');
@@ -196,7 +186,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
             />
             <div>
               <h1 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                {settings.namaUnitLayanan || 'PLN ES UP4 Sumatera Barat UP3 Padang'}
+                {settings.namaUnitLayanan || 'UL BUKITTINGGI'}
               </h1>
               <p className="text-[11px] text-slate-400 font-medium">
                 APHRO - Asset Protection & Hazard Response Operations
@@ -389,7 +379,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500">
                       <div className="flex items-center space-x-1.5 truncate">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">{wo.lokasi || wo.ulpName || 'Lokasi Padang'}</span>
+                        <span className="truncate">{wo.lokasi || wo.ulpName || 'Bukittinggi'}</span>
                       </div>
 
                       <div className="flex items-center space-x-1.5 truncate">

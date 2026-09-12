@@ -9,6 +9,20 @@ import { useUI } from '../context/UIContext';
 import { useGASSync } from '../hooks/useGASSync';
 import { useToast } from '../hooks/useToast';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
+import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
+import {
+  parseNumeric,
+  getWOTargetKms,
+  getWORealisasiKms,
+  isWOSelesai,
+  isWOInProgress,
+  TOTAL_PROGRAM_TARGET_KMS,
+  TARGET_KMS_PER_TIM_ROW,
+  calculateTimRowTargetKms,
+} from '../utils/metricUtils';
+import { normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
+import { TopPerformersList } from '../components/dashboard/TopPerformersList';
+import { RecentWOTable } from '../components/dashboard/RecentWOTable';
 import { StatCard } from '../components/common/StatCard';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { RealisasiTargetDashboard } from '../components/dashboard/RealisasiTargetDashboard';
@@ -27,6 +41,7 @@ import {
   PlusCircle,
   FileCheck2,
   FileSpreadsheet,
+  Database,
   RefreshCw,
   Cloud,
   CloudOff,
@@ -70,37 +85,33 @@ export const DashboardPage: React.FC = () => {
   const { setActiveTab, isDarkMode } = useUI();
   const { isGasConnected, syncWithGAS } = useGASSync();
   const { showToast } = useToast();
-
   // Get pending items from sync queue to identify unsynced WOs
   const [pendingIds, setPendingIds] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    let lastRaw = '';
     const checkPending = () => {
       try {
-        const raw = localStorage.getItem('aphro_pending_sync_queue') || '';
-        if (raw === lastRaw) return;
-        lastRaw = raw;
+        const raw = localStorage.getItem('aphro_pending_sync_queue');
         if (raw) {
           const queue = JSON.parse(raw);
           const ids = queue
             .filter((item: any) => item.type === 'WORK_ORDER_CREATE' || item.type === 'WORK_ORDER_UPDATE')
-            .map((item: any) => item.payload?.id || item.payload?.workOrder?.id)
-            .filter(Boolean);
+            .map((item: any) => item.payload?.id || item.payload?.workOrder?.id);
           setPendingIds(ids);
         } else {
           setPendingIds([]);
         }
-      } catch {
+      } catch (e) {
         setPendingIds([]);
       }
     };
 
     checkPending();
-    const interval = setInterval(checkPending, 10000);
-    return () => clearInterval(interval);
   }, []);
 
+
+  const [filterYear, setFilterYear] = React.useState<string>('ALL');
+  const [filterMonth, setFilterMonth] = React.useState<string>('ALL');
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [filterUlp, setFilterUlp] = React.useState('ALL');
@@ -112,25 +123,96 @@ export const DashboardPage: React.FC = () => {
 
   const role = currentUser?.role || 'User';
 
-  // 1. Deduplicate Work Orders to ensure each Nomor WO only appears once
+  // Helper to clean string for better matching
+  const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+
+  // Parse date strings safely into { year, month, full }
+  const parseDateParts = React.useCallback((dateStr?: string) => {
+    if (!dateStr) return { year: '', month: '', full: '' };
+    const iso = normalizeDateISO(dateStr);
+    if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      const parts = iso.split('-');
+      return { year: parts[0], month: parts[1], full: iso };
+    }
+    return { year: '', month: '', full: String(dateStr) };
+  }, []);
+
+  // Matching helpers
+  const matchesUlp = React.useCallback((itemUlpName?: string, itemUlpId?: string, targetFilter = filterUlp) => {
+    if (!targetFilter || targetFilter === 'ALL') return true;
+    const target = cleanStr(targetFilter);
+    if (!target) return true;
+    const name = cleanStr(itemUlpName || '');
+    const id = cleanStr(itemUlpId || '');
+    
+    // If neither name nor id is provided, check if target matches current global unit or default
+    if (!name && !id) {
+      const activeUnit = cleanStr(localStorage.getItem('aphro_nama_unit_layanan') || '');
+      if (activeUnit && activeUnit.includes(target)) return true;
+      return false;
+    }
+
+    const nameMatch = name && (name === target || name.includes(target) || target.includes(name) || (target.includes('padang') && name.includes('padang')) || (target.includes('bukittinggi') && name.includes('bukittinggi')) || (target.includes('solok') && name.includes('solok')) || (target.includes('payakumbuh') && name.includes('payakumbuh')));
+    const idMatch = id && (id === target);
+    
+    return nameMatch || idMatch;
+  }, [filterUlp]);
+
+  const matchesPenyulang = React.useCallback((itemPName?: string, itemPId?: string, targetFilter = filterPenyulang) => {
+    if (!targetFilter || targetFilter === 'ALL') return true;
+    const target = cleanStr(targetFilter);
+    if (!target) return true;
+    const name = cleanStr(itemPName || '');
+    const id = cleanStr(itemPId || '');
+    
+    if (!name && !id) return false;
+
+    // Only allow matching if itemPName is not empty when comparing with target.includes(name)
+    const nameMatch = name && (name === target || name.includes(target) || target.includes(name));
+    const idMatch = id && (id === target);
+
+    return nameMatch || idMatch;
+  }, [filterPenyulang]);
+
+  const { filteredWOs, filteredRealisasi, topPerformersData } = useDashboardMetrics(
+    workOrders,
+    realisasiList,
+    ulpList,
+    reguList,
+    petugasList,
+    penyulangList,
+    filterUlp,
+    filterPenyulang,
+    matchesUlp,
+    matchesPenyulang,
+    cleanStr,
+    filterYear,
+    filterMonth,
+    startDate,
+    endDate
+  );
+
+  // 1. Deduplicate Work Orders based on composite key (Nomor WO + Penyulang)
   const uniqueWorkOrders = React.useMemo(() => {
     const seen = new Map<string, any>();
     workOrders.forEach((wo) => {
       if (!wo) return;
-      const woKey = (wo.nomorWO || '').trim().toUpperCase() || (wo.id || '').trim().toUpperCase();
+      const woNo = (wo.nomorWO || '').trim().toUpperCase();
+      const penyulang = (wo.penyulangName || '').trim().toUpperCase();
+      const woKey = woNo && penyulang ? `${woNo}___${penyulang}` : (wo.id || '').trim().toUpperCase();
       if (!woKey) return;
 
       if (!seen.has(woKey)) {
         seen.set(woKey, wo);
       } else {
         const existing = seen.get(woKey)!;
-        const isNewSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
-        const isExistingSelesai = (existing.status || '').toUpperCase() === 'SELESAI';
+        const isNewSelesai = isWOSelesai(wo.status);
+        const isExistingSelesai = isWOSelesai(existing.status);
         
         // Priority: 1. Selesai, 2. Most realisasi
         if (isNewSelesai && !isExistingSelesai) {
           seen.set(woKey, wo);
-        } else if (isNewSelesai === isExistingSelesai && (wo.totalRealisasi || 0) > (existing.totalRealisasi || 0)) {
+        } else if (isNewSelesai === isExistingSelesai && (parseNumeric(wo.totalRealisasi, 0) > parseNumeric(existing.totalRealisasi, 0))) {
           seen.set(woKey, wo);
         }
       }
@@ -138,125 +220,165 @@ export const DashboardPage: React.FC = () => {
     return Array.from(seen.values());
   }, [workOrders]);
 
-  // Helper to clean string for better matching
-  const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+  // Dynamic Year Options extracted from actual WO & Realisasi dates
+  const yearOptions = React.useMemo(() => {
+    const yearsSet = new Set<string>();
+    const currentYear = new Date().getFullYear().toString();
+    yearsSet.add(currentYear);
 
-  // Apply Filters to Data
-  const filteredWOs = React.useMemo(() => {
-    return uniqueWorkOrders.filter(wo => {
-      // If User role, restrict to their Regu
-      if (role === 'User') {
-        const userRegu = cleanStr(currentUser?.reguName || '');
-        const woRegu = cleanStr(wo.reguName || '');
-        
-        const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu) || userRegu.includes(woRegu));
-        const matchReguId = wo.reguId && currentUser?.reguId && String(wo.reguId) === String(currentUser.reguId);
-        
-        if (!matchRegu && !matchReguId) return false;
-      }
-
-      const matchesStartDate = !startDate || (wo.tanggal && wo.tanggal >= startDate);
-      const matchesEndDate = !endDate || (wo.tanggal && wo.tanggal <= endDate);
-      const matchesUlp = filterUlp === 'ALL' || wo.ulpId === filterUlp || wo.ulpName === filterUlp;
-      const matchesPenyulang = filterPenyulang === 'ALL' || wo.penyulangId === filterPenyulang || wo.penyulangName === filterPenyulang;
-      return matchesStartDate && matchesEndDate && matchesUlp && matchesPenyulang;
-    }).sort((a, b) => {
-      // Primary sort: Tanggal (Z-A / Newest first)
-      const dateA = a.tanggal || '';
-      const dateB = b.tanggal || '';
-      if (dateA !== dateB) return dateB.localeCompare(dateA);
-
-      // Secondary sort: Nama Regu (A-Z / Ascending)
-      const reguA = a.reguName || '';
-      const reguB = b.reguName || '';
-      return reguA.localeCompare(reguB);
+    uniqueWorkOrders.forEach(wo => {
+      const woDate = normalizeDateISO(wo.tanggal) || parseDateFromNomorWO(wo.nomorWO || '') || normalizeDateISO(wo.createdAt);
+      const { year } = parseDateParts(woDate);
+      if (year && year.length === 4) yearsSet.add(year);
     });
-  }, [uniqueWorkOrders, startDate, endDate, filterUlp, filterPenyulang, role, currentUser]);
-
-  const filteredRealisasi = React.useMemo(() => {
-    return realisasiList.filter(rel => {
-      // If User role, restrict to their Regu
-      if (role === 'User') {
-        const userRegu = cleanStr(currentUser?.reguName || '');
-        const relRegu = cleanStr(rel.reguName || '');
-        
-        const matchRegu = userRegu !== '' && (relRegu === userRegu || relRegu.includes(userRegu) || userRegu.includes(relRegu));
-        
-        if (!matchRegu) return false;
-      }
-
-      const matchesStartDate = !startDate || (rel.tanggalRealisasi && rel.tanggalRealisasi >= startDate);
-      const matchesEndDate = !endDate || (rel.tanggalRealisasi && rel.tanggalRealisasi <= endDate);
-      const matchesUlp = filterUlp === 'ALL' || rel.ulpName === filterUlp;
-      const matchesPenyulang = filterPenyulang === 'ALL' || rel.penyulangName === filterPenyulang;
-      return matchesStartDate && matchesEndDate && matchesUlp && matchesPenyulang;
+    realisasiList.forEach(rel => {
+      const relDate = normalizeDateISO(rel.tanggalRealisasi) || parseDateFromNomorWO(rel.nomorWO || '') || normalizeDateISO(rel.createdAt);
+      const { year } = parseDateParts(relDate);
+      if (year && year.length === 4) yearsSet.add(year);
     });
-  }, [realisasiList, startDate, endDate, filterUlp, filterPenyulang, role, currentUser]);
+
+    return Array.from(yearsSet).sort().reverse();
+  }, [uniqueWorkOrders, realisasiList, parseDateParts]);
 
   // Metrics calculations based on FILTERED data
-  const totalWO = filteredWOs.length;
-  const woSelesai = filteredWOs.filter((w) => (w.status || '').toUpperCase() === 'SELESAI').length;
-  const woProgress = filteredWOs.filter((w) => (w.status || '').toUpperCase() === 'SEDANG DIKERJAKAN').length;
-  const woBelum = filteredWOs.filter((w) => (w.status || '').toUpperCase() === 'BELUM DIKERJAKAN').length;
+  const totalWO = React.useMemo(() => {
+    const setWOs = new Set(filteredWOs.map(w => (w.nomorWO || '').trim().toUpperCase()).filter(Boolean));
+    return setWOs.size > 0 ? setWOs.size : filteredWOs.length;
+  }, [filteredWOs]);
 
-  // New KMS Metrics logic
+  const woSelesai = React.useMemo(() => {
+    const setSelesai = new Set(
+      filteredWOs
+        .filter(w => {
+          const statusStr = String(w.status || '').toUpperCase().trim();
+          return statusStr !== 'BELUM SELESAI';
+        })
+        .map(w => (w.nomorWO || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+    return setSelesai.size > 0 ? setSelesai.size : filteredWOs.filter(w => {
+      const statusStr = String(w.status || '').toUpperCase().trim();
+      return statusStr !== 'BELUM SELESAI';
+    }).length;
+  }, [filteredWOs]);
+
+  const woProgress = filteredWOs.filter((w) => isWOInProgress(w.status)).length;
+  const woBelum = filteredWOs.filter((w) => !isWOSelesai(w.status) && !isWOInProgress(w.status)).length;
+
+  // ULP Performance Percentage Engine
+  const ulpPerformanceList = React.useMemo(() => {
+    const activeUlps = filterUlp === 'ALL'
+      ? ulpList
+      : ulpList.filter(u => matchesUlp(u.namaULP, u.id, filterUlp));
+
+    const listToProcess = activeUlps.length > 0 ? activeUlps : ulpList;
+
+    return listToProcess.map((u, idx) => {
+      const ulpWOs = filteredWOs.filter((w) => matchesUlp(w.ulpName, w.ulpId, u.namaULP || u.id));
+      const ulpRealisasiList = filteredRealisasi.filter((r) => matchesUlp(r.ulpName, undefined, u.namaULP || u.id));
+
+      const realisasiKms = ulpWOs.reduce((sum, wo) => {
+        return sum + getWORealisasiKms(wo);
+      }, 0);
+
+      const reguInUlp = reguList.filter(r => matchesUlp(r.ulpName, r.ulpId, u.namaULP || u.id));
+      const reguCount = reguInUlp.length || 1;
+      // Target setiap tim ROW adalah 50.20 KMS
+      const targetKms = Number((reguCount * TARGET_KMS_PER_TIM_ROW).toFixed(2));
+
+      const percentage = targetKms > 0 ? Math.min(100, Math.round((realisasiKms / targetKms) * 100)) : 0;
+      const woSelesaiCount = ulpWOs.filter(w => isWOSelesai(w.status)).length;
+
+      return {
+        id: u.id || `ulp-${idx}`,
+        namaULP: u.namaULP || `ULP ${idx + 1}`,
+        realisasiKms: Number(realisasiKms.toFixed(2)),
+        targetKms: Number(targetKms.toFixed(2)),
+        percentage,
+        woTotal: ulpWOs.length,
+        woSelesai: woSelesaiCount,
+        reguCount: reguInUlp.length,
+        realisasiCount: ulpRealisasiList.length
+      };
+    });
+  }, [ulpList, filterUlp, filteredWOs, filteredRealisasi, reguList, matchesUlp]);
+
+  // Overall KMS Target calculated from total active Tim ROWs multiplied by TARGET_KMS_PER_TIM_ROW (50.20)
   const totalTargetKms = React.useMemo(() => {
-    const activeUlps = filterUlp === 'ALL' 
-      ? ulpList 
-      : ulpList.filter(u => u.id === filterUlp || u.namaULP === filterUlp);
-      
-    return activeUlps.reduce((sum, u) => {
-      const reguInUlpCount = reguList.filter(r => r.ulpId === u.id || r.ulpName === u.namaULP).length;
-      return sum + (reguInUlpCount * 50.20);
-    }, 0);
-  }, [ulpList, reguList, filterUlp]);
+    const totalRegu = ulpPerformanceList.reduce((sum, u) => sum + u.reguCount, 0);
+    const targetFromRegu = totalRegu * TARGET_KMS_PER_TIM_ROW;
+    if (targetFromRegu > 0) return Number(targetFromRegu.toFixed(2));
+    return Number(ulpPerformanceList.reduce((sum, u) => sum + u.targetKms, 0).toFixed(2));
+  }, [ulpPerformanceList]);
 
-  const totalRealisasiKms = filteredWOs.reduce((sum, wo) => {
-    const isSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
-    if (!isSelesai) return sum;
-    let val = Number(wo.totalRealisasi) || 0;
-    if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') val = val / 20;
-    return sum + val;
-  }, 0);
+  const totalRealisasiKms = React.useMemo(() => {
+    return Number(ulpPerformanceList.reduce((sum, u) => sum + u.realisasiKms, 0).toFixed(2));
+  }, [ulpPerformanceList]);
+
   const kmsPercentage = totalTargetKms > 0 ? Math.round((totalRealisasiKms / totalTargetKms) * 100) : 0;
 
-  // New Tebang/Pangkas Metrics logic
-  const totalTebang = filteredRealisasi.filter(r => (r.keterangan || '').toUpperCase() === 'TEBANG').length;
-  const totalPangkas = filteredRealisasi.filter(r => (r.keterangan || '').toUpperCase() === 'PANGKAS').length;
+  // Tebang/Pangkas Metrics logic with exact / strict matching on keterangan for filteredRealisasi (filtered by unitId via Inisiasi)
+  const totalTebang = React.useMemo(() => {
+    return filteredRealisasi.filter(r => {
+      const ket = String(r.keterangan || '').toUpperCase().trim();
+      return ket === 'TEBANG' || ket.includes('TEBANG');
+    }).length;
+  }, [filteredRealisasi]);
+
+  const totalPangkas = React.useMemo(() => {
+    return filteredRealisasi.filter(r => {
+      const ket = String(r.keterangan || '').toUpperCase().trim();
+      return ket === 'PANGKAS' || ket.includes('PANGKAS');
+    }).length;
+  }, [filteredRealisasi]);
+
   const totalRealisasiPohon = totalTebang + totalPangkas;
 
-  // New Realisasi Penyulang Metrics logic
+  // Realisasi Penyulang Metrics logic
   const targetPenyulangs = Array.from(new Set(filteredWOs.map(w => w.penyulangName).filter(Boolean))).length;
   const uniqueRealizedPenyulangs = Array.from(new Set(filteredRealisasi.map(r => r.penyulangName).filter(Boolean))).length;
   const uniqueRealizedWOs = Array.from(new Set(filteredRealisasi.map(r => r.nomorWO).filter(Boolean))).length;
 
-  const totalPetugas = Array.from(new Set(filteredWOs.map(w => w.petugasId).filter(Boolean))).length || petugasList.length;
-  const totalRegu = Array.from(new Set(filteredWOs.map(w => w.reguId).filter(Boolean))).length || reguList.length;
+  const totalPetugas = React.useMemo(() => {
+    const activePetugas = new Set<string>();
+
+    petugasList.forEach(p => {
+      const matchUnit = filterUlp === 'ALL' || (p.ulpId && p.ulpId === filterUlp) || matchesUlp(p.ulpName, p.ulpId, filterUlp);
+      const isActive = !p.status || p.status.toLowerCase() === 'aktif';
+      if (matchUnit && isActive && p.nama && p.nama.trim() && p.nama.trim() !== '-') {
+        activePetugas.add(p.nama.trim().toUpperCase());
+      }
+    });
+
+    if (activePetugas.size === 0) {
+      filteredWOs.forEach(w => {
+        if (w.petugasName && w.petugasName.trim() && w.petugasName.trim() !== '-') {
+          activePetugas.add(w.petugasName.trim().toUpperCase());
+        }
+      });
+    }
+
+    return activePetugas.size;
+  }, [petugasList, matchesUlp, filterUlp, filteredWOs]);
+
+  const totalRegu = React.useMemo(() => {
+    return topPerformersData.length || reguList.length || 0;
+  }, [topPerformersData, reguList]);
+
   const totalULP = filterUlp === 'ALL' ? ulpList.length : 1;
   const totalPenyulangFiltered = filterPenyulang === 'ALL' 
-    ? (filterUlp === 'ALL' ? penyulangList.length : penyulangList.filter(p => p.ulpName === filterUlp || p.ulpId === filterUlp).length)
+    ? (filterUlp === 'ALL' ? penyulangList.length : penyulangList.filter(p => matchesUlp(p.ulpName, p.ulpId, filterUlp)).length)
     : 1;
 
-  // Prepare data for the new RealisasiTargetDashboard (now based on Regu/Teams)
+  // Prepare data for RealisasiTargetDashboard
   const reguDashboardData = React.useMemo(() => {
-    return reguList.map((r, idx) => {
-      const reguWOs = filteredWOs.filter(w => w.reguId === r.id || w.reguName === r.namaRegu);
-      const realisasi = reguWOs.reduce((sum, wo) => {
-        const isSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
-        if (!isSelesai) return sum;
-        let val = Number(wo.totalRealisasi) || 0;
-        if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') val = val / 20;
-        return sum + val;
-      }, 0);
-      
-      return {
-        id: r.id ? `regu-${r.id}-${idx}` : `regu-idx-${idx}`,
-        name: `TIM: ROW ${String(idx + 1).padStart(2, '0')} ${ (r.namaRegu || '').toUpperCase() }`,
-        realisasi: Number(realisasi.toFixed(1)),
-        target: 50.2
-      };
-    });
-  }, [reguList, filteredWOs]);
+    return topPerformersData.map((r, idx) => ({
+      id: r.id ? `regu-${r.id}-${idx}` : `regu-idx-${idx}`,
+      name: (r.namaRegu || '').toUpperCase(),
+      realisasi: r.realisasiKms,
+      target: TARGET_KMS_PER_TIM_ROW // 50.20 KMS per Tim ROW
+    }));
+  }, [topPerformersData]);
 
   // Chart Colors based on dark mode
   const textColor = isDarkMode ? '#cbd5e1' : '#475569';
@@ -299,30 +421,16 @@ export const DashboardPage: React.FC = () => {
   };
 
   // 2. Progress per ULP Bar Chart Data
-  const ulpLabels = ulpList.map((u) => (u.namaULP || '').replace('ULP ', ''));
-  const ulpProgressData = ulpList.map((u) => {
-    const ulpWOs = filteredWOs.filter((w) => w.ulpId === u.id || w.ulpName === u.namaULP);
-    const ulpRealisasiKms = ulpWOs.reduce((sum, wo) => {
-      const isSelesai = (wo.status || '').toUpperCase() === 'SELESAI';
-      return sum + (isSelesai ? (wo.totalRealisasi || 0) : 0);
-    }, 0);
-    
-    const reguInUlp = reguList.filter(r => r.ulpId === u.id || r.ulpName === u.namaULP);
-    const reguCount = reguInUlp.length;
-    
-    const ulpTargetKms = reguCount * 50.20;
-    
-    if (ulpTargetKms === 0) return 0;
-    return Math.round((ulpRealisasiKms / ulpTargetKms) * 100);
-  });
+  const ulpLabels = ulpPerformanceList.map((u) => u.namaULP.replace(/^ULP\s*/i, ''));
+  const ulpProgressData = ulpPerformanceList.map((u) => u.percentage);
 
   const ulpBarData = {
     labels: ulpLabels,
     datasets: [
       {
-        label: 'Persentase Penyelesaian ULP (%)',
+        label: 'Persentase Realisasi ULP (%)',
         data: ulpProgressData,
-        backgroundColor: ['#008396', '#00A2B9', '#0d9488', '#0891b2'],
+        backgroundColor: ['#008396', '#00A2B9', '#0d9488', '#0891b2', '#0284c7', '#0369a1'],
         borderRadius: 8,
       },
     ],
@@ -490,9 +598,9 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#00A2B9]/20 backdrop-blur-md border border-[#00A2B9]/30 text-xs font-bold text-teal-100">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" />
+              <Database className="w-3.5 h-3.5 text-teal-400" />
               <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-              <span>Spreadsheet DB: {isGasConnected ? 'Terhubung (Online)' : 'Aktif (Connected)'}</span>
+              <span>Supabase DB: Terhubung (Online)</span>
             </div>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight font-display text-white uppercase pt-1">
@@ -515,7 +623,7 @@ export const DashboardPage: React.FC = () => {
               className="inline-flex items-center space-x-2 px-5 py-2.5 bg-teal-950/40 backdrop-blur-sm border border-[#00A2B9]/30 text-white hover:bg-teal-950/60 font-black text-xs rounded-xl transition-all active:scale-95 shadow-sm"
             >
               <FileCheck2 className="w-4 h-4 text-teal-400" />
-              <span>Lihat Monitoring Operations</span>
+              <span>Lihat Peta Operations</span>
             </button>
           </div>
         </div>
@@ -526,31 +634,74 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Dashboard Filters */}
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap gap-4 items-end">
-        <div className="flex-1 min-w-[150px]">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap gap-3 items-end">
+        <div className="w-28 sm:w-32">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">
+            Tahun
+          </label>
+          <select
+            value={filterYear}
+            onChange={(e) => setFilterYear(e.target.value)}
+            className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
+          >
+            <option value="ALL">Semua Tahun</option>
+            {yearOptions.map(yr => (
+              <option key={yr} value={yr}>{yr}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="w-32 sm:w-36">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">
+            Bulan
+          </label>
+          <select
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
+          >
+            <option value="ALL">Semua Bulan</option>
+            <option value="01">Januari</option>
+            <option value="02">Februari</option>
+            <option value="03">Maret</option>
+            <option value="04">April</option>
+            <option value="05">Mei</option>
+            <option value="06">Juni</option>
+            <option value="07">Juli</option>
+            <option value="08">Agustus</option>
+            <option value="09">September</option>
+            <option value="10">Oktober</option>
+            <option value="11">November</option>
+            <option value="12">Desember</option>
+          </select>
+        </div>
+
+        <div className="flex-1 min-w-[130px]">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">
             Tanggal Mulai
           </label>
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
+            className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           />
         </div>
-        <div className="flex-1 min-w-[150px]">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+
+        <div className="flex-1 min-w-[130px]">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">
             Tanggal Akhir
           </label>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
+            className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           />
         </div>
+
         <div className="flex-1 min-w-[150px]">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">
             Filter ULP
           </label>
           <select
@@ -559,7 +710,7 @@ export const DashboardPage: React.FC = () => {
               setFilterUlp(e.target.value);
               setFilterPenyulang('ALL'); // Reset penyulang when ULP changes
             }}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
+            className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           >
             <option value="ALL">Semua ULP</option>
             {ulpList.map((ulp, idx) => (
@@ -569,18 +720,19 @@ export const DashboardPage: React.FC = () => {
             ))}
           </select>
         </div>
+
         <div className="flex-1 min-w-[150px]">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">
             Filter Penyulang
           </label>
           <select
             value={filterPenyulang}
             onChange={(e) => setFilterPenyulang(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
+            className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00A2B9]/20 transition-all"
           >
             <option value="ALL">Semua Penyulang</option>
             {penyulangList
-              .filter(p => filterUlp === 'ALL' || p.ulpName === filterUlp || p.ulpId === filterUlp)
+              .filter(p => filterUlp === 'ALL' || matchesUlp(p.ulpName, p.ulpId, filterUlp))
               .map((p, idx) => (
                 <option key={p.id ? `p-opt-${p.id}-${idx}` : `p-opt-${idx}`} value={p.namaPenyulang || p.id || `p-${idx}`}>
                   {p.namaPenyulang}
@@ -588,14 +740,17 @@ export const DashboardPage: React.FC = () => {
               ))}
           </select>
         </div>
+
         <button
           onClick={() => {
+            setFilterYear('ALL');
+            setFilterMonth('ALL');
             setStartDate('');
             setEndDate('');
             setFilterUlp('ALL');
             setFilterPenyulang('ALL');
           }}
-          className="px-4 py-2 text-[10px] font-black text-slate-500 hover:text-rose-500 uppercase tracking-widest transition-colors"
+          className="px-4 py-2.5 text-[10px] font-black text-slate-500 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 dark:bg-slate-900 dark:hover:bg-rose-950/30 rounded-xl uppercase tracking-wider transition-all"
         >
           Reset Filter
         </button>
@@ -770,20 +925,25 @@ export const DashboardPage: React.FC = () => {
       {/* Chart Visualizations & Metrics Row */}
       <div className="grid grid-cols-1 gap-6">
         {/* Bar Chart - Progress per ULP */}
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                Persentase Realisasi Pekerjaan per ULP
+              <h3 className="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                <span>Persentase Realisasi Pekerjaan per ULP</span>
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Berdasarkan Realisasi KMS / Total Target KMS
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Berdasarkan Realisasi KMS / Total Target KMS per Unit Layanan Pelanggan
               </p>
             </div>
-            <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-600">
-              <TrendingUp className="w-5 h-5" />
+            <div className="text-right">
+              <span className="text-2xl font-black text-teal-600 dark:text-teal-400">
+                {kmsPercentage}%
+              </span>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Rata-rata Realisasi</p>
             </div>
           </div>
+
           <div className="h-72">
             <Bar 
               data={ulpBarData} 
@@ -804,52 +964,84 @@ export const DashboardPage: React.FC = () => {
               }} 
             />
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top Performers & Tim ROW */}
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
-              <div className="flex items-center space-x-2 text-amber-500">
-                <Award className="w-5 h-5" />
-                <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                  Top Performers & Tim ROW
-                </h3>
-              </div>
-              <button
-                onClick={() => setActiveTab('master_data')}
-                className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center"
-              >
-                <span>Lihat Tim</span>
-                <ArrowRight className="w-3.5 h-3.5 ml-1" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {reguList.slice(0, 3).map((regu, idx) => (
-                <div
-                  key={regu.id ? `performer-${regu.id}-${idx}` : `performer-${idx}`}
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700/60"
+          {/* ULP Performance Grid Breakdown */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60">
+            <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
+              Rincian Performa ULP
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {ulpPerformanceList.map((ulp) => (
+                <div 
+                  key={ulp.id}
+                  className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2 hover:border-teal-500/50 transition-all"
                 >
-                  <div className="flex items-center space-x-3">
-                    <span className="w-6 h-6 rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 text-[10px] font-black flex items-center justify-center">
-                      #{idx + 1}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-900 dark:text-white uppercase truncate">
+                      {ulp.namaULP}
                     </span>
-                    <div>
-                      <h4 className="font-black text-slate-900 dark:text-white text-[9px] uppercase">
-                        {regu.namaRegu}
-                      </h4>
-                      <p className="text-[9px] text-slate-500 font-medium">
-                        PJ: {regu.penanggungJawab} ({regu.jumlahAnggota} Personel)
-                      </p>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      ulp.percentage >= 100 
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        : ulp.percentage >= 50
+                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                    }`}>
+                      {ulp.percentage}%
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      <span>Realisasi:</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                        {ulp.realisasiKms} / {ulp.targetKms} KMS
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-gradient-to-r from-teal-500 to-[#00A2B9] h-full transition-all duration-500 rounded-full"
+                        style={{ width: `${Math.min(100, ulp.percentage)}%` }}
+                      />
                     </div>
                   </div>
-                  <span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 uppercase">
-                    Aktif Siaga
-                  </span>
+
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 font-semibold">
+                    <span>WO Selesai: {ulp.woSelesai} / {ulp.woTotal}</span>
+                    <span>{ulp.reguCount} Tim ROW</span>
+                  </div>
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Top Performers & Tim ROW */}
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
+            <div className="flex items-center space-x-2 text-amber-500">
+              <Award className="w-5 h-5 text-amber-500 fill-amber-500/20" />
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                  Top Performers & Tim ROW
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Peringkat tim eksekusi ROW berdasarkan realisasi pekerjaan
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('master_data')}
+              className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center"
+            >
+              <span>Semua Tim</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-1" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <TopPerformersList topPerformersData={topPerformersData} />
           </div>
         </div>
       </div>
@@ -884,66 +1076,11 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        <div 
-          ref={draggable.ref}
-          onMouseDown={draggable.onMouseDown}
-          onMouseUp={draggable.onMouseUp}
-          onMouseLeave={draggable.onMouseLeave}
-          onMouseMove={draggable.onMouseMove}
-          className="overflow-x-auto"
-          style={draggable.style}
-        >
-          <table className="w-full text-left text-[9px]">
-            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-100 dark:border-slate-800 uppercase tracking-widest text-[10px]">
-              <tr>
-                <th className="p-4 pl-6">Nomor WO</th>
-                <th className="p-4">Penyulang & ULP</th>
-                <th className="p-4">Regu / Petugas</th>
-                <th className="p-4 pr-6 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredWOs.slice(0, 10).map((wo, idx) => (
-                <tr
-                  key={wo.id ? `wo-${wo.id}-${idx}` : `wo-idx-${idx}`}
-                  className="hover:bg-teal-50/50 dark:hover:bg-slate-800/50 transition-colors group"
-                >
-                  <td className="p-4 pl-6">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-black text-[#00A2B9] dark:text-teal-400 text-[11px]">
-                        {wo.nomorWO}
-                      </span>
-                      {pendingIds.includes(wo.id) ? (
-                        <span title="Menunggu Sinkronisasi" className="text-amber-500">
-                          <CloudOff className="w-3.5 h-3.5" />
-                        </span>
-                      ) : (
-                        <span title="Tersinkron" className="text-teal-500">
-                          <Cloud className="w-3.5 h-3.5" />
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <p className="font-black text-slate-800 dark:text-white uppercase truncate">
-                      {wo.penyulangName}
-                    </p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">{wo.ulpName}</p>
-                  </td>
-                  <td className="p-4">
-                    <p className="font-black text-[#008396] dark:text-teal-400 uppercase">
-                      {wo.petugasName}
-                    </p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">{wo.reguName}</p>
-                  </td>
-                  <td className="p-4 pr-6 text-center">
-                    <StatusBadge status={wo.status} size="sm" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <RecentWOTable 
+          filteredWOs={filteredWOs} 
+          pendingIds={pendingIds} 
+          draggable={draggable} 
+        />
       </div>
     </div>
   );

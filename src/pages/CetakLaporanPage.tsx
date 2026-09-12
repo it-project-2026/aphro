@@ -10,7 +10,7 @@ import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { MapReportCapture, MapReportCaptureRef } from '../components/MapReportCapture';
 import { MapPreviewModal } from '../components/MapPreviewModal';
 import { formatDateTime, formatDateOnly, formatExecutionDateTime } from '../utils/dateFormatter';
-import { formatDateDisplay, normalizeDateISO } from '../utils/dateUtils';
+import { formatDateDisplay, normalizeDateISO, getItemDateISO } from '../utils/dateUtils';
 import {
   generateLaporanPetaPDF,
   exportWorkOrdersToExcel,
@@ -150,33 +150,25 @@ function createPlantMarkerIcon(jenisTanaman: string, noTiang: string, seqNo: num
   });
 }
 
-// Helper component for robust logo rendering with multiple fallbacks
+// Helper component for robust, offline-first vector logo rendering
 const LogoComponent = () => {
-  const [imgStatus, setImgStatus] = React.useState<'local' | 'remote' | 'fallback'>('local');
-  const logoUrl = "https://www.plnes.co.id/_next/image?url=https%3A%2F%2Fcms.plnes.co.id%2Fuploads%2FLogo_HP_New_Temporary_09a9c5a521.png&w=750&q=75";
-
-  if (imgStatus === 'fallback') {
-    return (
-      <div className="flex items-center space-x-2">
-        <div className="w-5 h-6 bg-amber-400 text-slate-900 font-extrabold text-xs flex items-center justify-center rounded-2xs">⚡</div>
-        <div className="text-left leading-none">
-          <span className="font-extrabold text-teal-700 text-xs block">PLN</span>
-          <span className="font-bold text-teal-900 text-[10px]">Electricity Services</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <img 
-      src={imgStatus === 'local' ? '/logo_plnes.png' : logoUrl} 
-      alt="PLN Logo" 
-      className="h-10 w-auto object-contain"
-      onError={() => {
-        if (imgStatus === 'local') setImgStatus('remote');
-        else setImgStatus('fallback');
-      }}
-    />
+    <div className="flex items-center space-x-2 select-none">
+      <div className="w-10 h-10 bg-[#FFEB00] rounded-sm flex items-center justify-center relative p-1 shrink-0">
+        {/* Three blue wavy lines */}
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 24 24">
+          <path d="M2 9 Q4.5 7.5, 7 9 T12 9 T17 9 T22 9" stroke="#00A2B9" strokeWidth="1.5" fill="none" />
+          <path d="M2 13 Q4.5 11.5, 7 13 T12 13 T17 13 T22 13" stroke="#00A2B9" strokeWidth="1.5" fill="none" />
+          <path d="M2 17 Q4.5 15.5, 7 17 T12 17 T17 17 T22 17" stroke="#00A2B9" strokeWidth="1.5" fill="none" />
+          {/* Red lightning bolt */}
+          <path d="M14.5 3 L7.5 12.5 H12.5 L9.5 21 L16.5 11.5 H11.5 Z" fill="#E53E3E" />
+        </svg>
+      </div>
+      <div className="text-left leading-tight shrink-0">
+        <span className="font-extrabold text-[#00A2B9] text-base block tracking-tight">PLN</span>
+        <span className="font-semibold text-[#00A2B9] text-[9px] block tracking-tight uppercase">Electricity Service</span>
+      </div>
+    </div>
   );
 };
 
@@ -206,7 +198,7 @@ export const CetakLaporanPage: React.FC = () => {
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterNoWo, setFilterNoWo] = useState('ALL');
-  const [filterDate, setFilterDate] = useState(getTodayDateString());
+  const [filterDate, setFilterDate] = useState('');
   const [latestMapImage, setLatestMapImage] = useState<string | null>(null);
   const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
   const mapCaptureRef = useRef<MapReportCaptureRef>(null);
@@ -249,15 +241,32 @@ export const CetakLaporanPage: React.FC = () => {
     return penyulangList.filter((p) => {
       if (cleanStr(p.ulpId) === cleanStr(filterUlp) || cleanStr(p.ulpName) === cleanStr(filterUlp)) return true;
       if (selectedUlpObj && (cleanStr(p.ulpId) === cleanStr(selectedUlpObj.id) || cleanStr(p.ulpName) === cleanStr(selectedUlpObj.namaULP))) return true;
-      if (p.ulpName && targetUlpName && cleanStr(p.ulpName) === cleanStr(targetUlpName)) return true;
+      if (p.ulpName && targetUlpName && (cleanStr(p.ulpName) === cleanStr(targetUlpName) || cleanStr(p.ulpName).includes(cleanStr(targetUlpName)) || cleanStr(targetUlpName).includes(cleanStr(p.ulpName)))) return true;
       return false;
     });
   }, [penyulangList, filterUlp, ulpList]);
 
-  // Filter available NO WO by selected ULP
+  // Filter available Regu by selected ULP
+  const availableReguList = useMemo(() => {
+    if (filterUlp === 'ALL') return reguList;
+    const selectedUlpObj = ulpList.find((u) => u.id === filterUlp || u.namaULP === filterUlp);
+    const targetUlpName = selectedUlpObj ? selectedUlpObj.namaULP : filterUlp;
+
+    return reguList.filter((r) => {
+      if (cleanStr(r.ulpId) === cleanStr(filterUlp) || cleanStr(r.ulpName) === cleanStr(filterUlp)) return true;
+      if (selectedUlpObj && (cleanStr(r.ulpId) === cleanStr(selectedUlpObj.id) || cleanStr(r.ulpName) === cleanStr(selectedUlpObj.namaULP))) return true;
+      if (r.ulpName && targetUlpName && (cleanStr(r.ulpName) === cleanStr(targetUlpName) || cleanStr(r.ulpName).includes(cleanStr(targetUlpName)) || cleanStr(targetUlpName).includes(cleanStr(r.ulpName)))) return true;
+      return false;
+    });
+  }, [reguList, filterUlp, ulpList]);
+
+  // Filter available NO WO by selected ULP, Penyulang, and Regu
   const availableWONumbers = useMemo(() => {
     const selectedUlpObj = ulpList.find((u) => u.id === filterUlp || u.namaULP === filterUlp);
     const targetUlpName = selectedUlpObj ? selectedUlpObj.namaULP : filterUlp;
+
+    const selectedPenyulangObj = penyulangList.find((p) => p.id === filterPenyulang || p.namaPenyulang === filterPenyulang);
+    const targetPenyulangName = selectedPenyulangObj ? selectedPenyulangObj.namaPenyulang : filterPenyulang;
 
     const woSet = new Set<string>();
 
@@ -266,11 +275,25 @@ export const CetakLaporanPage: React.FC = () => {
         filterUlp === 'ALL' ||
         cleanStr(wo.ulpId) === cleanStr(filterUlp) ||
         cleanStr(wo.ulpName) === cleanStr(filterUlp) ||
-        (wo.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
+        (wo.ulpName && targetUlpName && (
+          cleanStr(wo.ulpName) === cleanStr(targetUlpName) ||
+          cleanStr(wo.ulpName).includes(cleanStr(targetUlpName)) ||
+          cleanStr(targetUlpName).includes(cleanStr(wo.ulpName))
+        ));
       
+      const matchesPenyulang =
+        filterPenyulang === 'ALL' ||
+        cleanStr(wo.penyulangId) === cleanStr(filterPenyulang) ||
+        cleanStr(wo.penyulangName) === cleanStr(filterPenyulang) ||
+        (wo.penyulangName && targetPenyulangName && (
+          cleanStr(wo.penyulangName) === cleanStr(targetPenyulangName) ||
+          cleanStr(wo.penyulangName).includes(cleanStr(targetPenyulangName)) ||
+          cleanStr(targetPenyulangName).includes(cleanStr(wo.penyulangName))
+        ));
+
       const matchesRegu = filterRegu === 'ALL' || cleanStr(wo.reguName) === cleanStr(filterRegu);
 
-      if (matchesUlp && matchesRegu && wo.nomorWO) {
+      if (matchesUlp && matchesPenyulang && matchesRegu && wo.nomorWO) {
         woSet.add(wo.nomorWO);
       }
     });
@@ -282,19 +305,43 @@ export const CetakLaporanPage: React.FC = () => {
         cleanStr(rel.ulpName) === cleanStr(filterUlp) ||
         cleanStr(wo?.ulpName) === cleanStr(filterUlp) ||
         cleanStr(wo?.ulpId) === cleanStr(filterUlp) ||
-        (rel.ulpName && targetUlpName && cleanStr(rel.ulpName) === cleanStr(targetUlpName)) ||
-        (wo?.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
+        (rel.ulpName && targetUlpName && (
+          cleanStr(rel.ulpName) === cleanStr(targetUlpName) ||
+          cleanStr(rel.ulpName).includes(cleanStr(targetUlpName)) ||
+          cleanStr(targetUlpName).includes(cleanStr(rel.ulpName))
+        )) ||
+        (wo?.ulpName && targetUlpName && (
+          cleanStr(wo.ulpName) === cleanStr(targetUlpName) ||
+          cleanStr(wo.ulpName).includes(cleanStr(targetUlpName)) ||
+          cleanStr(targetUlpName).includes(cleanStr(wo.ulpName))
+        ));
       
+      const matchesPenyulang =
+        filterPenyulang === 'ALL' ||
+        cleanStr(rel.penyulangName) === cleanStr(filterPenyulang) ||
+        cleanStr(wo?.penyulangName) === cleanStr(filterPenyulang) ||
+        cleanStr(wo?.penyulangId) === cleanStr(filterPenyulang) ||
+        (rel.penyulangName && targetPenyulangName && (
+          cleanStr(rel.penyulangName) === cleanStr(targetPenyulangName) ||
+          cleanStr(rel.penyulangName).includes(cleanStr(targetPenyulangName)) ||
+          cleanStr(targetPenyulangName).includes(cleanStr(rel.penyulangName))
+        )) ||
+        (wo?.penyulangName && targetPenyulangName && (
+          cleanStr(wo.penyulangName) === cleanStr(targetPenyulangName) ||
+          cleanStr(wo.penyulangName).includes(cleanStr(targetPenyulangName)) ||
+          cleanStr(targetPenyulangName).includes(cleanStr(wo.penyulangName))
+        ));
+
       const matchesRegu = filterRegu === 'ALL' || cleanStr(rel.reguName) === cleanStr(filterRegu) || cleanStr(wo?.reguName) === cleanStr(filterRegu);
 
-      if (matchesUlp && matchesRegu) {
+      if (matchesUlp && matchesPenyulang && matchesRegu) {
         if (rel.nomorWO) woSet.add(rel.nomorWO);
         if (wo?.nomorWO) woSet.add(wo.nomorWO);
       }
     });
 
     return Array.from(woSet).filter(Boolean).sort();
-  }, [workOrders, realisasiList, workOrdersMap, filterUlp, ulpList]);
+  }, [workOrders, realisasiList, workOrdersMap, filterUlp, filterPenyulang, filterRegu, ulpList, penyulangList]);
 
   const filteredRealisasi = useMemo(() => {
     return realisasiList.filter((rel) => {
@@ -317,8 +364,16 @@ export const CetakLaporanPage: React.FC = () => {
         cleanStr(rel.ulpName) === cleanStr(filterUlp) ||
         cleanStr(wo?.ulpName) === cleanStr(filterUlp) ||
         cleanStr(wo?.ulpId) === cleanStr(filterUlp) ||
-        (rel.ulpName && targetUlpName && cleanStr(rel.ulpName) === cleanStr(targetUlpName)) ||
-        (wo?.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
+        (rel.ulpName && targetUlpName && (
+          cleanStr(rel.ulpName) === cleanStr(targetUlpName) ||
+          cleanStr(rel.ulpName).includes(cleanStr(targetUlpName)) ||
+          cleanStr(targetUlpName).includes(cleanStr(rel.ulpName))
+        )) ||
+        (wo?.ulpName && targetUlpName && (
+          cleanStr(wo.ulpName) === cleanStr(targetUlpName) ||
+          cleanStr(wo.ulpName).includes(cleanStr(targetUlpName)) ||
+          cleanStr(targetUlpName).includes(cleanStr(wo.ulpName))
+        ));
 
       const selectedPenyulangObj = penyulangList.find((p) => p.id === filterPenyulang || p.namaPenyulang === filterPenyulang);
       const targetPenyulangName = selectedPenyulangObj ? selectedPenyulangObj.namaPenyulang : filterPenyulang;
@@ -328,8 +383,16 @@ export const CetakLaporanPage: React.FC = () => {
         cleanStr(rel.penyulangName) === cleanStr(filterPenyulang) ||
         cleanStr(wo?.penyulangName) === cleanStr(filterPenyulang) ||
         cleanStr(wo?.penyulangId) === cleanStr(filterPenyulang) ||
-        (rel.penyulangName && targetPenyulangName && cleanStr(rel.penyulangName) === cleanStr(targetPenyulangName)) ||
-        (wo?.penyulangName && targetPenyulangName && cleanStr(wo.penyulangName) === cleanStr(targetPenyulangName));
+        (rel.penyulangName && targetPenyulangName && (
+          cleanStr(rel.penyulangName) === cleanStr(targetPenyulangName) ||
+          cleanStr(rel.penyulangName).includes(cleanStr(targetPenyulangName)) ||
+          cleanStr(targetPenyulangName).includes(cleanStr(rel.penyulangName))
+        )) ||
+        (wo?.penyulangName && targetPenyulangName && (
+          cleanStr(wo.penyulangName) === cleanStr(targetPenyulangName) ||
+          cleanStr(wo.penyulangName).includes(cleanStr(targetPenyulangName)) ||
+          cleanStr(targetPenyulangName).includes(cleanStr(wo.penyulangName))
+        ));
 
       const matchesNoWo =
         filterNoWo === 'ALL' ||
@@ -339,8 +402,9 @@ export const CetakLaporanPage: React.FC = () => {
 
       const matchesRegu = filterRegu === 'ALL' || cleanStr(rel.reguName) === cleanStr(filterRegu) || cleanStr(wo?.reguName) === cleanStr(filterRegu);
 
-      const itemDate = normalizeDateISO(rel.tanggalRealisasi || rel.createdAt);
-      const matchesDate = !filterDate || itemDate === filterDate;
+      const itemDate = getItemDateISO(rel);
+      const normFilterDate = normalizeDateISO(filterDate);
+      const matchesDate = !normFilterDate || itemDate === normFilterDate;
 
       return matchesDate && matchesUlp && matchesPenyulang && matchesNoWo && matchesRegu;
     });
@@ -363,7 +427,11 @@ export const CetakLaporanPage: React.FC = () => {
         filterUlp === 'ALL' ||
         cleanStr(wo.ulpId) === cleanStr(filterUlp) ||
         cleanStr(wo.ulpName) === cleanStr(filterUlp) ||
-        (wo.ulpName && targetUlpName && cleanStr(wo.ulpName) === cleanStr(targetUlpName));
+        (wo.ulpName && targetUlpName && (
+          cleanStr(wo.ulpName) === cleanStr(targetUlpName) ||
+          cleanStr(wo.ulpName).includes(cleanStr(targetUlpName)) ||
+          cleanStr(targetUlpName).includes(cleanStr(wo.ulpName))
+        ));
 
       const selectedPenyulangObj = penyulangList.find((p) => p.id === filterPenyulang || p.namaPenyulang === filterPenyulang);
       const targetPenyulangName = selectedPenyulangObj ? selectedPenyulangObj.namaPenyulang : filterPenyulang;
@@ -372,7 +440,11 @@ export const CetakLaporanPage: React.FC = () => {
         filterPenyulang === 'ALL' ||
         cleanStr(wo.penyulangId) === cleanStr(filterPenyulang) ||
         cleanStr(wo.penyulangName) === cleanStr(filterPenyulang) ||
-        (wo.penyulangName && targetPenyulangName && cleanStr(wo.penyulangName) === cleanStr(targetPenyulangName));
+        (wo.penyulangName && targetPenyulangName && (
+          cleanStr(wo.penyulangName) === cleanStr(targetPenyulangName) ||
+          cleanStr(wo.penyulangName).includes(cleanStr(targetPenyulangName)) ||
+          cleanStr(targetPenyulangName).includes(cleanStr(wo.penyulangName))
+        ));
 
       const matchesNoWo =
         filterNoWo === 'ALL' ||
@@ -381,7 +453,11 @@ export const CetakLaporanPage: React.FC = () => {
 
       const matchesRegu = filterRegu === 'ALL' || cleanStr(wo.reguName) === cleanStr(filterRegu);
 
-      return matchesUlp && matchesPenyulang && matchesNoWo && matchesRegu;
+      const itemDate = getItemDateISO(wo);
+      const normFilterDate = normalizeDateISO(filterDate);
+      const matchesDate = !normFilterDate || itemDate === normFilterDate;
+
+      return matchesDate && matchesUlp && matchesPenyulang && matchesNoWo && matchesRegu;
     });
   }, [workOrders, filterUlp, filterPenyulang, filterNoWo, filterRegu, isAdmbktUser, currentUser, ulpList, penyulangList]);
 
@@ -397,7 +473,7 @@ export const CetakLaporanPage: React.FC = () => {
     ? selectedPenyulangObj.namaPenyulang
     : filterPenyulang !== 'ALL'
     ? filterPenyulang
-    : (filteredRealisasi[0]?.penyulangName || filteredWOs[0]?.penyulangName || '1 BASO - G.H. TANJUNG ALAM');
+    : (filteredRealisasi[0]?.penyulangName || filteredWOs[0]?.penyulangName || penyulangList[0]?.namaPenyulang || '');
 
   const selectedAreaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
 
@@ -426,6 +502,7 @@ export const CetakLaporanPage: React.FC = () => {
             pertumbuhanTanaman: rel.pertumbuhanTanaman || 'SEDANG',
             status: rel.status || wo?.status || 'Selesai',
             photoUrl,
+            tanggalRealisasi: rel.tanggalRealisasi || rel.createdAt || wo?.tanggal || wo?.createdAt,
           };
         })
       : filteredWOs.map((wo, idx) => {
@@ -445,6 +522,7 @@ export const CetakLaporanPage: React.FC = () => {
             pertumbuhanTanaman: 'SEDANG',
             status: wo.status || 'Belum Dikerjakan',
             photoUrl: wo.lampiranUrl,
+            tanggalRealisasi: wo.tanggal || wo.createdAt,
           };
         });
 
@@ -455,7 +533,7 @@ export const CetakLaporanPage: React.FC = () => {
       let lng = pt.lng;
 
       const key = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
-      if (seenCoords.has(key) || idx > 0) {
+      if (seenCoords.has(key)) {
         // Apply distinct spiral offset based on index to completely eliminate overlapping boxes
         const angle = idx * 2.39996; // golden angle distribution
         const radius = 0.0015 * Math.sqrt(idx + 1); // ~150 meters spread
@@ -547,7 +625,8 @@ export const CetakLaporanPage: React.FC = () => {
           status: pt.status,
           seqNo: idx + 1,
           ulpName: pt.ulpName,
-          penyulangName: pt.penyulangName
+          penyulangName: pt.penyulangName,
+          tanggalRealisasi: pt.tanggalRealisasi
         }));
 
         await generateEnhancedLaporanPetaPDF(
@@ -572,7 +651,7 @@ export const CetakLaporanPage: React.FC = () => {
           selectedUlpName,
           selectedPenyulangName,
           filteredRealisasi,
-          undefined,
+          latestMapImage || undefined,
           nonOverlappingMapPoints
         );
       } finally {
@@ -644,7 +723,7 @@ export const CetakLaporanPage: React.FC = () => {
               onClick={() => syncWithGAS(showToast)}
               disabled={isSyncing}
               className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-900 font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
-              title="Sinkronkan / Tarik Data Terbaru dari Spreadsheet Google"
+              title="Sinkronkan / Tarik Data Terbaru dari Supabase Database"
             >
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
               <span>{isSyncing ? 'Syncing...' : 'Sync Data'}</span>
@@ -682,14 +761,14 @@ export const CetakLaporanPage: React.FC = () => {
         </div>
 
         {/* Tab Selection & Filter Bar */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 pt-6 border-t border-slate-100 dark:border-slate-700">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 pt-6 border-t border-slate-100 dark:border-slate-700">
           {/* Professional Tab Toggle */}
-          <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl sm:w-auto self-start">
+          <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl sm:w-auto self-start select-none shadow-inner">
             <button
               onClick={() => setActiveReportTab('foto')}
-              className={`inline-flex items-center justify-center space-x-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`inline-flex items-center justify-center space-x-2 px-6 py-2.5 rounded-lg text-xs font-extrabold transition-all duration-200 ${
                 activeReportTab === 'foto'
-                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-sm ring-1 ring-slate-200/50'
+                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-md ring-1 ring-slate-200/50'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
@@ -699,9 +778,9 @@ export const CetakLaporanPage: React.FC = () => {
 
             <button
               onClick={() => setActiveReportTab('peta')}
-              className={`inline-flex items-center justify-center space-x-2 px-6 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`inline-flex items-center justify-center space-x-2 px-6 py-2.5 rounded-lg text-xs font-extrabold transition-all duration-200 ${
                 activeReportTab === 'peta'
-                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-sm ring-1 ring-slate-200/50'
+                  ? 'bg-white dark:bg-slate-800 text-[#00A2B9] dark:text-teal-400 shadow-md ring-1 ring-slate-200/50'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
@@ -709,38 +788,48 @@ export const CetakLaporanPage: React.FC = () => {
               <span>CETAK PETA</span>
             </button>
           </div>
+        </div>
 
-          {/* Vertical Divider for desktop */}
-          <div className="hidden lg:block w-px h-8 bg-slate-200 dark:bg-slate-700 mx-2"></div>
-
-          {/* Unified Filter Group */}
-          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
-            <div className="flex items-center space-x-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-              <Filter className="w-3 h-3" />
-              <span>Filter Laporan</span>
+        {/* Dedicated, Professional Filter Panel Card */}
+        <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-100 dark:border-slate-800/80 p-4 space-y-4">
+          <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-200">
+            <div className="p-1.5 bg-[#00A2B9]/10 rounded-lg text-[#00A2B9]">
+              <Filter className="w-4 h-4" />
             </div>
-            
-            <div className="grid grid-cols-1 sm:flex items-center gap-2 w-full sm:w-auto">
-              <div className="flex items-center gap-1">
+            <div className="text-left">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider block text-[#008396] dark:text-teal-400">PILIH FILTER PENYARINGAN LAPORAN</span>
+              <span className="text-[9px] text-slate-400 dark:text-slate-500 block">Saring hasil rekapitulasi data berdasarkan kriteria di bawah ini</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+            {/* 1. Filter Tanggal */}
+            <div className="flex flex-col space-y-1.5">
+              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Tanggal Kerja</span>
+              <div className="flex items-center gap-1.5 w-full">
                 <input
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
                   title="Filter Tanggal"
                 />
                 {filterDate && (
                   <button
                     type="button"
                     onClick={() => setFilterDate('')}
-                    className="px-2.5 py-2 text-[10px] bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors whitespace-nowrap"
+                    className="px-2.5 py-2 text-[10px] bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl font-bold text-slate-700 dark:text-slate-300 transition-colors whitespace-nowrap shadow-xs"
                     title="Tampilkan Semua Tanggal"
                   >
                     Semua
                   </button>
                 )}
               </div>
+            </div>
 
+            {/* 2. Filter ULP */}
+            <div className="flex flex-col space-y-1.5">
+              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Unit Layanan (ULP)</span>
               <select
                 value={filterUlp}
                 onChange={(e) => {
@@ -749,7 +838,7 @@ export const CetakLaporanPage: React.FC = () => {
                   setFilterRegu('ALL');
                   setFilterNoWo('ALL');
                 }}
-                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[140px]"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
               >
                 <option value="ALL">Semua ULP</option>
                 {ulpList.map((u, idx) => (
@@ -758,11 +847,19 @@ export const CetakLaporanPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
 
+            {/* 3. Filter Penyulang */}
+            <div className="flex flex-col space-y-1.5">
+              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Penyulang (Feeder)</span>
               <select
                 value={filterPenyulang}
-                onChange={(e) => setFilterPenyulang(e.target.value)}
-                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[160px]"
+                onChange={(e) => {
+                  setFilterPenyulang(e.target.value);
+                  setFilterNoWo('ALL');
+                  setFilterRegu('ALL');
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
               >
                 <option value="ALL">Semua Penyulang</option>
                 {availablePenyulangList.map((p, idx) => (
@@ -771,26 +868,35 @@ export const CetakLaporanPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
 
+            {/* 4. Filter Regu */}
+            <div className="flex flex-col space-y-1.5">
+              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Regu Pelaksana</span>
               <select
                 value={filterRegu}
-                onChange={(e) => setFilterRegu(e.target.value)}
-                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[140px]"
+                onChange={(e) => {
+                  setFilterRegu(e.target.value);
+                  setFilterNoWo('ALL');
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
               >
                 <option value="ALL">Semua Regu</option>
-                {reguList
-                  .filter(r => filterUlp === 'ALL' || cleanStr(r.ulpId) === cleanStr(filterUlp) || cleanStr(r.ulpName) === cleanStr(filterUlp))
-                  .map((r, idx) => (
+                {availableReguList.map((r, idx) => (
                   <option key={`${r.id}-${idx}`} value={r.namaRegu}>
                     {r.namaRegu}
                   </option>
                 ))}
               </select>
+            </div>
 
+            {/* 5. Filter Nomor WO */}
+            <div className="flex flex-col space-y-1.5">
+              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Nomor Work Order</span>
               <select
                 value={filterNoWo}
                 onChange={(e) => setFilterNoWo(e.target.value)}
-                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer min-w-[140px]"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
               >
                 <option value="ALL">Semua NO WO</option>
                 {availableWONumbers.map((woNum, idx) => (
@@ -883,10 +989,10 @@ export const CetakLaporanPage: React.FC = () => {
                             {rel.ulpName || wo?.ulpName || selectedUlpName}
                           </td>
                           <td className="p-2 border border-slate-200 font-medium text-[10px]">
-                            {rel.reguName || wo?.reguName || rel.petugasName || 'TIM ROW BASO'}
+                            {rel.reguName || wo?.reguName || rel.petugasName || ''}
                           </td>
                           <td className="p-2 border border-slate-200 font-medium text-[10px]">
-                            {rel.penyulangName || wo?.penyulangName || 'F Baso'}
+                            {rel.penyulangName || wo?.penyulangName || ''}
                           </td>
                           <td className="p-2 border border-slate-200 font-bold text-[10px]">
                             {rel.noTiang || wo?.lokasi || '-'}

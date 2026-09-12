@@ -21,11 +21,43 @@ export function getOfflineQueue(): PendingSyncItem[] {
   }
 }
 
+function sanitizePayload(payload: any): any {
+  if (!payload || typeof payload !== 'object') return payload;
+  const copy = Array.isArray(payload) ? [...payload] : { ...payload };
+  for (const key of Object.keys(copy)) {
+    const val = copy[key];
+    if (typeof val === 'string') {
+      if (val.startsWith('data:image/') || val.length > 20000) {
+        copy[key] = val.startsWith('data:image/') ? '[IMAGE_BASE64_ATTACHED]' : val.substring(0, 20000) + '...[TRUNCATED]';
+      }
+    } else if (val && typeof val === 'object') {
+      copy[key] = sanitizePayload(val);
+    }
+  }
+  return copy;
+}
+
 export function saveOfflineQueue(queue: PendingSyncItem[]): void {
   try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-  } catch (e) {
+    const sanitized = queue.map(item => ({
+      ...item,
+      payload: sanitizePayload(item.payload)
+    }));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(sanitized));
+  } catch (e: any) {
     console.error('Failed to save offline sync queue:', e);
+    // If quota exceeded, try trimming queue to last 15 items with minimal payloads
+    if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014 || String(e).includes('exceeded the quota'))) {
+      try {
+        const trimmed = queue.slice(-15).map(item => ({
+          ...item,
+          payload: { summary: '[TRUNCATED_DUE_TO_STORAGE_QUOTA]', id: item.payload?.id || item.payload?.nomorWO }
+        }));
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(trimmed));
+      } catch (innerErr) {
+        console.error('Failed even after trimming offline queue:', innerErr);
+      }
+    }
   }
 }
 

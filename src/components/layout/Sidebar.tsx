@@ -26,6 +26,7 @@ import {
   CalendarCheck,
   Building2,
   CalendarRange,
+  BarChart3,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -95,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
     {
       id: 'monitoring',
       label: 'Monitoring',
-      icon: MapPin,
+      icon: BarChart3,
       roles: ['SuperAdmin', 'Admin', 'User'],
     },
     {
@@ -126,7 +127,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       id: 'inisiasi',
       label: 'Inisiasi Unit Layanan',
       icon: Building2,
-      roles: ['SuperAdmin', 'Admin', 'User'],
+      roles: ['SuperAdmin', 'Admin'],
+    },
+    {
+      id: 'settings',
+      label: 'Setting & Konfigurasi',
+      icon: Settings,
+      roles: ['SuperAdmin', 'Admin'],
     },
     {
       id: 'logs',
@@ -137,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   ];
 
   const allowedItems = isAdmRole
-    ? navItems.filter((item) => ['cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi'].includes(item.id))
+    ? navItems.filter((item) => ['cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'settings'].includes(item.id))
     : navItems.filter((item) => item.roles.includes(role));
 
   return (
@@ -228,23 +235,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
             })}
           </nav>
 
-          {/* Spreadsheet Database Connection Card Widget */}
+          {/* PostgreSQL Database Connection Card Widget */}
           <div className="px-3 py-2">
             <div className="p-3 rounded-2xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/80 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  <Database className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                   <span className="text-[11px] font-black text-teal-950 dark:text-teal-200 uppercase font-display tracking-tight">
-                    Spreadsheet DB
+                    PostgreSQL DB
                   </span>
                 </div>
                 <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00A2B9] animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00A2B9]" />
                   <span>{isGasConnected ? 'ONLINE' : 'ACTIVE'}</span>
                 </span>
               </div>
               <p className="text-[10px] text-teal-800 dark:text-teal-300/80 font-medium line-clamp-1">
-                APHRO_DATABASE_ENTERPRISE
+                Supabase APHRO Database
               </p>
               <button
                 type="button"

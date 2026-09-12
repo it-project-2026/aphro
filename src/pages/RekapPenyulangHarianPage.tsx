@@ -17,6 +17,7 @@ import {
   RekapItemData,
   exportRekapHarianToExcel,
 } from '../utils/rekapExportService';
+import { TARGET_KMS_PER_TIM_ROW, calculateTimRowTargetKms } from '../utils/metricUtils';
 import {
   CalendarRange,
   FileSpreadsheet,
@@ -85,7 +86,7 @@ export const RekapPenyulangHarianPage: React.FC = () => {
       let currentWorkOrders = workOrders;
 
       if (navigator.onLine) {
-        showToast('Mengambil data terbaru dari Spreadsheet...', 'info');
+        showToast('Mengambil data terbaru dari Supabase Database...', 'info');
         const freshData = await syncWithGAS();
         if (freshData) {
           if (Array.isArray(freshData.realisasi)) currentRealisasi = freshData.realisasi;
@@ -198,7 +199,7 @@ export const RekapPenyulangHarianPage: React.FC = () => {
   }, [daysInMonth, filteredRows]);
 
   const grandTotalsSummary = useMemo(() => {
-    let grandVolume = 0, grandTarget = 0;
+    let grandVolume = 0;
     filteredRows.forEach((row) => {
       let rowTot = 0;
       daysInMonth.forEach((d) => {
@@ -206,11 +207,13 @@ export const RekapPenyulangHarianPage: React.FC = () => {
         rowTot += (v.realisasiKms || 0);
       });
       grandVolume += rowTot;
-      grandTarget += 50.20;
     });
+    // Target adalah per KMS yang mana Total Target KMS 552 untuk UL BUKITTINGGI, setiap tim ROW targetnya 50.20
+    const isBukittinggi = selectedULKey === 'BUKITTINGGI';
+    const grandTarget = calculateTimRowTargetKms(filteredRows.length, isBukittinggi);
     const sisa = grandTarget - grandVolume;
     const percent = grandTarget > 0 ? (grandVolume / grandTarget) * 100 : 0;
-    return { volume: grandVolume, sisa, percent: Math.round(percent) };
+    return { volume: grandVolume, target: grandTarget, sisa, percent: Math.round(percent) };
   }, [daysInMonth, filteredRows]);
 
   return (
@@ -342,7 +345,7 @@ export const RekapPenyulangHarianPage: React.FC = () => {
                   const val = row.dailyValues[d.dayFormatted] || { realisasiKms: 0 };
                   rowVolumeSum += (val.realisasiKms || 0);
                 });
-                const target = 50.20;
+                const target = row.target || TARGET_KMS_PER_TIM_ROW;
                 const sisa = target - rowVolumeSum;
                 const percent = (rowVolumeSum / target) * 100;
 

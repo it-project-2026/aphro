@@ -19,6 +19,7 @@ import {
 } from '../utils/rekapExportService';
 import { SyncService } from '../services/syncService';
 import { getActiveGasConfig } from '../config/gasConfig';
+import { TARGET_KMS_PER_TIM_ROW, calculateTimRowTargetKms } from '../utils/metricUtils';
 import {
   CalendarRange,
   FileSpreadsheet,
@@ -365,7 +366,6 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
   const grandTotalsSummary = useMemo(() => {
     let grandVolume = 0;
-    let grandTarget = 0;
     let grandTargetKms = 0;
     let grandRealisasiKms = 0;
 
@@ -379,10 +379,11 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
         grandRealisasiKms += v.realisasiKms || 0;
       });
       grandVolume += rowTot;
-      // Target is 50.20 per row
-      grandTarget += 50.20;
     });
 
+    // Target adalah per KMS yang mana Total Target KMS 552 untuk UL BUKITTINGGI, setiap tim ROW targetnya 50.20
+    const isBukittinggi = selectedULKey === 'BUKITTINGGI';
+    const grandTarget = calculateTimRowTargetKms(filteredRows.length, isBukittinggi);
     const sisa = grandTarget - grandVolume;
     const percent = grandTarget > 0 ? (grandVolume / grandTarget) * 100 : 0;
 
@@ -762,7 +763,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                   rowVolumeSum += (val.realisasiKms || 0);
                 });
 
-                const target = 50.20; // Fixed target as requested
+                const target = row.target || TARGET_KMS_PER_TIM_ROW;
                 const sisa = target - rowVolumeSum;
                 const percent = (rowVolumeSum / target) * 100;
 

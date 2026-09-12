@@ -20,6 +20,7 @@ import {
   AlertCircle,
   RefreshCw,
   ExternalLink,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { APP_LOGO_URL } from '../../data/initialData';
@@ -31,7 +32,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
   const { user: currentUser, logout, loginAsRole } = useAuth();
   const { settings } = useSettings();
-  const { isDarkMode, toggleDarkMode } = useUI();
+  const { activeTab, setActiveTab, isDarkMode, toggleDarkMode } = useUI();
   const { notifications, markNotificationAsRead, clearNotifications } = useNotifications();
   const {
     isGasConnected,
@@ -138,18 +139,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#008396] dark:text-teal-400 shrink-0" />
               <span className="relative flex h-2 w-2 shrink-0">
                 <span
-                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    !isOnline
-                      ? 'bg-rose-400'
-                      : pendingCount > 0
-                      ? 'bg-amber-400'
-                      : isGasConnected
-                      ? 'bg-teal-400'
-                      : 'bg-slate-400'
-                  }`}
-                />
-                <span
-                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                  className={`inline-flex rounded-full h-2 w-2 ${
                     !isOnline
                       ? 'bg-rose-500'
                       : pendingCount > 0
@@ -164,13 +154,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                 {!isOnline
                   ? `Offline (${pendingCount} Antrean)`
                   : pendingCount > 0
-                  ? `⚡ Sync ${pendingCount} Data`
+                  ? `⚡ Sinkron ${pendingCount} Data`
                   : isGasConnected
-                  ? 'Spreadsheet: Terhubung'
-                  : 'Spreadsheet: Standby'}
+                  ? 'Database PostgreSQL: Terhubung'
+                  : 'Database PostgreSQL: Standby'}
               </span>
               <span className="md:hidden font-display text-[10px]">
-                {!isOnline ? `Offline` : pendingCount > 0 ? `⚡ Sync(${pendingCount})` : isGasConnected ? 'Online' : 'Standby'}
+                {!isOnline ? `Offline` : pendingCount > 0 ? `⚡ Sinkron(${pendingCount})` : isGasConnected ? 'Online' : 'Standby'}
               </span>
               <ChevronDown className="w-3 h-3 opacity-60 hidden sm:block" />
             </button>
@@ -232,21 +222,21 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                     <div className="flex items-start space-x-2 text-rose-700 dark:text-rose-300 text-[11px] bg-rose-50/80 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200 dark:border-rose-800">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
                       <span>
-                        Aplikasi dalam mode <strong>Offline</strong>. Semua data input tersimpan aman di memori perangkat. Saat terhubung internet, tekan <strong>Tombol Sync Data</strong> untuk mengirim ke Spreadsheet.
+                        Aplikasi dalam mode <strong>Offline</strong>. Semua data input tersimpan aman di memori perangkat. Saat terhubung internet, tekan <strong>Tombol Sync Data</strong> untuk menyinkronkan ke Database.
                       </span>
                     </div>
                   ) : pendingCount > 0 ? (
                     <div className="flex items-start space-x-2 text-amber-700 dark:text-amber-300 text-[11px] bg-amber-50/80 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800">
                       <Zap className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
                       <span>
-                        Terdapat {pendingCount} data di perangkat. Silakan tekan tombol <strong>Sync Data</strong> di bawah untuk mengirim ke Google Spreadsheet.
+                        Terdapat {pendingCount} data di perangkat. Silakan tekan tombol <strong>Sync Data</strong> di bawah untuk menyinkronkan ke Database PostgreSQL.
                       </span>
                     </div>
                   ) : isGasConnected ? (
                     <div className="flex items-start space-x-2 text-[#008396] dark:text-teal-300 text-[11px] bg-teal-50/80 dark:bg-teal-950/40 p-2.5 rounded-xl border border-teal-200 dark:border-teal-800">
                       <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[#008396]" />
                       <span>
-                        Aplikasi terhubung ke Google Spreadsheet. Tekan tombol di bawah kapan saja untuk memperbarui data secara manual.
+                        Aplikasi terhubung langsung ke Database Supabase PostgreSQL. Tekan tombol di bawah kapan saja untuk memperbarui data secara manual.
                       </span>
                     </div>
                   ) : (
@@ -269,6 +259,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                     <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                     <span>{isSyncing ? 'Menyinkronkan...' : pendingCount > 0 ? `Tombol Sync Data (${pendingCount})` : 'Tombol Sync Data'}</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGasPopover(false);
+                      setActiveTab('settings');
+                    }}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition-colors"
+                    title="Buka Setting & Konfigurasi"
+                  >
+                    <SettingsIcon className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  </button>
                   <a
                     href="https://drive.google.com/drive/folders/1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv"
                     target="_blank"
@@ -282,6 +283,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               </div>
             )}
           </div>
+
+          {/* Setting & Konfigurasi Shortcut Button */}
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`p-1.5 sm:p-2 rounded-xl transition-all ${
+              activeTab === 'settings'
+                ? 'bg-teal-500 text-white shadow-xs'
+                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title="Setting & Konfigurasi Aplikasi"
+          >
+            <SettingsIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${activeTab === 'settings' ? 'text-white' : ''}`} />
+          </button>
 
           {/* Dark / Light Mode Toggle */}
           <button

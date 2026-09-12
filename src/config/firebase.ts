@@ -12,7 +12,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = getFirestore(app, "ai-studio-aphroassetprotec-d28001e8-66ea-4678-abc8-62d11d5e3a61");
 
 let messagingInstance: Messaging | null = null;
 

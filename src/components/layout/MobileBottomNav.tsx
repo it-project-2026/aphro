@@ -13,6 +13,7 @@ import {
   PlusCircle,
   Printer,
   CalendarRange,
+  BarChart3,
 } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
@@ -81,7 +82,7 @@ export const MobileBottomNav: React.FC = () => {
         {
           id: 'monitoring',
           label: 'Monitoring',
-          icon: MapPin,
+          icon: BarChart3,
         },
       ];
 
@@ -141,7 +142,7 @@ export const MobileBottomNav: React.FC = () => {
               <div className="relative">
                 <Icon className={`w-5 h-5 ${isActive ? 'scale-110' : ''} transition-transform`} />
                 {tab.id === 'work_orders' && pendingCount > 0 && (
-                  <span className="absolute -top-1 -right-2 bg-amber-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                  <span className="absolute -top-1 -right-2 bg-amber-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                     {pendingCount}
                   </span>
                 )}

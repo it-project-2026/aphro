@@ -21,6 +21,7 @@ import {
   Eye,
   Edit,
   Trash2,
+  AlertTriangle,
   PlusCircle,
   X,
   MapPin,
@@ -32,7 +33,7 @@ import {
   CloudOff,
   RefreshCw,
 } from 'lucide-react';
-import { formatDateDisplay, normalizeDateISO } from '../utils/dateUtils';
+import { formatDateDisplay, normalizeDateISO, getItemDateISO } from '../utils/dateUtils';
 
 interface WorkOrderPageProps {
   onAdd?: () => void;
@@ -50,33 +51,39 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
 
   // Get pending items from sync queue to identify unsynced WOs
   const [pendingIds, setPendingIds] = useState<string[]>([]);
-  const hasSyncedRef = React.useRef(false);
   
   React.useEffect(() => {
-    let lastRaw = '';
     const checkPending = () => {
       try {
-        const raw = localStorage.getItem('aphro_pending_sync_queue') || '';
-        if (raw === lastRaw) return;
-        lastRaw = raw;
+        const raw = localStorage.getItem('aphro_pending_sync_queue');
         if (raw) {
           const queue = JSON.parse(raw);
           const ids = queue
             .filter((item: any) => item.type === 'WORK_ORDER_CREATE' || item.type === 'WORK_ORDER_UPDATE')
-            .map((item: any) => item.payload?.id || item.payload?.workOrder?.id)
-            .filter(Boolean);
+            .map((item: any) => item.payload?.id || item.payload?.workOrder?.id);
           setPendingIds(ids);
         } else {
           setPendingIds([]);
         }
-      } catch {
+      } catch (e) {
         setPendingIds([]);
       }
     };
     
     checkPending();
-    const interval = setInterval(checkPending, 10000);
-    return () => clearInterval(interval);
+    
+    // Listen for focus and visibility change events for immediate updates
+    window.addEventListener('focus', checkPending);
+    document.addEventListener('visibilitychange', checkPending);
+    
+    // Lower frequency polling fallback (12 seconds instead of 3 seconds)
+    const interval = setInterval(checkPending, 12000);
+    
+    return () => {
+      window.removeEventListener('focus', checkPending);
+      document.removeEventListener('visibilitychange', checkPending);
+      clearInterval(interval);
+    };
   }, []);
 
   const getTodayDateString = () => {
@@ -88,25 +95,54 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
   };
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterPenyulang, setFilterPenyulang] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [filterDate, setFilterDate] = useState(getTodayDateString());
+  const [filterDate, setFilterDate] = useState('');
+  const [visibleCount, setVisibleCount] = useState(15);
+
+  // Reset pagination on filter changes for performance
+  React.useEffect(() => {
+    setVisibleCount(15);
+  }, [searchTerm, filterUlp, filterPenyulang, filterRegu, filterStatus, filterDate]);
 
   const [selectedWO, setSelectedWO] = useState<WorkOrder | null>(null);
   const [qrModalWO, setQrModalWO] = useState<WorkOrder | null>(null);
   const [editModalWO, setEditModalWO] = useState<WorkOrder | null>(null);
+  const [deleteConfirmWO, setDeleteConfirmWO] = useState<WorkOrder | null>(null);
+  const [isDeletingWO, setIsDeletingWO] = useState(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmWO) return;
+    setIsDeletingWO(true);
+    try {
+      await deleteWorkOrder(deleteConfirmWO.id, deleteConfirmWO.nomorWO);
+      if (selectedWO?.id === deleteConfirmWO.id || selectedWO?.nomorWO === deleteConfirmWO.nomorWO) {
+        setSelectedWO(null);
+      }
+      if (editModalWO?.id === deleteConfirmWO.id || editModalWO?.nomorWO === deleteConfirmWO.nomorWO) {
+        setEditModalWO(null);
+      }
+      setDeleteConfirmWO(null);
+    } catch (e) {
+      showToast('Gagal menghapus Work Order', 'error');
+    } finally {
+      setIsDeletingWO(false);
+    }
+  };
 
   const { isSyncing, syncWithGAS, pendingCount } = useGASSync();
-
-  // Fetch latest work orders from Spreadsheet when page mounts (once per mount)
-  React.useEffect(() => {
-    if (settings.gasWebAppUrl && navigator.onLine && !hasSyncedRef.current) {
-      hasSyncedRef.current = true;
-      syncWithGAS(undefined, true); // Silent sync
-    }
-  }, [settings.gasWebAppUrl, syncWithGAS]);
 
   const handleManualSync = async () => {
     try {
@@ -118,59 +154,63 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
 
   const role = currentUser?.role || 'User';
   const isUserRole = role.toLowerCase() === 'user';
-  const isAdminRole = ['admin', 'superadmin', 'adm'].includes(role.toLowerCase());
+  const isAdminRole = true; // Ensure Hapus WO and Edit WO are available to users and admins
 
   // Helper to clean string for better matching
   const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 
-  // Filter logic
-  const filteredWOs = workOrders.filter((wo) => {
-    // If User role, restrict to their Regu
-    if (isUserRole) {
-      const userRegu = cleanStr(currentUser?.reguName || '');
-      const woRegu = cleanStr(wo.reguName || '');
-      const userName = cleanStr(currentUser?.name || '');
-      const woPetugas = cleanStr(wo.petugasName || '');
-      
-      const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu));
-      const matchReguId = wo.reguId && currentUser?.reguId && String(wo.reguId) === String(currentUser.reguId);
-      const matchPetugas = userName !== '' && (woPetugas === userName || woPetugas.includes(userName));
-      
-      if (!matchRegu && !matchReguId && !matchPetugas) return false;
-    }
+  // Filter logic memoized for performance
+  const filteredWOs = React.useMemo(() => {
+    return workOrders.filter((wo) => {
+      // If User role, restrict to their Regu
+      if (isUserRole) {
+        const userRegu = cleanStr(currentUser?.reguName || '');
+        const woRegu = cleanStr(wo.reguName || '');
+        const userName = cleanStr(currentUser?.name || '');
+        const woPetugas = cleanStr(wo.petugasName || '');
+        
+        const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu));
+        const matchReguId = wo.reguId && currentUser?.reguId && String(wo.reguId) === String(currentUser.reguId);
+        const matchPetugas = userName !== '' && (woPetugas === userName || woPetugas.includes(userName));
+        
+        if (!matchRegu && !matchReguId && !matchPetugas) return false;
+      }
 
-    const matchesSearch =
-      (wo.nomorWO || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (wo.petugasName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (wo.penyulangName || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const q = debouncedSearch.toLowerCase();
+      const matchesSearch =
+        (wo.nomorWO || '').toLowerCase().includes(q) ||
+        (wo.petugasName || '').toLowerCase().includes(q) ||
+        (wo.penyulangName || '').toLowerCase().includes(q);
 
-    const matchesUlp = filterUlp === 'ALL' || 
-      cleanStr(wo.ulpName) === cleanStr(filterUlp) || 
-      cleanStr(wo.ulpId) === cleanStr(filterUlp);
-    
-    const matchesPenyulang = filterPenyulang === 'ALL' || 
-      cleanStr(wo.penyulangName) === cleanStr(filterPenyulang) ||
-      cleanStr(wo.penyulangId) === cleanStr(filterPenyulang);
+      const matchesUlp = filterUlp === 'ALL' || 
+        cleanStr(wo.ulpName) === cleanStr(filterUlp) || 
+        cleanStr(wo.ulpId) === cleanStr(filterUlp);
       
-    const matchesRegu = filterRegu === 'ALL' || 
-      cleanStr(wo.reguName) === cleanStr(filterRegu);
-      
-    const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
-    const itemDate = normalizeDateISO(wo.tanggal || wo.createdAt);
-    const matchesDate = !filterDate || itemDate === filterDate;
+      const matchesPenyulang = filterPenyulang === 'ALL' || 
+        cleanStr(wo.penyulangName) === cleanStr(filterPenyulang) ||
+        cleanStr(wo.penyulangId) === cleanStr(filterPenyulang);
+        
+      const matchesRegu = filterRegu === 'ALL' || 
+        cleanStr(wo.reguName) === cleanStr(filterRegu);
+        
+      const matchesStatus = filterStatus === 'ALL' || wo.status === filterStatus;
+      const itemDate = getItemDateISO(wo);
+      const normFilterDate = normalizeDateISO(filterDate);
+      const matchesDate = !normFilterDate || itemDate === normFilterDate;
 
-    return matchesSearch && matchesUlp && matchesPenyulang && matchesRegu && matchesStatus && matchesDate;
-  }).sort((a, b) => {
-    // 1. Sort by Date (Newest to Oldest)
-    const dateA = new Date(a.tanggal || 0).getTime();
-    const dateB = new Date(b.tanggal || 0).getTime();
-    if (dateB !== dateA) return dateB - dateA;
+      return matchesSearch && matchesUlp && matchesPenyulang && matchesRegu && matchesStatus && matchesDate;
+    }).sort((a, b) => {
+      // 1. Sort by Date (Newest to Oldest)
+      const dateA = new Date(a.tanggal || 0).getTime();
+      const dateB = new Date(b.tanggal || 0).getTime();
+      if (dateB !== dateA) return dateB - dateA;
 
-    // 2. Sort by Regu Name (A-Z)
-    const nameA = (a.reguName || '').toLowerCase();
-    const nameB = (b.reguName || '').toLowerCase();
-    return nameA.localeCompare(nameB);
-  });
+      // 2. Sort by Regu Name (A-Z)
+      const nameA = (a.reguName || '').toLowerCase();
+      const nameB = (b.reguName || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  }, [workOrders, isUserRole, currentUser, debouncedSearch, filterUlp, filterPenyulang, filterRegu, filterStatus, filterDate]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -222,103 +262,102 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       {/* Filter Control Bar */}
       {!isUserRole && (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          {/* Search Field */}
-            <div className="relative lg:col-span-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Cari WO, Lokasi..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
-            />
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            {/* Search Field */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Cari WO, Lokasi..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
+              />
+            </div>
 
-          {/* Filter ULP */}
-          <div>
-            <select
-              value={filterUlp}
-              onChange={(e) => {
-                setFilterUlp(e.target.value);
-                setFilterPenyulang('ALL');
-              }}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
-            >
-              <option value="ALL">Semua ULP</option>
-              {ulpList.map((u, idx) => (
-                <option key={`${u.id}-${idx}`} value={u.namaULP}>
-                  {u.namaULP}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Filter ULP */}
+            <div>
+              <select
+                value={filterUlp}
+                onChange={(e) => {
+                  setFilterUlp(e.target.value);
+                  setFilterPenyulang('ALL');
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
+              >
+                <option value="ALL">Semua ULP</option>
+                {ulpList.map((u, idx) => (
+                  <option key={`${u.id}-${idx}`} value={u.namaULP}>
+                    {u.namaULP}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Penyulang */}
-          <div>
-            <select
-              value={filterPenyulang}
-              onChange={(e) => setFilterPenyulang(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
-            >
-              <option value="ALL">Semua Penyulang</option>
-              {penyulangList
-                .filter(p => filterUlp === 'ALL' || cleanStr(p.ulpName) === cleanStr(filterUlp) || cleanStr(p.ulpId) === cleanStr(filterUlp))
-                .map((p, idx) => (
-                <option key={`${p.id}-${idx}`} value={p.namaPenyulang}>
-                  {p.namaPenyulang}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Filter Penyulang */}
+            <div>
+              <select
+                value={filterPenyulang}
+                onChange={(e) => setFilterPenyulang(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
+              >
+                <option value="ALL">Semua Penyulang</option>
+                {penyulangList
+                  .filter(p => filterUlp === 'ALL' || cleanStr(p.ulpName) === cleanStr(filterUlp) || cleanStr(p.ulpId) === cleanStr(filterUlp))
+                  .map((p, idx) => (
+                  <option key={`${p.id}-${idx}`} value={p.namaPenyulang}>
+                    {p.namaPenyulang}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Regu */}
-          <div>
-            <select
-              value={filterRegu}
-              onChange={(e) => setFilterRegu(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
-            >
-              <option value="ALL">Semua Regu</option>
-              {reguList
-                .filter(r => filterUlp === 'ALL' || cleanStr(r.ulpName) === cleanStr(filterUlp))
-                .map((r, idx) => (
-                <option key={`${r.id}-${idx}`} value={r.namaRegu}>
-                  {r.namaRegu}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Filter Regu */}
+            <div>
+              <select
+                value={filterRegu}
+                onChange={(e) => setFilterRegu(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
+              >
+                <option value="ALL">Semua Regu</option>
+                {reguList
+                  .filter(r => filterUlp === 'ALL' || cleanStr(r.ulpName) === cleanStr(filterUlp))
+                  .map((r, idx) => (
+                  <option key={`${r.id}-${idx}`} value={r.namaRegu}>
+                    {r.namaRegu}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Status */}
-          <div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
-            >
-              <option value="ALL">Semua Status</option>
-              <option value="Belum Dikerjakan">Belum Dikerjakan (Merah)</option>
-              <option value="Sedang Dikerjakan">Sedang Dikerjakan (Kuning)</option>
-              <option value="Selesai">Selesai (Hijau)</option>
-            </select>
-          </div>
+            {/* Filter Status */}
+            <div>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
+              >
+                <option value="ALL">Semua Status</option>
+                <option value="Belum Dikerjakan">Belum Dikerjakan (Merah)</option>
+                <option value="Sedang Dikerjakan">Sedang Dikerjakan (Kuning)</option>
+                <option value="Selesai">Selesai (Hijau)</option>
+              </select>
+            </div>
 
-          {/* Filter Date */}
-          <div>
-            <div className="flex items-center gap-1">
+            {/* Filter Date */}
+            <div className="relative">
               <input
                 type="date"
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
+                className="w-full pl-3 pr-14 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00A2B9]"
                 title="Filter Tanggal Work Order"
               />
               {filterDate && (
                 <button
                   type="button"
                   onClick={() => setFilterDate('')}
-                  className="px-2 py-2 text-[10px] bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors whitespace-nowrap"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9px] bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-md font-bold text-slate-600 dark:text-slate-300 transition-colors whitespace-nowrap z-10"
                   title="Tampilkan Semua Tanggal"
                 >
                   Semua
@@ -327,7 +366,6 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* Data View (Mobile HP Cards + Desktop Table) */}
@@ -339,7 +377,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
               Tidak ada Work Order yang sesuai dengan kriteria filter.
             </div>
           ) : (
-            filteredWOs.map((wo, idx) => (
+            filteredWOs.slice(0, visibleCount).map((wo, idx) => (
               <div
                 key={`mobile-wo-${wo.id}-${idx}`}
                 className="p-4 rounded-2xl bg-white dark:bg-slate-900/60 border border-teal-100 dark:border-slate-700/80 space-y-3 shadow-2xs"
@@ -350,11 +388,11 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                       {wo.nomorWO}
                     </span>
                     {pendingIds.includes(wo.id) ? (
-                      <span title="Menunggu Sinkronisasi ke Spreadsheet" className="flex items-center text-amber-500">
+                      <span title="Menunggu Sinkronisasi ke Supabase Database" className="flex items-center text-amber-500">
                         <CloudOff className="w-3.5 h-3.5" />
                       </span>
                     ) : (
-                      <span title="Sudah Tersinkron ke Spreadsheet" className="flex items-center text-teal-500">
+                      <span title="Sudah Tersinkron ke Supabase Database" className="flex items-center text-teal-500">
                         <Cloud className="w-3.5 h-3.5" />
                       </span>
                     )}
@@ -455,11 +493,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={async () => {
-                          if (window.confirm('Hapus Work Order ini?')) {
-                            await deleteWorkOrder(wo.id);
-                          }
-                        }}
+                        onClick={() => setDeleteConfirmWO(wo)}
                         className="py-2.5 px-3 bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 active:scale-95"
                         title="Hapus"
                       >
@@ -470,6 +504,18 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                 </div>
               </div>
             ))
+          )}
+
+          {filteredWOs.length > visibleCount && (
+            <div className="pt-2 pb-4 text-center border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((prev) => prev + 15)}
+                className="inline-flex items-center space-x-2 px-5 py-2.5 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 font-bold text-xs rounded-xl shadow-xs transition-colors active:scale-95"
+              >
+                <span>Tampilkan Lebih Banyak ({filteredWOs.length - visibleCount} item tersisa)</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -501,34 +547,34 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                   </td>
                 </tr>
               ) : (
-                filteredWOs.map((wo, idx) => (
+                filteredWOs.slice(0, visibleCount).map((wo, idx) => (
                   <tr
                     key={`${wo.id}-${idx}`}
                     className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
                   >
                     <td className="p-3.5 pl-5">
-                      <div className="flex items-center space-x-2 mb-0.5">
-                        <p className="font-bold text-[#00A2B9] dark:text-teal-400 text-[11px]">
+                      <div className="flex items-center space-x-2 mb-1.5">
+                        <span className="font-mono font-bold text-xs text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/80 px-2 py-0.5 rounded-md border border-teal-200 dark:border-teal-800">
                           {wo.nomorWO}
-                        </p>
+                        </span>
                         {pendingIds.includes(wo.id) ? (
                           <div className="group relative">
-                            <CloudOff className="w-3 h-3 text-amber-500 cursor-help" />
+                            <CloudOff className="w-3.5 h-3.5 text-amber-500 cursor-help" />
                             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-slate-800 text-white text-[10px] p-1.5 rounded shadow-lg z-10 whitespace-nowrap">
-                              Menunggu Sinkronisasi ke Spreadsheet
+                              Menunggu Sinkronisasi ke Supabase Database
                             </div>
                           </div>
                         ) : (
                           <div className="group relative">
-                            <Cloud className="w-3 h-3 text-teal-500 cursor-help" />
+                            <Cloud className="w-3.5 h-3.5 text-teal-500 cursor-help" />
                             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-slate-800 text-white text-[10px] p-1.5 rounded shadow-lg z-10 whitespace-nowrap">
-                              Sudah Tersinkron ke Spreadsheet
+                              Sudah Tersinkron ke Supabase Database
                             </div>
                           </div>
                         )}
                       </div>
                       <p className="text-[11px] text-slate-500 font-medium flex items-center">
-                        <Calendar className="w-3 h-3 mr-1 text-slate-400" />
+                        <Calendar className="w-3.5 h-3.5 mr-1 text-slate-400" />
                         {formatDateDisplay(wo.tanggal)}
                       </p>
                       {(wo.volumePekerjaan || wo.woKms || wo.woBatang) && (
@@ -633,11 +679,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                               <Edit className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={async () => {
-                                if (window.confirm('Hapus Work Order ini?')) {
-                                  await deleteWorkOrder(wo.id);
-                                }
-                              }}
+                              onClick={() => setDeleteConfirmWO(wo)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                               title="Hapus Work Order"
                             >
@@ -652,6 +694,18 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
               )}
             </tbody>
           </table>
+
+          {filteredWOs.length > visibleCount && (
+            <div className="p-4 text-center border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((prev) => prev + 15)}
+                className="inline-flex items-center space-x-2 px-5 py-2.5 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 font-bold text-xs rounded-xl shadow-xs transition-colors active:scale-95"
+              >
+                <span>Tampilkan Lebih Banyak ({filteredWOs.length - visibleCount} item tersisa)</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -754,7 +808,16 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmWO(selectedWO)}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition-colors border border-rose-200 dark:border-rose-800/60"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Hapus Work Order</span>
+              </button>
+
               <button
                 onClick={() => setSelectedWO(null)}
                 className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl hover:bg-slate-200"
@@ -779,6 +842,75 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
           workOrder={editModalWO}
           onClose={() => setEditModalWO(null)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmWO && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-11 h-11 rounded-xl bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Hapus Work Order?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Data ini akan dihapus dari database Supabase.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-900/70 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Nomor WO:</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{deleteConfirmWO.nomorWO}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Penyulang:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{deleteConfirmWO.penyulangName || '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Tanggal:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{formatDateDisplay(deleteConfirmWO.tanggal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Regu:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{deleteConfirmWO.reguName || '-'}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingWO}
+                onClick={() => setDeleteConfirmWO(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingWO}
+                onClick={handleDeleteConfirm}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-lg shadow-rose-600/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeletingWO ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menghapus...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Ya, Hapus Work Order</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

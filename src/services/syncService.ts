@@ -1,7 +1,9 @@
 import { GASApiService } from './gasApiService';
+import { SupabaseService } from './supabaseService';
 import { User, UserRole, WorkOrder, ULP, Penyulang, ReguROW, Petugas } from '../types';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
+import { parseNumeric } from '../utils/metricUtils';
 
 export function normalizeUser(u: any): User {
   if (!u || typeof u !== 'object') {
@@ -135,9 +137,9 @@ export function normalizeWorkOrder(w: any): WorkOrder {
     penyulangName: String(w.penyulangName || w.NAMA_PENYULANG || w.Nama_Penyulang || w.Penyulang || ''),
     reguId: String(w.reguId || w.ReguId || w.REGU_ID || ''),
     reguName: String(w.reguName || w.NAMA_REGU || w.Nama_Regu || w.Regu_ROW || w.Regu || ''),
-    volumePekerjaan: Number(w.volumePekerjaan || w.VOLUME || w.Volume || w.volume || 0),
+    volumePekerjaan: parseNumeric(w.volumePekerjaan || w.VOLUME || w.Volume || w.volume, 0),
     satuan,
-    totalRealisasi: Number(w.totalRealisasi || w.TOTAL_REALISASI || w.Total_Realisasi || w.total_realisasi || 0),
+    totalRealisasi: parseNumeric(w.totalRealisasi || w.TOTAL_REALISASI || w.Total_Realisasi || w.total_realisasi, 0),
     satuanTotalRealisasi: (w.satuanTotalRealisasi || w.SATUAN_TOTAL_REALISASI || w.Satuan_Total_Realisasi || w.satuan_total_realisasi || 'KMS') as 'KMS' | 'GAWANG',
     woMulai: String(w.woMulai || w.WO_MULAI || w.Wo_Mulai || w.WoMulai || ''),
     woAkhir: String(w.woAkhir || w.WO_AKHIR || w.Wo_Akhir || w.WoAkhir || ''),
@@ -147,7 +149,7 @@ export function normalizeWorkOrder(w: any): WorkOrder {
     prioritas: w.prioritas || w.PRIORITAS || w.Prioritas || 'Sedang',
     lokasi: String(w.lokasi || w.LOKASI || w.Lokasi || ''),
     petugasName: String(w.petugasName || w.PETUGAS || w.Petugas || w.NAMA_PETUGAS || ''),
-    progressPercent: Number(w.progressPercent || w.PROGRESS || w.progress || w.Progress || 0),
+    progressPercent: parseNumeric(w.progressPercent || w.PROGRESS || w.progress || w.Progress, 0),
     createdAt: String(w.createdAt || w.Created_At || getLocalDateTimeString()),
   };
 }
@@ -281,95 +283,42 @@ export class SyncService {
     }
   }
 
-  static async fetchAllData(gasUrl: string, spreadsheetId?: string) {
+  static async fetchAllData(gasUrl?: string, spreadsheetId?: string) {
     try {
-      // Try bulk fetch with minimal retry delay
-      const response = await this.withRetry(() => GASApiService.fetchAllData(gasUrl, spreadsheetId), 1, 300);
+      const activeUnitId = SupabaseService.getActiveUnitId();
+      const supaData = await SupabaseService.fetchAllData(activeUnitId);
       
-      if (response.status === 'success' && response.data) {
-        const d = response.data;
-        const usersList = Array.isArray(d.USERS || d.Users || d.users) ? (d.USERS || d.Users || d.users).map(normalizeUser) : [];
-        const ulpList = Array.isArray(d.ULP || d.Ulp || d.ulp) ? (d.ULP || d.Ulp || d.ulp).map(normalizeULP) : [];
-        const penyulangList = Array.isArray(d.PENYULANG || d.Penyulang || d.penyulang) ? (d.PENYULANG || d.Penyulang || d.penyulang).map(normalizePenyulang) : [];
-        const reguList = Array.isArray(d.REGU_ROW || d.Regu_ROW || d.ReguROW || d.Regu || d.regu) ? (d.REGU_ROW || d.Regu_ROW || d.ReguROW || d.Regu || d.regu).map(normalizeRegu) : [];
-        const petugasList = Array.isArray(d.PETUGAS || d.Petugas || d.petugas || d.Data_Petugas || d.DATA_PETUGAS) ? (d.PETUGAS || d.Petugas || d.petugas || d.Data_Petugas || d.DATA_PETUGAS).map(normalizePetugas) : [];
-        const workOrdersList = Array.isArray(d.WORK_ORDER || d.Work_Order || d.WorkOrder || d.WO || d.wo) 
-          ? (d.WORK_ORDER || d.Work_Order || d.WorkOrder || d.WO || d.wo)
-            .map(normalizeWorkOrder)
-            .filter(wo => wo.nomorWO || wo.ulpName || wo.reguName || wo.penyulangName)
-          : [];
-        const realisasiList = Array.isArray(d.REALISASI || d.Realisasi || d.realisasi) 
-          ? (d.REALISASI || d.Realisasi || d.realisasi)
-            .map(normalizeRealisasi)
-            .filter(rel => rel.workOrderId || rel.nomorWO)
-          : [];
-
-        const result = {
-          masterData: {
-            users: usersList,
-            ulp: ulpList,
-            penyulang: penyulangList,
-            regu: reguList,
-            petugas: petugasList
-          },
-          workOrders: workOrdersList,
-          realisasi: realisasiList,
-          absensi: Array.isArray(d.ABSENSI || d.Absensi || d.absensi) 
-            ? (d.ABSENSI || d.Absensi || d.absensi)
-              .map(normalizeAbsensi)
-              .filter(abs => abs.reguName || abs.ulpName)
-            : [],
-          errors: []
-        };
-
-        // Clean up legacy bloated localStorage key if present
-        try {
-          localStorage.removeItem('aphro_cached_synced_data');
-        } catch {}
-
-        return result;
-      }
-      throw new Error(response.message || 'Bulk fetch failed');
-    } catch {
-      // Fallback to individual parallel fetches if bulk fetch fails
-      const results = await Promise.allSettled([
-        this.withRetry(() => GASApiService.fetchUsers(gasUrl, spreadsheetId), 1, 200),
-        this.withRetry(() => GASApiService.fetchWorkOrders(gasUrl, spreadsheetId), 1, 200),
-        this.withRetry(() => GASApiService.fetchRealisasi(gasUrl, spreadsheetId), 1, 200),
-        this.withRetry(() => GASApiService.fetchAbsensi(gasUrl, spreadsheetId), 1, 200),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getULP', spreadsheetId), 1, 200),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPenyulang', spreadsheetId), 1, 200),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getRegu', spreadsheetId), 1, 200),
-        this.withRetry(() => GASApiService.fetchMasterData(gasUrl, 'getPetugas', spreadsheetId), 1, 200),
-      ]);
-
-      const errors = results.filter(r => r.status === 'rejected');
-
-      const rawUsers = results[0].status === 'fulfilled' && Array.isArray(results[0].value.data) ? results[0].value.data : [];
-      const rawWo = results[1].status === 'fulfilled' && Array.isArray(results[1].value.data) ? results[1].value.data : [];
-      const rawRel = results[2].status === 'fulfilled' && Array.isArray(results[2].value.data) ? results[2].value.data : [];
-      const rawUlp = results[4].status === 'fulfilled' && Array.isArray(results[4].value.data) ? results[4].value.data : [];
-      const rawPyl = results[5].status === 'fulfilled' && Array.isArray(results[5].value.data) ? results[5].value.data : [];
-      const rawRegu = results[6].status === 'fulfilled' && Array.isArray(results[6].value.data) ? results[6].value.data : [];
-      const rawPtg = results[7].status === 'fulfilled' && Array.isArray(results[7].value.data) ? results[7].value.data : [];
-
       const result = {
         masterData: {
-          users: rawUsers.map(normalizeUser),
-          ulp: rawUlp.map(normalizeULP),
-          penyulang: rawPyl.map(normalizePenyulang),
-          regu: rawRegu.map(normalizeRegu),
-          petugas: rawPtg.map(normalizePetugas),
+          users: supaData.masterData.users || [],
+          ulp: supaData.masterData.ulp || [],
+          penyulang: supaData.masterData.penyulang || [],
+          regu: supaData.masterData.regu || [],
+          petugas: supaData.masterData.petugas || []
         },
-        workOrders: rawWo.map(normalizeWorkOrder).filter(wo => wo.nomorWO || wo.ulpName || wo.reguName || wo.penyulangName),
-        realisasi: rawRel.map(normalizeRealisasi).filter(rel => rel.workOrderId || rel.nomorWO),
-        absensi: results[3].status === 'fulfilled' && Array.isArray(results[3].value.data) 
-          ? results[3].value.data.map(normalizeAbsensi).filter(abs => abs.reguName || abs.ulpName) 
-          : [],
-        errors: errors
+        workOrders: supaData.workOrders || [],
+        realisasi: supaData.realisasi || [],
+        absensi: supaData.absensi || [],
+        errors: []
       };
 
+      try {
+        const cacheResult = { ...result, workOrders: [] };
+        localStorage.setItem('aphro_cached_synced_data', JSON.stringify(cacheResult));
+      } catch (e) {
+        // ignore storage quota errors
+      }
+
       return result;
+    } catch (err: any) {
+      console.warn('SyncService fetchAllData error:', err);
+      return {
+        masterData: { users: [], ulp: [], penyulang: [], regu: [], petugas: [] },
+        workOrders: [],
+        realisasi: [],
+        absensi: [],
+        errors: [err.message || 'Gagal memuat data dari Supabase']
+      };
     }
   }
 }

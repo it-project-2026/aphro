@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAbsensi } from '../context/AbsensiContext';
@@ -17,13 +17,17 @@ import {
   LogOut,
   Clock,
   Plus,
-  Eye
+  Eye,
+  RotateCw
 } from 'lucide-react';
 import { generateWatermarkedImage } from '../utils/watermark';
 import { compressImage } from '../utils/imageCompression';
 import { AbsensiPetugas } from '../types';
-import { getLocalDateTimeString } from '../utils/dateUtils';
+import { getLocalDateTimeString, getWIBDateString, normalizeDateISO } from '../utils/dateUtils';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
+import { useSettings } from '../context/SettingsContext';
+import { GASApiService } from '../services/gasApiService';
+import { getActiveGasConfig } from '../config/gasConfig';
 
 interface AbsensiKerjaPageProps {
   onSuccess: () => void;
@@ -32,14 +36,13 @@ interface AbsensiKerjaPageProps {
 export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess }) => {
   const draggable = useDraggableScroll();
   const { user: currentUser, logout } = useAuth();
-  const { petugasList, users } = useMasterData();
+  const { petugasList, users, reguList } = useMasterData();
   const { absensiList, addAbsensi } = useAbsensi();
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
+  const { settings } = useSettings();
 
   const todayStr = getLocalDateTimeString().slice(0, 10);
-  const reguName = currentUser?.reguName || currentUser?.reguId || (currentUser?.role === 'SuperAdmin' || currentUser?.role === 'Admin' ? 'Manajemen/Admin' : 'Belum Ada Regu');
-  const ulpName = currentUser?.ulpName || currentUser?.ulpId || 'Belum Ada ULP';
 
   // Helper to normalize strings for comparison
   const cleanStr = (s?: string | null) => {
@@ -51,32 +54,147 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       .replace(/[^a-z0-9]/gi, '');
   };
 
+  const extractRowNumber = (s?: string | null): number | null => {
+    if (!s) return null;
+    const m = String(s).match(/row\s*0?(\d+)/i);
+    return m ? parseInt(m[1], 10) : null;
+  };
+
+  // Find matching user record in MasterData users table (from Supabase USERS)
+  const matchedMasterUser = useMemo(() => {
+    if (!currentUser) return null;
+    const userIdentifier = (currentUser.userName || currentUser.nip || currentUser.id || '').toLowerCase().trim();
+    if (!userIdentifier) return null;
+    return users.find((u) => {
+      const uName = (u.userName || '').toLowerCase().trim();
+      const uNip = (u.nip || '').toLowerCase().trim();
+      const uId = (u.id || '').toLowerCase().trim();
+      return uName === userIdentifier || uNip === userIdentifier || uId === userIdentifier;
+    }) || null;
+  }, [currentUser, users]);
+
+  // Robustly resolve the active user's Regu Name
+  const effectiveReguName = useMemo(() => {
+    // 1. Direct from currentUser.reguName if available and not empty / placeholder
+    if (
+      currentUser?.reguName &&
+      currentUser.reguName.trim() !== '' &&
+      currentUser.reguName !== 'Belum Ada Regu'
+    ) {
+      return currentUser.reguName.trim();
+    }
+
+    // 2. From matched user in master users table
+    if (
+      matchedMasterUser?.reguName &&
+      matchedMasterUser.reguName.trim() !== '' &&
+      matchedMasterUser.reguName !== 'Belum Ada Regu'
+    ) {
+      return matchedMasterUser.reguName.trim();
+    }
+
+    // 3. Fallback: match by username pattern (e.g. 'row08' -> number 8)
+    const userIdentifier = (currentUser?.userName || currentUser?.nip || currentUser?.id || '').toLowerCase().trim();
+    const userRowNumber = extractRowNumber(userIdentifier);
+    if (userRowNumber !== null) {
+      // Find matching regu in reguList
+      const matchedRegu = reguList.find((r) => {
+        const rNum = extractRowNumber(r.namaRegu || r.kodeRegu);
+        return rNum === userRowNumber;
+      });
+      if (matchedRegu?.namaRegu) return matchedRegu.namaRegu;
+
+      // Find matching regu in petugasList
+      const matchedPetugasRegu = petugasList.find((p) => {
+        const pNum = extractRowNumber(p.reguName);
+        return pNum === userRowNumber;
+      });
+      if (matchedPetugasRegu?.reguName) return matchedPetugasRegu.reguName;
+    }
+
+    // 4. Role fallbacks
+    if (currentUser?.role === 'SuperAdmin' || currentUser?.role === 'Admin') {
+      return 'Manajemen/Admin';
+    }
+
+    return currentUser?.name || 'Belum Ada Regu';
+  }, [currentUser, matchedMasterUser, reguList, petugasList]);
+
+  // Robustly resolve the active user's ULP Name
+  const effectiveUlpName = useMemo(() => {
+    if (
+      currentUser?.ulpName &&
+      currentUser.ulpName.trim() !== '' &&
+      currentUser.ulpName !== 'Belum Ada ULP'
+    ) {
+      return currentUser.ulpName.trim();
+    }
+    if (
+      matchedMasterUser?.ulpName &&
+      matchedMasterUser.ulpName.trim() !== '' &&
+      matchedMasterUser.ulpName !== 'Belum Ada ULP'
+    ) {
+      return matchedMasterUser.ulpName.trim();
+    }
+    return 'Belum Ada ULP';
+  }, [currentUser, matchedMasterUser]);
+
+  const reguName = effectiveReguName;
+  const ulpName = effectiveUlpName;
+
   const userReguClean = cleanStr(reguName);
+  const userRowNumber = extractRowNumber(reguName) ?? extractRowNumber(currentUser?.userName);
+  const userUlpClean = cleanStr(ulpName);
 
   // Find today's existing Absensi record for this Regu
+  const todayISO = getWIBDateString();
   const todayAbsensi = absensiList.find((a) => {
     if (!a) return false;
-    const isToday = String(a.tanggal || '').slice(0, 10) === todayStr;
-    const matchRegu = cleanStr(a.reguName) === userReguClean;
+    const aDate = normalizeDateISO(a.tanggal);
+    const isToday = aDate === todayISO || String(a.tanggal || '').slice(0, 10) === todayStr;
+    const matchRegu = cleanStr(a.reguName) === userReguClean || (userRowNumber !== null && extractRowNumber(a.reguName) === userRowNumber);
     const matchUser = cleanStr(a.userName) === cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id) || cleanStr(a.namaPetugas) === cleanStr(currentUser?.name);
     return isToday && (matchRegu || matchUser);
   });
 
   // Check if Absensi Masuk has already been done today
   const hasDoneAbsensiMasuk = Boolean(
-    todayAbsensi && (todayAbsensi.fotoMasuk || (todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0))
+    todayAbsensi && (
+      Boolean(todayAbsensi.fotoMasuk) || 
+      (Array.isArray(todayAbsensi.petugasList) && todayAbsensi.petugasList.length > 0)
+    )
+  );
+
+  // Check if Absensi Keluar has already been done today
+  const hasDoneAbsensiKeluar = Boolean(
+    todayAbsensi && Boolean(todayAbsensi.fotoKeluar)
   );
 
   // Helper to get all Petugas members matching the active Regu
-  const getReguMembersFromMaster = (): AbsensiPetugas[] => {
+  const getReguMembersFromMaster = useCallback((): AbsensiPetugas[] => {
     // 1. Match from Petugas Master Data
     const matchedPetugas = petugasList.filter((p) => {
       if (!p || p.status === 'Non-Aktif') return false;
       const cleanPRegu = cleanStr(p.reguName);
       const isExactRegu = (p.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
-      const isCleanMatch = userReguClean && cleanPRegu === userReguClean;
+      const isCleanMatch = Boolean(userReguClean && cleanPRegu && cleanPRegu === userReguClean);
       const isIdMatch = Boolean(currentUser?.reguId && p.reguId && p.reguId === currentUser.reguId);
-      return isExactRegu || isCleanMatch || isIdMatch;
+
+      // Match by ROW number (e.g. ROW 08 or ROW 8)
+      let isNumberMatch = false;
+      if (userRowNumber !== null) {
+        const pNum = extractRowNumber(p.reguName);
+        if (pNum !== null && pNum === userRowNumber) {
+          // If ULP information is available for both, ensure they match to avoid picking the other unit's ROW 08
+          if (userUlpClean && cleanStr(p.ulpName)) {
+            isNumberMatch = cleanStr(p.ulpName) === userUlpClean;
+          } else {
+            isNumberMatch = true;
+          }
+        }
+      }
+
+      return isExactRegu || isCleanMatch || isIdMatch || isNumberMatch;
     });
 
     if (matchedPetugas.length > 0) {
@@ -91,7 +209,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       if (!u || u.status === 'Non-Aktif') return false;
       const cleanURegu = cleanStr(u.reguName);
       const isExactRegu = (u.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
-      const isCleanMatch = userReguClean && cleanURegu === userReguClean;
+      const isCleanMatch = Boolean(userReguClean && cleanURegu && cleanURegu === userReguClean);
       const isIdMatch = Boolean(currentUser?.reguId && u.reguId && u.reguId === currentUser.reguId);
       return isExactRegu || isCleanMatch || isIdMatch;
     });
@@ -104,12 +222,12 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     }
 
     // 3. Fallback: current logged-in user
-    if (currentUser?.name) {
+    if (currentUser?.name && currentUser.name !== 'User') {
       return [{ nama: currentUser.name, keterangan: 'HADIR' as const }];
     }
 
     return [{ nama: '', keterangan: 'HADIR' as const }];
-  };
+  }, [petugasList, users, reguName, userReguClean, userRowNumber, userUlpClean, currentUser]);
 
   const [petugasRows, setPetugasRows] = useState<AbsensiPetugas[]>(() => {
     if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
@@ -121,24 +239,51 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     return getReguMembersFromMaster();
   });
 
+  const isManuallyEditedRef = useRef(false);
+
+  // Automatically populate with master data members as soon as they become available
   useEffect(() => {
-    // Only initialize if petugasRows is effectively empty or reset is needed
-    // This prevents losing user input after taking a photo
-    const currentRowsValid = petugasRows.some(p => p.nama !== '');
-    
-    if (!currentRowsValid) {
-      if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
-        setPetugasRows(
-          todayAbsensi.petugasList.map((p) => ({
-            nama: p.nama || '',
-            keterangan: p.keterangan || 'HADIR',
-          }))
-        );
-      } else {
-        setPetugasRows(getReguMembersFromMaster());
-      }
+    if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
+      setPetugasRows(
+        todayAbsensi.petugasList.map((p) => ({
+          nama: p.nama || '',
+          keterangan: p.keterangan || 'HADIR',
+        }))
+      );
+      return;
     }
-  }, [todayAbsensi, reguName, petugasList, users]);
+
+    if (hasDoneAbsensiMasuk) return;
+    if (isManuallyEditedRef.current) return;
+
+    const masterMembers = getReguMembersFromMaster();
+    const hasRealOfficers = masterMembers.length > 0 && masterMembers.some((m) => m.nama && m.nama.trim() !== '' && m.nama !== currentUser?.userName);
+
+    // Check if current rows are just fallback/empty
+    const isFallbackState = petugasRows.length === 0 || (
+      petugasRows.length === 1 && (
+        !petugasRows[0].nama || 
+        petugasRows[0].nama === '' || 
+        petugasRows[0].nama === currentUser?.userName || 
+        petugasRows[0].nama === currentUser?.name
+      )
+    );
+
+    if (hasRealOfficers && (isFallbackState || petugasRows.length !== masterMembers.length)) {
+      setPetugasRows(masterMembers);
+    }
+  }, [todayAbsensi, hasDoneAbsensiMasuk, getReguMembersFromMaster, currentUser, petugasRows.length]);
+
+  const handleReloadFromMaster = () => {
+    const masterMembers = getReguMembersFromMaster();
+    if (masterMembers.length > 0 && masterMembers[0].nama) {
+      isManuallyEditedRef.current = false;
+      setPetugasRows(masterMembers);
+      showToast(`Berhasil memuat ${masterMembers.length} anggota petugas untuk ${reguName}`, 'success');
+    } else {
+      showToast('Data master petugas untuk regu ini belum ditemukan.', 'info');
+    }
+  };
 
   // Filter history strictly for the logged-in user's Regu
   const reguAbsensiHistory = useMemo(() => {
@@ -166,18 +311,21 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveUrl: string } | null>(null);
 
   const handlePetugasNameChange = (index: number, val: string) => {
+    isManuallyEditedRef.current = true;
     const updated = [...petugasRows];
     updated[index] = { ...updated[index], nama: val };
     setPetugasRows(updated);
   };
 
   const handlePetugasStatusChange = (index: number, status: string) => {
+    isManuallyEditedRef.current = true;
     const updated = [...petugasRows];
     updated[index] = { ...updated[index], keterangan: status };
     setPetugasRows(updated);
   };
 
   const handleAddPetugas = () => {
+    isManuallyEditedRef.current = true;
     setPetugasRows((prev) => [
       ...prev,
       { nama: '', keterangan: 'HADIR' as const },
@@ -185,6 +333,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   };
 
   const handleRemovePetugas = (index: number) => {
+    isManuallyEditedRef.current = true;
     if (petugasRows.length <= 1) {
       setPetugasRows([{ nama: '', keterangan: 'HADIR' as const }]);
       return;
@@ -269,20 +418,64 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     }
 
     setIsSubmitting(true);
+    showToast('Mengunggah foto & menyimpan absensi...', 'info');
 
     try {
-      // When doing "Absen Pulang" (Keluar), we only need to update the existing record
+      let finalDriveFotoMasuk = hasDoneAbsensiMasuk ? (todayAbsensi?.fotoMasuk || '') : fotoMasuk;
+      let finalDriveFotoKeluar = hasDoneAbsensiMasuk ? fotoKeluar : '';
+
+      const gasConfig = getActiveGasConfig();
+      const gasUrl = settings.gasWebAppUrl || gasConfig.gasWebAppUrl;
+      const absensiFolderId = settings.absensiFolderId || gasConfig.absensiFolderId || '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5';
+
+      // Proactively upload Foto Masuk to Google Drive
+      if (!hasDoneAbsensiMasuk && fotoMasuk && fotoMasuk.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          showToast('Mengunggah Foto Masuk ke Google Drive...', 'info');
+          const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
+            base64Data: fotoMasuk,
+            reguName: reguName,
+            photoType: 'Absensi_Masuk',
+            folderId: absensiFolderId,
+          });
+          if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
+            finalDriveFotoMasuk = uploadRes.fileUrl;
+          }
+        } catch (err) {
+          console.warn('Upload foto masuk to Google Drive error:', err);
+        }
+      }
+
+      // Proactively upload Foto Keluar to Google Drive
+      if (hasDoneAbsensiMasuk && fotoKeluar && fotoKeluar.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          showToast('Mengunggah Foto Keluar ke Google Drive...', 'info');
+          const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
+            base64Data: fotoKeluar,
+            reguName: todayAbsensi?.reguName || reguName,
+            photoType: 'Absensi_Keluar',
+            folderId: absensiFolderId,
+          });
+          if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
+            finalDriveFotoKeluar = uploadRes.fileUrl;
+          }
+        } catch (err) {
+          console.warn('Upload foto keluar to Google Drive error:', err);
+        }
+      }
+
+      // When doing "Absen Pulang" (Keluar), we update the existing record
       const absensiPayload = {
-        tanggal: todayStr,
+        tanggal: todayAbsensi?.tanggal || todayStr,
         reguName: todayAbsensi?.reguName || reguName,
-        penyulangName: todayAbsensi?.penyulangName || (currentUser as any)?.penyulangName || 'Penyulang Pauh Utama',
+        penyulangName: todayAbsensi?.penyulangName || (currentUser as any)?.penyulangName || '',
         ulpName: todayAbsensi?.ulpName || ulpName,
         userName: currentUser?.userName || currentUser?.nip || currentUser?.id,
         namaPetugas: currentUser?.name,
         nip: currentUser?.nip,
         petugasList: hasDoneAbsensiMasuk ? (todayAbsensi?.petugasList || petugasRows) : petugasRows,
-        fotoMasuk: hasDoneAbsensiMasuk ? (todayAbsensi?.fotoMasuk || '') : fotoMasuk,
-        fotoKeluar: hasDoneAbsensiMasuk ? fotoKeluar : '',
+        fotoMasuk: finalDriveFotoMasuk,
+        fotoKeluar: finalDriveFotoKeluar,
         latitude: currentCoords?.lat || todayAbsensi?.latitude,
         longitude: currentCoords?.lon || todayAbsensi?.longitude,
       };
@@ -372,6 +565,35 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           </div>
         )}
 
+        {/* Existing Absensi Keluar Status Banner if already checked out */}
+        {hasDoneAbsensiKeluar && todayAbsensi?.fotoKeluar && (
+          <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start space-x-3">
+              <div className="p-2 rounded-xl bg-indigo-600 text-white shrink-0 mt-0.5">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold text-indigo-900 dark:text-indigo-200">
+                  Absensi Keluar (Pulang) Hari Ini Sudah Tercatat
+                </h4>
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">
+                  Waktu Keluar: {todayAbsensi.timestampKeluar || todayAbsensi.updatedAt || 'Tercatat'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 self-end sm:self-center shrink-0">
+              <div className="w-12 h-12 rounded-xl overflow-hidden border border-indigo-300 dark:border-indigo-700 bg-black cursor-pointer" onClick={() => setPreviewImage({
+                  url: formatDriveImageUrl(todayAbsensi.fotoKeluar!),
+                  title: `Foto Keluar - ${reguName} (${todayStr})`,
+                  driveUrl: formatDriveViewUrl(todayAbsensi.fotoKeluar!)
+                })}>
+                <img src={formatDriveImageUrl(todayAbsensi.fotoKeluar)} alt="Foto Keluar" className="w-full h-full object-cover" />
+              </div>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Automatic Meta Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -408,15 +630,26 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
               </div>
 
               {!hasDoneAbsensiMasuk && (
-                <button
-                  type="button"
-                  onClick={handleAddPetugas}
-                  className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center space-x-1.5 transition-all self-start sm:self-auto cursor-pointer shadow-xs"
-                  title="Tambah baris anggota regu baru"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Tambah Petugas</span>
-                </button>
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={handleReloadFromMaster}
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer border border-slate-200 dark:border-slate-700 shadow-xs"
+                    title="Muat ulang daftar nama petugas dari Master Data"
+                  >
+                    <RotateCw className="w-3.5 h-3.5 text-[#00A2B9]" />
+                    <span>Muat Ulang Petugas</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddPetugas}
+                    className="px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer shadow-xs"
+                    title="Tambah baris anggota regu baru"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah Petugas</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -645,6 +878,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                   ? 'Menyimpan & Menyinkronkan...'
                   : !hasDoneAbsensiMasuk
                   ? 'Kirim Absensi Masuk & Masuk Aplikasi'
+                  : hasDoneAbsensiKeluar
+                  ? 'Perbarui Absensi Keluar & Simpan'
                   : 'Kirim Absensi Keluar & Simpan'}
               </span>
             </button>

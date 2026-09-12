@@ -7,8 +7,11 @@ import { useToast } from '../hooks/useToast';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
-import { normalizeDateISO, getLocalDateTimeString } from '../utils/dateUtils';
+import { normalizeDateISO, getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
+import { useSettings } from '../context/SettingsContext';
+import { GASApiService } from '../services/gasApiService';
+import { getActiveGasConfig } from '../config/gasConfig';
 import {
   UserCheck,
   Calendar,
@@ -26,6 +29,7 @@ import {
   Filter,
   FileSpreadsheet,
   Eye,
+  RotateCw,
 } from 'lucide-react';
 
 interface AbsensiMainPageProps {
@@ -35,11 +39,39 @@ interface AbsensiMainPageProps {
 function formatHariTanggal(dateStr: string) {
   if (!dateStr) return '-';
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const hari = d.toLocaleDateString('id-ID', { weekday: 'long' });
-    const tgl = d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    return `${hari}, ${tgl}`;
+    let year = 0, month = 0, day = 0;
+    const s = String(dateStr).trim();
+    
+    // Match YYYY-MM-DD or YYYY/MM/DD
+    const ymdMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    // Match DD-MM-YYYY or DD/MM/YYYY
+    const dmyMatch = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+    
+    if (ymdMatch) {
+      year = parseInt(ymdMatch[1], 10);
+      month = parseInt(ymdMatch[2], 10) - 1;
+      day = parseInt(ymdMatch[3], 10);
+    } else if (dmyMatch) {
+      day = parseInt(dmyMatch[1], 10);
+      month = parseInt(dmyMatch[2], 10) - 1;
+      year = parseInt(dmyMatch[3], 10);
+    } else {
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return dateStr;
+      year = d.getFullYear();
+      month = d.getMonth();
+      day = d.getDate();
+    }
+    
+    const localDate = new Date(year, month, day);
+    const dayOfWeek = localDate.getDay();
+    const INDONESIAN_DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const hari = INDONESIAN_DAYS[dayOfWeek] || 'Senin';
+    
+    const formattedDay = String(day).padStart(2, '0');
+    const formattedMonth = String(month + 1).padStart(2, '0');
+    
+    return `${hari}, ${formattedDay}/${formattedMonth}/${year}`;
   } catch {
     return dateStr;
   }
@@ -50,9 +82,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   const draggable2 = useDraggableScroll();
 
   const { user: currentUser } = useAuth();
-  const { absensiList, addAbsensi, updateAbsensi, deleteAbsensi } = useAbsensi();
+  const { absensiList, addAbsensi, updateAbsensi, deleteAbsensi, refreshAbsensi } = useAbsensi();
   const { ulpList, reguList, petugasList } = useMasterData();
   const { showToast } = useToast();
+  const { settings } = useSettings();
 
   const [editingAbsensi, setEditingAbsensi] = useState<any | null>(null);
 
@@ -80,17 +113,26 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     return String(s)
       .toLowerCase()
       .trim()
-      .replace(/^(regu|tim|petugas|kelompok|regu_row)\s+/gi, '')
+      .replace(/^(regu|tim|petugas|kelompok|regu_row|ulp)\s+/gi, '')
       .replace(/[^a-z0-9]/gi, '');
   };
 
+  const extractRowNumber = (s?: string | null): number | null => {
+    if (!s) return null;
+    const m = String(s).match(/row\s*0?(\d+)/i);
+    return m ? parseInt(m[1], 10) : null;
+  };
+
   const userReguClean = cleanStr(reguName);
+  const userRowNumber = extractRowNumber(reguName) ?? extractRowNumber(currentUser?.userName);
 
   // Find today's existing Absensi record
+  const todayISO = getWIBDateString();
   const todayAbsensi = absensiList.find((a) => {
     if (!a) return false;
-    const isToday = String(a.tanggal || '').slice(0, 10) === todayStr;
-    const matchRegu = cleanStr(a.reguName) === userReguClean;
+    const aDate = normalizeDateISO(a.tanggal);
+    const isToday = aDate === todayISO || String(a.tanggal || '').slice(0, 10) === todayStr;
+    const matchRegu = cleanStr(a.reguName) === userReguClean || (userRowNumber !== null && extractRowNumber(a.reguName) === userRowNumber);
     const matchUser =
       cleanStr(a.userName) === cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id) ||
       cleanStr(a.namaPetugas) === cleanStr(currentUser?.name);
@@ -108,17 +150,27 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
   // Filters for Monitoring & Rekap Absensi Table
   const getTodayDateString = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return getWIBDateString();
   };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterUlp, setFilterUlp] = useState('ALL');
   const [filterRegu, setFilterRegu] = useState('ALL');
-  const [filterDate, setFilterDate] = useState(getTodayDateString());
+  const [filterDate, setFilterDate] = useState(''); // Default to '' to show all attendance entries
+  const [filterMyReguOnly, setFilterMyReguOnly] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshAbsensi();
+      showToast('Data absensi berhasil disegarkan dari Supabase', 'success');
+    } catch {
+      showToast('Gagal menyegarkan data absensi', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Logic to calculate days and presence for Rekap Absensi
   const rekapData = useMemo(() => {
@@ -268,12 +320,35 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     }
 
     setIsSubmitting(true);
+    showToast('Mengunggah Foto Pulang ke Google Drive...', 'info');
 
     try {
+      let finalDriveFotoKeluar = fotoKeluar || todayAbsensi?.fotoKeluar || '';
+
+      const gasConfig = getActiveGasConfig();
+      const gasUrl = settings.gasWebAppUrl || gasConfig.gasWebAppUrl;
+      const absensiFolderId = settings.absensiFolderId || gasConfig.absensiFolderId || '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5';
+
+      if (fotoKeluar && fotoKeluar.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
+            base64Data: fotoKeluar,
+            reguName: todayAbsensi?.reguName || reguName,
+            photoType: 'Absensi_Keluar',
+            folderId: absensiFolderId,
+          });
+          if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
+            finalDriveFotoKeluar = uploadRes.fileUrl;
+          }
+        } catch (err) {
+          console.warn('Upload foto keluar to Google Drive error:', err);
+        }
+      }
+
       await addAbsensi({
-        tanggal: todayStr,
+        tanggal: todayAbsensi?.tanggal || todayStr,
         reguName: todayAbsensi?.reguName || reguName,
-        penyulangName: todayAbsensi?.penyulangName || (currentUser as any)?.penyulangName || 'Penyulang Pauh Utama',
+        penyulangName: todayAbsensi?.penyulangName || (currentUser as any)?.penyulangName || '',
         ulpName: todayAbsensi?.ulpName || ulpName,
         userName: currentUser?.userName || currentUser?.nip || currentUser?.id,
         namaPetugas: currentUser?.name,
@@ -281,10 +356,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         petugasList: todayAbsensi?.petugasList || [],
         fotoMasuk: todayAbsensi?.fotoMasuk || '',
         timestampMasuk: todayAbsensi?.timestampMasuk || '',
-        fotoKeluar: fotoKeluar || todayAbsensi?.fotoKeluar || '',
+        fotoKeluar: finalDriveFotoKeluar,
       });
 
-      showToast('Absensi Pulang (Foto Pulang) berhasil disimpan & disinkronkan!', 'success');
+      showToast('Absensi Pulang (Foto Pulang) berhasil disimpan ke Google Drive & Supabase!', 'success');
       setFotoKeluar('');
       
       // Auto redirect to Monitoring Absensi after checkout
@@ -300,14 +375,14 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
   // Filtered Absensi List for Monitoring Table
   const filteredAbsensiList = useMemo(() => {
-    // 1. Basic filter based on user role and search query
+    // 1. Basic filter based on user role, filters, and search query
     const baseList = absensiList.filter((item) => {
       if (!item) return false;
 
-      const itemDateNormalized = normalizeDateISO(item.tanggal);
+      const itemDateNormalized = normalizeDateISO(item.tanggal) || String(item.tanggal || '').slice(0, 10);
 
-      // Role-based user filter: if role === 'USER', only show entries for the logged-in user's Regu / account
-      if (isUserRole) {
+      // Optional quick filter: only active when user toggles "Regu Saya"
+      if (filterMyReguOnly) {
         const itemReguClean = cleanStr(item.reguName);
         const itemUserClean = cleanStr(item.userName);
         const activeUserClean = cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id);
@@ -315,6 +390,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
         const isExactRegu = (item.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
         const isCleanReguMatch = Boolean(userReguClean && itemReguClean && itemReguClean === userReguClean);
+        const isRowMatch = Boolean(userRowNumber !== null && extractRowNumber(item.reguName) === userRowNumber);
         const isUserMatch = Boolean(activeUserClean && itemUserClean && itemUserClean === activeUserClean);
         const isNameMatch = Boolean(activeNameClean && cleanStr(item.namaPetugas) === activeNameClean);
         const isNipMatch = Boolean(currentUser?.nip && item.nip && item.nip === currentUser.nip);
@@ -324,18 +400,25 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
           item.petugasList.some((p: any) => cleanStr(p.nama) === activeNameClean)
         );
 
-        const belongsToUser = isExactRegu || isCleanReguMatch || isUserMatch || isNameMatch || isNipMatch || isPetugasMemberMatch;
+        const belongsToUser = isExactRegu || isCleanReguMatch || isRowMatch || isUserMatch || isNameMatch || isNipMatch || isPetugasMemberMatch;
         if (!belongsToUser) return false;
       }
 
-      // Date Filter
+      // Date Filter: if filterDate is empty, display all records
       const matchesDate = !filterDate || itemDateNormalized === filterDate;
 
       // ULP Filter
-      const matchesUlp = filterUlp === 'ALL' || cleanStr(item.ulpName) === cleanStr(filterUlp);
+      const matchesUlp =
+        filterUlp === 'ALL' ||
+        cleanStr(item.ulpName) === cleanStr(filterUlp) ||
+        (item.ulpName || '').toLowerCase().includes(filterUlp.toLowerCase());
 
       // Regu Filter
-      const matchesRegu = filterRegu === 'ALL' || cleanStr(item.reguName) === cleanStr(filterRegu);
+      const matchesRegu =
+        filterRegu === 'ALL' ||
+        cleanStr(item.reguName) === cleanStr(filterRegu) ||
+        (item.reguName || '').trim().toLowerCase() === filterRegu.trim().toLowerCase() ||
+        (extractRowNumber(item.reguName) !== null && extractRowNumber(item.reguName) === extractRowNumber(filterRegu));
 
       // Search Query
       const query = searchQuery.toLowerCase().trim();
@@ -345,26 +428,29 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         (item.tanggal || '').toLowerCase().includes(query) ||
         (item.ulpName || '').toLowerCase().includes(query) ||
         (item.reguName || '').toLowerCase().includes(query) ||
-        item.petugasList?.some((p) => (p.nama || '').toLowerCase().includes(query));
+        item.petugasList?.some((p) => (p.nama || '').toLowerCase().includes(query)) ||
+        ((item as any).PETUGAS_1 && String((item as any).PETUGAS_1).toLowerCase().includes(query)) ||
+        ((item as any).PETUGAS_2 && String((item as any).PETUGAS_2).toLowerCase().includes(query)) ||
+        ((item as any).PETUGAS_3 && String((item as any).PETUGAS_3).toLowerCase().includes(query)) ||
+        ((item as any).PETUGAS_4 && String((item as any).PETUGAS_4).toLowerCase().includes(query)) ||
+        ((item as any).PETUGAS_5 && String((item as any).PETUGAS_5).toLowerCase().includes(query));
 
       return matchesDate && matchesUlp && matchesRegu && matchesSearch;
     });
 
     // 2. Deduplicate: Ensure only one row per (Tanggal + Regu)
-    // This addresses the user request: "update existing row instead of creating a new row"
-    // even if the backend might have sent multiple rows.
-    const uniqueMap = new Map<string, typeof baseList[0]>();
+    const uniqueMap = new Map<string, any>();
     
-    // Sort by updatedAt descending so we keep the freshest one
+    // Sort by updatedAt or createdAt descending so we keep the freshest one
     const sorted = [...baseList].sort((a, b) => {
-      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
-      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      const timeA = new Date(a.updatedAt || a.createdAt || a.timestampMasuk || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || b.timestampMasuk || 0).getTime();
       return timeB - timeA;
     });
 
     for (const item of sorted) {
-      const datePart = normalizeDateISO(item.tanggal);
-      const reguPart = cleanStr(item.reguName);
+      const datePart = normalizeDateISO(item.tanggal) || String(item.tanggal || '');
+      const reguPart = cleanStr(item.reguName) || item.id;
       const key = `${datePart}_${reguPart}`;
       
       if (!uniqueMap.has(key)) {
@@ -376,19 +462,31 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
           ...existing,
           fotoMasuk: existing.fotoMasuk || item.fotoMasuk,
           fotoKeluar: existing.fotoKeluar || item.fotoKeluar,
-          petugasList: (existing.petugasList && existing.petugasList.length > 0) ? existing.petugasList : item.petugasList,
+          petugasList: (Array.isArray(existing.petugasList) && existing.petugasList.length > 0) ? existing.petugasList : item.petugasList,
           timestampMasuk: existing.timestampMasuk || item.timestampMasuk,
           timestampKeluar: existing.timestampKeluar || item.timestampKeluar,
+          PETUGAS_1: (existing as any).PETUGAS_1 || (item as any).PETUGAS_1,
+          KET_1: (existing as any).KET_1 || (item as any).KET_1,
+          PETUGAS_2: (existing as any).PETUGAS_2 || (item as any).PETUGAS_2,
+          KET_2: (existing as any).KET_2 || (item as any).KET_2,
+          PETUGAS_3: (existing as any).PETUGAS_3 || (item as any).PETUGAS_3,
+          KET_3: (existing as any).KET_3 || (item as any).KET_3,
+          PETUGAS_4: (existing as any).PETUGAS_4 || (item as any).PETUGAS_4,
+          KET_4: (existing as any).KET_4 || (item as any).KET_4,
+          PETUGAS_5: (existing as any).PETUGAS_5 || (item as any).PETUGAS_5,
+          KET_5: (existing as any).KET_5 || (item as any).KET_5,
         });
       }
     }
 
     return Array.from(uniqueMap.values()).sort((a, b) => {
-      const dateA = new Date(a.tanggal || 0).getTime();
-      const dateB = new Date(b.tanggal || 0).getTime();
-      return dateB - dateA;
+      const dateA = normalizeDateISO(a.tanggal) || String(a.tanggal || '');
+      const dateB = normalizeDateISO(b.tanggal) || String(b.tanggal || '');
+      const dateComp = dateB.localeCompare(dateA);
+      if (dateComp !== 0) return dateComp;
+      return (a.reguName || '').localeCompare(b.reguName || '');
     });
-  }, [absensiList, isUserRole, reguName, userReguClean, currentUser, filterUlp, filterRegu, filterDate, searchQuery]);
+  }, [absensiList, filterMyReguOnly, reguName, userReguClean, userRowNumber, currentUser, filterUlp, filterRegu, filterDate, searchQuery]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -846,18 +944,46 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
               <h2 className="text-lg font-extrabold text-slate-900 dark:text-white font-display flex items-center space-x-2">
                 <Clock className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
                 <span>
-                  Tabel Monitoring Absensi {isUserRole ? `- ${reguName} ` : ''}({filteredAbsensiList.length})
+                  Tabel Monitoring Absensi ({filteredAbsensiList.length})
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {isUserRole
-                  ? `Menampilkan riwayat absensi khusus untuk ${reguName} (${currentUser?.name || currentUser?.userName || 'Petugas'}).`
-                  : 'Data kehadiran regu, status Petugas 1 s.d 5, serta Foto Masuk & Foto Keluar.'}
+                Monitoring kehadiran TIM ROW & Petugas 1 s.d 5, status kehadiran, Foto Masuk, dan Foto Keluar Google Drive.
               </p>
             </div>
 
             {/* Filters & Actions */}
             <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+              {/* Quick Regu Filter: Semua vs Regu Saya */}
+              {userReguClean && (
+                <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setFilterMyReguOnly(false)}
+                    className={`px-2.5 py-1.5 rounded-lg transition-colors font-bold ${
+                      !filterMyReguOnly
+                        ? 'bg-white dark:bg-slate-800 text-[#005a9c] dark:text-cyan-400 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    Semua Regu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterMyReguOnly(true)}
+                    className={`px-2.5 py-1.5 rounded-lg transition-colors font-bold ${
+                      filterMyReguOnly
+                        ? 'bg-white dark:bg-slate-800 text-[#005a9c] dark:text-cyan-400 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                    title={`Tampilkan khusus ${reguName}`}
+                  >
+                    Regu Saya
+                  </button>
+                </div>
+              )}
+
+              {/* Date Filter */}
               <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                 <input
                   type="date"
@@ -887,7 +1013,8 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 )}
               </div>
 
-              <div className="relative flex-1 sm:flex-initial min-w-[200px]">
+              {/* Search Query */}
+              <div className="relative flex-1 sm:flex-initial min-w-[180px]">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
@@ -898,6 +1025,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 />
               </div>
 
+              {/* ULP Filter */}
               <select
                 value={filterUlp}
                 onChange={(e) => {
@@ -914,26 +1042,37 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 ))}
               </select>
 
-              {!isUserRole && (
-                <select
-                  value={filterRegu}
-                  onChange={(e) => setFilterRegu(e.target.value)}
-                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
-                >
-                  <option value="ALL">Semua Nama Regu</option>
-                  {allReguOptions
-                    .filter(r => {
-                      if (filterUlp === 'ALL') return true;
-                      const reguObj = reguList.find(reg => reg.namaRegu === r);
-                      return reguObj && (cleanStr(reguObj.ulpName) === cleanStr(filterUlp) || cleanStr(reguObj.ulpId) === cleanStr(filterUlp));
-                    })
-                    .map((r, idx) => (
-                    <option key={`${r}-${idx}`} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              )}
+              {/* Regu Filter (Available to all users) */}
+              <select
+                value={filterRegu}
+                onChange={(e) => setFilterRegu(e.target.value)}
+                className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium"
+              >
+                <option value="ALL">Semua Nama Regu</option>
+                {allReguOptions
+                  .filter(r => {
+                    if (filterUlp === 'ALL') return true;
+                    const reguObj = reguList.find(reg => reg.namaRegu === r);
+                    return reguObj && (cleanStr(reguObj.ulpName) === cleanStr(filterUlp) || cleanStr(reguObj.ulpId) === cleanStr(filterUlp));
+                  })
+                  .map((r, idx) => (
+                  <option key={`${r}-${idx}`} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+
+              {/* Segarkan / Refresh Button */}
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer disabled:opacity-50"
+                title="Segarkan data absensi dari Supabase"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#00A2B9]' : ''}`} />
+                <span>{isRefreshing ? 'Memuat...' : 'Segarkan'}</span>
+              </button>
 
               {!isUserRole && (
                 <button
@@ -1220,7 +1359,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                             </button>
                             <button 
                               onClick={async () => {
-                                if (window.confirm('Hapus data absensi ini? Perubahan akan langsung sinkron ke Spreadsheet.')) {
+                                if (window.confirm('Hapus data absensi ini? Perubahan akan langsung sinkron ke Supabase Database.')) {
                                   await deleteAbsensi(item.id);
                                 }
                               }}

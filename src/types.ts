@@ -31,6 +31,7 @@ export type WOType =
 
 export interface WorkOrder {
   id: string;
+  unitId?: string;
   pekerjaan?: 'NORMAL' | 'GOROW';
   nomorWO: string;
   tanggal: string; // YYYY-MM-DD
@@ -88,6 +89,7 @@ export interface AbsensiPetugas {
 
 export interface Absensi {
   id: string;
+  unitId?: string;
   tanggal: string; // YYYY-MM-DD
   reguName: string;
   penyulangName?: string;
@@ -108,6 +110,7 @@ export interface Absensi {
 
 export interface Realisasi {
   id: string;
+  unitId?: string;
   workOrderId: string;
   nomorWO: string;
   ulpName?: string;

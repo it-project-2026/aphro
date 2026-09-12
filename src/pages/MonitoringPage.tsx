@@ -2,42 +2,31 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useRealisasi } from '../context/RealisasiContext';
-import { useAbsensi } from '../context/AbsensiContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useSettings } from '../context/SettingsContext';
 import { useGASSync } from '../context/GASSyncContext';
-import { useUI } from '../context/UIContext';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
-import { StatusBadge } from '../components/common/StatusBadge';
-import { WorkOrder, Realisasi } from '../types';
-import { getLocalDateTimeString, formatDateDisplay, normalizeDateISO, getWIBDateString } from '../utils/dateUtils';
+import { WorkOrder } from '../types';
+import { formatDateDisplay, getWIBDateString, getLocalDateTimeString, normalizeDateISO } from '../utils/dateUtils';
 import {
-  MapPin,
-  Filter,
   Search,
   Calendar,
-  CheckCircle2,
-  Clock,
   Scissors,
   TreeDeciduous,
-  Eye,
-  FileSpreadsheet,
+  Table as TableIcon,
   BarChart3,
   TrendingUp,
 } from 'lucide-react';
 
 export const MonitoringPage: React.FC = () => {
   const draggable1 = useDraggableScroll();
-  const draggable2 = useDraggableScroll();
   
   const { user: currentUser } = useAuth();
   const { workOrders, displayedWorkOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
-  const { absensiList } = useAbsensi();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { syncWithGAS } = useGASSync();
-  const { setActiveTab } = useUI();
 
   const isUserRole = currentUser?.role === 'User';
 
@@ -46,8 +35,17 @@ export const MonitoringPage: React.FC = () => {
   const [filterRegu, setFilterRegu] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
   // Default today in WIB for User, empty for Admin to see all
-  const [filterDate, setFilterDate] = useState(currentUser?.role === 'User' ? getWIBDateString() : '');
+  const [filterDate, setFilterDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const isAdmRole = (currentUser?.role || '').toUpperCase() === 'ADM' || (currentUser?.role || '').toUpperCase() === 'ADMIN' || (currentUser?.userName || '').toLowerCase() === 'admbkt';
 
@@ -69,7 +67,9 @@ export const MonitoringPage: React.FC = () => {
 
     baseList.forEach((wo) => {
       if (!wo) return;
-      const woKey = (wo.nomorWO || '').trim().toUpperCase() || (wo.id || '').trim().toUpperCase();
+      const woNo = (wo.nomorWO || '').trim().toUpperCase();
+      const penyulang = (wo.penyulangName || '').trim().toUpperCase();
+      const woKey = woNo && penyulang ? `${woNo}___${penyulang}` : (wo.id || '').trim().toUpperCase();
       if (!woKey) return;
 
       if (!seen.has(woKey)) {
@@ -92,10 +92,12 @@ export const MonitoringPage: React.FC = () => {
       }
     });
 
-    // Also inject synthetic Work Orders for any Realisasi whose nomorWO / workOrderId is not in seen
+    // Also inject synthetic Work Orders for any Realisasi whose (nomorWO + penyulangName) is not in seen
     realisasiList.forEach((r) => {
       if (!r) return;
-      const rKey = (r.nomorWO || '').trim().toUpperCase() || (r.workOrderId || '').trim().toUpperCase();
+      const rWoNo = (r.nomorWO || '').trim().toUpperCase();
+      const rPenyulang = (r.penyulangName || '').trim().toUpperCase();
+      const rKey = rWoNo && rPenyulang ? `${rWoNo}___${rPenyulang}` : (r.workOrderId || '').trim().toUpperCase();
       if (!rKey) return;
 
       if (!seen.has(rKey)) {
@@ -148,7 +150,7 @@ export const MonitoringPage: React.FC = () => {
 
       const matchesDate = !filterDate || matchesWoDate || hasRealisasiOnDate;
       
-      const query = searchQuery.toLowerCase().trim();
+      const query = debouncedSearch.toLowerCase().trim();
       const matchesSearch =
         !query ||
         (wo.nomorWO || '').toLowerCase().includes(query) ||
@@ -158,7 +160,7 @@ export const MonitoringPage: React.FC = () => {
 
       return matchesUlp && matchesPenyulang && matchesRegu && matchesStatus && matchesDate && matchesSearch;
     });
-  }, [uniqueWorkOrders, realisasiList, filterUlp, filterPenyulang, filterRegu, filterStatus, filterDate, searchQuery]);
+  }, [uniqueWorkOrders, realisasiList, filterUlp, filterPenyulang, filterRegu, filterStatus, filterDate, debouncedSearch]);
 
   // 3. Calculate totals across filtered WOs with deduplicated realisasi items
   const woMonitoringRows = useMemo(() => {
@@ -258,8 +260,8 @@ export const MonitoringPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Overview Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 no-print">
+        {/* Overview Stat Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 no-print">
             <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-1">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Work Order</span>
               <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-display">
@@ -398,111 +400,110 @@ export const MonitoringPage: React.FC = () => {
           </div>
 
           {/* Main Content Area */}
-          {/* TABLE REALISASI PER WORK ORDER */}
           <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between no-print">
               <div className="flex items-center space-x-2">
-                <FileSpreadsheet className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
-                  <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
-                    Tabel Realisasi per Work Order ({woMonitoringRows.length})
-                  </h3>
-                </div>
-                <span className="text-xs font-bold text-slate-400">
-                  Sinkron dengan Data Google Spreadsheet
-                </span>
+                <TableIcon className="w-5 h-5 text-[#00A2B9] dark:text-teal-400" />
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                  Tabel Realisasi per Work Order ({woMonitoringRows.length})
+                </h3>
               </div>
-
-              <div 
-                ref={draggable1.ref}
-                onMouseDown={draggable1.onMouseDown}
-                onMouseUp={draggable1.onMouseUp}
-                onMouseLeave={draggable1.onMouseLeave}
-                onMouseMove={draggable1.onMouseMove}
-                className="overflow-x-auto"
-                style={draggable1.style}
-              >
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 font-extrabold uppercase tracking-wider">
-                      <th className="py-3.5 px-4">Nama Work Order</th>
-                      <th className="py-3.5 px-4">Tanggal</th>
-                      <th className="py-3.5 px-4">ULP</th>
-                      <th className="py-3.5 px-4">Penyulang</th>
-                      <th className="py-3.5 px-4 text-center">Total Realisasi</th>
-                      <th className="py-3.5 px-4 text-center">Total Tebang</th>
-                      <th className="py-3.5 px-4 text-center">Total Pangkas</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                    {woMonitoringRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
-                          Tidak ada data Work Order yang sesuai filter
-                        </td>
-                      </tr>
-                    ) : (
-                      woMonitoringRows.map((row, idx) => (
-                        <tr
-                          key={`${row.workOrder.id}-${idx}`}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors"
-                        >
-                          <td className="py-3.5 px-4 font-bold text-[#008396] dark:text-teal-400">
-                            <div className="flex flex-col">
-                              <span className="text-xs font-black">{row.nomorWO}</span>
-                              <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
-                                {row.workOrder.jenisPekerjaan || 'Pemangkasan Pohon (ROW)'}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap text-slate-700 dark:text-slate-300">
-                            {formatDateDisplay(row.tanggal)}
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap text-slate-800 dark:text-slate-200 font-semibold">
-                            {row.ulpName}
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap text-slate-700 dark:text-slate-300">
-                            {row.penyulangName}
-                          </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                            <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-[#00A2B9]/10 dark:bg-teal-950/80 text-[#008396] dark:text-teal-300 border border-[#00A2B9]/20 dark:border-teal-800">
-                              {row.totalRealisasiCount} Titik
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                            <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-[#00A2B9]/10 dark:bg-teal-950/80 text-[#008396] dark:text-teal-300 border border-[#00A2B9]/20 dark:border-teal-800">
-                              {row.totalTebang} Pohon
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                            <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                              {row.totalPotong} Titik/Pohon
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {woMonitoringRows.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold border-t-2 border-slate-200 dark:border-slate-700">
-                        <td colSpan={4} className="py-3.5 px-4 text-right uppercase tracking-wider text-xs">
-                          Total Keseluruhan :
-                        </td>
-                        <td className="py-3.5 px-4 text-center text-[#00A2B9] dark:text-teal-400">
-                          {grandTotalRealisasi} Titik
-                        </td>
-                        <td className="py-3.5 px-4 text-center text-[#008396] dark:text-teal-400">
-                          {grandTotalTebang} Pohon
-                        </td>
-                        <td className="py-3.5 px-4 text-center text-slate-600 dark:text-slate-400">
-                          {grandTotalPotong} Titik/Pohon
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
+              <span className="text-xs font-bold text-slate-400">
+                Sinkron dengan Data Google Spreadsheet
+              </span>
             </div>
+
+            <div 
+              ref={draggable1.ref}
+              onMouseDown={draggable1.onMouseDown}
+              onMouseUp={draggable1.onMouseUp}
+              onMouseLeave={draggable1.onMouseLeave}
+              onMouseMove={draggable1.onMouseMove}
+              className="overflow-x-auto"
+              style={draggable1.style}
+            >
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 font-extrabold uppercase tracking-wider">
+                    <th className="py-3.5 px-4">Nama Work Order</th>
+                    <th className="py-3.5 px-4">Tanggal</th>
+                    <th className="py-3.5 px-4">ULP</th>
+                    <th className="py-3.5 px-4">Penyulang</th>
+                    <th className="py-3.5 px-4 text-center">Total Realisasi</th>
+                    <th className="py-3.5 px-4 text-center">Total Tebang</th>
+                    <th className="py-3.5 px-4 text-center">Total Pangkas</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                  {woMonitoringRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                        Tidak ada data Work Order yang sesuai filter
+                      </td>
+                    </tr>
+                  ) : (
+                    woMonitoringRows.map((row, idx) => (
+                      <tr
+                        key={`${row.workOrder.id}-${idx}`}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors"
+                      >
+                        <td className="py-3.5 px-4 font-bold text-[#008396] dark:text-teal-400">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-black">{row.nomorWO}</span>
+                            <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                              {row.workOrder.jenisPekerjaan || 'Pemangkasan Pohon (ROW)'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap text-slate-700 dark:text-slate-300">
+                          {formatDateDisplay(row.tanggal)}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap text-slate-800 dark:text-slate-200 font-semibold">
+                          {row.ulpName}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap text-slate-700 dark:text-slate-300">
+                          {row.penyulangName}
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-[#00A2B9]/10 dark:bg-teal-950/80 text-[#008396] dark:text-teal-300 border border-[#00A2B9]/20 dark:border-teal-800">
+                            {row.totalRealisasiCount} Titik
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-[#00A2B9]/10 dark:bg-teal-950/80 text-[#008396] dark:text-teal-300 border border-[#00A2B9]/20 dark:border-teal-800">
+                            {row.totalTebang} Pohon
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {row.totalPotong} Titik/Pohon
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {woMonitoringRows.length > 0 && (
+                  <tfoot>
+                    <tr className="bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold border-t-2 border-slate-200 dark:border-slate-700">
+                      <td colSpan={4} className="py-3.5 px-4 text-right uppercase tracking-wider text-xs">
+                        Total Keseluruhan :
+                      </td>
+                      <td className="py-3.5 px-4 text-center text-[#00A2B9] dark:text-teal-400">
+                        {grandTotalRealisasi} Titik
+                      </td>
+                      <td className="py-3.5 px-4 text-center text-[#008396] dark:text-teal-400">
+                        {grandTotalTebang} Pohon
+                      </td>
+                      <td className="py-3.5 px-4 text-center text-slate-600 dark:text-slate-400">
+                        {grandTotalPotong} Titik/Pohon
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
     </div>
   );
 };

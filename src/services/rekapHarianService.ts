@@ -5,6 +5,8 @@
 
 import { RekapItemData } from '../utils/rekapExportService';
 import { Realisasi, ULP, ReguROW, WorkOrder, Penyulang } from '../types';
+import { getWOTargetKms, getWORealisasiKms, TARGET_KMS_PER_TIM_ROW } from '../utils/metricUtils';
+import { normalizeDateISO } from '../utils/dateUtils';
 
 export interface ULConfigPreset {
   kodeUL: string;
@@ -22,49 +24,49 @@ export const UL_PRESETS: Record<string, ULConfigPreset> = {
     kodeUL: 'BKT',
     namaUL: 'UL BUKITTINGGI',
     rows: [
-      { namaUlp: 'ULP BUKITTINGGI', timRow: 'TIM ROW 3', target: 200, kodeUnit: '13221' },
-      { namaUlp: 'ULP PADANG PANJANG', timRow: 'TIM ROW 4', target: 200, kodeUnit: '13222' },
-      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 7', target: 50.20, kodeUnit: '13223' },
-      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 8', target: 50.20, kodeUnit: '13223' },
-      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 5', target: 50.20, kodeUnit: '13224' },
-      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 6', target: 50.20, kodeUnit: '13224' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 9', target: 50.20, kodeUnit: '13225' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 10', target: 50.20, kodeUnit: '13225' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 11', target: 50.20, kodeUnit: '13225' },
-      { namaUlp: 'ULP BASO', timRow: 'TIM ROW 2', target: 200, kodeUnit: '13226' },
-      { namaUlp: 'ULP KOTO TUO', timRow: 'TIM ROW 1', target: 200, kodeUnit: '13227' },
+      { namaUlp: 'ULP BUKITTINGGI', timRow: 'TIM ROW 3', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13221' },
+      { namaUlp: 'ULP PADANG PANJANG', timRow: 'TIM ROW 4', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13222' },
+      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 7', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13223' },
+      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 8', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13223' },
+      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 5', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13224' },
+      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 6', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13224' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 9', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 10', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 11', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
+      { namaUlp: 'ULP BASO', timRow: 'TIM ROW 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13226' },
+      { namaUlp: 'ULP KOTO TUO', timRow: 'TIM ROW 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13227' },
     ],
   },
   PADANG: {
     kodeUL: 'PDG',
     namaUL: 'UL PADANG',
     rows: [
-      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Alpha (Tim Utama)', target: 50.20, kodeUnit: '13211' },
-      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Charlie (Rapid Response)', target: 50.20, kodeUnit: '13211' },
-      { namaUlp: 'ULP INDARUNG', timRow: 'Regu ROW Bravo (Tim Indarung)', target: 200, kodeUnit: '13212' },
-      { namaUlp: 'ULP KURANJI', timRow: 'Regu ROW Alpha (Tim Utama)', target: 200, kodeUnit: '13213' },
-      { namaUlp: 'ULP TABING', timRow: 'Regu ROW Delta (Tim Tabing)', target: 200, kodeUnit: '13214' },
+      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Alpha (Tim Utama)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13211' },
+      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Charlie (Rapid Response)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13211' },
+      { namaUlp: 'ULP INDARUNG', timRow: 'Regu ROW Bravo (Tim Indarung)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13212' },
+      { namaUlp: 'ULP KURANJI', timRow: 'Regu ROW Alpha (Tim Utama)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13213' },
+      { namaUlp: 'ULP TABING', timRow: 'Regu ROW Delta (Tim Tabing)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13214' },
     ],
   },
   PAYAKUMBUH: {
     kodeUL: 'PYK',
     namaUL: 'UL PAYAKUMBUH',
     rows: [
-      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 1', target: 50.20, kodeUnit: '13231' },
-      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 2', target: 50.20, kodeUnit: '13231' },
-      { namaUlp: 'ULP LIMA PULUH KOTA', timRow: 'TIM ROW 3', target: 200, kodeUnit: '13232' },
-      { namaUlp: 'ULP SULIKI', timRow: 'TIM ROW 4', target: 200, kodeUnit: '13233' },
+      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13231' },
+      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13231' },
+      { namaUlp: 'ULP LIMA PULUH KOTA', timRow: 'TIM ROW 3', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13232' },
+      { namaUlp: 'ULP SULIKI', timRow: 'TIM ROW 4', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13233' },
     ],
   },
   SOLOK: {
     kodeUL: 'SLK',
     namaUL: 'UL SOLOK',
     rows: [
-      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 1', target: 50.20, kodeUnit: '13241' },
-      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 2', target: 50.20, kodeUnit: '13241' },
-      { namaUlp: 'ULP SAWAHLUNTO', timRow: 'TIM ROW 3', target: 200, kodeUnit: '13242' },
-      { namaUlp: 'ULP SIJUNJUNG', timRow: 'TIM ROW 4', target: 200, kodeUnit: '13243' },
-      { namaUlp: 'ULP MUARA LABUH', timRow: 'TIM ROW 5', target: 200, kodeUnit: '13244' },
+      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13241' },
+      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13241' },
+      { namaUlp: 'ULP SAWAHLUNTO', timRow: 'TIM ROW 3', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13242' },
+      { namaUlp: 'ULP SIJUNJUNG', timRow: 'TIM ROW 4', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13243' },
+      { namaUlp: 'ULP MUARA LABUH', timRow: 'TIM ROW 5', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13244' },
     ],
   },
 };
@@ -106,9 +108,41 @@ export class RekapHarianService {
   static getDefaultRowsForUnit(
     unitName: string,
     ulpList?: ULP[],
-    reguList?: ReguROW[]
+    reguList?: ReguROW[],
+    realisasiList?: Realisasi[],
+    workOrders?: WorkOrder[]
   ): Array<{ id: string; noUrut: number; kodeUnit: string; namaUlp: string; timRow: string; target: number }> {
-    // 1. PRIORITAS UTAMA: Data Master Regu & ULP yang tersimpan dari Spreadsheet
+    // 1. PRIORITAS 1: Jika ada realisasiList atau workOrders, ekstrak regu/tim unik dari sana agar semua tim lapangan otomatis masuk ke rekap!
+    if ((realisasiList && realisasiList.length > 0) || (workOrders && workOrders.length > 0)) {
+      const seenRegu = new Set<string>();
+      const rows: Array<{ id: string; noUrut: number; kodeUnit: string; namaUlp: string; timRow: string; target: number }> = [];
+      let seq = 1;
+
+      const addRegu = (ulp?: string, regu?: string) => {
+        if (!regu) return;
+        const cleanRegu = regu.trim().toUpperCase();
+        if (seenRegu.has(cleanRegu)) return;
+        seenRegu.add(cleanRegu);
+        rows.push({
+          id: `row-extracted-${seq}`,
+          noUrut: seq,
+          kodeUnit: `1320${seq}`,
+          namaUlp: (ulp || 'ULP UTAMA').toUpperCase(),
+          timRow: cleanRegu,
+          target: TARGET_KMS_PER_TIM_ROW,
+        });
+        seq++;
+      };
+
+      realisasiList?.forEach(r => addRegu(r.ulpName, r.reguName || r.petugasName));
+      workOrders?.forEach(w => addRegu(w.ulpName, w.reguName));
+
+      if (rows.length > 0) {
+        return rows;
+      }
+    }
+
+    // 2. Data Master Regu & ULP yang tersimpan dari Spreadsheet
     if (reguList && reguList.length > 0) {
       const activeRegus = reguList.filter(r => r.status !== 'Non-Aktif');
       const targetRegus = activeRegus.length > 0 ? activeRegus : reguList;
@@ -138,7 +172,7 @@ export class RekapHarianService {
               kodeUnit: ulp.kodeULP || `1320${seq}`,
               namaUlp: (regu.ulpName || ulp.namaULP).toUpperCase(),
               timRow: regu.namaRegu,
-              target: 200,
+              target: TARGET_KMS_PER_TIM_ROW,
             });
             seq++;
           });
@@ -155,7 +189,7 @@ export class RekapHarianService {
               kodeUnit: `1320${seq}`,
               namaUlp: resolvedUlpName.toUpperCase(),
               timRow: regu.namaRegu,
-              target: 200,
+              target: TARGET_KMS_PER_TIM_ROW,
             });
             seq++;
           }
@@ -169,7 +203,7 @@ export class RekapHarianService {
             kodeUnit: `1320${seq}`,
             namaUlp: (regu.ulpName || 'ULP UTAMA').toUpperCase(),
             timRow: regu.namaRegu,
-            target: 200,
+            target: TARGET_KMS_PER_TIM_ROW,
           });
           seq++;
         });
@@ -180,7 +214,7 @@ export class RekapHarianService {
       }
     }
 
-    // 2. Jika master data belum terisi, gunakan preset Unit Layanan
+    // 3. Jika master data belum terisi, gunakan preset Unit Layanan
     const unitKey = this.normalizeUnitKey(unitName);
     if (UL_PRESETS[unitKey]) {
       return UL_PRESETS[unitKey].rows.map((r, idx) => ({
@@ -193,7 +227,7 @@ export class RekapHarianService {
       }));
     }
 
-    // 3. Fallback bawaan
+    // 4. Fallback bawaan
     return DEFAULT_REKAP_ROWS;
   }
 
@@ -203,26 +237,53 @@ export class RekapHarianService {
   static getDefaultRowsForPenyulang(
     unitName: string,
     ulpList?: ULP[],
-    penyulangList?: Penyulang[]
+    penyulangList?: Penyulang[],
+    realisasiList?: Realisasi[],
+    workOrders?: WorkOrder[]
   ): Array<{ id: string; noUrut: number; kodeUnit: string; namaUlp: string; timRow: string; target: number }> {
     if (penyulangList && penyulangList.length > 0) {
       const rows: Array<{ id: string; noUrut: number; kodeUnit: string; namaUlp: string; timRow: string; target: number }> = [];
       let seq = 1;
 
-      // Filter by unit if needed, otherwise use all
-      const targetPenyulangs = penyulangList;
-
-      targetPenyulangs.forEach((p) => {
+      penyulangList.forEach((p) => {
         rows.push({
           id: `row-penyulang-${p.id || seq}`,
           noUrut: seq,
           kodeUnit: p.kodePenyulang || `PYL-${seq}`,
           namaUlp: (p.ulpName || 'ULP TERKAIT').toUpperCase(),
-          timRow: p.namaPenyulang, // We use timRow field as Nama Penyulang for compatibility with RekapItemData
-          target: 50.20,
+          timRow: p.namaPenyulang,
+          target: TARGET_KMS_PER_TIM_ROW,
         });
         seq++;
       });
+
+      if (rows.length > 0) return rows;
+    }
+
+    // Jika penyulangList kosong, ekstrak dari realisasiList & workOrders
+    if ((realisasiList && realisasiList.length > 0) || (workOrders && workOrders.length > 0)) {
+      const seenPenyulang = new Set<string>();
+      const rows: Array<{ id: string; noUrut: number; kodeUnit: string; namaUlp: string; timRow: string; target: number }> = [];
+      let seq = 1;
+
+      const addPenyulang = (ulp?: string, penyulang?: string) => {
+        if (!penyulang) return;
+        const clean = penyulang.trim().toUpperCase();
+        if (seenPenyulang.has(clean)) return;
+        seenPenyulang.add(clean);
+        rows.push({
+          id: `row-penyulang-ext-${seq}`,
+          noUrut: seq,
+          kodeUnit: `PYL-${seq}`,
+          namaUlp: (ulp || 'ULP UTAMA').toUpperCase(),
+          timRow: clean,
+          target: TARGET_KMS_PER_TIM_ROW,
+        });
+        seq++;
+      };
+
+      realisasiList?.forEach(r => addPenyulang(r.ulpName, r.penyulangName));
+      workOrders?.forEach(w => addPenyulang(w.ulpName, w.penyulangName));
 
       if (rows.length > 0) return rows;
     }
@@ -260,7 +321,7 @@ export class RekapHarianService {
     }
 
     if (rows.length === 0) {
-      const defaultRows = this.getDefaultRowsForPenyulang(unitName, ulpList, penyulangList);
+      const defaultRows = this.getDefaultRowsForPenyulang(unitName, ulpList, penyulangList, realisasiList, workOrders);
       rows = defaultRows.map((def, idx) => ({
         id: def.id,
         noUrut: idx + 1,
@@ -292,7 +353,32 @@ export class RekapHarianService {
   ): RekapItemData[] {
     const normalize = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 
-    return currentRows.map((row) => {
+    // Ensure any penyulang found in realisasiList or workOrders that is missing from currentRows is added
+    const existingPenyulang = new Set(currentRows.map(r => normalize(r.timRow)));
+    const dynamicRows = [...currentRows];
+
+    const addMissingPenyulang = (ulp?: string, penyulang?: string) => {
+      if (!penyulang) return;
+      const clean = normalize(penyulang);
+      if (!existingPenyulang.has(clean)) {
+        existingPenyulang.add(clean);
+        dynamicRows.push({
+          id: `row-peny-dyn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          noUrut: dynamicRows.length + 1,
+          kodeUnit: `PYL-${dynamicRows.length + 1}`,
+          namaUlp: (ulp || 'ULP UTAMA').toUpperCase(),
+          timRow: penyulang.trim().toUpperCase(),
+          target: TARGET_KMS_PER_TIM_ROW,
+          keterangan: '',
+          dailyValues: {}
+        });
+      }
+    };
+
+    realisasiList?.forEach(r => addMissingPenyulang(r.ulpName, r.penyulangName));
+    workOrders?.forEach(w => addMissingPenyulang(w.ulpName, w.penyulangName));
+
+    return dynamicRows.map((row) => {
       const updatedDaily = { ...row.dailyValues };
       
       // Reset
@@ -326,9 +412,9 @@ export class RekapHarianService {
               }
 
               const ket = normalize(rel.keterangan || '');
-              if (ket.includes('TEBANG')) {
+              if (ket === 'TEBANG' || ket.includes('TEBANG')) {
                 updatedDaily[dayKey].tebang1++;
-              } else if (ket.includes('PANGKAS') || ket.includes('POTONG')) {
+              } else if (ket === 'PANGKAS' || ket.includes('PANGKAS') || ket.includes('POTONG')) {
                 updatedDaily[dayKey].pangkas++;
               }
             }
@@ -352,15 +438,8 @@ export class RekapHarianService {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
-              let targetKms = Number(wo.volumePekerjaan) || 0;
-              if (wo.satuan?.toUpperCase() === 'GAWANG') targetKms = targetKms / 20;
-
-              let realisasiKms = 0;
-              const statusUpper = (wo.status || '').toUpperCase();
-              if (statusUpper === 'SELESAI') {
-                realisasiKms = Number(wo.totalRealisasi) || 0;
-                if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') realisasiKms = realisasiKms / 20;
-              }
+              const targetKms = getWOTargetKms(wo);
+              const realisasiKms = getWORealisasiKms(wo);
 
               updatedDaily[dayKey].targetKms += targetKms;
               updatedDaily[dayKey].realisasiKms += realisasiKms;
@@ -448,7 +527,7 @@ export class RekapHarianService {
 
     // Jika belum ada data tersimpan, inisialisasi dari default
     if (rows.length === 0) {
-      const defaultRows = this.getDefaultRowsForUnit(unitName, ulpList, reguList);
+      const defaultRows = this.getDefaultRowsForUnit(unitName, ulpList, reguList, realisasiList, workOrders);
       rows = defaultRows.map((def, idx) => ({
         id: def.id,
         noUrut: idx + 1,
@@ -484,59 +563,15 @@ export class RekapHarianService {
 
   /**
    * Helper to parse date parts from various formats accurately
-   * Prevents timezone shifts by using manual parsing for ISO strings
+   * Uses unified normalizeDateISO logic
    */
   static parseDateParts(dateStr: any) {
     if (!dateStr) return null;
-    
-    // If it's already a Date object
-    if (dateStr instanceof Date) {
-      return { y: dateStr.getFullYear(), m: dateStr.getMonth() + 1, d: dateStr.getDate() };
+    const iso = normalizeDateISO(dateStr);
+    if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      const [y, m, d] = iso.split('-').map(Number);
+      return { y, m, d };
     }
-
-    const s = String(dateStr).trim();
-    if (!s) return null;
-
-    // 1. ISO format YYYY-MM-DD (optionally with T and time)
-    const isoMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-    if (isoMatch) {
-      const year = parseInt(isoMatch[1], 10);
-      const month = parseInt(isoMatch[2], 10);
-      const day = parseInt(isoMatch[3], 10);
-      
-      // Handle UTC ISO strings from Google Apps Script (e.g. 2026-08-19T17:00:00.000Z)
-      // We assume these are local midnight shifted to UTC. 
-      // 17:00 UTC of previous day = 00:00 local of current day (WIB +7)
-      if (s.includes('T') && s.endsWith('Z')) {
-        const dt = new Date(s);
-        // If hours is late (17..23), it's likely midnight of the NEXT day in local time
-        if (dt.getUTCHours() >= 12) {
-          const localDt = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
-          return { y: localDt.getUTCFullYear(), m: localDt.getUTCMonth() + 1, d: localDt.getUTCDate() };
-        }
-        // If hours is early, it stays on the same UTC day which is also same local day
-        return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
-      }
-
-      return { y: year, m: month, d: day };
-    }
-
-    // 2. Indo format DD-MM-YYYY or DD/MM/YYYY
-    const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-    if (dmyMatch) {
-      return { 
-        y: parseInt(dmyMatch[3], 10), 
-        m: parseInt(dmyMatch[2], 10), 
-        d: parseInt(dmyMatch[1], 10) 
-      };
-    }
-
-    // 3. Fallback
-    const dt = new Date(s);
-    if (!isNaN(dt.getTime())) {
-      return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
-    }
-
     return null;
   }
 
@@ -601,16 +636,16 @@ export class RekapHarianService {
 
             const matchUlp = relUlp.includes(rowUlpClean) || rowUlpClean.includes(relUlp) || relTimFull.includes(rowUlpClean);
 
-            if (matchUlp && matchTim) {
+            if (matchTim) {
               const dayKey = String(parts.d).padStart(2, '0');
               if (!updatedDaily[dayKey]) {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
               const ket = normalize(rel.keterangan || '');
-              if (ket.includes('TEBANG')) {
+              if (ket === 'TEBANG' || ket.includes('TEBANG')) {
                 updatedDaily[dayKey].tebang1++;
-              } else if (ket.includes('PANGKAS') || ket.includes('POTONG')) {
+              } else if (ket === 'PANGKAS' || ket.includes('PANGKAS') || ket.includes('POTONG')) {
                 updatedDaily[dayKey].pangkas++;
               }
 
@@ -647,22 +682,15 @@ export class RekapHarianService {
 
             const matchUlp = woUlp.includes(rowUlpClean) || rowUlpClean.includes(woUlp) || woTimFull.includes(rowUlpClean);
 
-            if (matchUlp && matchTim) {
+            if (matchTim) {
               let targetDayKey = String(parts.d).padStart(2, '0');
 
               if (!updatedDaily[targetDayKey]) {
                 updatedDaily[targetDayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
-              let targetKms = Number(wo.volumePekerjaan) || 0;
-              if (wo.satuan?.toUpperCase() === 'GAWANG') targetKms = targetKms / 20;
-
-              let realisasiKms = 0;
-              const statusUpper = (wo.status || '').toUpperCase();
-              if (statusUpper === 'SELESAI') {
-                realisasiKms = Number(wo.totalRealisasi) || 0;
-                if (wo.satuanTotalRealisasi?.toUpperCase() === 'GAWANG') realisasiKms = realisasiKms / 20;
-              }
+              const targetKms = getWOTargetKms(wo);
+              const realisasiKms = getWORealisasiKms(wo);
 
               updatedDaily[targetDayKey].targetKms += targetKms;
               updatedDaily[targetDayKey].realisasiKms += realisasiKms;

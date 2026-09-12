@@ -15,13 +15,32 @@ export interface GASApiResponse<T = any> {
 // Memory cache & Request deduplication map
 const apiCache = new Map<string, { data: any; timestamp: number }>();
 const activeRequests = new Map<string, Promise<Response>>();
-const CACHE_TTL_MS = 15000; // 15 seconds memory cache to prevent redundant requests
+const CACHE_TTL_MS = 60000; // Increase to 60 seconds memory cache to prevent redundant requests
+
+// Global Request Queue to prevent "Rate Exceeded" in Google Apps Script
+let requestQueue: Promise<any> = Promise.resolve();
 
 export class GASApiService {
   /**
    * Fetch with AbortController timeout and exponential backoff retry
    */
-  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 25000, retries = 2): Promise<Response> {
+  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 25000, retries = 3): Promise<Response> {
+    // Wrap in queue to prevent concurrent requests to GAS side
+    return new Promise((resolve, reject) => {
+      requestQueue = requestQueue.then(async () => {
+        try {
+          const res = await this.executeFetch(url, options, timeoutMs, retries);
+          resolve(res);
+        } catch (err) {
+          reject(err);
+        }
+        // Small gap between requests to GAS
+        await new Promise(r => setTimeout(r, 800));
+      });
+    });
+  }
+
+  private static async executeFetch(url: string, options: RequestInit, timeoutMs: number, retries: number): Promise<Response> {
     for (let attempt = 0; attempt <= retries; attempt++) {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -30,6 +49,12 @@ export class GASApiService {
           ...options,
           signal: controller.signal,
         });
+        
+        // If Rate Exceeded (429 or 503 from Google), trigger a retry
+        if (response.status === 429 || response.status === 503) {
+          throw new Error('Rate Exceeded');
+        }
+
         clearTimeout(id);
         return response;
       } catch (err: any) {
@@ -42,7 +67,7 @@ export class GASApiService {
           throw err;
         }
         // Wait with exponential backoff and random jitter before retry
-        const delay = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 500);
+        const delay = Math.pow(2, attempt) * 1500 + Math.floor(Math.random() * 1000);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -156,6 +181,19 @@ export class GASApiService {
       return { status: 'error', message: err.message || 'Gagal mengirim data ke server GAS' };
     }
   }
+  /**
+   * Log user activity to Google Spreadsheet LOG_ACTIVITY sheet
+   */
+  static async logActivity(gasUrl: string, spreadsheetId: string | undefined, user: string, activity: string, module: string): Promise<GASApiResponse> {
+    return this.postRequest(gasUrl, {
+      action: 'logActivity',
+      spreadsheetId,
+      user,
+      aktivitas: activity,
+      modul: module,
+    });
+  }
+
   private static async handleResponse(response: Response): Promise<GASApiResponse> {
     const contentType = response.headers.get('content-type');
     const text = await response.text();
@@ -202,7 +240,7 @@ export class GASApiService {
     if (!gasUrl || !gasUrl.startsWith('http')) return false;
     try {
       const targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=ping` : `${gasUrl}?action=ping`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' });
       
       if (response.ok) {
         const result = await this.handleResponse(response);
@@ -220,7 +258,7 @@ export class GASApiService {
   static async initDatabase(gasUrl: string): Promise<GASApiResponse> {
     try {
       const targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=initDatabase` : `${gasUrl}?action=initDatabase`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' });
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message || 'Gagal menginisialisasi database GAS' };
@@ -232,7 +270,7 @@ export class GASApiService {
    */
   static async login(gasUrl: string, username: string, password: string): Promise<GASApiResponse> {
     try {
-      const response = await fetch(gasUrl, {
+      const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
@@ -371,7 +409,7 @@ export class GASApiService {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getUsers` : `${gasUrl}?action=getUsers`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' });
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -385,7 +423,7 @@ export class GASApiService {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getRealisasi` : `${gasUrl}?action=getRealisasi`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' });
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
@@ -396,7 +434,7 @@ export class GASApiService {
     try {
       let targetUrl = gasUrl.includes('?') ? `${gasUrl}&action=getAbsensi` : `${gasUrl}?action=getAbsensi`;
       if (spreadsheetId) targetUrl += `&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
-      const response = await fetch(targetUrl, { method: 'GET' });
+      const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' });
       return await this.handleResponse(response);
     } catch (err: any) {
       return { status: 'error', message: err.message };
