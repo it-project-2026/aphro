@@ -6,7 +6,7 @@ import { useMasterData } from './MasterDataContext';
 import { useWorkOrders } from './WorkOrderContext';
 import { useRealisasi } from './RealisasiContext';
 import { useAbsensi } from './AbsensiContext';
-import { getMsUntilNextWIBMidnight, getWIBDateString } from '../utils/dateUtils';
+import { getMsUntilNextWIBMidnight, getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
 
 export type SyncStage = 'idle' | 'detecting' | 'syncing' | 'success' | 'error';
 
@@ -156,6 +156,10 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       } else if (event.type === 'PENDING_QUEUE_CHANGED') {
         const ops = Array.isArray(event.data) ? event.data : [];
         setPendingCount(ops.length);
+      } else if (event.type === 'SYNC_PROGRESS') {
+        if (event.progress) {
+          setSyncProgress(event.progress);
+        }
       } else if (event.type === 'SYNC_STATUS_CHANGED') {
         if (event.status === 'SYNCHRONIZING' || event.status === 'PROCESSING_QUEUE') {
           setIsSyncing(true);
@@ -187,13 +191,22 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     setSyncMessage('Memproses antrean transaksi offline...');
 
     try {
-      const processedCount = await syncManager.processPendingOperations();
+      const stats = await syncManager.processPendingOperations();
       await refreshPendingCount();
 
-      if (processedCount > 0) {
+      setLastSyncStats({
+        successCount: stats.successCount,
+        failCount: stats.failCount,
+        totalCount: stats.totalCount,
+        timestamp: getLocalDateTimeString(),
+      });
+
+      if (stats.totalCount > 0 || stats.successCount > 0) {
         setSyncStage('success');
-        setSyncMessage(`✅ Berhasil menyinkronkan ${processedCount} data transaksi ke database.`);
-        if (showToast) showToast(`✅ ${processedCount} data offline berhasil disinkronkan!`, 'success');
+        setSyncMessage(`Sinkronisasi Selesai: ${stats.successCount} data berhasil masuk database, ${stats.failCount} gagal.`);
+        if (showToast) {
+          showToast(`Sinkronisasi Selesai: ${stats.successCount} data masuk, ${stats.failCount} gagal.`, stats.failCount > 0 ? 'warning' : 'success');
+        }
       } else {
         setSyncStage('idle');
       }
@@ -225,8 +238,15 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // 1. Process pending operations first
-      await syncManager.processPendingOperations();
+      const stats = await syncManager.processPendingOperations();
       await refreshPendingCount();
+
+      setLastSyncStats({
+        successCount: stats.successCount,
+        failCount: stats.failCount,
+        totalCount: stats.totalCount,
+        timestamp: getLocalDateTimeString(),
+      });
 
       // 2. Perform Supabase fetch & sync changed tables
       const syncedTables = await syncManager.syncAllRequired();
@@ -247,18 +267,18 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
       setIsGasConnected(true);
       setSyncStage('success');
-      setSyncMessage('Data Supabase APHRO-Database berhasil diperbarui.');
+      setSyncMessage(`Sinkronisasi Selesai: ${stats.successCount} data berhasil masuk database, ${stats.failCount} gagal.`);
       setLastUpdatedText(syncManager.getLastUpdatedText());
 
       if (showToast && !isSilent) {
-        showToast('Data berhasil disinkronkan dengan Supabase!', 'success');
+        showToast(`Sinkronisasi Selesai: ${stats.successCount} data berhasil masuk, ${stats.failCount} gagal.`, stats.failCount > 0 ? 'warning' : 'success');
       }
 
       if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
       autoDismissTimerRef.current = setTimeout(() => {
         if (!isSilent) setShowSyncBanner(false);
         setSyncStage('idle');
-      }, 4000);
+      }, 5000);
 
       return syncedTables;
     } catch (err) {

@@ -31,7 +31,7 @@ import { useGASSync } from '../context/GASSyncContext';
 interface InputRealisasiPageProps {
   editMode?: boolean;
   initialData?: any;
-  onSuccess?: () => void;
+  onSuccess?: (savedWo?: any) => void;
   onCancel?: () => void;
 }
 
@@ -498,7 +498,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         setSubmissionStatus('success');
         showToast('Realisasi berhasil diinput.', 'success');
         if (onSuccess) {
-          onSuccess();
+          onSuccess(selectedWO);
         }
       }
     } catch (err: any) {

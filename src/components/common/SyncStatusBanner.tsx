@@ -101,10 +101,14 @@ export const SyncStatusBanner: React.FC = () => {
 
   // 2. STATE SUKSES SINKRONISASI
   if (syncStage === 'success' && showSyncBanner) {
+    const successCount = lastSyncStats?.successCount ?? 0;
+    const failCount = lastSyncStats?.failCount ?? 0;
+    const totalCount = lastSyncStats?.totalCount ?? (successCount + failCount);
+
     return (
       <aside
         aria-label="Status Sinkronisasi Selesai"
-        className="fixed bottom-20 md:bottom-6 right-3 sm:right-6 z-50 max-w-md w-[calc(100vw-1.5rem)] sm:w-[420px] bg-slate-900 text-white rounded-2xl shadow-2xl border border-emerald-500/50 p-4 transition-opacity duration-300"
+        className="fixed bottom-20 md:bottom-6 right-3 sm:right-6 z-50 max-w-md w-[calc(100vw-1.5rem)] sm:w-[440px] bg-slate-900 text-white rounded-2xl shadow-2xl border border-emerald-500/50 p-5 transition-opacity duration-300 space-y-4"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center space-x-3 min-w-0">
@@ -117,29 +121,44 @@ export const SyncStatusBanner: React.FC = () => {
                   Sinkron Selesai
                 </span>
                 {lastSyncStats?.timestamp && (
-                  <span className="text-[11px] text-emerald-200 opacity-90">
+                  <span className="text-[11px] text-emerald-200 opacity-90 font-mono">
                     {lastSyncStats.timestamp}
                   </span>
                 )}
               </div>
-              <h4 className="text-xs font-bold text-white mt-1">
-                Data Perangkat Sukses Tersimpan
+              <h4 className="text-sm font-black text-white mt-1">
+                Hasil Sinkronisasi Perangkat ke Database
               </h4>
-              <p className="text-[11px] text-emerald-100 mt-0.5">
-                {syncMessage || 'Seluruh data berhasil disinkronkan dan tersimpan permanen di Database.'}
-              </p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={dismissSyncBanner}
-            className="p-1 rounded-lg hover:bg-slate-800 text-emerald-200 hover:text-white transition-colors shrink-0"
+            className="p-1 rounded-lg hover:bg-slate-800 text-emerald-200 hover:text-white transition-colors shrink-0 cursor-pointer"
             title="Tutup Notifikasi"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Metering Summary Box */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-3 text-center">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-300">Data Berhasil Masuk</span>
+            <span className="text-xl font-black text-emerald-400 font-mono">{successCount}</span>
+            <span className="block text-[10px] text-emerald-200/80 mt-0.5">Item tersimpan</span>
+          </div>
+          <div className={`rounded-xl p-3 text-center border ${failCount > 0 ? 'bg-rose-950/40 border-rose-500/30 text-rose-300' : 'bg-slate-800/60 border-slate-700 text-slate-300'}`}>
+            <span className="block text-[10px] font-bold uppercase tracking-wider">Data Gagal</span>
+            <span className={`text-xl font-black font-mono ${failCount > 0 ? 'text-rose-400' : 'text-slate-200'}`}>{failCount}</span>
+            <span className="block text-[10px] opacity-85 mt-0.5">Item tertunda</span>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-300 font-medium">
+          {syncMessage || `Total ${totalCount} item diproses dari penyimpanan perangkat.`}
+        </p>
       </aside>
     );
   }

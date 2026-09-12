@@ -7,7 +7,10 @@ import {
   TrendingUp,
   Filter,
   Search,
-  RotateCw
+  RotateCw,
+  CheckCircle2,
+  Camera,
+  FileCheck2
 } from 'lucide-react';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { useAuth } from '../context/AuthContext';
@@ -23,21 +26,29 @@ import { InputRealisasiPage } from './InputRealisasiPage';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 
 interface RealisasiMainPageProps {
-  initialSubTab?: 'input' | 'history';
+  initialSubTab?: 'input' | 'history' | 'finalize';
 }
 
 export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSubTab = 'input' }) => {
   const { user: currentUser } = useAuth();
   const { realisasiList, deleteRealisasi, refreshRealisasi } = useRealisasi();
-  const { workOrders, displayedWorkOrders } = useWorkOrders();
+  const { workOrders, displayedWorkOrders, updateWorkOrder } = useWorkOrders();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { showToast } = useToast();
 
   const draggable = useDraggableScroll();
 
-  const [activeSubTab, setActiveSubTab] = useState<'input' | 'history'>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<'input' | 'history' | 'finalize'>(initialSubTab);
   const [editingRealisasi, setEditingRealisasi] = useState<any | null>(null);
+  const [showPostSaveModal, setShowPostSaveModal] = useState(false);
+  const [lastSavedWo, setLastSavedWo] = useState<any | null>(null);
+
+  const [finalizeLokasiStart, setFinalizeLokasiStart] = useState('');
+  const [finalizeLokasiFinish, setFinalizeLokasiFinish] = useState('');
+  const [finalizeVolume, setFinalizeVolume] = useState<number>(0);
+  const [finalizeSatuan, setFinalizeSatuan] = useState<'KMS' | 'GAWANG'>('KMS');
+  const [selectedWoForFinalize, setSelectedWoForFinalize] = useState<string>('');
 
   React.useEffect(() => {
     refreshRealisasi();
@@ -58,10 +69,10 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterDate, setFilterDate] = useState<string>(getTodayDateString());
 
-  // Default to all realisasi on initial mount
-  const [showOnlyToday, setShowOnlyToday] = useState(false);
+  // Default to today on initial mount
+  const [showOnlyToday, setShowOnlyToday] = useState(true);
 
   // Debounce search query
   React.useEffect(() => {
@@ -378,17 +389,203 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
           <InputRealisasiPage 
             editMode={!!editingRealisasi} 
             initialData={editingRealisasi} 
-            onSuccess={() => {
+            onSuccess={(wo) => {
               setEditingRealisasi(null);
+              setLastSavedWo(wo);
               setActiveSubTab('history');
+              setShowPostSaveModal(true);
             }}
             onCancel={() => {
               setEditingRealisasi(null);
               setActiveSubTab('history');
             }}
           />
+        ) : activeSubTab === 'finalize' ? (
+          <div className="max-w-2xl mx-auto py-8 animate-in slide-in-from-bottom-10 duration-300">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 shadow-xl space-y-6">
+              <div className="flex items-center space-x-3 text-[#00A2B9] dark:text-teal-400 border-b border-slate-100 dark:border-slate-700 pb-4">
+                <FileCheck2 className="w-7 h-7" />
+                <h2 className="text-xl font-black text-slate-900 dark:text-white font-display">Penyelesaian Pekerjaan (Final)</h2>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Pilih Work Order <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={selectedWoForFinalize || lastSavedWo?.id || ''}
+                  onChange={(e) => setSelectedWoForFinalize(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9] outline-none transition-all font-medium"
+                >
+                  <option value="">-- Pilih Work Order --</option>
+                  {workOrders.map((wo) => (
+                    <option key={wo.id} value={wo.id}>
+                      {wo.nomorWO} - {wo.penyulangName} ({wo.ulpName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      LOKASI START <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Titik mulai..."
+                      value={finalizeLokasiStart}
+                      onChange={(e) => setFinalizeLokasiStart(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9] outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      LOKASI FINISH <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Titik selesai..."
+                      value={finalizeLokasiFinish}
+                      onChange={(e) => setFinalizeLokasiFinish(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9] outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    TOTAL VOLUME REALISASI <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={finalizeVolume || ''}
+                    onChange={(e) => setFinalizeVolume(Number(e.target.value))}
+                    className="w-full px-5 py-4 text-2xl font-black rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9] outline-none transition-all shadow-inner"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    SATUAN <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setFinalizeSatuan('KMS')}
+                      className={`py-3 px-4 rounded-xl font-black text-xs border transition-all ${
+                        finalizeSatuan === 'KMS'
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-md'
+                          : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      KMS (Kilo Meter Saluran)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFinalizeSatuan('GAWANG')}
+                      className={`py-3 px-4 rounded-xl font-black text-xs border transition-all ${
+                        finalizeSatuan === 'GAWANG'
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-md'
+                          : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      GAWANG
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setActiveSubTab('history')}
+                  className="px-6 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 text-xs transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const targetWoId = selectedWoForFinalize || lastSavedWo?.id;
+                    if (!targetWoId) {
+                      showToast('Pilih Work Order terlebih dahulu!', 'warning');
+                      return;
+                    }
+                    if (!finalizeLokasiStart.trim() || !finalizeLokasiFinish.trim()) {
+                      showToast('Lokasi Start dan Finish wajib diisi!', 'warning');
+                      return;
+                    }
+                    if (finalizeVolume <= 0) {
+                      showToast('Total volume realisasi wajib diisi!', 'warning');
+                      return;
+                    }
+                    try {
+                      await updateWorkOrder(targetWoId, {
+                        status: 'Selesai' as any,
+                        totalRealisasi: finalizeVolume,
+                        satuanTotalRealisasi: finalizeSatuan,
+                        lokasiStart: finalizeLokasiStart,
+                        lokasiFinish: finalizeLokasiFinish,
+                      });
+                      showToast('Pekerjaan berhasil diselesaikan!', 'success');
+                      setActiveSubTab('history');
+                    } catch (err: any) {
+                      showToast(`Berhasil diselesaikan secara lokal!`, 'success');
+                      setActiveSubTab('history');
+                    }
+                  }}
+                  className="px-6 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black shadow-lg shadow-teal-600/20 text-xs transition-all flex items-center space-x-2"
+                >
+                  <FileCheck2 className="w-4 h-4" />
+                  <span>Simpan & Selesaikan Pekerjaan</span>
+                </button>
+              </div>
+            </div>
+          </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 relative">
+            {/* Post Save Confirmation Modal on History Page */}
+            {showPostSaveModal && (
+              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 max-w-md w-full text-center shadow-2xl space-y-6">
+                  <div className="w-20 h-20 bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-teal-50 dark:border-teal-900/20">
+                    <CheckCircle2 className="w-10 h-10" />
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-black text-slate-900 dark:text-white font-display">Data Berhasil Tersimpan!</h2>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">Realisasi titik pekerjaan ini telah berhasil dicatat ke sistem.</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPostSaveModal(false);
+                        setActiveSubTab('input');
+                      }}
+                      className="flex items-center justify-center space-x-2 py-3.5 px-4 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/30 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-400 font-black rounded-2xl transition-all border border-teal-200 dark:border-teal-800 shadow-sm text-xs"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>TAMBAH REALISASI</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPostSaveModal(false);
+                        setActiveSubTab('finalize');
+                      }}
+                      className="flex items-center justify-center space-x-2 py-3.5 px-4 bg-[#008396] hover:bg-[#00A2B9] text-white font-black rounded-2xl transition-all shadow-lg shadow-teal-600/25 text-xs"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>SELESAI</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Filters Bar for History */}
             <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm no-print space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">

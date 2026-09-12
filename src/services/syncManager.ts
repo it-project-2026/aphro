@@ -60,11 +60,17 @@ export interface HealthCheckResult {
 }
 
 export type SyncManagerListener = (event: {
-  type: 'DATA_UPDATED' | 'SYNC_STATUS_CHANGED' | 'PENDING_QUEUE_CHANGED' | 'AUDIT_LOG_ADDED';
+  type: 'DATA_UPDATED' | 'SYNC_STATUS_CHANGED' | 'PENDING_QUEUE_CHANGED' | 'AUDIT_LOG_ADDED' | 'SYNC_PROGRESS';
   tableName?: string;
   data?: any;
   status?: string;
   lastUpdatedText?: string;
+  progress?: {
+    current: number;
+    total: number;
+    percent: number;
+    currentItemDescription?: string;
+  };
 }) => void;
 
 export class SyncManager {
@@ -131,13 +137,7 @@ export class SyncManager {
     };
   }
 
-  private notifyListeners(event: {
-    type: 'DATA_UPDATED' | 'SYNC_STATUS_CHANGED' | 'PENDING_QUEUE_CHANGED' | 'AUDIT_LOG_ADDED';
-    tableName?: string;
-    data?: any;
-    status?: string;
-    lastUpdatedText?: string;
-  }) {
+  private notifyListeners(event: Parameters<SyncManagerListener>[0]) {
     this.listeners.forEach((listener) => {
       try {
         listener(event);
@@ -203,7 +203,8 @@ export class SyncManager {
 
     const pendingOps = await idbService.getPendingOperations();
 
-    // Trigger non-blocking version check in background if online & URL configured
+    // Background sync disabled to ensure sync is strictly manual as requested
+    /*
     if (this.gasUrl && typeof window !== 'undefined' && navigator.onLine) {
       setTimeout(() => {
         this.syncAllRequired().catch((err) => {
@@ -211,6 +212,7 @@ export class SyncManager {
         });
       }, 500);
     }
+    */
 
     return {
       cachedData,
@@ -513,13 +515,14 @@ export class SyncManager {
   /**
    * Process pending offline operations queue without duplication
    */
-  public async processPendingOperations(): Promise<number> {
+  public async processPendingOperations(): Promise<{ successCount: number; failCount: number; totalCount: number }> {
     if (this.isProcessingQueue || typeof window === 'undefined' || !navigator.onLine) {
-      return 0;
+      return { successCount: 0, failCount: 0, totalCount: 0 };
     }
 
     this.isProcessingQueue = true;
-    let processedCount = 0;
+    let successCount = 0;
+    let failCount = 0;
 
     try {
       // Clear legacy localStorage queue if present to prevent lingering counts
@@ -533,14 +536,29 @@ export class SyncManager {
       if (!queue || queue.length === 0) {
         this.isProcessingQueue = false;
         this.notifyListeners({ type: 'PENDING_QUEUE_CHANGED', data: [] });
-        return 0;
+        return { successCount: 0, failCount: 0, totalCount: 0 };
       }
 
+      const totalCount = queue.length;
       this.notifyListeners({ type: 'SYNC_STATUS_CHANGED', status: 'PROCESSING_QUEUE' });
       const unitId = SupabaseService.getActiveUnitId();
 
-      for (const item of queue) {
+      for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
         if (!item || !item.idempotencyKey) continue;
+
+        const percent = Math.round(((i + 1) / totalCount) * 100);
+        const itemDesc = `Sinkron item ${i + 1} dari ${totalCount}: ${item.tableName} (${item.type})`;
+        
+        this.notifyListeners({
+          type: 'SYNC_PROGRESS',
+          progress: {
+            current: i + 1,
+            total: totalCount,
+            percent,
+            currentItemDescription: itemDesc,
+          },
+        });
 
         item.status = 'PROCESSING';
         item.retryCount = (item.retryCount || 0) + 1;
@@ -655,7 +673,7 @@ export class SyncManager {
           // Remove item from IndexedDB if success OR if retried >= 2 times
           if (isSuccess || item.retryCount >= 2) {
             await idbService.removePendingOperation(item.idempotencyKey);
-            processedCount++;
+            successCount++;
 
             await this.addAuditLog({
               action: item.type,
@@ -666,15 +684,17 @@ export class SyncManager {
             item.status = 'FAILED';
             item.error = 'Gagal menyimpan ke Supabase';
             await idbService.updatePendingOperation(item);
+            failCount++;
           }
         } catch (err: any) {
           if (item.retryCount >= 2) {
             await idbService.removePendingOperation(item.idempotencyKey);
-            processedCount++;
+            successCount++;
           } else {
             item.status = 'FAILED';
             item.error = err.message || 'Koneksi ke Supabase terputus';
             await idbService.updatePendingOperation(item);
+            failCount++;
           }
         }
       }
@@ -685,15 +705,15 @@ export class SyncManager {
         data: remainingOps,
       });
 
-      if (processedCount > 0) {
+      if (successCount > 0) {
         await this.syncAllRequired(true);
       }
+
+      return { successCount, failCount, totalCount };
     } finally {
       this.isProcessingQueue = false;
       this.notifyListeners({ type: 'SYNC_STATUS_CHANGED', status: 'IDLE' });
     }
-
-    return processedCount;
   }
 
   public async clearPendingQueue(): Promise<void> {
