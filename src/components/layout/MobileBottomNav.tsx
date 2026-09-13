@@ -75,6 +75,11 @@ export const MobileBottomNav: React.FC = () => {
           highlight: true, // Special center action button for mobile
         },
         {
+          id: 'sinkronisasi',
+          label: 'Sinkron',
+          icon: RefreshCw,
+        },
+        {
           id: 'absensi_pulang',
           label: 'Absensi',
           icon: LogOut,

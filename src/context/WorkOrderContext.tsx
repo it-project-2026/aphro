@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { SupabaseService } from '../services/supabaseService';
+import { dexieDb } from '../services/dexieDb';
 import { syncManager } from '../services/syncManager';
 import { getLocalDateTimeString, parseDateFromNomorWO } from '../utils/dateUtils';
 
@@ -26,45 +27,62 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
-  
+
   const [workOrders, setWorkOrders] = React.useState<WorkOrder[]>([]);
   const lastSyncRef = React.useRef<string | undefined>(undefined);
   const [selectedWoIdForRealisasi, setSelectedWoIdForRealisasi] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const isFetchingRef = React.useRef(false);
 
-  // Auto-fetch Work Orders from Supabase on mount and whenever unit settings change
+  // Auto-fetch Work Orders from Dexie DB & Supabase
   const refreshWorkOrders = React.useCallback(async (page: number = 0) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     setIsLoading(true);
-    try {
-      const unitId = SupabaseService.getActiveUnitId();
-      const res = await SupabaseService.fetchWorkOrders(unitId, page, 1000, page === 0 ? undefined : lastSyncRef.current);
-      if (res.success && res.data) {
-        // Detect and fix any mismatches or NULL dates between nomorWO and tanggal
-        const corrected = res.data.map((wo) => {
-          const parsedDate = parseDateFromNomorWO(wo.nomorWO);
-          const isNullOrEmpty = !wo.tanggal || 
-                                wo.tanggal === 'null' || 
-                                wo.tanggal === 'undefined' || 
-                                String(wo.tanggal).trim() === '';
-          if (parsedDate && (isNullOrEmpty || wo.tanggal !== parsedDate)) {
-            return { ...wo, tanggal: parsedDate };
-          }
-          return wo;
-        });
 
-        // For first page, replace; for subsequent pages, append
-        setWorkOrders(prev => page === 0 ? corrected : [...prev, ...corrected]);
-        
-        // Update sync time only on first page fetch
-        if (page === 0) {
-          lastSyncRef.current = getLocalDateTimeString();
+    try {
+      // 1. Load local offline Work Orders from Dexie DB first
+      const cachedLocals = await dexieDb.work_orders.toArray();
+      if (cachedLocals.length > 0 && page === 0) {
+        setWorkOrders(cachedLocals);
+      }
+
+      // 2. Fetch remote Work Orders from Supabase if online
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        const unitId = SupabaseService.getActiveUnitId();
+        const res = await SupabaseService.fetchWorkOrders(unitId, page, 1000, page === 0 ? undefined : lastSyncRef.current);
+
+        if (res.success && res.data) {
+          const corrected = res.data.map((wo) => {
+            const parsedDate = parseDateFromNomorWO(wo.nomorWO);
+            const isNullOrEmpty = !wo.tanggal || 
+                                  wo.tanggal === 'null' || 
+                                  wo.tanggal === 'undefined' || 
+                                  String(wo.tanggal).trim() === '';
+            if (parsedDate && (isNullOrEmpty || wo.tanggal !== parsedDate)) {
+              return { ...wo, tanggal: parsedDate };
+            }
+            return wo;
+          });
+
+          // Save into Dexie DB
+          await dexieDb.work_orders.bulkPut(
+            corrected.map((wo) => ({
+              ...wo,
+              syncStatus: 'SYNCED',
+              updatedAt: wo.updatedAt || getLocalDateTimeString(),
+            }))
+          );
+
+          setWorkOrders((prev) => (page === 0 ? corrected : [...prev, ...corrected]));
+
+          if (page === 0) {
+            lastSyncRef.current = getLocalDateTimeString();
+          }
         }
       }
     } catch (err) {
-      console.warn('Error loading Work Orders from Supabase:', err);
+      console.warn('Error loading Work Orders from Dexie/Supabase:', err);
     } finally {
       setIsLoading(false);
       isFetchingRef.current = false;
@@ -74,7 +92,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     lastSyncRef.current = undefined;
     refreshWorkOrders(0);
-  }, [refreshWorkOrders, settings.namaUnitLayanan, settings.spreadsheetId, user]);
+  }, [refreshWorkOrders, settings.namaUnitLayanan, user]);
 
   const correctedWorkOrders = React.useMemo(() => {
     return workOrders.map((wo) => {
@@ -109,11 +127,9 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       ].filter(Boolean);
 
       return correctedWorkOrders.filter((wo) => {
-        // Direct Regu ID match
         if (user.reguId && wo.reguId && user.reguId === wo.reguId) return true;
         if (user.id && wo.petugasId && user.id === wo.petugasId) return true;
 
-        // Regu Name / NAMA_REGU match
         const woReguClean = cleanStr(wo.reguName);
         if (woReguClean) {
           for (const uCand of userReguCandidates) {
@@ -126,7 +142,6 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // Petugas Name match
         const woPetugasClean = cleanStr(wo.petugasName);
         if (woPetugasClean) {
           for (const uCand of userReguCandidates) {
@@ -139,7 +154,6 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // ULP Match as fallback if user has ULP
         if (user.ulpId && wo.ulpId && user.ulpId === wo.ulpId) return true;
         if (user.ulpName && wo.ulpName) {
           const u1 = cleanStr(user.ulpName);
@@ -156,8 +170,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const addWorkOrder = React.useCallback(async (woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
     const cleanStr = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 
-    // Prevent creation of duplicate Work Orders (Same Nomor WO AND Same Penyulang)
-    const isDuplicate = correctedWorkOrders.some(wo => {
+    const isDuplicate = correctedWorkOrders.some((wo) => {
       const woNoWO = cleanStr(wo.nomorWO);
       const dataNoWO = cleanStr(woData.nomorWO);
       const woPenyulang = cleanStr(wo.penyulangName);
@@ -166,13 +179,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       const hasValidNoWO = woNoWO.length > 2 && dataNoWO.length > 2;
       const hasValidPenyulang = woPenyulang.length > 2 && dataPenyulang.length > 2;
 
-      // Match same Nomor WO AND same Penyulang (Only if both have valid, non-empty values)
-      const matchNoWOAndPenyulang = hasValidNoWO && 
-                                    hasValidPenyulang && 
-                                    woNoWO === dataNoWO && 
-                                    woPenyulang === dataPenyulang;
-
-      return matchNoWOAndPenyulang;
+      return hasValidNoWO && hasValidPenyulang && woNoWO === dataNoWO && woPenyulang === dataPenyulang;
     });
 
     if (isDuplicate) {
@@ -187,19 +194,14 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       createdAt: nowStr,
       updatedAt: nowStr,
     };
-    
-    // Optimistic local update & cache update
-    setWorkOrders(prev => {
-      const next = [newWo, ...prev];
-      try {
-        const unitId = SupabaseService.getActiveUnitId();
-        localStorage.setItem(`aphro_workorders_${unitId}`, JSON.stringify(next));
-        localStorage.setItem('aphro_work_orders', JSON.stringify(next));
-      } catch (e) {
-        console.warn('Cache error:', e);
-      }
-      return next;
+
+    // Save to Dexie DB
+    await dexieDb.work_orders.put({
+      ...newWo,
+      syncStatus: 'PENDING',
     });
+
+    setWorkOrders((prev) => [newWo, ...prev]);
 
     const unitId = SupabaseService.getActiveUnitId();
     try {
@@ -210,11 +212,12 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         apiCall: async () => {
           const result = await SupabaseService.saveWorkOrder(unitId, newWo);
           return { status: result.success ? 'success' : 'error', message: result.error };
-        }
+        },
       });
 
       if (!res.offline) {
         showToast(`Work Order ${newWo.nomorWO} berhasil tersimpan ke Database!`, 'success');
+        await dexieDb.work_orders.update(newWo.id, { syncStatus: 'SYNCED' });
       } else {
         showToast(`Work Order tersimpan (offline).`, 'info');
       }
@@ -228,13 +231,18 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
   const updateWorkOrder = React.useCallback(async (id: string, updates: Partial<WorkOrder>) => {
     const nowStr = getLocalDateTimeString();
-    const existingWo = workOrders.find(wo => wo.id === id);
+    const existingWo = workOrders.find((wo) => wo.id === id);
     if (!existingWo) return;
 
     const updatedWo = { ...existingWo, ...updates, updatedAt: nowStr };
-    
-    // Update local state first (Optimistic)
-    setWorkOrders(prev => prev.map(wo => wo.id === id ? updatedWo : wo));
+
+    setWorkOrders((prev) => prev.map((wo) => (wo.id === id ? updatedWo : wo)));
+
+    await dexieDb.work_orders.update(id, {
+      ...updates,
+      syncStatus: 'PENDING',
+      updatedAt: nowStr,
+    });
 
     const unitId = SupabaseService.getActiveUnitId();
     try {
@@ -245,11 +253,12 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         apiCall: async () => {
           const result = await SupabaseService.updateWorkOrder(unitId, id, updatedWo);
           return { status: result.success ? 'success' : 'error', message: result.error };
-        }
+        },
       });
 
       if (!res.offline) {
         showToast('Work Order berhasil diperbarui', 'success');
+        await dexieDb.work_orders.update(id, { syncStatus: 'SYNCED' });
       } else {
         showToast('Tersimpan di antrean offline.', 'info');
       }
@@ -263,35 +272,29 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     const cleanId = (id || '').trim();
     const cleanNomor = (nomorWO || '').trim();
 
-    // Optimistic Delete
-    setWorkOrders(prev => prev.filter(wo => {
-      const woId = (wo.id || '').trim();
-      const woNomor = (wo.nomorWO || '').trim();
-      if (cleanId && (woId === cleanId || woNomor === cleanId)) return false;
-      if (cleanNomor && (woNomor === cleanNomor || woId === cleanNomor)) return false;
-      return true;
-    }));
+    setWorkOrders((prev) => prev.filter((wo) => wo.id !== cleanId && wo.nomorWO !== cleanNomor));
+
+    try {
+      await dexieDb.work_orders.delete(cleanId);
+    } catch (e) {
+      console.warn('Delete Dexie WO error:', e);
+    }
 
     const unitId = SupabaseService.getActiveUnitId();
     try {
-      const res = await syncManager.executeMutation({
+      await syncManager.executeMutation({
         type: 'DELETE',
         tableName: 'WORK_ORDER',
         payload: { id: cleanId, nomorWO: cleanNomor },
         apiCall: async () => {
           const result = await SupabaseService.deleteWorkOrder(unitId, cleanId, cleanNomor);
           return { status: result.success ? 'success' : 'error', message: result.error };
-        }
+        },
       });
 
-      if (!res.offline) {
-        showToast('Work Order berhasil dihapus', 'success');
-      } else {
-        showToast('Hapus tersimpan (offline).', 'info');
-      }
+      showToast('Work Order dihapus', 'info');
     } catch (err) {
-      console.warn('Delete WO error:', err);
-      showToast('Koneksi terputus, tersimpan di antrean offline.', 'info');
+      showToast('Hapus tersimpan (offline).', 'info');
     }
   }, [showToast]);
 

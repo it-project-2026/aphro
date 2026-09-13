@@ -33,6 +33,7 @@ const InisiasiPage = React.lazy(() => import('./pages/InisiasiPage').then(m => (
 const RekapPekerjaanHarianPage = React.lazy(() => import('./pages/RekapPekerjaanHarianPage').then(m => ({ default: m.RekapPekerjaanHarianPage })));
 const RekapPenyulangHarianPage = React.lazy(() => import('./pages/RekapPenyulangHarianPage').then(m => ({ default: m.RekapPenyulangHarianPage })));
 const SettingAplikasiPage = React.lazy(() => import('./pages/SettingAplikasiPage').then(m => ({ default: m.SettingAplikasiPage })));
+const SinkronisasiPage = React.lazy(() => import('./pages/SinkronisasiPage').then(m => ({ default: m.SinkronisasiPage })));
 
 import { useNotifications } from './hooks/useNotifications';
 
@@ -125,6 +126,7 @@ const AppContent: React.FC = () => {
       case 'setting': return <SettingAplikasiPage />;
       case 'logs': return <AuditLogPage />;
       case 'inisiasi': return <InisiasiPage isFromMenu={true} />;
+      case 'sinkronisasi': return <SinkronisasiPage />;
       default: return <DashboardPage />;
     }
   };

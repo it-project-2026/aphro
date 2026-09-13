@@ -6,7 +6,8 @@ import { useSettings } from './SettingsContext';
 import { useAuth } from './AuthContext';
 import { useToast } from '../hooks/useToast';
 import { SupabaseService } from '../services/supabaseService';
-import { syncManager } from '../services/syncManager';
+import { dexieDb, LocalRealisasi, LocalPhoto } from '../services/dexieDb';
+import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { getLocalDateTimeString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
 
 interface RealisasiContextType {
@@ -30,148 +31,223 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
 
   const refreshRealisasi = React.useCallback(async (force: boolean = false) => {
     const now = Date.now();
-    if (!force && now - lastFetchTime.current < 2000) return; // Limit to once every 2 seconds unless forced
+    if (!force && now - lastFetchTime.current < 2000) return;
     lastFetchTime.current = now;
 
     try {
-      const unitId = SupabaseService.getActiveUnitId();
-      const res = await SupabaseService.fetchRealisasi(unitId);
-      if (res.success && res.data) {
-        setRealisasiList(prev => {
-          const map = new Map<string, Realisasi>();
-          res.data.forEach(item => {
-            const woDate = parseDateFromNomorWO(item.nomorWO);
-            const isNullOrEmpty = !item.tanggalRealisasi || 
-                                  item.tanggalRealisasi === 'null' || 
-                                  item.tanggalRealisasi === 'undefined' || 
-                                  String(item.tanggalRealisasi).trim() === '';
-            const normalized = normalizeDateISO(item.tanggalRealisasi);
-            if (normalized) {
-              item.tanggalRealisasi = normalized;
-            } else if (woDate && isNullOrEmpty) {
-              item.tanggalRealisasi = woDate;
-            }
-            const key = item.id || item.syncId || `${item.nomorWO || ''}-${item.noTiang || ''}`;
-            map.set(key, item);
-          });
-          // Preserve only unsynced offline records from previous state for the same unit
-          prev.forEach(item => {
-            if (item.isSynced === false && (!item.unitId || item.unitId === unitId)) {
-              const key = item.id || item.syncId || `${item.nomorWO || ''}-${item.noTiang || ''}`;
-              if (!map.has(key)) {
-                map.set(key, item);
-              }
-            }
-          });
-          return Array.from(map.values());
-        });
+      // 1. Load local offline Realisasi records from Dexie first
+      const localRecords = await dexieDb.realisasi.toArray();
+
+      // 2. Fetch from Supabase if online
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        const unitId = SupabaseService.getActiveUnitId();
+        const res = await SupabaseService.fetchRealisasi(unitId);
+
+        if (res.success && res.data) {
+          // Store remote records into Dexie
+          await dexieDb.realisasi.bulkPut(
+            res.data.map((item) => ({
+              id: item.id || item.syncId || `REL-${Date.now()}`,
+              localId: item.id || `REL-${Date.now()}`,
+              serverId: item.id,
+              idempotencyKey: item.syncId || item.id,
+              nomorWO: item.nomorWO,
+              ulpName: item.ulpName || '',
+              reguName: item.reguName || '',
+              petugasId: item.petugasId || '',
+              petugasName: item.petugasName || '',
+              noTiang: item.noTiang || '',
+              tanggalRealisasi: item.tanggalRealisasi,
+              jenisTanaman: item.jenisTanaman || '',
+              keterangan: item.keterangan || '',
+              pertumbuhanTanaman: item.pertumbuhanTanaman || '',
+              kendala: item.kendala || '',
+              latitude: item.latitude || 0,
+              longitude: item.longitude || 0,
+              createdAt: item.createdAt || getLocalDateTimeString(),
+              updatedAt: getLocalDateTimeString(),
+              syncStatus: 'SYNCED' as const,
+              progressPercent: 100,
+              status: item.status || 'Selesai',
+              fotoSebelumUrl: item.fotoSebelumUrl,
+              fotoSesudahUrl: item.fotoSesudahUrl,
+              photosSebelum: item.photosSebelum || [],
+              photosSesudah: item.photosSesudah || [],
+              workOrderId: item.workOrderId,
+            }))
+          );
+        }
       }
+
+      // 3. Render unified list (Dexie local records + remote records)
+      const allLocal = await dexieDb.realisasi.toArray();
+      const unifiedList: Realisasi[] = allLocal.map((loc) => ({
+        id: loc.serverId || loc.localId || loc.id,
+        unitId: loc.ulpName || '',
+        workOrderId: loc.workOrderId || '',
+        nomorWO: loc.nomorWO,
+        ulpName: loc.ulpName,
+        reguName: loc.reguName,
+        penyulangName: loc.penyulangName,
+        noTiang: loc.noTiang,
+        tanggalRealisasi: loc.tanggalRealisasi,
+        petugasId: loc.petugasId,
+        petugasName: loc.petugasName,
+        jenisTanaman: loc.jenisTanaman,
+        pertumbuhanTanaman: loc.pertumbuhanTanaman,
+        kendala: loc.kendala,
+        lokasiKerja: loc.lokasiKerja,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        keterangan: loc.keterangan,
+        progressPercent: loc.progressPercent || 100,
+        status: loc.status || 'Selesai',
+        photosSebelum: loc.photosSebelum || [],
+        photosSesudah: loc.photosSesudah || [],
+        fotoSebelumUrl: loc.fotoSebelumUrl,
+        fotoSesudahUrl: loc.fotoSesudahUrl,
+        createdAt: loc.createdAt,
+        isSynced: loc.syncStatus === 'SYNCED',
+        syncId: loc.idempotencyKey,
+      }));
+
+      // Sort newest first
+      unifiedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setRealisasiList(unifiedList);
     } catch (err) {
-      console.warn('Error loading Realisasi from Supabase:', err);
+      console.warn('Error loading Realisasi from Dexie/Supabase:', err);
     }
   }, [setRealisasiList]);
 
   React.useEffect(() => {
     refreshRealisasi(true);
-  }, [refreshRealisasi, settings.namaUnitLayanan, settings.spreadsheetId, user]);
+
+    // Subscribe to Offline Sync Queue changes to refresh state automatically
+    const unsubscribe = offlineSyncQueue.subscribe((evt) => {
+      if (evt.status === 'COMPLETED' || evt.status === 'SYNCING') {
+        refreshRealisasi(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [refreshRealisasi, settings.namaUnitLayanan, user]);
 
   const addRealisasi = React.useCallback(async (relData: Omit<Realisasi, 'id' | 'createdAt' | 'isSynced' | 'syncId'>) => {
-    const syncId = `SYNC-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newRel: Realisasi = {
-      ...relData,
-      id: 'REL-' + Date.now(),
-      createdAt: getLocalDateTimeString(),
-      syncId,
-      isSynced: false // Default to false until synced to Supabase
-    };
-    
-    // Optimistic UI Update
-    setRealisasiList(prev => [newRel, ...prev]);
+    const timestamp = getLocalDateTimeString();
+    const idempotencyKey = `REL-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const localId = idempotencyKey;
 
-    const unitId = SupabaseService.getActiveUnitId();
-    
-    try {
-      const res = await syncManager.executeMutation({
-        type: 'CREATE',
-        tableName: 'REALISASI',
-        payload: newRel,
-        apiCall: async () => {
-          const result = await SupabaseService.saveRealisasi(unitId, newRel);
-          return { 
-            status: result.success ? 'success' : 'error', 
-            message: result.error 
-          };
-        }
+    // Extract photos for local IndexedDB store
+    const localPhotos: LocalPhoto[] = [];
+    if (relData.photosSebelum && Array.isArray(relData.photosSebelum)) {
+      relData.photosSebelum.forEach((p, idx) => {
+        localPhotos.push({
+          id: p.id || `photo-seb-${localId}-${idx + 1}`,
+          realisasiId: localId,
+          woId: relData.workOrderId || '',
+          type: 'sebelum',
+          slotIndex: (idx + 1) as any,
+          dataUrl: p.dataUrl || '',
+          fileUrl: p.fileUrl,
+          originalName: p.originalName || `Foto_Sebelum_${idx + 1}.jpg`,
+          timestamp: p.timestamp || timestamp,
+          latitude: p.latitude || relData.latitude || 0,
+          longitude: p.longitude || relData.longitude || 0,
+          userName: p.userName || relData.petugasName || '',
+          ulpName: p.ulpName || relData.ulpName || '',
+          syncStatus: 'PENDING',
+          createdAt: timestamp,
+        });
       });
-
-      if (!res.offline) {
-        showToast(`Realisasi WO ${relData.nomorWO || ''} berhasil disinkronkan!`, 'success');
-        // Update local status to synced
-        setRealisasiList(prev => prev.map(r => r.syncId === syncId ? { ...r, isSynced: true } : r));
-      } else {
-        showToast(`Realisasi tersimpan secara offline.`, 'info');
-      }
-    } catch (err) {
-      console.warn('Sync execution error:', err);
-      showToast('Tersimpan di antrean offline.', 'info');
     }
 
-    return newRel;
+    if (relData.photosSesudah && Array.isArray(relData.photosSesudah)) {
+      relData.photosSesudah.forEach((p, idx) => {
+        localPhotos.push({
+          id: p.id || `photo-ses-${localId}-${idx + 1}`,
+          realisasiId: localId,
+          woId: relData.workOrderId || '',
+          type: 'sesudah',
+          slotIndex: (idx + 1) as any,
+          dataUrl: p.dataUrl || '',
+          fileUrl: p.fileUrl,
+          originalName: p.originalName || `Foto_Sesudah_${idx + 1}.jpg`,
+          timestamp: p.timestamp || timestamp,
+          latitude: p.latitude || relData.latitude || 0,
+          longitude: p.longitude || relData.longitude || 0,
+          userName: p.userName || relData.petugasName || '',
+          ulpName: p.ulpName || relData.ulpName || '',
+          syncStatus: 'PENDING',
+          createdAt: timestamp,
+        });
+      });
+    }
+
+    const localRecord: LocalRealisasi = {
+      ...relData,
+      localId,
+      idempotencyKey,
+      syncStatus: 'PENDING',
+      updatedAt: timestamp,
+      createdAt: timestamp,
+      id: localId,
+      progressPercent: 100,
+      status: 'Selesai',
+    };
+
+    // 1. Enqueue in Offline Sync Queue & Dexie DB
+    await offlineSyncQueue.enqueueRealisasi(localRecord, localPhotos);
+
+    const newRelUI: Realisasi = {
+      ...relData,
+      id: localId,
+      createdAt: timestamp,
+      syncId: idempotencyKey,
+      isSynced: false,
+    };
+
+    // 2. Immediate Optimistic UI Update from Local DB
+    setRealisasiList((prev) => [newRelUI, ...prev]);
+
+    // 3. User feedback message
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      showToast('Realisasi tersimpan di perangkat dan menunggu sinkronisasi.', 'info');
+    } else {
+      showToast('Realisasi tersimpan di perangkat. Memulai sinkronisasi...', 'info');
+    }
+
+    return newRelUI;
   }, [setRealisasiList, showToast]);
 
   const updateRealisasi = React.useCallback(async (id: string, updates: Partial<Realisasi>) => {
-    const existing = realisasiList.find(r => r.id === id);
+    const existing = realisasiList.find((r) => r.id === id || r.syncId === id);
     if (!existing) return;
 
     const updatedRel = { ...existing, ...updates };
 
-    setRealisasiList(prev => prev.map(rel => {
-      if (rel.id === id) {
-        return updatedRel;
-      }
-      return rel;
-    }));
+    setRealisasiList((prev) => prev.map((rel) => (rel.id === id || rel.syncId === id ? updatedRel : rel)));
 
-    const unitId = SupabaseService.getActiveUnitId();
     try {
-      await syncManager.executeMutation({
-        type: 'UPDATE',
-        tableName: 'REALISASI',
-        payload: updatedRel,
-        apiCall: async () => {
-          const result = await SupabaseService.saveRealisasi(unitId, updatedRel);
-          return { status: result.success ? 'success' : 'error', message: result.error };
-        }
+      await dexieDb.realisasi.update(id, {
+        ...updates,
+        syncStatus: 'PENDING',
+        updatedAt: getLocalDateTimeString(),
       });
-      showToast('Realisasi berhasil diperbarui', 'success');
+      showToast('Realisasi berhasil diperbarui di perangkat', 'info');
     } catch (err) {
-      showToast('Perubahan tersimpan lokal.', 'info');
+      console.warn('Update Dexie Realisasi error:', err);
     }
   }, [realisasiList, setRealisasiList, showToast]);
 
   const deleteRealisasi = React.useCallback(async (id: string) => {
-    const existing = realisasiList.find(r => r.id === id);
-    setRealisasiList(prev => prev.filter(rel => rel.id !== id));
-    
-    if (existing) {
-      const unitId = SupabaseService.getActiveUnitId();
-      try {
-        await syncManager.executeMutation({
-          type: 'DELETE',
-          tableName: 'REALISASI',
-          payload: { id },
-          apiCall: async () => {
-            const result = await SupabaseService.deleteRealisasi(unitId, id);
-            return { status: result.success ? 'success' : 'error', message: result.error };
-          }
-        });
-      } catch (e) {
-        console.warn('Delete Realisasi offline queue error:', e);
-      }
+    setRealisasiList((prev) => prev.filter((rel) => rel.id !== id && rel.syncId !== id));
+    try {
+      await dexieDb.realisasi.delete(id);
+      showToast('Realisasi dihapus dari perangkat', 'info');
+    } catch (e) {
+      console.warn('Delete Dexie Realisasi error:', e);
     }
-    
-    showToast('Realisasi dihapus', 'info');
-  }, [realisasiList, setRealisasiList, showToast]);
+  }, [setRealisasiList, showToast]);
 
   return (
     <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, deleteRealisasi, refreshRealisasi }}>

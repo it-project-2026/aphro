@@ -903,6 +903,45 @@ export class SupabaseService {
   }
 
   /**
+   * Save Realisasi idempotently using clientGeneratedId / idempotencyKey
+   */
+  static async saveRealisasiIdempotent(
+    unitId: string,
+    rel: any,
+    photos?: any[]
+  ): Promise<{ success: boolean; serverId?: string; error?: string }> {
+    const targetUnitId = unitId || this.getActiveUnitId();
+    const serverId = rel.idempotencyKey || rel.serverId || rel.localId || rel.id || `REL-${Date.now()}`;
+
+    // Standardize photo URLs
+    let fotoSebelumUrl = rel.fotoSebelumUrl || '';
+    let fotoSesudahUrl = rel.fotoSesudahUrl || '';
+
+    if (!fotoSebelumUrl && photos && Array.isArray(photos)) {
+      const seb = photos.find((p: any) => p.type === 'sebelum');
+      if (seb) fotoSebelumUrl = seb.fileUrl || seb.dataUrl || '';
+    }
+    if (!fotoSesudahUrl && photos && Array.isArray(photos)) {
+      const ses = photos.find((p: any) => p.type === 'sesudah');
+      if (ses) fotoSesudahUrl = ses.fileUrl || ses.dataUrl || '';
+    }
+
+    const realisasiPayload: Realisasi = {
+      ...rel,
+      id: serverId,
+      fotoSebelumUrl,
+      fotoSesudahUrl,
+    };
+
+    const res = await this.saveRealisasi(targetUnitId, realisasiPayload);
+    return {
+      success: res.success,
+      serverId,
+      error: res.error,
+    };
+  }
+
+  /**
    * Delete Realisasi by ID
    */
   static async deleteRealisasi(arg1: string, arg2?: string): Promise<{ success: boolean; error?: string }> {

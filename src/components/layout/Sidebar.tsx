@@ -82,6 +82,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin', 'User'],
     },
     {
+      id: 'sinkronisasi',
+      label: 'Pusat Sinkronisasi',
+      icon: RefreshCw,
+      roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
+    },
+    {
       id: 'absensi_pulang',
       label: 'Absensi Pulang',
       icon: LogOut,

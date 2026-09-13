@@ -1,12 +1,10 @@
 /**
- * IndexedDB Service for APHRO - Asset Protection & Hazard Response Operations
+ * IndexedDB Service for APHRO - Powered by Dexie.js
  * Provides client-side persistent storage for table data, versions, pending operations, and audit logs.
  */
 
+import { dexieDb } from './dexieDb';
 import { getLocalDateTimeString } from '../utils/dateUtils';
-
-const DB_NAME = 'aphro_app_db';
-const DB_VERSION = 1;
 
 export interface CachedTableRecord<T = any> {
   tableName: string;
@@ -42,60 +40,24 @@ export interface AuditLogRecord {
 }
 
 class IndexedDBService {
-  private dbPromise: Promise<IDBDatabase> | null = null;
-
-  private initDB(): Promise<IDBDatabase> {
-    if (this.dbPromise) return this.dbPromise;
-
-    this.dbPromise = new Promise((resolve, reject) => {
-      if (typeof window === 'undefined' || !window.indexedDB) {
-        reject(new Error('IndexedDB is not supported in this environment'));
-        return;
-      }
-
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-      request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
-        const db = request.result;
-
-        if (!db.objectStoreNames.contains('tables')) {
-          db.createObjectStore('tables', { keyPath: 'tableName' });
-        }
-        if (!db.objectStoreNames.contains('versions')) {
-          db.createObjectStore('versions', { keyPath: 'tableName' });
-        }
-        if (!db.objectStoreNames.contains('pendingOperations')) {
-          db.createObjectStore('pendingOperations', { keyPath: 'idempotencyKey' });
-        }
-        if (!db.objectStoreNames.contains('auditLogs')) {
-          db.createObjectStore('auditLogs', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('metadata')) {
-          db.createObjectStore('metadata', { keyPath: 'key' });
-        }
-      };
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => {
-        console.error('IndexedDB open failed:', request.error);
-        reject(request.error);
-      };
-    });
-
-    return this.dbPromise;
-  }
-
   // --- TABLES ---
   async getTable<T = any>(tableName: string): Promise<T[] | null> {
     try {
-      const db = await this.initDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction('tables', 'readonly');
-        const store = tx.objectStore('tables');
-        const req = store.get(tableName);
-        req.onsuccess = () => resolve(req.result ? (req.result.data as T[]) : null);
-        req.onerror = () => resolve(null);
-      });
+      if (tableName === 'WORK_ORDER') {
+        const records = await dexieDb.work_orders.toArray();
+        return (records as unknown as T[]) || null;
+      }
+      if (tableName === 'REALISASI') {
+        const records = await dexieDb.realisasi.toArray();
+        return (records as unknown as T[]) || null;
+      }
+      if (tableName === 'USERS') {
+        const records = await dexieDb.users.toArray();
+        return (records as unknown as T[]) || null;
+      }
+      
+      const record = await dexieDb.metadata.get(`table_${tableName}`);
+      return record ? (record.value as T[]) : null;
     } catch {
       return null;
     }
@@ -103,96 +65,78 @@ class IndexedDBService {
 
   async saveTable<T = any>(tableName: string, data: T[]): Promise<void> {
     try {
-      const db = await this.initDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction('tables', 'readwrite');
-        const store = tx.objectStore('tables');
-        const record: CachedTableRecord<T> = {
-          tableName,
-          data,
-          updatedAt: getLocalDateTimeString(),
-        };
-        const req = store.put(record);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
+      if (tableName === 'WORK_ORDER' && Array.isArray(data)) {
+        await dexieDb.work_orders.clear();
+        await dexieDb.work_orders.bulkPut(data as any);
+        return;
+      }
+      if (tableName === 'REALISASI' && Array.isArray(data)) {
+        // Keep unsynced pending local records
+        const existingPending = await dexieDb.realisasi.where('syncStatus').equals('PENDING').toArray();
+        const pendingMap = new Map(existingPending.map(p => [p.localId, p]));
+
+        const recordsToSave = data.map((item: any) => {
+          const localId = item.id || item.localId || `REL-${Date.now()}`;
+          return {
+            ...item,
+            localId,
+            idempotencyKey: item.idempotencyKey || localId,
+            syncStatus: item.isSynced ? 'SYNCED' : (item.syncStatus || 'SYNCED'),
+            updatedAt: item.updatedAt || getLocalDateTimeString(),
+          };
+        });
+
+        // Re-inject unsynced pending items
+        pendingMap.forEach(p => {
+          if (!recordsToSave.some(r => r.localId === p.localId)) {
+            recordsToSave.push(p);
+          }
+        });
+
+        await dexieDb.realisasi.bulkPut(recordsToSave as any);
+        return;
+      }
+
+      await dexieDb.metadata.put({
+        key: `table_${tableName}`,
+        value: data,
+        updatedAt: getLocalDateTimeString(),
       });
     } catch (err) {
-      console.warn(`Failed to save table ${tableName} to IndexedDB`, err);
+      console.warn(`Failed to save table ${tableName} to Dexie DB`, err);
     }
   }
 
   async clearTable(tableName: string): Promise<void> {
     try {
-      const db = await this.initDB();
-      const tx = db.transaction('tables', 'readwrite');
-      tx.objectStore('tables').delete(tableName);
+      if (tableName === 'WORK_ORDER') {
+        await dexieDb.work_orders.clear();
+        return;
+      }
+      if (tableName === 'REALISASI') {
+        await dexieDb.realisasi.clear();
+        return;
+      }
+      await dexieDb.metadata.delete(`table_${tableName}`);
     } catch (e) {
       console.warn(`Failed to clear table ${tableName}`, e);
-    }
-  }
-
-  // --- VERSIONS ---
-  async getTableVersion(tableName: string): Promise<number | string | null> {
-    try {
-      const db = await this.initDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction('versions', 'readonly');
-        const store = tx.objectStore('versions');
-        const req = store.get(tableName);
-        req.onsuccess = () => resolve(req.result ? req.result.version : null);
-        req.onerror = () => resolve(null);
-      });
-    } catch {
-      return null;
-    }
-  }
-
-  async getAllVersions(): Promise<Record<string, number | string>> {
-    try {
-      const db = await this.initDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction('versions', 'readonly');
-        const store = tx.objectStore('versions');
-        const req = store.getAll();
-        req.onsuccess = () => {
-          const map: Record<string, number | string> = {};
-          (req.result || []).forEach((item: TableVersionRecord) => {
-            map[item.tableName] = item.version;
-          });
-          resolve(map);
-        };
-        req.onerror = () => resolve({});
-      });
-    } catch {
-      return {};
-    }
-  }
-
-  async saveTableVersion(tableName: string, version: number | string): Promise<void> {
-    try {
-      const db = await this.initDB();
-      const tx = db.transaction('versions', 'readwrite');
-      tx.objectStore('versions').put({
-        tableName,
-        version,
-        updatedAt: getLocalDateTimeString(),
-      });
-    } catch (e) {
-      console.warn(`Failed to save version for ${tableName}`, e);
     }
   }
 
   // --- PENDING OPERATIONS ---
   async getPendingOperations(): Promise<PendingOperation[]> {
     try {
-      const db = await this.initDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction('pendingOperations', 'readonly');
-        const store = tx.objectStore('pendingOperations');
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => resolve([]);
-      });
+      const queue = await dexieDb.sync_queue.toArray();
+      return queue.map((q) => ({
+        idempotencyKey: q.idempotencyKey,
+        type: q.type,
+        tableName: q.tableName,
+        payload: q.payload,
+        timestamp: q.timestamp,
+        retryCount: q.retryCount,
+        status: q.status === 'SYNCING' ? 'PROCESSING' : q.status === 'SYNCED' ? 'PENDING' : q.status,
+        error: q.error,
+      }));
     } catch {
       return [];
     }
@@ -206,91 +150,92 @@ class IndexedDBService {
       status: 'PENDING',
     };
     try {
-      const db = await this.initDB();
-      const tx = db.transaction('pendingOperations', 'readwrite');
-      tx.objectStore('pendingOperations').put(fullOp);
+      await dexieDb.sync_queue.put({
+        idempotencyKey: fullOp.idempotencyKey,
+        type: fullOp.type,
+        tableName: fullOp.tableName as any,
+        payload: fullOp.payload,
+        timestamp: fullOp.timestamp,
+        retryCount: 0,
+        status: 'PENDING',
+      });
     } catch (e) {
-      console.warn('Failed to add pending operation to IndexedDB', e);
+      console.warn('Failed to add pending operation to Dexie DB', e);
     }
     return fullOp;
   }
 
-  async updatePendingOperation(op: PendingOperation): Promise<void> {
-    try {
-      const db = await this.initDB();
-      const tx = db.transaction('pendingOperations', 'readwrite');
-      tx.objectStore('pendingOperations').put(op);
-    } catch (e) {
-      console.warn('Failed to update pending operation in IndexedDB', e);
-    }
-  }
-
   async removePendingOperation(idempotencyKey: string): Promise<void> {
     try {
-      const db = await this.initDB();
-      const tx = db.transaction('pendingOperations', 'readwrite');
-      tx.objectStore('pendingOperations').delete(idempotencyKey);
+      await dexieDb.sync_queue.delete(idempotencyKey);
     } catch (e) {
       console.warn(`Failed to remove pending operation ${idempotencyKey}`, e);
     }
   }
 
+  async updatePendingOperation(op: PendingOperation): Promise<void> {
+    try {
+      await dexieDb.sync_queue.put({
+        idempotencyKey: op.idempotencyKey,
+        type: op.type,
+        tableName: op.tableName as any,
+        payload: op.payload,
+        timestamp: op.timestamp,
+        retryCount: op.retryCount,
+        status: op.status === 'PROCESSING' ? 'SYNCING' : op.status === 'FAILED' ? 'FAILED' : 'PENDING',
+        error: op.error,
+      });
+    } catch (e) {
+      console.warn(`Failed to update pending operation ${op.idempotencyKey}`, e);
+    }
+  }
+
   async clearPendingOperations(): Promise<void> {
     try {
-      const db = await this.initDB();
-      const tx = db.transaction('pendingOperations', 'readwrite');
-      tx.objectStore('pendingOperations').clear();
+      await dexieDb.sync_queue.clear();
     } catch (e) {
-      console.warn('Failed to clear pending operations store in IndexedDB', e);
+      console.warn('Failed to clear pending operations', e);
     }
   }
 
-  // --- AUDIT LOGS ---
-  async getAuditLogs(): Promise<AuditLogRecord[]> {
+  async saveTableVersion(tableName: string, version: number | string): Promise<void> {
     try {
-      const db = await this.initDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction('auditLogs', 'readonly');
-        const store = tx.objectStore('auditLogs');
-        const req = store.getAll();
-        req.onsuccess = () => {
-          const logs = req.result || [];
-          logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-          resolve(logs);
-        };
-        req.onerror = () => resolve([]);
+      await dexieDb.metadata.put({
+        key: `ver_${tableName}`,
+        value: version,
+        updatedAt: getLocalDateTimeString(),
       });
-    } catch {
-      return [];
+    } catch (e) {
+      console.warn(`Failed to save table version for ${tableName}`, e);
     }
   }
 
-  async addAuditLog(entry: Omit<AuditLogRecord, 'id' | 'timestamp'> & { timestamp?: string; id?: string }): Promise<AuditLogRecord> {
-    const log: AuditLogRecord = {
-      id: entry.id || `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: entry.timestamp || getLocalDateTimeString(),
-      user: entry.user || 'Sistem',
-      action: entry.action,
-      module: entry.module,
-      details: entry.details,
-      synced: false,
+  async addAuditLog(log: Omit<AuditLogRecord, 'id' | 'timestamp'> & { id?: string; timestamp?: string }): Promise<AuditLogRecord> {
+    const fullLog: AuditLogRecord = {
+      id: log.id || `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: log.timestamp || getLocalDateTimeString(),
+      user: log.user || 'SYSTEM',
+      action: log.action,
+      module: log.module,
+      details: log.details,
+      synced: log.synced || false,
     };
     try {
-      const db = await this.initDB();
-      const tx = db.transaction('auditLogs', 'readwrite');
-      tx.objectStore('auditLogs').put(log);
+      await dexieDb.metadata.put({
+        key: `audit_${fullLog.id}`,
+        value: fullLog,
+        updatedAt: getLocalDateTimeString(),
+      });
     } catch (e) {
-      console.warn('Failed to add audit log to IndexedDB', e);
+      console.warn('Failed to add audit log', e);
     }
-    return log;
+    return fullLog;
   }
 
   // --- METADATA ---
   async setMetadata(key: string, value: any): Promise<void> {
     try {
-      const db = await this.initDB();
-      const tx = db.transaction('metadata', 'readwrite');
-      tx.objectStore('metadata').put({ key, value, updatedAt: getLocalDateTimeString() });
+      await dexieDb.metadata.put({ key, value, updatedAt: getLocalDateTimeString() });
     } catch (e) {
       console.warn(`Failed to set metadata ${key}`, e);
     }
@@ -298,13 +243,8 @@ class IndexedDBService {
 
   async getMetadata<T = any>(key: string): Promise<T | null> {
     try {
-      const db = await this.initDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction('metadata', 'readonly');
-        const req = tx.objectStore('metadata').get(key);
-        req.onsuccess = () => resolve(req.result ? (req.result.value as T) : null);
-        req.onerror = () => resolve(null);
-      });
+      const res = await dexieDb.metadata.get(key);
+      return res ? (res.value as T) : null;
     } catch {
       return null;
     }
@@ -312,12 +252,10 @@ class IndexedDBService {
 
   async clearAll(): Promise<void> {
     try {
-      const db = await this.initDB();
-      const stores = ['tables', 'versions', 'pendingOperations', 'auditLogs', 'metadata'];
-      const tx = db.transaction(stores, 'readwrite');
-      stores.forEach((store) => tx.objectStore(store).clear());
+      await dexieDb.delete();
+      await dexieDb.open();
     } catch (e) {
-      console.warn('Failed to clear IndexedDB', e);
+      console.warn('Failed to clear Dexie DB', e);
     }
   }
 }

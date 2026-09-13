@@ -249,36 +249,50 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                   )}
                 </div>
 
-                <div className="pt-1 flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={handleManualSync}
-                    disabled={isSyncing || (!isOnline && pendingCount === 0)}
-                    className="flex-1 py-2 px-3 bg-gradient-to-r from-amber-500 via-[#00A2B9] to-[#008396] hover:from-amber-600 hover:to-[#006e7e] text-white rounded-xl text-xs font-black flex items-center justify-center space-x-2 transition-all shadow-md active:scale-95 disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                    <span>{isSyncing ? 'Menyinkronkan...' : pendingCount > 0 ? `Tombol Sync Data (${pendingCount})` : 'Tombol Sync Data'}</span>
-                  </button>
+                <div className="pt-1 flex flex-col space-y-2">
                   <button
                     type="button"
                     onClick={() => {
                       setShowGasPopover(false);
-                      setActiveTab('settings');
+                      setActiveTab('sinkronisasi');
                     }}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition-colors"
-                    title="Buka Setting & Konfigurasi"
+                    className="w-full py-2 px-3 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-extrabold flex items-center justify-center space-x-2 transition-all shadow-md"
                   >
-                    <SettingsIcon className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Buka Pusat Sinkronisasi Data</span>
                   </button>
-                  <a
-                    href="https://drive.google.com/drive/folders/1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition-colors"
-                    title="Buka Folder Drive Database"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={handleManualSync}
+                      disabled={isSyncing || (!isOnline && pendingCount === 0)}
+                      className="flex-1 py-2 px-3 bg-gradient-to-r from-amber-500 via-[#00A2B9] to-[#008396] hover:from-amber-600 hover:to-[#006e7e] text-white rounded-xl text-xs font-black flex items-center justify-center space-x-2 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Menyinkronkan...' : pendingCount > 0 ? `Tombol Sync Data (${pendingCount})` : 'Tombol Sync Data'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowGasPopover(false);
+                        setActiveTab('settings');
+                      }}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition-colors"
+                      title="Buka Setting & Konfigurasi"
+                    >
+                      <SettingsIcon className="w-4 h-4" />
+                    </button>
+                    <a
+                      href="https://drive.google.com/drive/folders/1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition-colors"
+                      title="Buka Folder Drive Database"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
                 </div>
               </div>
             )}

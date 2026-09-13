@@ -2,6 +2,7 @@ import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
 import { User, UserRole } from '../types';
 import { AuthContextData } from './contextConstants';
+import { dexieDb } from '../services/dexieDb';
 
 interface AuthContextType {
   user: User | null;
@@ -19,27 +20,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     'pln_mobile_user',
     AuthContextData.defaultUser
   );
-  
-  // This would normally come from MasterDataContext users, but let's assume we fetch it or it's provided
-  // For simplicity during migration, I'll keep it basic
+
   const loginWithCredentials = React.useCallback(async (userid: string, _password?: string) => {
-    // In a real app, this would verify against a backend or MasterDataContext users
-    // For now, we'll assume the component calling this will handle the lookup and then call login()
     return true; 
   }, []);
 
   const login = React.useCallback((userData: User) => {
     setUser(userData);
     try {
-      localStorage.setItem('aphro_user', JSON.stringify(userData)); // Backward compatibility
+      localStorage.setItem('aphro_user', JSON.stringify(userData));
       localStorage.setItem('aphro_has_initiated', 'true');
+
+      // Persist in Dexie DB for offline authentication access
+      dexieDb.users.put({
+        ...userData,
+        syncStatus: 'SYNCED',
+        updatedAt: new Date().toISOString(),
+      }).catch(err => console.warn('Dexie user put error:', err));
     } catch {
       // Ignore storage write error
     }
   }, [setUser]);
 
   const loginAsRole = React.useCallback((role: UserRole) => {
-    // Mock user for role switcher
     const safeRole = role || '';
     const mockUser: User = {
       id: `usr-${safeRole.toLowerCase()}`,
