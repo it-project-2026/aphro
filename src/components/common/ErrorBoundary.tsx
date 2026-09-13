@@ -25,7 +25,13 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public handleReset = () => {
     this.setState({ hasError: false, error: undefined });
-    window.location.reload();
+    // Force cache reload
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        for (let name of names) caches.delete(name);
+      });
+    }
+    window.location.href = window.location.origin + window.location.pathname + '?t=' + Date.now();
   };
 
   public render() {
