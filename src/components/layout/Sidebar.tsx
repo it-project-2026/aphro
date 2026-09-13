@@ -139,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       id: 'settings',
       label: 'Setting & Konfigurasi',
       icon: Settings,
-      roles: ['SuperAdmin', 'Admin'],
+      roles: ['SuperAdmin'],
     },
     {
       id: 'logs',
@@ -150,7 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   ];
 
   const allowedItems = isAdmRole
-    ? navItems.filter((item) => ['cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'settings'].includes(item.id))
+    ? navItems.filter((item) => ['cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi'].includes(item.id))
     : navItems.filter((item) => item.roles.includes(role));
 
   return (

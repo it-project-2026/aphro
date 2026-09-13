@@ -234,11 +234,23 @@ class OfflineSyncQueueEngine {
             }
           }
 
-          // Remove queue item or mark SYNCED
+          // Remove queue item after confirmed database save
           await dexieDb.sync_queue.delete(item.idempotencyKey);
           return true;
         } else {
-          throw new Error(serverResult.error || 'Server menolak transaksi.');
+          throw new Error(serverResult.error || 'Server database menolak transaksi Realisasi.');
+        }
+      } else if (item.tableName === 'WORK_ORDER') {
+        const unitId = SupabaseService.getActiveUnitId();
+        const serverResult = await SupabaseService.saveWorkOrder(unitId, item.payload);
+        if (serverResult.success) {
+          if (item.payload.id) {
+            await dexieDb.work_orders.update(item.payload.id, { syncStatus: 'SYNCED' });
+          }
+          await dexieDb.sync_queue.delete(item.idempotencyKey);
+          return true;
+        } else {
+          throw new Error(serverResult.error || 'Server database menolak transaksi Work Order.');
         }
       } else {
         // Fallback for other tables

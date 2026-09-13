@@ -123,7 +123,9 @@ const AppContent: React.FC = () => {
         return <RekapPenyulangHarianPage />;
       case 'master_data': return <MasterDataPage />;
       case 'settings':
-      case 'setting': return <SettingAplikasiPage />;
+      case 'setting':
+        if (user?.role !== 'SuperAdmin') return <DashboardPage />;
+        return <SettingAplikasiPage />;
       case 'logs': return <AuditLogPage />;
       case 'inisiasi': return <InisiasiPage isFromMenu={true} />;
       case 'sinkronisasi': return <SinkronisasiPage />;

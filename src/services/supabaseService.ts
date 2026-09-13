@@ -849,9 +849,10 @@ export class SupabaseService {
 
     try {
       const tryUpsert = async (currPayload: Record<string, any>): Promise<{ success: boolean; error?: string }> => {
-        let { error } = await supabase
+        let { data, error } = await supabase
           .from(SUPABASE_TABLES.REALISASI)
-          .upsert([currPayload], { onConflict: 'REALISASI_ID' });
+          .upsert([currPayload], { onConflict: 'REALISASI_ID' })
+          .select();
 
         if (error && (error.code === 'PGRST204' || error.message?.includes('Could not find the'))) {
           const match = error.message?.match(/Could not find the '([^']+)' column/);
@@ -864,18 +865,20 @@ export class SupabaseService {
             for (const col of optionalCols) {
               if (currPayload[col]) delete currPayload[col];
             }
-            const retryErr = await supabase
+            const retryRes = await supabase
               .from(SUPABASE_TABLES.REALISASI)
-              .upsert([currPayload], { onConflict: 'REALISASI_ID' });
-            if (!retryErr.error) return { success: true };
-            error = retryErr.error;
+              .upsert([currPayload], { onConflict: 'REALISASI_ID' })
+              .select();
+            if (!retryRes.error) return { success: true };
+            error = retryRes.error;
           }
         }
 
         if (error) {
           const err2 = await supabase
             .from(SUPABASE_TABLES.REALISASI)
-            .upsert([currPayload], { onConflict: 'ID' });
+            .upsert([currPayload], { onConflict: 'ID' })
+            .select();
           if (!err2.error) return { success: true };
           error = err2.error;
         }
@@ -883,7 +886,8 @@ export class SupabaseService {
         if (error) {
           const err3 = await supabase
             .from(SUPABASE_TABLES.REALISASI)
-            .insert([currPayload]);
+            .insert([currPayload])
+            .select();
           if (!err3.error) return { success: true };
           error = err3.error;
         }

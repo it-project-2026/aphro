@@ -272,17 +272,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                       <span>{isSyncing ? 'Menyinkronkan...' : pendingCount > 0 ? `Tombol Sync Data (${pendingCount})` : 'Tombol Sync Data'}</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowGasPopover(false);
-                        setActiveTab('settings');
-                      }}
-                      className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition-colors"
-                      title="Buka Setting & Konfigurasi"
-                    >
-                      <SettingsIcon className="w-4 h-4" />
-                    </button>
+                    {currentUser?.role === 'SuperAdmin' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowGasPopover(false);
+                          setActiveTab('settings');
+                        }}
+                        className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl transition-colors"
+                        title="Buka Setting & Konfigurasi"
+                      >
+                        <SettingsIcon className="w-4 h-4" />
+                      </button>
+                    )}
                     <a
                       href="https://drive.google.com/drive/folders/1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv"
                       target="_blank"
@@ -298,18 +300,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
             )}
           </div>
 
-          {/* Setting & Konfigurasi Shortcut Button */}
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`p-1.5 sm:p-2 rounded-xl transition-all ${
-              activeTab === 'settings'
-                ? 'bg-teal-500 text-white shadow-xs'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-            title="Setting & Konfigurasi Aplikasi"
-          >
-            <SettingsIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${activeTab === 'settings' ? 'text-white' : ''}`} />
-          </button>
+          {/* Setting & Konfigurasi Shortcut Button (SuperAdmin Only) */}
+          {currentUser?.role === 'SuperAdmin' && (
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`p-1.5 sm:p-2 rounded-xl transition-all ${
+                activeTab === 'settings'
+                  ? 'bg-teal-500 text-white shadow-xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+              title="Setting & Konfigurasi Aplikasi"
+            >
+              <SettingsIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${activeTab === 'settings' ? 'text-white' : ''}`} />
+            </button>
+          )}
 
           {/* Dark / Light Mode Toggle */}
           <button
