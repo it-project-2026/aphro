@@ -38,6 +38,7 @@ interface GASSyncContextType {
   showSyncBanner: boolean;
   setShowSyncBanner: (show: boolean) => void;
   dismissSyncBanner: () => void;
+  syncData: (showToast?: (msg: string, type?: any) => void, isSilent?: boolean) => Promise<any>;
   syncWithGAS: (showToast?: (msg: string, type?: any) => void, isSilent?: boolean) => Promise<any>;
   processPendingQueue: (showToast?: (msg: string, type?: any) => void, isAuto?: boolean) => Promise<void>;
   checkConnection: () => Promise<boolean>;
@@ -389,6 +390,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
         showSyncBanner,
         setShowSyncBanner,
         dismissSyncBanner,
+        syncData: syncWithGAS,
         syncWithGAS,
         processPendingQueue,
         checkConnection,
@@ -410,3 +412,8 @@ export function useGASSync() {
   }
   return context;
 }
+
+/**
+ * Modern Supabase ↔ Dexie Sync Hook
+ */
+export const useSync = useGASSync;

@@ -4,6 +4,8 @@ import { User, UserRole, WorkOrder, ULP, Penyulang, ReguROW, Petugas } from '../
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
 import { parseNumeric } from '../utils/metricUtils';
+import { dexieDb } from './dexieDb';
+import { offlineSyncQueue } from './offlineSyncQueue';
 
 export function normalizeUser(u: any): User {
   if (!u || typeof u !== 'object') {
@@ -273,6 +275,8 @@ export function normalizeRealisasi(r: any): any {
 }
 
 export class SyncService {
+  private static LAST_SYNC_KEY = 'aphro_last_sync_timestamp';
+
   static async withRetry<T>(fn: () => Promise<T>, retries = 1, delay = 300): Promise<T> {
     try {
       return await fn();
@@ -283,6 +287,159 @@ export class SyncService {
     }
   }
 
+  /**
+   * Get the last successful sync timestamp
+   */
+  static getLastSyncTime(): string | null {
+    try {
+      return localStorage.getItem(this.LAST_SYNC_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Set the last successful sync timestamp
+   */
+  static setLastSyncTime(timestamp: string): void {
+    try {
+      localStorage.setItem(this.LAST_SYNC_KEY, timestamp);
+      dexieDb.metadata.put({
+        key: 'last_sync_timestamp',
+        value: timestamp,
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Delta Synchronization (Supabase ↔ Dexie)
+   * If lastSyncTime exists (e.g. 2026-09-14 08:30), only queries and downloads
+   * records created/updated after that timestamp instead of downloading full 500 WO / 2,000 Realisasi!
+   */
+  static async syncDelta(forceFull: boolean = false): Promise<{
+    success: boolean;
+    isDelta: boolean;
+    woChanged: number;
+    realisasiChanged: number;
+    totalProcessed: number;
+    lastSyncTime: string;
+    error?: string;
+  }> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return {
+        success: false,
+        isDelta: false,
+        woChanged: 0,
+        realisasiChanged: 0,
+        totalProcessed: 0,
+        lastSyncTime: this.getLastSyncTime() || 'Offline',
+        error: 'Perangkat sedang offline.',
+      };
+    }
+
+    const previousSyncTime = forceFull ? null : this.getLastSyncTime();
+    const currentSyncTime = getLocalDateTimeString();
+    const unitId = SupabaseService.getActiveUnitId();
+
+    try {
+      // 1. Process pending offline mutation queue first
+      await offlineSyncQueue.processQueue();
+
+      // 2. Fetch Delta or Full Work Orders
+      const woRes = await SupabaseService.fetchWorkOrders(
+        unitId,
+        0,
+        previousSyncTime ? 500 : 1000,
+        previousSyncTime || undefined
+      );
+
+      let woChanged = 0;
+      if (woRes.success && Array.isArray(woRes.data) && woRes.data.length > 0) {
+        woChanged = woRes.data.length;
+        await dexieDb.work_orders.bulkPut(
+          woRes.data.map((wo) => ({
+            ...wo,
+            syncStatus: 'SYNCED',
+            updatedAt: wo.updatedAt || currentSyncTime,
+          }))
+        );
+      }
+
+      // 3. Fetch Delta or Full Realisasi
+      const relRes = await SupabaseService.fetchRealisasi(
+        unitId,
+        0,
+        previousSyncTime ? 500 : 2000,
+        previousSyncTime || undefined
+      );
+
+      let realisasiChanged = 0;
+      if (relRes.success && Array.isArray(relRes.data) && relRes.data.length > 0) {
+        realisasiChanged = relRes.data.length;
+        await dexieDb.realisasi.bulkPut(
+          relRes.data.map((item) => ({
+            id: item.id || item.syncId || `REL-${Date.now()}`,
+            localId: item.id || `REL-${Date.now()}`,
+            serverId: item.id,
+            idempotencyKey: item.syncId || item.id,
+            nomorWO: item.nomorWO,
+            ulpName: item.ulpName || '',
+            reguName: item.reguName || '',
+            petugasId: item.petugasId || '',
+            petugasName: item.petugasName || '',
+            noTiang: item.noTiang || '',
+            tanggalRealisasi: item.tanggalRealisasi,
+            jenisTanaman: item.jenisTanaman || '',
+            keterangan: item.keterangan || '',
+            pertumbuhanTanaman: item.pertumbuhanTanaman || '',
+            kendala: item.kendala || '',
+            latitude: item.latitude || 0,
+            longitude: item.longitude || 0,
+            createdAt: item.createdAt || currentSyncTime,
+            updatedAt: currentSyncTime,
+            syncStatus: 'SYNCED' as const,
+            progressPercent: 100,
+            status: item.status || 'Selesai',
+            fotoSebelumUrl: item.fotoSebelumUrl,
+            fotoSesudahUrl: item.fotoSesudahUrl,
+            photosSebelum: item.photosSebelum || [],
+            photosSesudah: item.photosSesudah || [],
+            workOrderId: item.workOrderId,
+          }))
+        );
+      }
+
+      // 4. Update sync timestamp upon success
+      this.setLastSyncTime(currentSyncTime);
+
+      return {
+        success: true,
+        isDelta: !forceFull && !!previousSyncTime,
+        woChanged,
+        realisasiChanged,
+        totalProcessed: woChanged + realisasiChanged,
+        lastSyncTime: currentSyncTime,
+      };
+    } catch (err: any) {
+      console.warn('SyncService.syncDelta error:', err);
+      return {
+        success: false,
+        isDelta: !forceFull && !!previousSyncTime,
+        woChanged: 0,
+        realisasiChanged: 0,
+        totalProcessed: 0,
+        lastSyncTime: previousSyncTime || 'Belum tersinkron',
+        error: err.message || 'Gagal melakukan sinkronisasi delta.',
+      };
+    }
+  }
+
+  /**
+   * Full Data Fetch Baseline for Initial Startup or Reset
+   */
   static async fetchAllData(gasUrl?: string, spreadsheetId?: string) {
     try {
       const activeUnitId = SupabaseService.getActiveUnitId();
@@ -308,6 +465,8 @@ export class SyncService {
       } catch (e) {
         // ignore storage quota errors
       }
+
+      this.setLastSyncTime(getLocalDateTimeString());
 
       return result;
     } catch (err: any) {

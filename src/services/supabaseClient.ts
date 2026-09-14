@@ -66,6 +66,11 @@ export function getClient(): SupabaseClient {
   return activeClient;
 }
 
+export function isSupabaseConfigured(): boolean {
+  const config = getSupabaseConfig();
+  return Boolean(config.url && config.key && config.url !== 'https://your-project.supabase.co');
+}
+
 export const SUPABASE_SETUP_SQL = `-- ========================================================
 -- APHRO-Database Complete SQL Setup Script (Supabase PostgreSQL)
 -- Jalankan skrip ini di: Supabase Dashboard > SQL Editor > Run (Ctrl+Enter)

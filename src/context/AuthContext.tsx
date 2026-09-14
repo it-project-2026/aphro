@@ -2,7 +2,7 @@ import * as React from 'react';
 import { usePersistState } from '../hooks/usePersistState';
 import { User, UserRole } from '../types';
 import { AuthContextData } from './contextConstants';
-import { dexieDb } from '../services/dexieDb';
+import { AuthService } from '../services/authService';
 import { getPrimaryTimRowForUnit } from '../services/rekapHarianService';
 
 interface AuthContextType {
@@ -22,26 +22,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     AuthContextData.defaultUser
   );
 
-  const loginWithCredentials = React.useCallback(async (userid: string, _password?: string) => {
-    return true; 
-  }, []);
-
   const login = React.useCallback((userData: User) => {
     setUser(userData);
-    try {
-      localStorage.setItem('aphro_user', JSON.stringify(userData));
-      localStorage.setItem('aphro_has_initiated', 'true');
-
-      // Persist in Dexie DB for offline authentication access
-      dexieDb.users.put({
-        ...userData,
-        syncStatus: 'SYNCED',
-        updatedAt: new Date().toISOString(),
-      }).catch(err => console.warn('Dexie user put error:', err));
-    } catch {
-      // Ignore storage write error
-    }
+    AuthService.saveLocalSession(userData);
   }, [setUser]);
+
+  const loginWithCredentials = React.useCallback(async (userid: string, password?: string) => {
+    const res = await AuthService.loginWithCredentials(userid, password);
+    if (res.success && res.user) {
+      login(res.user);
+      return true;
+    }
+    return false;
+  }, [login]);
 
   const loginAsRole = React.useCallback((role: UserRole) => {
     const safeRole = role || '';
@@ -71,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = React.useCallback(() => {
     setUser(null);
-    localStorage.removeItem('aphro_user');
+    AuthService.clearSession();
   }, [setUser]);
 
   const isAuthenticated = !!user;

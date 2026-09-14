@@ -4,7 +4,7 @@
  * Single database architecture connecting all tables via 'unitId' to INISIASI (ID).
  */
 
-import { supabase, SUPABASE_TABLES, SUPABASE_DATABASE_NAME } from './supabaseClient';
+import { supabase, SUPABASE_TABLES, SUPABASE_DATABASE_NAME, isSupabaseConfigured } from './supabaseClient';
 import {
   InisiasiUnit,
   WorkOrder,
@@ -215,13 +215,19 @@ export class SupabaseService {
         query = query.eq('unitId', targetUnitId);
       }
 
+      // Delta Sync Filter: If lastSyncTime is provided, only query records created/updated after lastSyncTime
+      if (lastSyncTime) {
+        const syncDate = lastSyncTime.split('T')[0].split(' ')[0];
+        query = query.or(`Created_At.gte.${lastSyncTime},Tanggal.gte.${syncDate}`);
+      }
+
       // 3. Add order and range
       let { data, error } = await query
         .order('Tanggal', { ascending: false, nullsFirst: false })
         .range(from, to);
 
-      if (error || !data || data.length === 0) {
-        // Fallback to Nomor_WO order if Tanggal order fails or returns nothing
+      if (!lastSyncTime && (error || !data || data.length === 0)) {
+        // Fallback to Nomor_WO order if Tanggal order fails or returns nothing (only on full cold start)
         const fallbackRes = await supabase
           .from(SUPABASE_TABLES.WORK_ORDER)
           .select('*')
@@ -538,9 +544,14 @@ export class SupabaseService {
   // ==========================================
 
   /**
-   * Fetch Realisasi from Supabase REALISASI table filtered by unitId
+   * Fetch Realisasi from Supabase REALISASI table filtered by unitId with delta sync support
    */
-  static async fetchRealisasi(unitId?: string, page: number = 0, pageSize: number = 2000): Promise<{
+  static async fetchRealisasi(
+    unitId?: string, 
+    page: number = 0, 
+    pageSize: number = 2000,
+    lastSyncTime?: string
+  ): Promise<{
     success: boolean;
     data: Realisasi[];
     source: 'supabase' | 'cache' | 'initial';
@@ -556,11 +567,17 @@ export class SupabaseService {
         query = query.or(`unitId.eq.${targetUnitId},unitId.is.null`);
       }
 
+      // Delta Sync Filter: If lastSyncTime is provided, only fetch records updated/created after lastSyncTime
+      if (lastSyncTime) {
+        const syncDate = lastSyncTime.split('T')[0].split(' ')[0];
+        query = query.or(`TANGGAL.gte.${syncDate},Tanggal.gte.${syncDate},WAKTU.gte.${lastSyncTime}`);
+      }
+
       let { data, error } = await query
         .order('TANGGAL', { ascending: false, nullsFirst: false })
         .limit(pageSize);
 
-      if (error || !data || data.length === 0) {
+      if (!lastSyncTime && (error || !data || data.length === 0)) {
         const fallbackRes = await supabase
           .from(SUPABASE_TABLES.REALISASI)
           .select('*')
@@ -572,9 +589,11 @@ export class SupabaseService {
         }
       }
 
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         const list: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
-        this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(list));
+        if (!lastSyncTime) {
+          this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(list));
+        }
         return { success: true, data: list, source: 'supabase' };
       }
     } catch (err) {
@@ -597,6 +616,233 @@ export class SupabaseService {
   }
 
   /**
+   * Fetch Targeted Report Data directly from PostgreSQL/Supabase
+   * Sends targeted SQL WHERE filters directly to the database:
+   * WHERE ulp = ... AND tanggal >= ... AND tanggal <= ...
+   * and selectively requests only the required columns.
+   */
+  static async fetchTargetedReportData(params: {
+    jenisLaporan: 'realisasi' | 'work_order' | 'foto' | 'peta';
+    unitId?: string;
+    ulpName?: string;
+    startDate?: string;
+    endDate?: string;
+    penyulangName?: string;
+    reguName?: string;
+    nomorWO?: string;
+  }): Promise<{
+    success: boolean;
+    realisasi: Realisasi[];
+    workOrders: WorkOrder[];
+    totalCount: number;
+    source: 'supabase' | 'dexie';
+  }> {
+    const { jenisLaporan, unitId, ulpName, startDate, endDate, penyulangName, reguName, nomorWO } = params;
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+    // 1. Online targeted SQL query directly to PostgreSQL / Supabase
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        if (jenisLaporan === 'work_order') {
+          let query = supabase
+            .from(SUPABASE_TABLES.WORK_ORDER)
+            .select('*');
+
+          if (unitId && unitId !== 'ALL') {
+            query = query.eq('unitId', unitId);
+          }
+          if (ulpName && ulpName !== 'ALL') {
+            query = query.ilike('ULP', `%${ulpName}%`);
+          }
+          if (startDate) {
+            query = query.gte('Tanggal', startDate);
+          }
+          if (endDate) {
+            query = query.lte('Tanggal', endDate);
+          }
+          if (penyulangName && penyulangName !== 'ALL') {
+            query = query.ilike('PENYULANG', `%${penyulangName}%`);
+          }
+          if (reguName && reguName !== 'ALL') {
+            query = query.ilike('REGU_ROW', `%${reguName}%`);
+          }
+          if (nomorWO && nomorWO !== 'ALL') {
+            query = query.ilike('Nomor_WO', `%${nomorWO}%`);
+          }
+
+          const { data, error } = await query.order('Tanggal', { ascending: false }).limit(2000);
+          if (!error && Array.isArray(data)) {
+            const woList: WorkOrder[] = data.map((row: any) => this.normalizeWorkOrderRow(row));
+            return {
+              success: true,
+              realisasi: [],
+              workOrders: woList,
+              totalCount: woList.length,
+              source: 'supabase',
+            };
+          }
+        } else {
+          // 'realisasi' | 'foto' | 'peta'
+          let query = supabase
+            .from(SUPABASE_TABLES.REALISASI)
+            .select('*');
+
+          if (unitId && unitId !== 'ALL') {
+            query = query.or(`unitId.eq.${unitId},unitId.is.null`);
+          }
+          if (ulpName && ulpName !== 'ALL') {
+            query = query.ilike('ULP', `%${ulpName}%`);
+          }
+          if (startDate) {
+            query = query.or(`TANGGAL.gte.${startDate},Tanggal.gte.${startDate},WAKTU.gte.${startDate}`);
+          }
+          if (endDate) {
+            query = query.or(`TANGGAL.lte.${endDate},Tanggal.lte.${endDate},WAKTU.lte.${endDate}T23:59:59`);
+          }
+          if (penyulangName && penyulangName !== 'ALL') {
+            query = query.ilike('PENYULANG', `%${penyulangName}%`);
+          }
+          if (reguName && reguName !== 'ALL') {
+            query = query.ilike('REGU_ROW', `%${reguName}%`);
+          }
+          if (nomorWO && nomorWO !== 'ALL') {
+            query = query.ilike('Nomor_WO', `%${nomorWO}%`);
+          }
+
+          const { data, error } = await query.order('TANGGAL', { ascending: false }).limit(2500);
+          if (!error && Array.isArray(data)) {
+            let relList: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
+
+            // Fetch related Work Orders to cross-reference Feeder/Penyulang and details
+            let woList: WorkOrder[] = [];
+            try {
+              let woQuery = supabase.from(SUPABASE_TABLES.WORK_ORDER).select('*');
+              if (unitId && unitId !== 'ALL') {
+                woQuery = woQuery.or(`unitId.eq.${unitId},unitId.is.null`);
+              }
+              if (ulpName && ulpName !== 'ALL') {
+                woQuery = woQuery.ilike('ULP', `%${ulpName}%`);
+              }
+              const { data: woData } = await woQuery.limit(2000);
+              if (Array.isArray(woData)) {
+                woList = woData.map((row: any) => this.normalizeWorkOrderRow(row));
+                const woMapById: Record<string, WorkOrder> = {};
+                const woMapByNo: Record<string, WorkOrder> = {};
+                woList.forEach((w) => {
+                  if (w.id) woMapById[w.id] = w;
+                  if (w.nomorWO) woMapByNo[w.nomorWO] = w;
+                });
+
+                // Auto-fill missing penyulangName from matched Work Order
+                relList = relList.map((r) => {
+                  if (!r.penyulangName || r.penyulangName === '-' || r.penyulangName === 'null') {
+                    const matchedWo = woMapById[r.workOrderId] || woMapByNo[r.nomorWO];
+                    if (matchedWo?.penyulangName) {
+                      return { ...r, penyulangName: matchedWo.penyulangName };
+                    }
+                  }
+                  return r;
+                });
+              }
+            } catch {
+              // Ignore auxiliary WO lookup error
+            }
+
+            return {
+              success: true,
+              realisasi: relList,
+              workOrders: woList,
+              totalCount: relList.length,
+              source: 'supabase',
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase fetchTargetedReportData error:', err);
+      }
+    }
+
+    // 2. Local fallback from Dexie if offline or network failure
+    try {
+      const { dexieDb } = await import('./dexieDb');
+      if (jenisLaporan === 'work_order') {
+        let allWOs = await dexieDb.work_orders.toArray();
+        let filtered = allWOs.filter((wo) => {
+          if (unitId && unitId !== 'ALL' && wo.unitId && wo.unitId !== unitId) return false;
+          if (ulpName && ulpName !== 'ALL') {
+            const targetUlp = ulpName.toLowerCase();
+            const woUlp = (wo.ulpName || '').toLowerCase();
+            if (!woUlp.includes(targetUlp) && !targetUlp.includes(woUlp)) return false;
+          }
+          if (startDate && wo.tanggal && wo.tanggal < startDate) return false;
+          if (endDate && wo.tanggal && wo.tanggal > endDate) return false;
+          if (penyulangName && penyulangName !== 'ALL' && !wo.penyulangName?.toLowerCase().includes(penyulangName.toLowerCase())) return false;
+          if (reguName && reguName !== 'ALL' && !wo.reguName?.toLowerCase().includes(reguName.toLowerCase())) return false;
+          if (nomorWO && nomorWO !== 'ALL' && !wo.nomorWO?.toLowerCase().includes(nomorWO.toLowerCase())) return false;
+          return true;
+        });
+        return {
+          success: true,
+          realisasi: [],
+          workOrders: filtered,
+          totalCount: filtered.length,
+          source: 'dexie',
+        };
+      } else {
+        let allRels = await dexieDb.realisasi.toArray();
+        let allWOs = await dexieDb.work_orders.toArray();
+        const woMapById: Record<string, WorkOrder> = {};
+        const woMapByNo: Record<string, WorkOrder> = {};
+        allWOs.forEach((w) => {
+          if (w.id) woMapById[w.id] = w;
+          if (w.nomorWO) woMapByNo[w.nomorWO] = w;
+        });
+
+        let filtered = allRels.filter((rel) => {
+          if (unitId && unitId !== 'ALL' && rel.unitId && rel.unitId !== unitId) return false;
+          if (ulpName && ulpName !== 'ALL') {
+            const targetUlp = ulpName.toLowerCase();
+            const relUlp = (rel.ulpName || '').toLowerCase();
+            if (!relUlp.includes(targetUlp) && !targetUlp.includes(relUlp)) return false;
+          }
+          const relDate = rel.tanggalRealisasi || (rel.createdAt ? rel.createdAt.split('T')[0] : '');
+          if (startDate && relDate && relDate < startDate) return false;
+          if (endDate && relDate && relDate > endDate) return false;
+          if (penyulangName && penyulangName !== 'ALL' && !rel.penyulangName?.toLowerCase().includes(penyulangName.toLowerCase())) return false;
+          if (reguName && reguName !== 'ALL' && !rel.reguName?.toLowerCase().includes(reguName.toLowerCase())) return false;
+          if (nomorWO && nomorWO !== 'ALL' && !rel.nomorWO?.toLowerCase().includes(nomorWO.toLowerCase())) return false;
+          return true;
+        }).map((r) => {
+          if (!r.penyulangName || r.penyulangName === '-' || r.penyulangName === 'null') {
+            const matchedWo = woMapById[r.workOrderId] || woMapByNo[r.nomorWO];
+            if (matchedWo?.penyulangName) {
+              return { ...r, penyulangName: matchedWo.penyulangName };
+            }
+          }
+          return r;
+        });
+
+        return {
+          success: true,
+          realisasi: filtered,
+          workOrders: allWOs,
+          totalCount: filtered.length,
+          source: 'dexie',
+        };
+      }
+    } catch (localErr) {
+      console.warn('Dexie report fallback error:', localErr);
+      return {
+        success: false,
+        realisasi: [],
+        workOrders: [],
+        totalCount: 0,
+        source: 'dexie',
+      };
+    }
+  }
+
+  /**
    * Normalize Supabase REALISASI row
    */
   static normalizeRealisasiRow(row: any): Realisasi {
@@ -610,7 +856,14 @@ export class SupabaseService {
     let rawNoWo = rawNoWoCandidate;
     let rawUlp = String(row.ULP || row.ulp || row.Nama_ULP || '');
     let reguName = String(row.REGU_ROW || row.regu_row || row.Regu || row.REGU || '');
-    let penyulangName = String(row.PENYULANG || row.penyulang || row.Nama_Penyulang || '');
+    let penyulangName = String(
+      row.PENYULANG || row.Penyulang || row.penyulang ||
+      row.PENYULANG_FEEDER || row.Penyulang_Feeder || row.penyulang_feeder ||
+      row.Nama_Penyulang || row.nama_penyulang || row.NAMA_PENYULANG ||
+      row.FEEDER || row.Feeder || row.feeder ||
+      row.penyulangName || row.penyulang_name ||
+      ''
+    );
     let noTiang = String(row.NO_TIANG || row.No_Tiang || row.no_tiang || '');
     let rawTanggal = row.Tanggal ?? row.TANGGAL ?? row.tanggal ?? row.TANGGAL_REALISASI ?? row.tanggal_realisasi ?? row.TANGGAL_EKSEKUSI ?? row.tanggal_eksekusi;
     let rawFotoSebelum = String(row.FOTO_SEBELUM || row.Foto_Sebelum || row.foto_sebelum || row.FOTO_SEBELUM_URL || '');
@@ -686,7 +939,7 @@ export class SupabaseService {
       nomorWO: rawNoWo,
       ulpName,
       reguName,
-      penyulangName: String(row.PENYULANG || row.penyulang || row.Nama_Penyulang || ''),
+      penyulangName: penyulangName,
       noTiang: String(row.NO_TIANG || row.No_Tiang || row.no_tiang || ''),
       tanggalRealisasi: tanggalStr,
       petugasId: 'usr-1',
