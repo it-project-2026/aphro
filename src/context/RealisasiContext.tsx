@@ -89,6 +89,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
                 nomorWO: item.nomorWO,
                 ulpName: item.ulpName || '',
                 reguName: item.reguName || '',
+                penyulangName: item.penyulangName || '',
                 petugasId: item.petugasId || '',
                 petugasName: item.petugasName || '',
                 noTiang: item.noTiang || '',

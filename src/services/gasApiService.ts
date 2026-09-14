@@ -266,15 +266,16 @@ export class GASApiService {
   }
 
   /**
-   * Login user via Google Spreadsheet USERS sheet
+   * Login user via Google Spreadsheet USERS sheet with unitId, username, and password
    */
-  static async login(gasUrl: string, username: string, password: string): Promise<GASApiResponse> {
+  static async login(gasUrl: string, username: string, password: string, unitId?: string): Promise<GASApiResponse> {
     try {
       const response = await this.fetchWithTimeout(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'login',
+          unitId: unitId || 'UL1',
           username,
           password,
         }),

@@ -177,6 +177,63 @@ export class InisiasiService {
     return null;
   }
 
+  static getStandardUnitId(input?: string | null): 'UL1' | 'UL2' | 'UL3' | 'UL4' | string {
+    if (!input) return 'UL1';
+    const str = String(input).toUpperCase().trim();
+    if (str === 'UL1' || str === '1' || str.includes('PADANG') || str === 'PDG') return 'UL1';
+    if (str === 'UL2' || str === '2' || str.includes('BUKITTINGGI') || str === 'BKT') return 'UL2';
+    if (str === 'UL3' || str === '3' || str.includes('SOLOK') || str === 'SLK') return 'UL3';
+    if (str === 'UL4' || str === '4' || str.includes('PAYAKUMBUH') || str === 'PYK') return 'UL4';
+    return str;
+  }
+
+  static isUserMatchingUnit(userUnitId?: string | null, targetUnitId?: string | null): boolean {
+    if (!userUnitId || !targetUnitId) return true;
+    return this.getStandardUnitId(userUnitId) === this.getStandardUnitId(targetUnitId);
+  }
+
+  static getActiveInisiasiUnit(): { unitId: string; namaUL: string; unitName: string } {
+    try {
+      const rawSelected = localStorage.getItem('aphro_selected_inisiasi_ul');
+      if (rawSelected) {
+        const parsed = JSON.parse(rawSelected);
+        const rawId = parsed?.unitId || parsed?.id;
+        const rawName = parsed?.unitName || parsed?.namaUL;
+        if (rawId && rawName) {
+          return {
+            unitId: this.getStandardUnitId(rawId),
+            namaUL: rawName,
+            unitName: rawName,
+          };
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
+    const storedId = localStorage.getItem('aphro_selected_unit_id') || localStorage.getItem('aphro_unit_id');
+    const storedName = localStorage.getItem('aphro_nama_unit_layanan') || localStorage.getItem('aphro_unit_name');
+    if (storedId || storedName) {
+      const standardId = this.getStandardUnitId(storedId || storedName || 'UL1');
+      const name =
+        storedName ||
+        (standardId === 'UL2'
+          ? 'UL BUKITTINGGI'
+          : standardId === 'UL3'
+          ? 'UL SOLOK'
+          : standardId === 'UL4'
+          ? 'UL PAYAKUMBUH'
+          : 'UL PADANG');
+      return {
+        unitId: standardId,
+        namaUL: name,
+        unitName: name,
+      };
+    }
+
+    return { unitId: 'UL1', namaUL: 'UL PADANG', unitName: 'UL PADANG' };
+  }
+
   static getSelectedUnit(): InisiasiUnit | null {
     try {
       const saved = localStorage.getItem('aphro_selected_inisiasi_ul');
@@ -191,8 +248,16 @@ export class InisiasiService {
 
   static saveSelectedUnit(unit: InisiasiUnit): void {
     try {
-      localStorage.setItem('aphro_selected_inisiasi_ul', JSON.stringify(unit));
-      localStorage.setItem('aphro_selected_unit_id', unit.id);
+      const cleanUnitId = this.getStandardUnitId(unit.id);
+      const explicitUnit = {
+        ...unit,
+        unitId: cleanUnitId,
+        unitName: unit.namaUL,
+      };
+      localStorage.setItem('aphro_selected_inisiasi_ul', JSON.stringify(explicitUnit));
+      localStorage.setItem('aphro_selected_unit_id', cleanUnitId);
+      localStorage.setItem('aphro_unit_id', cleanUnitId);
+      localStorage.setItem('aphro_unit_name', unit.namaUL);
       localStorage.setItem('aphro_has_initiated', 'true');
       localStorage.setItem('aphro_nama_unit_layanan', unit.namaUL);
 
@@ -200,7 +265,9 @@ export class InisiasiService {
       const rawSaved = localStorage.getItem('pln_mobile_settings');
       const parsed = rawSaved ? JSON.parse(rawSaved) : {};
       parsed.namaUnitLayanan = unit.namaUL;
-      parsed.spreadsheetId = unit.id;
+      parsed.unitId = cleanUnitId;
+      parsed.unitName = unit.namaUL;
+      parsed.spreadsheetId = cleanUnitId;
       if (unit.folderIdSpreadsheet) parsed.driveFolderId = unit.folderIdSpreadsheet;
       if (unit.folderIdFoto) parsed.photoFolderId = unit.folderIdFoto;
       if (unit.folderIdAbsensi) parsed.absensiFolderId = unit.folderIdAbsensi;

@@ -6,7 +6,7 @@
 import { RekapItemData } from '../utils/rekapExportService';
 import { Realisasi, ULP, ReguROW, WorkOrder, Penyulang } from '../types';
 import { getWOTargetKms, getWORealisasiKms, TARGET_KMS_PER_TIM_ROW } from '../utils/metricUtils';
-import { normalizeDateISO } from '../utils/dateUtils';
+import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO } from '../utils/dateUtils';
 
 export interface ULConfigPreset {
   kodeUL: string;
@@ -47,6 +47,16 @@ export const UL_PRESETS: Record<string, ULConfigPreset> = {
       { namaUlp: 'ULP KURANJI', timRow: 'TIM ROW 04 Kuranji', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13213' },
       { namaUlp: 'ULP TABING', timRow: 'TIM ROW 05 Tabing', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13214' },
       { namaUlp: 'ULP LUBUK BEGALUNG', timRow: 'TIM ROW 06 Lubuk Begalung', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13215' },
+      { namaUlp: 'ULP PARIAMAN', timRow: 'TIM ROW 07 Pariaman', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13216' },
+      { namaUlp: 'ULP SICINCIN', timRow: 'TIM ROW 08 Sicincin', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13217' },
+      { namaUlp: 'ULP LUBUK ALUNG', timRow: 'TIM ROW 09 Lubuk Alung', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13218' },
+      { namaUlp: 'ULP PAINAN', timRow: 'TIM ROW 10 Painan', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13219' },
+      { namaUlp: 'ULP BALAI SELASA', timRow: 'TIM ROW 11 Balai Selasa', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13210' },
+      { namaUlp: 'ULP KAMBANG', timRow: 'TIM ROW 12 Kambang', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13219' },
+      { namaUlp: 'ULP MENTAWAI', timRow: 'TIM ROW 13 Mentawai', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13210' },
+      { namaUlp: 'ULP TUAPEJAT', timRow: 'TIM ROW 14 Tuapejat', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13210' },
+      { namaUlp: 'ULP SIKABALUAN', timRow: 'TIM ROW 15 Sikabaluan', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13210' },
+      { namaUlp: 'ULP SIOBAN', timRow: 'TIM ROW 16 Sioban', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13210' },
     ],
   },
   PAYAKUMBUH: {
@@ -130,9 +140,14 @@ export function resolveUserTimRowAndUlp(
   }
 
   // Helper clean string
-  const cleanStr = (s?: string | null) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanStr = (s?: string | null) =>
+    (s || '')
+      .toLowerCase()
+      .trim()
+      .replace(/^(regu|tim|petugas|kelompok|regu_row|ulp)\s+/gi, '')
+      .replace(/[^a-z0-9]/g, '');
 
-  // Helper extract row number (e.g., 'row01', 'USERS 01', 'usr-01', '01' -> 1)
+  // Helper extract row number (e.g., 'row01', 'USERS 01', 'usr-01', '01' -> 1, 'row13' -> 13)
   const extractRowNumber = (s?: string | null): number | null => {
     if (!s) return null;
     const str = String(s).trim();
@@ -140,84 +155,150 @@ export function resolveUserTimRowAndUlp(
     return m ? parseInt(m[1], 10) : null;
   };
 
-  // Filter reguList strictly by active unitKey
-  const unitReguList = (reguList || []).filter((r: any) => {
-    const rUnitId = r.unitId || r.unit_id || r.ulpId;
-    if (!rUnitId) return false;
-    return RekapHarianService.normalizeUnitKey(rUnitId) === unitKey;
+  // Find matching user from MasterData / USERS table if provided
+  const userIdentifier = (user.userName || user.nip || user.id || '').toLowerCase().trim();
+  const matchedMaster = (masterUsers || []).find((m: any) => {
+    if (!m) return false;
+    const mName = (m.userName || '').toLowerCase().trim();
+    const mNip = (m.nip || '').toLowerCase().trim();
+    const mId = (m.id || '').toLowerCase().trim();
+    return Boolean(userIdentifier && (mName === userIdentifier || mNip === userIdentifier || mId === userIdentifier));
   });
 
-  // Filter ulpList strictly by active unitKey
-  const unitUlpList = (ulpList || []).filter((u: any) => {
-    const uUnitId = u.unitId || u.unit_id;
-    if (!uUnitId) return false;
-    return RekapHarianService.normalizeUnitKey(uUnitId) === unitKey;
-  });
+  // Extract explicit regu and ulp from user or matchedMaster
+  const directReguName = (
+    user.reguName ||
+    matchedMaster?.reguName ||
+    user.namaRegu ||
+    matchedMaster?.namaRegu ||
+    user.Regu_ROW ||
+    matchedMaster?.Regu_ROW ||
+    user.Nama_Regu ||
+    matchedMaster?.Nama_Regu ||
+    user.NAMA_REGU ||
+    matchedMaster?.NAMA_REGU ||
+    (user.name && user.name.toUpperCase().startsWith('TIM ROW') ? user.name : '') ||
+    ''
+  ).trim();
 
-  // Determine row number from user identifiers
-  const userIdentifier = `${user.userName || ''} ${user.nip || ''} ${user.id || ''} ${user.name || ''} ${user.reguName || ''}`;
-  const userRowNum = extractRowNumber(userIdentifier);
+  const directUlpName = (
+    user.ulpName ||
+    matchedMaster?.ulpName ||
+    user.namaULP ||
+    matchedMaster?.namaULP ||
+    user.ULP ||
+    matchedMaster?.ULP ||
+    user.Nama_ULP ||
+    matchedMaster?.Nama_ULP ||
+    user.NAMA_ULP ||
+    matchedMaster?.NAMA_ULP ||
+    ''
+  ).trim();
 
   let resolvedReguName: string | null = null;
   let resolvedUlpName: string | null = null;
 
-  // Priority 1: Match row number directly against ACTIVE unit's preset rows (e.g. UL1 row 1 -> TIM ROW 01 Belanti, UL2 row 1 -> TIM ROW 01 Koto Tuo)
-  if (userRowNum !== null && userRowNum > 0) {
+  // Filter reguList and ulpList for active unit
+  const unitReguList = (reguList || []).filter((r: any) => {
+    const rUnitId = r.unitId || r.unit_id || r.ulpId;
+    if (!rUnitId) return true;
+    return RekapHarianService.normalizeUnitKey(rUnitId) === unitKey;
+  });
+
+  const unitUlpList = (ulpList || []).filter((u: any) => {
+    const uUnitId = u.unitId || u.unit_id;
+    if (!uUnitId) return true;
+    return RekapHarianService.normalizeUnitKey(uUnitId) === unitKey;
+  });
+
+  // Step 1: If user explicitly has a non-placeholder reguName (e.g. 'TIM ROW 13 MENTAWAI' or 'TIM ROW 01 Belanti')
+  if (directReguName && directReguName !== 'Belum Ada Regu' && directReguName !== 'Semua Regu' && directReguName !== '-') {
+    resolvedReguName = directReguName;
+  }
+
+  // Step 2: If user explicitly has a non-placeholder ulpName (e.g. 'ULP BELANTI' or 'ULP MENTAWAI')
+  if (directUlpName && directUlpName !== 'SEMUA ULP' && directUlpName !== 'Semua ULP' && directUlpName !== '-') {
+    resolvedUlpName = directUlpName;
+  }
+
+  // Step 3: If regu is still missing, try matching by row number or preset
+  const userRowNum = extractRowNumber(user.userName) ?? extractRowNumber(user.nip) ?? extractRowNumber(user.id) ?? extractRowNumber(user.name);
+  if (!resolvedReguName && userRowNum !== null && userRowNum > 0) {
     const presetRow = preset.rows.find(r => extractRowNumber(r.timRow) === userRowNum) || preset.rows[userRowNum - 1];
     if (presetRow) {
       resolvedReguName = presetRow.timRow;
-      resolvedUlpName = presetRow.namaUlp;
+      if (!resolvedUlpName) {
+        resolvedUlpName = presetRow.namaUlp;
+      }
+    } else {
+      const reguMatch = unitReguList.find(r => extractRowNumber(r.namaRegu) === userRowNum);
+      if (reguMatch) {
+        resolvedReguName = reguMatch.namaRegu;
+        if (!resolvedUlpName && reguMatch.ulpName) {
+          resolvedUlpName = reguMatch.ulpName;
+        }
+      }
     }
   }
 
-  // Priority 2: Check if user.reguName explicitly belongs to active unit's preset rows or unitReguList
-  if (!resolvedReguName && user.reguName && user.reguName.trim() !== '' && user.reguName !== 'Belum Ada Regu') {
-    const matchedPreset = preset.rows.find(r => cleanStr(r.timRow) === cleanStr(user.reguName));
-    const matchedRegu = unitReguList.find(r => cleanStr(r.namaRegu) === cleanStr(user.reguName));
-    if (matchedPreset) {
-      resolvedReguName = matchedPreset.timRow;
-      resolvedUlpName = matchedPreset.namaUlp;
-    } else if (matchedRegu) {
-      resolvedReguName = matchedRegu.namaRegu;
-    }
-  }
-
-  // Priority 3: Check if user.name matches any timRow in active unit's preset
+  // Step 4: If regu is still missing, check if user.name matches any timRow in preset or reguList
   if (!resolvedReguName && user.name) {
-    const matchedPreset = preset.rows.find(r => cleanStr(r.timRow) === cleanStr(user.name));
-    if (matchedPreset) {
-      resolvedReguName = matchedPreset.timRow;
-      resolvedUlpName = matchedPreset.namaUlp;
+    const presetMatch = preset.rows.find(r => cleanStr(r.timRow) === cleanStr(user.name));
+    if (presetMatch) {
+      resolvedReguName = presetMatch.timRow;
+      if (!resolvedUlpName) resolvedUlpName = presetMatch.namaUlp;
+    } else {
+      const reguMatch = unitReguList.find(r => cleanStr(r.namaRegu) === cleanStr(user.name));
+      if (reguMatch) {
+        resolvedReguName = reguMatch.namaRegu;
+        if (!resolvedUlpName && reguMatch.ulpName) resolvedUlpName = reguMatch.ulpName;
+      }
     }
   }
 
-  // Priority 4: Fallback to active unit's primary tim row
+  // Step 5: Fallback regu to primaryInfo for this unit
   if (!resolvedReguName) {
     resolvedReguName = primaryInfo.reguName;
-    resolvedUlpName = primaryInfo.ulpName;
   }
 
-  // Resolve ULP Name for active unit if not set
+  // Step 6: If ULP is still missing, resolve it from resolvedReguName
   if (!resolvedUlpName) {
-    const presetRow = preset.rows.find(r => 
-      cleanStr(r.timRow) === cleanStr(resolvedReguName) || 
-      (userRowNum !== null && extractRowNumber(r.timRow) === userRowNum)
+    // 6a. Check in active preset
+    const presetMatch = preset.rows.find(r => 
+      cleanStr(r.timRow) === cleanStr(resolvedReguName) ||
+      (extractRowNumber(resolvedReguName) !== null && extractRowNumber(r.timRow) === extractRowNumber(resolvedReguName))
     );
-    if (presetRow?.namaUlp) {
-      resolvedUlpName = presetRow.namaUlp;
+    if (presetMatch?.namaUlp) {
+      resolvedUlpName = presetMatch.namaUlp;
     }
-  }
 
-  if (!resolvedUlpName && user.ulpName) {
-    const isUlpInActiveUnit = preset.rows.some(r => cleanStr(r.namaUlp) === cleanStr(user.ulpName)) ||
-      unitUlpList.some(u => cleanStr(u.namaULP) === cleanStr(user.ulpName));
-    if (isUlpInActiveUnit) {
-      resolvedUlpName = user.ulpName.trim();
+    // 6b. Check in reguList
+    if (!resolvedUlpName) {
+      const reguMatch = unitReguList.find(r => cleanStr(r.namaRegu) === cleanStr(resolvedReguName));
+      if (reguMatch?.ulpName) {
+        resolvedUlpName = reguMatch.ulpName;
+      }
     }
-  }
 
-  if (!resolvedUlpName) {
-    resolvedUlpName = primaryInfo.ulpName;
+    // 6c. Infer ULP from name in resolvedReguName (e.g., 'TIM ROW 13 MENTAWAI' -> 'ULP MENTAWAI', 'TIM ROW 01 Belanti' -> 'ULP BELANTI')
+    if (!resolvedUlpName && resolvedReguName) {
+      const parts = resolvedReguName.replace(/^TIM\s*ROW\s*\d+\s*/i, '').trim();
+      if (parts && parts.length > 2) {
+        const potentialUlpName = parts.toUpperCase().startsWith('ULP') ? parts.toUpperCase() : `ULP ${parts.toUpperCase()}`;
+        const matchedUlp = unitUlpList.find(u => cleanStr(u.namaULP) === cleanStr(potentialUlpName)) ||
+          preset.rows.find(r => cleanStr(r.namaUlp) === cleanStr(potentialUlpName));
+        if (matchedUlp) {
+          resolvedUlpName = (matchedUlp as any).namaULP || (matchedUlp as any).namaUlp;
+        } else {
+          resolvedUlpName = potentialUlpName;
+        }
+      }
+    }
+
+    // 6d. Fallback to primary ULP of active unit
+    if (!resolvedUlpName) {
+      resolvedUlpName = primaryInfo.ulpName;
+    }
   }
 
   const resolvedUserName: string = user.name && !user.name.toUpperCase().startsWith('TIM ROW')
@@ -526,7 +607,24 @@ export class RekapHarianService {
       }
     };
 
-    realisasiList?.forEach(r => addMissingPenyulang(r.ulpName, r.penyulangName));
+    // Build Work Order maps for fallback penyulang resolution
+    const woMapById: Record<string, WorkOrder> = {};
+    const woMapByNo: Record<string, WorkOrder> = {};
+    if (Array.isArray(workOrders)) {
+      workOrders.forEach((w) => {
+        if (w.id) woMapById[w.id] = w;
+        if (w.nomorWO) woMapByNo[w.nomorWO] = w;
+      });
+    }
+
+    realisasiList?.forEach(r => {
+      let peny = r.penyulangName || (r as any).Penyulang || (r as any).PENYULANG || (r as any).Nama_Penyulang || '';
+      if (!peny || peny === '-' || peny === 'null') {
+        const matchedWo = woMapById[r.workOrderId] || woMapByNo[r.nomorWO];
+        if (matchedWo?.penyulangName) peny = matchedWo.penyulangName;
+      }
+      addMissingPenyulang(r.ulpName, peny);
+    });
     workOrders?.forEach(w => addMissingPenyulang(w.ulpName, w.penyulangName));
 
     return dynamicRows.map((row) => {
@@ -550,22 +648,35 @@ export class RekapHarianService {
       if (Array.isArray(realisasiList)) {
         realisasiList.forEach((rel) => {
           if (!rel) return;
-          const parts = this.parseDateParts(rel.tanggalRealisasi);
+          const parts = this.parseDateParts(rel.tanggalRealisasi || rel);
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const relPenyulang = normalize(rel.penyulangName || '');
+            let relPenyulangRaw = rel.penyulangName || (rel as any).Penyulang || (rel as any).PENYULANG || (rel as any).Nama_Penyulang || (rel as any).NAMA_PENYULANG || (rel as any).feeder || (rel as any).FEEDER || '';
+            if (!relPenyulangRaw || relPenyulangRaw === '-' || relPenyulangRaw === 'null') {
+              const matchedWo = woMapById[rel.workOrderId] || woMapByNo[rel.nomorWO];
+              if (matchedWo?.penyulangName) relPenyulangRaw = matchedWo.penyulangName;
+            }
+            const relPenyulang = normalize(relPenyulangRaw);
             
-            if (relPenyulang === rowPenyulangClean || relPenyulang.includes(rowPenyulangClean) || rowPenyulangClean.includes(relPenyulang)) {
+            let matchPenyulang = false;
+            if (relPenyulang && rowPenyulangClean) {
+              matchPenyulang = relPenyulang === rowPenyulangClean || relPenyulang.includes(rowPenyulangClean) || rowPenyulangClean.includes(relPenyulang);
+            }
+
+            if (matchPenyulang) {
               const dayKey = String(parts.d).padStart(2, '0');
               if (!updatedDaily[dayKey]) {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
-              const ket = normalize(rel.keterangan || '');
-              if (ket === 'TEBANG' || ket.includes('TEBANG')) {
+              const ket = normalize(rel.keterangan || (rel as any).Keterangan || (rel as any).KETERANGAN || rel.jenisTanaman || '');
+              if (ket.includes('TEBANG') || ket.includes('TBG') || ket === 'T') {
                 updatedDaily[dayKey].tebang1++;
-              } else if (ket === 'PANGKAS' || ket.includes('PANGKAS') || ket.includes('POTONG')) {
+              } else if (ket.includes('PANGKAS') || ket.includes('POTONG') || ket.includes('PNG') || ket.includes('PK') || ket === 'P') {
+                updatedDaily[dayKey].pangkas++;
+              } else {
+                // Default fallback for any realization record
                 updatedDaily[dayKey].pangkas++;
               }
             }
@@ -577,13 +688,13 @@ export class RekapHarianService {
       if (Array.isArray(workOrders)) {
         workOrders.forEach((wo) => {
           if (!wo) return;
-          const parts = this.parseDateParts(wo.tanggal);
+          const parts = this.parseDateParts(wo.tanggal || wo);
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const woPenyulang = normalize(wo.penyulangName || '');
+            const woPenyulang = normalize(wo.penyulangName || (wo as any).Penyulang || (wo as any).PENYULANG || '');
             
-            if (woPenyulang === rowPenyulangClean || woPenyulang.includes(rowPenyulangClean) || rowPenyulangClean.includes(woPenyulang)) {
+            if (woPenyulang && rowPenyulangClean && (woPenyulang === rowPenyulangClean || woPenyulang.includes(rowPenyulangClean) || rowPenyulangClean.includes(woPenyulang))) {
               const dayKey = String(parts.d).padStart(2, '0');
               if (!updatedDaily[dayKey]) {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
@@ -716,9 +827,23 @@ export class RekapHarianService {
    * Helper to parse date parts from various formats accurately
    * Uses unified normalizeDateISO logic
    */
-  static parseDateParts(dateStr: any) {
-    if (!dateStr) return null;
-    const iso = normalizeDateISO(dateStr);
+  /**
+   * Helper to parse date parts from various formats accurately
+   * Uses unified normalizeDateISO logic
+   */
+  static parseDateParts(dateInput: any) {
+    if (!dateInput) return null;
+    let dateStr = '';
+    if (typeof dateInput === 'string' || typeof dateInput === 'number') {
+      dateStr = String(dateInput);
+    } else if (typeof dateInput === 'object') {
+      dateStr = dateInput.tanggalRealisasi || dateInput.tanggal || dateInput.Tanggal || dateInput.TANGGAL || dateInput.createdAt || dateInput.Created_At || dateInput.timestamp || '';
+      if (!dateStr && dateInput.nomorWO) {
+        dateStr = parseDateFromNomorWO(dateInput.nomorWO) || '';
+      }
+    }
+
+    const iso = normalizeDateISO(dateStr) || (typeof dateInput === 'string' ? parseDateFromNomorWO(dateInput) : null);
     if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
       const [y, m, d] = iso.split('-').map(Number);
       return { y, m, d };
@@ -767,25 +892,26 @@ export class RekapHarianService {
       if (Array.isArray(realisasiList)) {
         realisasiList.forEach((rel) => {
           if (!rel) return;
-          const parts = this.parseDateParts(rel.tanggalRealisasi);
+          const parts = this.parseDateParts(rel.tanggalRealisasi || rel);
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const relUlp = normalizeNumbers(stripPrefix(rel.ulpName || ''));
-            const relTimFull = normalizeNumbers(normalize(rel.reguName || ''));
-            const relTimClean = normalizeNumbers(stripPrefix(rel.reguName || ''));
+            const relUlp = normalizeNumbers(stripPrefix(rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || ''));
+            const relTimFull = normalizeNumbers(normalize(rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || ''));
+            const relTimClean = normalizeNumbers(stripPrefix(rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || ''));
             
             const rowNumMatch = rowTimClean.match(/\d+/);
             const relNumMatch = relTimClean.match(/\d+/);
             
             let matchTim = false;
-            if (rowNumMatch && relNumMatch) {
-              matchTim = rowNumMatch[0] === relNumMatch[0];
-            } else {
-              matchTim = relTimFull.includes(rowTimClean) || relTimClean.includes(rowTimClean) || rowTimClean.includes(relTimClean);
+            if (relTimFull.includes(rowTimClean) || relTimClean.includes(rowTimClean) || rowTimClean.includes(relTimClean)) {
+              matchTim = true;
+            } else if (rowNumMatch && relNumMatch) {
+              const matchUlp = !relUlp || !rowUlpClean || relUlp.includes(rowUlpClean) || rowUlpClean.includes(relUlp) || relTimFull.includes(rowUlpClean);
+              if (matchUlp) {
+                matchTim = rowNumMatch[0] === relNumMatch[0];
+              }
             }
-
-            const matchUlp = relUlp.includes(rowUlpClean) || rowUlpClean.includes(relUlp) || relTimFull.includes(rowUlpClean);
 
             if (matchTim) {
               const dayKey = String(parts.d).padStart(2, '0');
@@ -793,15 +919,18 @@ export class RekapHarianService {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
-              const ket = normalize(rel.keterangan || '');
-              if (ket === 'TEBANG' || ket.includes('TEBANG')) {
+              const ket = normalize(rel.keterangan || (rel as any).Keterangan || (rel as any).KETERANGAN || rel.jenisTanaman || '');
+              if (ket.includes('TEBANG') || ket.includes('TBG') || ket === 'T') {
                 updatedDaily[dayKey].tebang1++;
-              } else if (ket === 'PANGKAS' || ket.includes('PANGKAS') || ket.includes('POTONG')) {
+              } else if (ket.includes('PANGKAS') || ket.includes('POTONG') || ket.includes('PNG') || ket.includes('PK') || ket === 'P') {
+                updatedDaily[dayKey].pangkas++;
+              } else {
+                // Default fallback for any realization record
                 updatedDaily[dayKey].pangkas++;
               }
 
               // Track dates of activity for each Penyulang to help align KMS
-              const penyClean = normalize(rel.penyulangName || 'GENERAL');
+              const penyClean = normalize(rel.penyulangName || (rel as any).Penyulang || 'GENERAL');
               if (!activityDatesByPenyulang[penyClean]) activityDatesByPenyulang[penyClean] = new Set();
               activityDatesByPenyulang[penyClean].add(dayKey);
             }
@@ -813,25 +942,26 @@ export class RekapHarianService {
       if (Array.isArray(workOrders)) {
         workOrders.forEach((wo) => {
           if (!wo) return;
-          const parts = this.parseDateParts(wo.tanggal);
+          const parts = this.parseDateParts(wo.tanggal || wo);
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const woUlp = normalizeNumbers(stripPrefix(wo.ulpName || ''));
-            const woTimFull = normalizeNumbers(normalize(wo.reguName || ''));
-            const woTimClean = normalizeNumbers(stripPrefix(wo.reguName || ''));
+            const woUlp = normalizeNumbers(stripPrefix(wo.ulpName || (wo as any).ULP || ''));
+            const woTimFull = normalizeNumbers(normalize(wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || ''));
+            const woTimClean = normalizeNumbers(stripPrefix(wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || ''));
             
             const rowNumMatch = rowTimClean.match(/\d+/);
             const woNumMatch = woTimClean.match(/\d+/);
             
             let matchTim = false;
-            if (rowNumMatch && woNumMatch) {
-              matchTim = rowNumMatch[0] === woNumMatch[0];
-            } else {
-              matchTim = woTimFull.includes(rowTimClean) || rowTimClean.includes(woTimClean);
+            if (woTimFull.includes(rowTimClean) || rowTimClean.includes(woTimClean)) {
+              matchTim = true;
+            } else if (rowNumMatch && woNumMatch) {
+              const matchUlp = !woUlp || !rowUlpClean || woUlp.includes(rowUlpClean) || rowUlpClean.includes(woUlp) || woTimFull.includes(rowUlpClean);
+              if (matchUlp) {
+                matchTim = rowNumMatch[0] === woNumMatch[0];
+              }
             }
-
-            const matchUlp = woUlp.includes(rowUlpClean) || rowUlpClean.includes(woUlp) || woTimFull.includes(rowUlpClean);
 
             if (matchTim) {
               let targetDayKey = String(parts.d).padStart(2, '0');

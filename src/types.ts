@@ -2,6 +2,8 @@ export type UserRole = 'SuperAdmin' | 'Admin' | 'Adm' | 'User';
 
 export interface User {
   id: string;
+  unitId?: string;
+  unitName?: string;
   nip: string;
   name: string;
   userName?: string;
@@ -140,6 +142,7 @@ export interface Realisasi {
 
 export interface ULP {
   id: string;
+  unitId?: string;
   kodeULP: string;
   namaULP: string;
   manajer: string;
@@ -150,6 +153,7 @@ export interface ULP {
 
 export interface Penyulang {
   id: string;
+  unitId?: string;
   kodePenyulang: string;
   namaPenyulang: string;
   ulpId: string;
@@ -161,6 +165,7 @@ export interface Penyulang {
 
 export interface ReguROW {
   id: string;
+  unitId?: string;
   kodeRegu: string;
   namaRegu: string;
   penanggungJawab: string;
@@ -173,6 +178,7 @@ export interface ReguROW {
 
 export interface Petugas {
   id: string;
+  unitId?: string;
   nip: string;
   nama: string;
   reguId: string;

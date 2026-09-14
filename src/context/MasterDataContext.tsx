@@ -10,6 +10,7 @@ import {
 } from '../data/initialData';
 import { useSettings } from './SettingsContext';
 import { SupabaseService } from '../services/supabaseService';
+import { InisiasiService } from '../services/inisiasiService';
 
 interface MasterDataContextType {
   ulpList: ULP[];
@@ -53,11 +54,72 @@ const MasterDataContext = React.createContext<MasterDataContextType | undefined>
 
 export function MasterDataProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
-  const [ulpList, setUlpList] = usePersistState<ULP[]>('aphro_ulp', INITIAL_ULP);
-  const [penyulangList, setPenyulangList] = usePersistState<Penyulang[]>('aphro_penyulang', INITIAL_PENYULANG);
-  const [reguList, setReguList] = usePersistState<ReguROW[]>('aphro_regu', INITIAL_REGU);
-  const [petugasList, setPetugasList] = usePersistState<Petugas[]>('aphro_ptg', INITIAL_PETUGAS);
-  const [users, setUsers] = usePersistState<User[]>('aphro_synced_users', INITIAL_USERS);
+  const activeUnitId = SupabaseService.getActiveUnitId();
+
+  const [ulpList, setUlpList] = React.useState<ULP[]>(() => {
+    try {
+      const saved = localStorage.getItem(`aphro_ulp_${activeUnitId}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_ULP.filter(u => InisiasiService.isUserMatchingUnit(u.unitId || u.namaULP, activeUnitId));
+  });
+
+  const [penyulangList, setPenyulangList] = React.useState<Penyulang[]>(() => {
+    try {
+      const saved = localStorage.getItem(`aphro_penyulang_${activeUnitId}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_PENYULANG.filter(p => InisiasiService.isUserMatchingUnit(p.ulpId || p.ulpName, activeUnitId));
+  });
+
+  const [reguList, setReguList] = React.useState<ReguROW[]>(() => {
+    try {
+      const saved = localStorage.getItem(`aphro_regu_${activeUnitId}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_REGU.filter(r => InisiasiService.isUserMatchingUnit(r.ulpId || r.unitId, activeUnitId));
+  });
+
+  const [petugasList, setPetugasList] = React.useState<Petugas[]>(() => {
+    try {
+      const saved = localStorage.getItem(`aphro_ptg_${activeUnitId}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_PETUGAS.filter(p => InisiasiService.isUserMatchingUnit(p.ulpId || p.unitId, activeUnitId));
+  });
+
+  const [users, setUsers] = React.useState<User[]>(() => {
+    try {
+      const saved = localStorage.getItem(`aphro_synced_users_${activeUnitId}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_USERS.filter(u => InisiasiService.isUserMatchingUnit(u.unitId, activeUnitId));
+  });
+
+  // Reload cache when unit changes
+  React.useEffect(() => {
+    try {
+      const cachedRegu = localStorage.getItem(`aphro_regu_${activeUnitId}`);
+      if (cachedRegu) setReguList(JSON.parse(cachedRegu));
+      const cachedPtg = localStorage.getItem(`aphro_ptg_${activeUnitId}`);
+      if (cachedPtg) setPetugasList(JSON.parse(cachedPtg));
+      const cachedUsers = localStorage.getItem(`aphro_synced_users_${activeUnitId}`);
+      if (cachedUsers) setUsers(JSON.parse(cachedUsers));
+      const cachedUlp = localStorage.getItem(`aphro_ulp_${activeUnitId}`);
+      if (cachedUlp) setUlpList(JSON.parse(cachedUlp));
+    } catch {}
+  }, [activeUnitId]);
+
+  // Persist to unit-partitioned cache
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(`aphro_regu_${activeUnitId}`, JSON.stringify(reguList));
+      localStorage.setItem(`aphro_ptg_${activeUnitId}`, JSON.stringify(petugasList));
+      localStorage.setItem(`aphro_synced_users_${activeUnitId}`, JSON.stringify(users));
+      localStorage.setItem(`aphro_ulp_${activeUnitId}`, JSON.stringify(ulpList));
+      localStorage.setItem(`aphro_penyulang_${activeUnitId}`, JSON.stringify(penyulangList));
+    } catch {}
+  }, [reguList, petugasList, users, ulpList, penyulangList, activeUnitId]);
 
   const refreshMasterData = React.useCallback(async (forceRefresh = false) => {
     const unitId = SupabaseService.getActiveUnitId();
@@ -90,7 +152,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
 
   React.useEffect(() => {
     refreshMasterData();
-  }, [refreshMasterData, settings.namaUnitLayanan]);
+  }, [refreshMasterData, settings.namaUnitLayanan, activeUnitId]);
 
   const setMasterData = React.useCallback((data: {
     ulp?: ULP[];

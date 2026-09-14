@@ -39,7 +39,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
   const { settings, updateSettings } = useSettings();
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
-  const { login } = useAuth();
+  const { login, logout, user: currentUser } = useAuth();
 
   const [ulOptions, setUlOptions] = useState<InisiasiUnit[]>(DEFAULT_UL_OPTIONS);
   const [selectedULName, setSelectedULName] = useState<string>('');
@@ -130,19 +130,23 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
       localStorage.removeItem(`aphro_wo_${selectedUnit.id}`);
       localStorage.removeItem(`aphro_realisasi_${selectedUnit.id}`);
 
-      // Ensure current active user in storage remains logged in without overwriting user name
+      // Ensure user session matches selected unit. If user is from a different unit, reset session to enforce unit-bound login.
+      const targetStandardUnitId = InisiasiService.getStandardUnitId(selectedUnit.id);
       try {
         const savedUserStr = localStorage.getItem('aphro_user') || localStorage.getItem('pln_mobile_user');
         if (savedUserStr) {
           const parsedUser = JSON.parse(savedUserStr);
-          if (parsedUser) {
-            // Only update demo accounts
-            if (parsedUser.name?.startsWith('Demo')) {
-              const primaryInfo = getPrimaryTimRowForUnit(selectedUnit.namaUL || selectedUnit.id);
-              parsedUser.name = primaryInfo.name;
-              parsedUser.reguName = primaryInfo.reguName;
-              parsedUser.ulpName = primaryInfo.ulpName;
-            }
+          if (parsedUser && parsedUser.unitId && !InisiasiService.isUserMatchingUnit(parsedUser.unitId, targetStandardUnitId)) {
+            console.warn(`[APHRO INISIASI] Resetting user session because unit changed to ${selectedUnit.namaUL} (${targetStandardUnitId})`);
+            logout();
+            localStorage.removeItem('aphro_user');
+            localStorage.removeItem('pln_mobile_user');
+          } else if (parsedUser && parsedUser.name?.startsWith('Demo')) {
+            const primaryInfo = getPrimaryTimRowForUnit(selectedUnit.namaUL || selectedUnit.id);
+            parsedUser.name = primaryInfo.name;
+            parsedUser.reguName = primaryInfo.reguName;
+            parsedUser.ulpName = primaryInfo.ulpName;
+            parsedUser.unitId = targetStandardUnitId;
             localStorage.setItem('aphro_user', JSON.stringify(parsedUser));
             localStorage.setItem('pln_mobile_user', JSON.stringify(parsedUser));
             login(parsedUser);

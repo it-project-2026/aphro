@@ -10,6 +10,8 @@ import { saveAndEmbedGasConfig } from '../config/gasConfig';
 import { GASApiService } from '../services/gasApiService';
 import { normalizeUser } from '../services/syncService';
 import { SupabaseService } from '../services/supabaseService';
+import { User } from '../types';
+import { InisiasiService } from '../services/inisiasiService';
 import {
   Zap,
   ShieldCheck,
@@ -136,13 +138,18 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     setIsSubmitting(true);
     
     const safeUsername = (username || '').trim().toLowerCase();
+    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+    const activeUnitId = activeInisiasi.unitId;
 
     // 1. Try Direct Supabase Login against USERS table
     if (navigator.onLine) {
       try {
-        const supaRes = await SupabaseService.loginWithSupabase(username, password);
+        const supaRes = await SupabaseService.loginWithSupabase(username, password, activeUnitId);
         if (supaRes.success && supaRes.user) {
           const authenticatedUser = supaRes.user;
+          if (!authenticatedUser.unitId) {
+            authenticatedUser.unitId = activeUnitId;
+          }
           login(authenticatedUser);
 
           // Trigger automatic background sync
@@ -156,10 +163,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           } else {
             setActiveTab('dashboard');
           }
-          showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Role: ${authenticatedUser.role}] (Terotentikasi via Supabase APHRO-Database)`, 'success');
+          showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId}) - Role: ${authenticatedUser.role}]`, 'success');
           setIsSubmitting(false);
           return;
-        } else if (supaRes.message && (supaRes.message.includes('Password') || supaRes.message.includes('Non-Aktif'))) {
+        } else if (supaRes.message && (supaRes.message.includes('Password') || supaRes.message.includes('Non-Aktif') || supaRes.message.includes('terdaftar untuk unit'))) {
           showToast(supaRes.message, 'error');
           setIsSubmitting(false);
           return;
@@ -172,10 +179,13 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     // 2. Try Direct GAS Login Endpoint if GAS URL is configured and online
     if (settings.gasWebAppUrl && navigator.onLine) {
       try {
-        const gasRes = await GASApiService.login(settings.gasWebAppUrl, username, password);
+        const gasRes = await GASApiService.login(settings.gasWebAppUrl, username, password, activeUnitId);
         if (gasRes && gasRes.status === 'success' && (gasRes.user || gasRes.data)) {
           const rawUserObj = gasRes.user || gasRes.data;
           const authenticatedUser = normalizeUser(rawUserObj);
+          if (!authenticatedUser.unitId) {
+            authenticatedUser.unitId = activeUnitId;
+          }
           
           login(authenticatedUser);
           
@@ -192,12 +202,12 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           } else {
             setActiveTab('dashboard');
           }
-          showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Role: ${authenticatedUser.role}] (Terotentikasi via Sheet USERS)`, 'success');
+          showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId}) - Role: ${authenticatedUser.role}]`, 'success');
           setIsSubmitting(false);
           return;
         } else if (gasRes && gasRes.status === 'error' && gasRes.message) {
           // If GAS specifically answered user not found or password invalid
-          if (gasRes.message.toLowerCase().includes('password') || gasRes.message.toLowerCase().includes('sandi') || gasRes.message.toLowerCase().includes('user')) {
+          if (gasRes.message.toLowerCase().includes('password') || gasRes.message.toLowerCase().includes('sandi') || gasRes.message.toLowerCase().includes('user') || gasRes.message.toLowerCase().includes('unit')) {
             showToast(gasRes.message, 'error');
             setIsSubmitting(false);
             return;
@@ -208,16 +218,39 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       }
     }
 
-    // 2. Fallback / Offline search in Master Data (synced from Sheet USERS)
-    let foundUser = users.find(u => 
-      (u.userName || '').trim().toLowerCase() === safeUsername ||
-      (u.nip || '').trim().toLowerCase() === safeUsername || 
-      (u.id || '').trim().toLowerCase() === safeUsername ||
-      (u.name || '').trim().toLowerCase() === safeUsername ||
-      (u.email || '').trim().toLowerCase() === safeUsername
-    );
+    // 3. Fallback / Offline search in Master Data (synced from Sheet USERS)
+    let foundUser = users.find(u => {
+      const isNameMatch = 
+        (u.userName || '').trim().toLowerCase() === safeUsername ||
+        (u.nip || '').trim().toLowerCase() === safeUsername || 
+        (u.id || '').trim().toLowerCase() === safeUsername ||
+        (u.name || '').trim().toLowerCase() === safeUsername ||
+        (u.email || '').trim().toLowerCase() === safeUsername;
+      if (!isNameMatch) return false;
 
-    // 3. Fallback / Offline search in Petugas Master Data
+      if (u.unitId) {
+        return InisiasiService.isUserMatchingUnit(u.unitId, activeUnitId);
+      }
+      return true;
+    });
+
+    // Check if user is registered under a different unit
+    if (!foundUser) {
+      const foundOtherUnitUser = users.find(u =>
+        (u.userName || '').trim().toLowerCase() === safeUsername ||
+        (u.nip || '').trim().toLowerCase() === safeUsername || 
+        (u.id || '').trim().toLowerCase() === safeUsername ||
+        (u.name || '').trim().toLowerCase() === safeUsername ||
+        (u.email || '').trim().toLowerCase() === safeUsername
+      );
+      if (foundOtherUnitUser && foundOtherUnitUser.unitId && !InisiasiService.isUserMatchingUnit(foundOtherUnitUser.unitId, activeUnitId)) {
+        showToast(`Username "${username}" terdaftar untuk unit (${foundOtherUnitUser.unitId}), bukan di Inisiasi ${activeInisiasi.namaUL} (${activeUnitId}). Silakan ganti Inisiasi Unit.`, 'error');
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    // 4. Fallback / Offline search in Petugas Master Data
     if (!foundUser) {
       const matchedPetugas = petugasList.find(p =>
         (p.nama || '').trim().toLowerCase() === safeUsername ||
@@ -227,6 +260,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       if (matchedPetugas) {
         foundUser = {
           id: matchedPetugas.id || `ptg-${Date.now()}`,
+          unitId: activeUnitId,
           nip: matchedPetugas.nip || matchedPetugas.nama,
           userName: (matchedPetugas.nip || matchedPetugas.nama).toLowerCase().replace(/\s+/g, ''),
           name: matchedPetugas.nama,
@@ -243,13 +277,20 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     if (!foundUser && settings.gasWebAppUrl && navigator.onLine) {
       try {
         await syncWithGAS(undefined, true);
-        foundUser = users.find(u => 
-          (u.userName || '').trim().toLowerCase() === safeUsername ||
-          (u.nip || '').trim().toLowerCase() === safeUsername || 
-          (u.id || '').trim().toLowerCase() === safeUsername ||
-          (u.name || '').trim().toLowerCase() === safeUsername ||
-          (u.email || '').trim().toLowerCase() === safeUsername
-        );
+        foundUser = users.find(u => {
+          const isNameMatch =
+            (u.userName || '').trim().toLowerCase() === safeUsername ||
+            (u.nip || '').trim().toLowerCase() === safeUsername || 
+            (u.id || '').trim().toLowerCase() === safeUsername ||
+            (u.name || '').trim().toLowerCase() === safeUsername ||
+            (u.email || '').trim().toLowerCase() === safeUsername;
+          if (!isNameMatch) return false;
+
+          if (u.unitId) {
+            return InisiasiService.isUserMatchingUnit(u.unitId, activeUnitId);
+          }
+          return true;
+        });
       } catch {
         // Continue to check local
       }
@@ -274,35 +315,66 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         }
       }
 
-      login(foundUser);
+      // Enforce active unit identity on user object
+      const fullUser: User = {
+        ...foundUser,
+        unitId: activeUnitId,
+        unitName: activeInisiasi.namaUL,
+        ulpName: foundUser.ulpName || activeInisiasi.namaUL,
+      };
+
+      // Format role names for Admin/Adm to dynamically display current UL name
+      const isAdmRole = (fullUser.role || '').toUpperCase() === 'ADM' || safeUsername === 'adm';
+      const isAdminRole = (fullUser.role || '').toUpperCase() === 'ADMIN' || safeUsername === 'admin';
+      const isSuperAdminRole = (fullUser.role || '').toUpperCase() === 'SUPERADMIN' || safeUsername === 'superadmin';
+
+      if (isAdmRole && (!fullUser.name || fullUser.name.toLowerCase() === 'adm' || fullUser.name.includes('Bukittinggi'))) {
+        fullUser.name = `ADM ${activeInisiasi.namaUL}`;
+      } else if (isAdminRole && (!fullUser.name || fullUser.name.toLowerCase() === 'admin' || fullUser.name.includes('System Admin'))) {
+        fullUser.name = `Admin ${activeInisiasi.namaUL}`;
+      } else if (isSuperAdminRole && (!fullUser.name || fullUser.name.toLowerCase() === 'superadmin' || fullUser.name.includes('SuperAdmin Utama'))) {
+        fullUser.name = `SuperAdmin ${activeInisiasi.namaUL}`;
+      }
+
+      login(fullUser);
 
       // Trigger automatic sync after login
       if (settings.gasWebAppUrl && navigator.onLine) {
         syncWithGAS(undefined, true).catch(() => {});
       }
 
-      const isAdm = (foundUser.role || '').toUpperCase() === 'ADM' || (foundUser.userName || foundUser.nip || foundUser.id || '').toLowerCase() === 'admbkt';
-      if (isAdm) {
+      if (isAdmRole) {
         setActiveTab('cetak_laporan');
-      } else if ((foundUser.role || '').toUpperCase() === 'USER') {
+      } else if ((fullUser.role || '').toUpperCase() === 'USER') {
         setActiveTab('input_realisasi');
       } else {
         setActiveTab('dashboard');
       }
       
       const offlineMsg = !navigator.onLine ? ' (Mode Offline Tanpa Sinyal)' : '';
-      showToast(`Selamat datang, ${foundUser.name || foundUser.userName}! [Role: ${foundUser.role}]${offlineMsg}`, 'success');
+      showToast(`Selamat datang, ${fullUser.name || fullUser.userName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId}) - Role: ${fullUser.role}]${offlineMsg}`, 'success');
     } else {
-      // Fallback for superadmin / admin if not present in users list
+      // Fallback for superadmin / admin / adm if not present in users list
       if (safeUsername === 'superadmin' || safeUsername === 'admin' || safeUsername === 'user' || safeUsername === 'adm') {
         const expectedRole = safeUsername === 'superadmin' ? 'SuperAdmin' : safeUsername === 'adm' ? 'ADM' : safeUsername === 'admin' ? 'Admin' : 'User';
+        const roleDisplayName = safeUsername === 'superadmin'
+          ? `SuperAdmin ${activeInisiasi.namaUL}`
+          : safeUsername === 'adm'
+          ? `ADM ${activeInisiasi.namaUL}`
+          : safeUsername === 'admin'
+          ? `Admin ${activeInisiasi.namaUL}`
+          : `Petugas Lapangan (${activeInisiasi.namaUL})`;
+
         login({
-          id: `hardcoded-${safeUsername}`,
+          id: `hardcoded-${safeUsername}-${activeUnitId.toLowerCase()}`,
+          unitId: activeUnitId,
+          unitName: activeInisiasi.namaUL,
           nip: username.toUpperCase(),
           userName: safeUsername,
-          name: safeUsername === 'superadmin' ? 'SuperAdmin Utama' : safeUsername === 'adm' ? 'ADM Bukittinggi' : safeUsername === 'admin' ? 'System Admin' : 'Petugas Lapangan',
+          name: roleDisplayName,
           role: expectedRole as any,
           email: `${safeUsername}@pln.co.id`,
+          ulpName: activeInisiasi.namaUL,
           status: 'Aktif'
         });
         if (settings.gasWebAppUrl && navigator.onLine) {
@@ -315,23 +387,26 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         } else {
           setActiveTab('dashboard');
         }
-        showToast(`Selamat datang, ${expectedRole}! (Mode Cepat Offline)`, 'success');
+        showToast(`Selamat datang, ${roleDisplayName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId})]`, 'success');
       } else {
         // Allow field login even for custom unknown names in offline mode
         if (!navigator.onLine) {
           login({
             id: `offline-${Date.now()}`,
+            unitId: activeUnitId,
+            unitName: activeInisiasi.namaUL,
             nip: username.toUpperCase(),
             userName: safeUsername,
             name: username,
             role: 'User',
             email: `${safeUsername}@pln.co.id`,
+            ulpName: activeInisiasi.namaUL,
             status: 'Aktif'
           });
           setActiveTab('input_realisasi');
-          showToast(`Masuk sebagai ${username} (Mode Offline Tanpa Sinyal)`, 'success');
+          showToast(`Masuk sebagai ${username} [Unit: ${activeInisiasi.namaUL} (${activeUnitId})]`, 'success');
         } else {
-          showToast(`Username "${username}" tidak ditemukan pada Sheet USERS Spreadsheet. Silakan periksa kolom Username atau gunakan daftar akun di bawah.`, 'error');
+          showToast(`Username "${username}" tidak ditemukan pada unit ${activeInisiasi.namaUL} (${activeUnitId}).`, 'error');
         }
       }
     }
@@ -433,6 +508,24 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
 
         {/* Login Card */}
         <div className="bg-white/90 backdrop-blur-2xl border border-teal-100 rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-teal-900/5 space-y-6">
+          {/* Active Inisiasi Scope Banner */}
+          <div className="p-3 rounded-2xl bg-cyan-50/90 border border-cyan-200/80 text-cyan-950 flex items-center justify-between shadow-xs">
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <div className="p-1.5 bg-cyan-600 text-white rounded-xl shrink-0">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div className="text-xs min-w-0">
+                <span className="text-[9px] uppercase font-black text-cyan-800 tracking-wider block">Inisiasi Unit Aktif</span>
+                <p className="font-bold text-cyan-950 text-xs truncate">
+                  {InisiasiService.getActiveInisiasiUnit().namaUL} <span className="text-cyan-700 font-extrabold">({InisiasiService.getActiveInisiasiUnit().unitId})</span>
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-cyan-600 text-white shadow-xs shrink-0">
+              {InisiasiService.getActiveInisiasiUnit().unitId}
+            </span>
+          </div>
+
           {/* Offline / No-Signal Status Alert Banner */}
           {!isOnlineState && (
             <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start space-x-3 shadow-xs">

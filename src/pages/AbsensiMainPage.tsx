@@ -13,6 +13,7 @@ import { useSettings } from '../context/SettingsContext';
 import { GASApiService } from '../services/gasApiService';
 import { getActiveGasConfig } from '../config/gasConfig';
 import { getPrimaryTimRowForUnit, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
+import { InisiasiService } from '../services/inisiasiService';
 import {
   UserCheck,
   Calendar,
@@ -88,6 +89,12 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   const { showToast } = useToast();
   const { settings } = useSettings();
 
+  const activeUnitId = useMemo(() => {
+    return currentUser?.unitId 
+      ? InisiasiService.getStandardUnitId(currentUser.unitId)
+      : InisiasiService.getActiveInisiasiUnit().unitId;
+  }, [currentUser?.unitId, settings.namaUnitLayanan]);
+
   const [editingAbsensi, setEditingAbsensi] = useState<any | null>(null);
 
   const isAdmRole = (currentUser?.role || '').toUpperCase() === 'ADM' || (currentUser?.role || '').toUpperCase() === 'ADMIN' || (currentUser?.userName || '').toLowerCase() === 'admbkt';
@@ -106,7 +113,11 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
   const todayStr = getLocalDateTimeString().slice(0, 10);
 
-  const activeUnitName = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+  const activeUnitName =
+    settings.namaUnitLayanan ||
+    localStorage.getItem('aphro_nama_unit_layanan') ||
+    localStorage.getItem('aphro_selected_unit_id') ||
+    'UL PADANG';
   const primaryInfo = getPrimaryTimRowForUnit(activeUnitName);
 
   // Helper to normalize strings for comparison
@@ -206,6 +217,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     };
 
     absensiList.forEach((abs) => {
+      // Filter by unitId
+      const itemUnitId = abs.unitId || activeUnitId;
+      if (!InisiasiService.isUserMatchingUnit(itemUnitId, activeUnitId)) return;
+
       // Filter by ULP/Regu if needed
       const matchesUlp = filterUlp === 'ALL' || cleanCompare(abs.ulpName, filterUlp);
       const matchesRegu = filterRegu === 'ALL' || cleanCompare(abs.reguName, filterRegu);
@@ -219,15 +234,30 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         }
         const officerStatuses = presenceMap.get(dateStr)!;
         
-        if (Array.isArray(abs.petugasList)) {
+        let foundInArray = false;
+        if (Array.isArray(abs.petugasList) && abs.petugasList.length > 0) {
           abs.petugasList.forEach((p) => {
             if (p.nama && p.nama !== '-') {
               const key = normalizeName(p.nama);
               if (key) {
                 officerStatuses.set(key, p.keterangan || 'HADIR');
+                foundInArray = true;
               }
             }
           });
+        }
+        
+        if (!foundInArray) {
+          for (let i = 1; i <= 5; i++) {
+            const pName = (abs as any)[`PETUGAS_${i}`] || (abs as any)[`Petugas_${i}`] || (abs as any)[`NAMA_PETUGAS_${i}`] || (abs as any)[`nama_petugas_${i}`];
+            const pKet = (abs as any)[`KET_${i}`] || (abs as any)[`Ket_${i}`] || (abs as any)[`KETERANGAN_${i}`] || (abs as any)[`STATUS_${i}`] || 'HADIR';
+            if (pName && String(pName).trim() !== '-' && String(pName).trim() !== '') {
+              const key = normalizeName(String(pName));
+              if (key) {
+                officerStatuses.set(key, String(pKet));
+              }
+            }
+          }
         }
       }
     });
@@ -237,15 +267,43 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     
     // Add from master data (Sheet PETUGAS)
     petugasList.forEach(p => {
-      // ONLY include active officers if requested, but at least ensure they match ULP/Regu
       const matchesUlp = filterUlp === 'ALL' || cleanCompare(p.ulpName, filterUlp);
       const matchesRegu = filterRegu === 'ALL' || cleanCompare(p.reguName, filterRegu);
       
-      // We only show officers from master data that match current filters
       if (p.nama && p.nama.trim() !== '' && p.nama.trim() !== '-' && matchesUlp && matchesRegu) {
         const key = normalizeName(p.nama);
         if (key) {
           officerSet.set(key, { nama: p.nama.trim(), reguName: p.reguName || 'Tanpa Regu' });
+        }
+      }
+    });
+
+    // Add officers present in absensi records for that month to officerSet
+    absensiList.forEach((abs) => {
+      const matchesUlp = filterUlp === 'ALL' || cleanCompare(abs.ulpName, filterUlp);
+      const matchesRegu = filterRegu === 'ALL' || cleanCompare(abs.reguName, filterRegu);
+      if (!matchesUlp || !matchesRegu) return;
+
+      const dateStr = normalizeDateISO(abs.tanggal);
+      if (dateStr.startsWith(`${rekapYear}-${String(rekapMonth).padStart(2, '0')}`)) {
+        if (Array.isArray(abs.petugasList)) {
+          abs.petugasList.forEach((p) => {
+            if (p.nama && p.nama.trim() !== '' && p.nama.trim() !== '-') {
+              const key = normalizeName(p.nama);
+              if (key && !officerSet.has(key)) {
+                officerSet.set(key, { nama: p.nama.trim(), reguName: abs.reguName || 'Tanpa Regu' });
+              }
+            }
+          });
+        }
+        for (let i = 1; i <= 5; i++) {
+          const pName = (abs as any)[`PETUGAS_${i}`] || (abs as any)[`Petugas_${i}`] || (abs as any)[`NAMA_PETUGAS_${i}`];
+          if (pName && String(pName).trim() !== '' && String(pName).trim() !== '-') {
+            const key = normalizeName(String(pName));
+            if (key && !officerSet.has(key)) {
+              officerSet.set(key, { nama: String(pName).trim(), reguName: abs.reguName || 'Tanpa Regu' });
+            }
+          }
         }
       }
     });
@@ -261,21 +319,35 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
   // Filters for Monitoring Absensi Table (Already declared above now)
 
-  // Dynamic unique regu options
+  // Dynamic unique regu options derived strictly from current unit data
   const allReguOptions = useMemo(() => {
     const set = new Set<string>();
-    if (Array.isArray(reguList)) {
-      reguList.forEach((r) => {
-        if (r?.namaRegu && r.namaRegu.trim()) set.add(r.namaRegu.trim());
-      });
-    }
+    
+    // 1. Ambil NAMA_REGU dari data ABSENSI unit terpilih
     if (Array.isArray(absensiList)) {
       absensiList.forEach((a) => {
-        if (a?.reguName && a.reguName.trim()) set.add(a.reguName.trim());
+        const itemUnitId = a.unitId || activeUnitId;
+        if (InisiasiService.isUserMatchingUnit(itemUnitId, activeUnitId)) {
+          const regu = a.reguName || (a as any).NAMA_REGU || (a as any).Nama_Regu || (a as any).Regu;
+          if (regu && String(regu).trim()) {
+            set.add(String(regu).trim());
+          }
+        }
       });
     }
+
+    // 2. Dari Master REGU unit terpilih
+    if (Array.isArray(reguList)) {
+      reguList.forEach((r) => {
+        const itemUnitId = r.ulpId || r.unitId || activeUnitId;
+        if (InisiasiService.isUserMatchingUnit(itemUnitId, activeUnitId)) {
+          if (r?.namaRegu && r.namaRegu.trim()) set.add(r.namaRegu.trim());
+        }
+      });
+    }
+
     return Array.from(set).sort();
-  }, [reguList, absensiList]);
+  }, [reguList, absensiList, activeUnitId]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1364,7 +1436,18 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                         <td className="p-3 text-center sticky right-0 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-[-4px_0_10px_rgba(0,0,0,0.05)]">
                           <div className="flex items-center justify-center gap-2">
                             <button 
-                              onClick={() => setEditingAbsensi(item)}
+                              onClick={() => {
+                                const existingList = Array.isArray(item.petugasList) && item.petugasList.length > 0
+                                  ? item.petugasList
+                                  : [p1, p2, p3, p4, p5].filter(p => p && p.nama && p.nama !== '-');
+                                const fallbackList = existingList.length > 0
+                                  ? existingList
+                                  : petugasList.filter(p => cleanStr(p.reguName) === cleanStr(item.reguName)).map(p => ({ nama: p.nama, keterangan: 'HADIR' }));
+                                setEditingAbsensi({
+                                  ...item,
+                                  petugasList: fallbackList,
+                                });
+                              }}
                               className="p-1.5 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors dark:bg-teal-900/30 dark:text-teal-400"
                               title="Edit Status"
                             >

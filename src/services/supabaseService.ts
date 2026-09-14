@@ -20,6 +20,7 @@ import {
 import {
   DEFAULT_UL_OPTIONS,
   DEFAULT_INISIASI_SPREADSHEET_ID,
+  InisiasiService,
 } from './inisiasiService';
 import { UL_PRESETS, RekapHarianService } from './rekapHarianService';
 import {
@@ -1252,13 +1253,13 @@ export class SupabaseService {
     const targetUnitId = unitId || this.getActiveUnitId();
 
     try {
-      // 1. Fetch with unitId filter, specific columns, and range pagination (latest 50)
+      // 1. Fetch with unitId filter, ordered by date descending (up to 1000 records)
       const { data, error } = await supabase
         .from(SUPABASE_TABLES.ABSENSI)
         .select('*')
         .eq('unitId', targetUnitId)
         .order('TANGGAL', { ascending: false })
-        .range(0, 49);
+        .range(0, 999);
 
       if (!error && Array.isArray(data) && data.length > 0) {
         const list: Absensi[] = data.map((row: any) => this.normalizeAbsensiRow(row));
@@ -1277,7 +1278,7 @@ export class SupabaseService {
     }
 
     try {
-      const cached = this.safeGetItem(`aphro_absensi_all`) || this.safeGetItem(`aphro_absensi_${targetUnitId}`);
+      const cached = this.safeGetItem(`aphro_absensi_${targetUnitId}`);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1452,9 +1453,11 @@ export class SupabaseService {
     const rawUlp = u.ULP ?? u.ulp ?? u.ulpName ?? u.ulp_name ?? '';
     const rawStatus = u.Status ?? u.status ?? 'Aktif';
     const rawReguId = u.ReguID ?? u.reguId ?? u.regu_id ?? u.Kode_Regu ?? '';
+    const rawUnitId = u.unitId ?? u.unit_id ?? u.UnitID ?? u.Unit_ID ?? u.kodeUnit ?? u.Kode_Unit ?? '';
 
     return {
       id: String(rawUserId || `usr-${Math.random().toString(36).substr(2, 6)}`),
+      unitId: String(rawUnitId || ''),
       nip: String(rawUserId || rawUsername),
       name: String(rawName || 'User'),
       userName: String(rawUsername || ''),
@@ -1694,7 +1697,11 @@ export class SupabaseService {
         supabase.from(SUPABASE_TABLES.PETUGAS).select('*'),
       ]);
 
-      const users: User[] = (usersRes.data || []).map((u: any) => this.normalizeUserRow(u));
+      const rawUsers = (usersRes.data || []).map((u: any) => this.normalizeUserRow(u));
+      const users: User[] = rawUsers.filter((u: User) => {
+        if (!u.unitId) return true;
+        return InisiasiService.isUserMatchingUnit(u.unitId, targetUnitId);
+      });
 
       let ulp: ULP[] = (ulpRes.data || []).map((u: any) => ({
         id: String(u.ID || u.id || `ulp-${Math.random().toString(36).substr(2, 6)}`),
@@ -1704,11 +1711,12 @@ export class SupabaseService {
         kontak: String(u.Kontak || u.kontak || ''),
         alamat: String(u.Alamat || u.alamat || ''),
         status: (u.Status === 'Non-Aktif' || u.status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
+        unitId: u.unitId || u.unit_id || targetUnitId,
       }));
 
-      // Filter ULP by targetUnitId if property exists, or if empty fallback to unit default
+      // Filter ULP by targetUnitId if property exists
       const filteredUlp = ulp.filter((u: any) => {
-        if (u.unitId) return String(u.unitId) === targetUnitId;
+        if (u.unitId) return InisiasiService.isUserMatchingUnit(u.unitId, targetUnitId);
         return true;
       });
       if (filteredUlp.length > 0) {
@@ -1729,9 +1737,9 @@ export class SupabaseService {
       const rawReguList = reguRes.data || [];
       // Filter regus strictly to target unit if unitId is defined on the database rows
       const unitSpecificRawRegus = rawReguList.filter((r: any) => {
-        const itemUnitId = r.unitId || r.unit_id || r.unitID || r.Unit_ID;
+        const itemUnitId = r.unitId || r.unit_id || r.unitID || r.Unit_ID || r.ULP || r.ulp;
         if (itemUnitId) {
-          return String(itemUnitId).toUpperCase() === targetUnitId.toUpperCase();
+          return InisiasiService.isUserMatchingUnit(itemUnitId, targetUnitId);
         }
         return true;
       });
@@ -1784,18 +1792,27 @@ export class SupabaseService {
         ulp = defaults.ulp;
       }
 
-      const petugas: Petugas[] = (ptgRes.data || []).map((ptg: any) => ({
-        id: String(ptg.ID || ptg.id || `ptg-${Math.random().toString(36).substr(2, 6)}`),
-        nip: String(ptg.ID || ptg.id || ''),
-        nama: String(ptg.Nama || ptg.nama || ''),
-        reguId: '',
-        reguName: String(ptg.Regu || ptg.regu || ''),
-        ulpId: targetUnitId,
-        ulpName: String(ptg.ULP || ptg.ulp || ''),
-        noHp: '',
-        role: (ptg.Role || ptg.role || 'User') as UserRole,
-        status: (ptg.Status === 'Non-Aktif' || ptg.status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
-      }));
+      const petugas: Petugas[] = (ptgRes.data || [])
+        .map((ptg: any) => ({
+          id: String(ptg.ID || ptg.id || `ptg-${Math.random().toString(36).substr(2, 6)}`),
+          nip: String(ptg.ID || ptg.id || ''),
+          nama: String(ptg.Nama || ptg.nama || ''),
+          reguId: '',
+          reguName: String(ptg.Regu || ptg.regu || ''),
+          ulpId: targetUnitId,
+          ulpName: String(ptg.ULP || ptg.ulp || ''),
+          noHp: '',
+          role: (ptg.Role || ptg.role || 'User') as UserRole,
+          status: (ptg.Status === 'Non-Aktif' || ptg.status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif') as 'Aktif' | 'Non-Aktif',
+          unitId: ptg.unitId || ptg.unit_id || targetUnitId,
+        }))
+        .filter((ptg: Petugas) => !ptg.unitId || InisiasiService.isUserMatchingUnit(ptg.unitId, targetUnitId));
+
+      // Cache master data strictly with targetUnitId
+      this.safeSetItem(`aphro_regu_${targetUnitId}`, JSON.stringify(regu));
+      this.safeSetItem(`aphro_ptg_${targetUnitId}`, JSON.stringify(petugas));
+      this.safeSetItem(`aphro_synced_users_${targetUnitId}`, JSON.stringify(users));
+      this.safeSetItem(`aphro_ulp_${targetUnitId}`, JSON.stringify(ulp));
 
       return {
         users: users.length > 0 ? users : INITIAL_USERS,
@@ -2236,27 +2253,57 @@ export class SupabaseService {
   // ==========================================
 
   /**
-   * Authenticate user against Supabase USERS table
+   * Authenticate user against Supabase USERS table using unitId + username + password
    */
-  static async loginWithSupabase(username: string, passwordInput?: string): Promise<{
+  static async loginWithSupabase(username: string, passwordInput?: string, unitIdInput?: string): Promise<{
     success: boolean;
     user?: User;
     message?: string;
   }> {
     const safeUsername = (username || '').trim().toLowerCase();
+    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+    const targetUnitId = unitIdInput || activeInisiasi.unitId;
 
     try {
       const { data, error } = await supabase.from(SUPABASE_TABLES.USERS).select('*');
       if (!error && Array.isArray(data) && data.length > 0) {
-        const matchedRow = data.find((u: any) => {
+        // First: search for user matching username AND unitId
+        let matchedRow = data.find((u: any) => {
           const uName = String(u.Username ?? u.username ?? '').trim().toLowerCase();
           const uId = String(u.UserID ?? u.userid ?? u.id ?? '').trim().toLowerCase();
           const uNama = String(u.Nama ?? u.nama ?? u.name ?? '').trim().toLowerCase();
-          return uName === safeUsername || uId === safeUsername || uNama === safeUsername;
+          const matchesName = uName === safeUsername || uId === safeUsername || uNama === safeUsername;
+          if (!matchesName) return false;
+
+          const rowUnitId = u.unitId ?? u.unit_id ?? u.UnitID ?? u.Unit_ID ?? u.kodeUnit ?? u.Kode_Unit ?? '';
+          if (rowUnitId) {
+            return InisiasiService.isUserMatchingUnit(rowUnitId, targetUnitId);
+          }
+          return true;
         });
+
+        // If not matched for targetUnitId, check if username exists under another unit
+        if (!matchedRow) {
+          const matchedOtherUnit = data.find((u: any) => {
+            const uName = String(u.Username ?? u.username ?? '').trim().toLowerCase();
+            const uId = String(u.UserID ?? u.userid ?? u.id ?? '').trim().toLowerCase();
+            const uNama = String(u.Nama ?? u.nama ?? u.name ?? '').trim().toLowerCase();
+            return uName === safeUsername || uId === safeUsername || uNama === safeUsername;
+          });
+          if (matchedOtherUnit) {
+            const rowUnitId = matchedOtherUnit.unitId ?? matchedOtherUnit.unit_id ?? matchedOtherUnit.UnitID ?? matchedOtherUnit.Unit_ID ?? matchedOtherUnit.kodeUnit ?? matchedOtherUnit.Kode_Unit ?? '';
+            return {
+              success: false,
+              message: `Username "${username}" terdaftar untuk unit (${rowUnitId}), bukan di Inisiasi ${activeInisiasi.namaUL} (${targetUnitId}). Silakan lakukan Inisiasi unit yang sesuai.`,
+            };
+          }
+        }
 
         if (matchedRow) {
           const userObj = this.normalizeUserRow(matchedRow);
+          if (!userObj.unitId) {
+            userObj.unitId = targetUnitId;
+          }
           if (userObj.status === 'Non-Aktif') {
             return { success: false, message: `Akun "${userObj.userName}" sedang Non-Aktif.` };
           }

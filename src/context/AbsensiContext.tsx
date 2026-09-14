@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { SupabaseService } from '../services/supabaseService';
+import { InisiasiService } from '../services/inisiasiService';
 import { syncManager } from '../services/syncManager';
 import { getLocalDateTimeString, getWIBDateString, normalizeDateISO } from '../utils/dateUtils';
 
@@ -25,25 +26,50 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
-  const [absensiList, setAbsensiList] = usePersistState<Absensi[]>('aphro_absensi', INITIAL_ABSENSI);
+  
+  const activeUnitId = user?.unitId || SupabaseService.getActiveUnitId();
+
+  const [absensiList, setAbsensiList] = React.useState<Absensi[]>(() => {
+    try {
+      const saved = localStorage.getItem(`aphro_absensi_${activeUnitId}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_ABSENSI.filter(a => !a.unitId || InisiasiService.isUserMatchingUnit(a.unitId, activeUnitId));
+  });
+
+  // Reload cache when unit changes
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`aphro_absensi_${activeUnitId}`);
+      if (saved) {
+        setAbsensiList(JSON.parse(saved));
+      }
+    } catch {}
+  }, [activeUnitId]);
+
+  // Persist to unit-partitioned key
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(`aphro_absensi_${activeUnitId}`, JSON.stringify(absensiList));
+    } catch {}
+  }, [absensiList, activeUnitId]);
 
   const refreshAbsensi = React.useCallback(async () => {
     try {
-      const unitId = SupabaseService.getActiveUnitId();
+      const unitId = user?.unitId || SupabaseService.getActiveUnitId();
       const res = await SupabaseService.fetchAbsensi(unitId);
       if (res.success && res.data) {
-        setAbsensiList(res.data);
+        const filtered = res.data.filter(a => !a.unitId || InisiasiService.isUserMatchingUnit(a.unitId, unitId));
+        setAbsensiList(filtered);
       }
     } catch (err) {
       console.warn('Error loading Absensi from Supabase:', err);
     }
-  }, [setAbsensiList]);
+  }, [user?.unitId]);
 
   React.useEffect(() => {
-    if (user) {
-      refreshAbsensi();
-    }
-  }, [refreshAbsensi, settings.namaUnitLayanan, user]);
+    refreshAbsensi();
+  }, [refreshAbsensi, settings.namaUnitLayanan, user, activeUnitId]);
 
   const addAbsensi = React.useCallback(async (absData: Omit<Absensi, 'id' | 'createdAt'>) => {
     const todayStr = absData.tanggal || getWIBDateString();

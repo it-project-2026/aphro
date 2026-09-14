@@ -40,10 +40,14 @@ export function normalizeUser(u: any): User {
 
   const reguName = String(u.NamaRegu || u.Nama_Regu || u.reguName || u.NAMA_REGU || u.Regu_ROW || u.Regu || u.namaRegu || u.regu || u.ReguROW || u.Nama_Regu_ROW || u.Tim || u.Nama_Tim || u.Kelompok || '').trim();
   const ulpName = String(u.ULP || u.ulpName || u.NAMA_ULP || u.Nama_ULP || u.namaULP || u.ulp || u.NamaULP || u.nama_ulp || '').trim();
+  const unitId = String(u.unitId || u.unit_id || u.UnitID || u.Unit_ID || u.kodeUnit || u.Kode_Unit || u.kodeUL || u.Kode_UL || '').trim();
+  const unitName = String(u.unitName || u.unit_name || u.UnitName || u.Nama_UL || u.namaUL || u.NamaUL || '').trim();
   const status = (u.Status === 'Non-Aktif' || u.status === 'Non-Aktif' || u.Status === 'Nonaktif' || u.status === 'Nonaktif') ? 'Non-Aktif' : 'Aktif';
 
   return {
     id,
+    unitId: unitId || undefined,
+    unitName: unitName || undefined,
     nip,
     name,
     userName,

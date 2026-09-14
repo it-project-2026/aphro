@@ -76,7 +76,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
   // Resolve the active user's Regu Name and ULP Name based on USERS login and active INISIASI unit
   const resolvedIdentity = useMemo(() => {
-    const activeUnitName = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+    const activeUnitName =
+      settings.namaUnitLayanan ||
+      localStorage.getItem('aphro_nama_unit_layanan') ||
+      localStorage.getItem('aphro_selected_unit_id') ||
+      'UL PADANG';
     return resolveUserTimRowAndUlp(currentUser, activeUnitName, users, ulpList, reguList);
   }, [currentUser, settings.namaUnitLayanan, users, ulpList, reguList]);
 
