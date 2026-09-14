@@ -22,6 +22,8 @@ import { useToast } from '../hooks/useToast';
 import { formatExecutionDateTime } from '../utils/dateFormatter';
 import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO } from '../utils/dateUtils';
 import { Realisasi } from '../types';
+import { resolveUserTimRowAndUlp, RekapHarianService } from '../services/rekapHarianService';
+import { SupabaseService } from '../services/supabaseService';
 import { InputRealisasiPage } from './InputRealisasiPage';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 
@@ -158,8 +160,42 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   };
 
   const canUserAccessRealisasi = React.useCallback((rel: Realisasi) => {
+    const activeUnitKey = RekapHarianService.normalizeUnitKey(
+      settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL PADANG'
+    );
+
+    const wo = workOrdersMap[rel.workOrderId] || 
+               workOrdersMap[rel.nomorWO] ||
+               (rel.workOrderId ? workOrdersMap[rel.workOrderId.toLowerCase().trim()] : undefined) ||
+               (rel.nomorWO ? workOrdersMap[rel.nomorWO.toLowerCase().trim()] : undefined);
+
+    // Filter strictly by Active Inisiasi Unit Key
+    const activeUnitId = SupabaseService.getActiveUnitId();
+    if (rel.unitId && activeUnitId) {
+      const rUId = String(rel.unitId).trim().toUpperCase();
+      const aUId = String(activeUnitId).trim().toUpperCase();
+      if (rUId === 'UL1' || rUId.includes('PADANG')) {
+        if (aUId !== 'UL1' && activeUnitKey !== 'PADANG') return false;
+      } else if (rUId === 'UL2' || rUId.includes('BUKITTINGGI')) {
+        if (aUId !== 'UL2' && activeUnitKey !== 'BUKITTINGGI') return false;
+      } else if (rUId === 'UL3' || rUId.includes('PAYAKUMBUH')) {
+        if (aUId !== 'UL3' && activeUnitKey !== 'PAYAKUMBUH') return false;
+      } else if (rUId !== aUId) {
+        return false;
+      }
+    }
+
+    const itemUnitRaw = rel.unitId || rel.ulpName || (rel as any).namaUnitLayanan || wo?.unitId || wo?.ulpName;
+    if (itemUnitRaw) {
+      const itemUnitKey = RekapHarianService.normalizeUnitKey(itemUnitRaw);
+      if (itemUnitKey !== activeUnitKey) {
+        return false;
+      }
+    }
+
+    // Admin / Management roles can view all records for active Inisiasi Unit
     if (isAdmbktUser) return true;
-    if (!currentUser) return true;
+    if (!currentUser) return false;
 
     const roleLower = (currentUser.role || '').toLowerCase();
     if (
@@ -173,31 +209,20 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
       return true;
     }
 
-    const wo = workOrdersMap[rel.workOrderId] || 
-               workOrdersMap[rel.nomorWO] ||
-               (rel.workOrderId ? workOrdersMap[rel.workOrderId.toLowerCase().trim()] : undefined) ||
-               (rel.nomorWO ? workOrdersMap[rel.nomorWO.toLowerCase().trim()] : undefined);
-
-    // 0. If WO is assigned to user in displayedWorkOrders, allow access
-    const isAssignedWo = displayedWorkOrders.some(woItem => 
-      woItem.id === rel.workOrderId || 
-      woItem.nomorWO === rel.nomorWO || 
-      (rel.nomorWO && woItem.nomorWO && cleanStr(rel.nomorWO) === cleanStr(woItem.nomorWO)) ||
-      (rel.workOrderId && woItem.id && cleanStr(rel.workOrderId) === cleanStr(woItem.id))
-    );
-    if (isAssignedWo) return true;
+    // Resolve current user's active team ROW info for active Inisiasi
+    const userTimInfo = resolveUserTimRowAndUlp(currentUser, settings.namaUnitLayanan);
 
     // 1. Direct creator or assignee match
     const isCreatorOrPetugas =
-      (rel.petugasId && String(rel.petugasId) === String(currentUser.id)) ||
-      (rel.petugasName && cleanStr(rel.petugasName) === cleanStr(currentUser.name)) ||
-      (rel.petugasName && cleanStr(rel.petugasName) === cleanStr(currentUser.userName)) ||
+      (rel.petugasId && (String(rel.petugasId) === String(currentUser.id) || String(rel.petugasId) === String(currentUser.nip) || String(rel.petugasId) === String(currentUser.userName))) ||
+      (rel.petugasName && (cleanStr(rel.petugasName) === cleanStr(currentUser.name) || cleanStr(rel.petugasName) === cleanStr(currentUser.userName) || cleanStr(rel.petugasName) === cleanStr(userTimInfo.name))) ||
       (wo?.petugasId && String(wo.petugasId) === String(currentUser.id));
 
     if (isCreatorOrPetugas) return true;
 
-    // 2. Check all user regu / name candidates
+    // 2. Check Tim ROW matching
     const userReguCandidates = [
+      userTimInfo.reguName,
       currentUser.reguName,
       currentUser.userName,
       currentUser.name,
@@ -211,16 +236,18 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
       }
     }
 
-    // 3. ULP match (if empty on rel or matches, permit)
-    if (currentUser.ulpName) {
-      if (!rel.ulpName && !wo?.ulpName) return true;
-      const matchUlp = matchesUlpHelper(rel.ulpName, currentUser.ulpName) || matchesUlpHelper(wo?.ulpName, currentUser.ulpName);
-      if (matchUlp) return true;
-    }
+    // 3. Assigned Work Order match
+    const isAssignedWo = displayedWorkOrders.some(woItem => 
+      woItem.id === rel.workOrderId || 
+      woItem.nomorWO === rel.nomorWO || 
+      (rel.nomorWO && woItem.nomorWO && cleanStr(rel.nomorWO) === cleanStr(woItem.nomorWO)) ||
+      (rel.workOrderId && woItem.id && cleanStr(rel.workOrderId) === cleanStr(woItem.id))
+    );
+    if (isAssignedWo) return true;
 
-    // Allow viewing by default in management view
-    return true;
-  }, [currentUser, isAdmbktUser, workOrdersMap, displayedWorkOrders]);
+    // Strict filter: Hide data belonging to other users
+    return false;
+  }, [currentUser, isAdmbktUser, workOrdersMap, displayedWorkOrders, settings.namaUnitLayanan]);
 
   const filteredRealisasi = useMemo(() => {
     const todayStr = getTodayDateString();
@@ -298,13 +325,17 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   }, [realisasiList, workOrdersMap, debouncedSearch, canUserAccessRealisasi, showOnlyToday, filterDate, filterStatus]);
 
   const noWoOptions = useMemo(() => {
-    const listFromWo = workOrders.map(wo => wo.nomorWO).filter(Boolean);
-    const listFromDisplayed = displayedWorkOrders.map(wo => wo.nomorWO).filter(Boolean);
-    const listFromRealisasi = realisasiList
+    // Collect No WO from displayedWorkOrders (already filtered by active inisiasi & user role)
+    const displayedNoWos = new Set(displayedWorkOrders.map(wo => wo.nomorWO).filter(Boolean));
+
+    // Also include realisasi items accessible to current user (which are filtered by active inisiasi)
+    const accessibleRealisasiNoWos = realisasiList
+      .filter(rel => canUserAccessRealisasi(rel))
       .map(rel => rel.nomorWO || workOrdersMap[rel.workOrderId]?.nomorWO || workOrdersMap[rel.id]?.nomorWO)
       .filter(Boolean);
-    return Array.from(new Set([...listFromWo, ...listFromDisplayed, ...listFromRealisasi])).sort();
-  }, [workOrders, displayedWorkOrders, realisasiList, workOrdersMap]);
+
+    return Array.from(new Set([...Array.from(displayedNoWos), ...accessibleRealisasiNoWos])).sort();
+  }, [displayedWorkOrders, realisasiList, workOrdersMap, canUserAccessRealisasi]);
 
   const paginatedRealisasi = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;

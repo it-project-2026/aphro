@@ -94,6 +94,37 @@ class OfflineSyncQueueEngine {
   }
 
   /**
+   * Add a DELETE realisasi operation to the local sync queue
+   */
+  public async enqueueDeleteRealisasi(id: string): Promise<void> {
+    const timestamp = getLocalDateTimeString();
+
+    try {
+      await dexieDb.realisasi.where('id').equals(id).or('localId').equals(id).or('serverId').equals(id).or('idempotencyKey').equals(id).delete();
+      await dexieDb.realisasi.delete(id);
+      await dexieDb.photos.where('realisasiId').equals(id).delete();
+    } catch (e) {
+      console.warn('Dexie delete error in enqueueDeleteRealisasi:', e);
+    }
+
+    const queueItem: LocalSyncQueueItem = {
+      idempotencyKey: `DEL-REL-${id}-${Date.now()}`,
+      type: 'DELETE',
+      tableName: 'REALISASI',
+      payload: { id },
+      timestamp,
+      retryCount: 0,
+      status: 'PENDING',
+    };
+
+    await dexieDb.sync_queue.put(queueItem);
+
+    if (navigator.onLine) {
+      this.processQueue();
+    }
+  }
+
+  /**
    * Main Queue Processor with concurrency limit & backoff
    */
   public async processQueue(): Promise<{ success: boolean; total: number; synced: number; failed: number }> {

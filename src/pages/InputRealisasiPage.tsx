@@ -42,7 +42,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   onCancel 
 }) => {
   const { user: currentUser } = useAuth();
-  const { workOrders, updateWorkOrder } = useWorkOrders();
+  const { workOrders, displayedWorkOrders, updateWorkOrder } = useWorkOrders();
   const { realisasiList, addRealisasi, updateRealisasi } = useRealisasi();
   const { settings } = useSettings();
   const { 
@@ -68,7 +68,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       .trim();
 
   // Filter Work Orders strictly for TODAY with STATUS "BELUM SELESAI" for the logged-in user
-  const availableWorkOrders = workOrders
+  const availableWorkOrders = displayedWorkOrders
     .filter((wo) => {
       // Always show current WO if in edit mode or explicitly selected via UI context to prevent form breaking
       if (editMode && initialData && wo.id === initialData.workOrderId) return true;

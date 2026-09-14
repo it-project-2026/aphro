@@ -62,7 +62,7 @@ export const MonitoringPage: React.FC = () => {
 
   // 1. Deduplicate Work Orders to ensure each Nomor WO only appears once, and synthetic WOs from Realisasi are included
   const uniqueWorkOrders = useMemo(() => {
-    const baseList = isUserRole ? displayedWorkOrders : workOrders;
+    const baseList = displayedWorkOrders;
     const seen = new Map<string, WorkOrder>();
 
     baseList.forEach((wo) => {

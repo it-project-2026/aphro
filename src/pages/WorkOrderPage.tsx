@@ -42,7 +42,7 @@ interface WorkOrderPageProps {
 
 export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) => {
   const { user: currentUser } = useAuth();
-  const { workOrders, deleteWorkOrder } = useWorkOrders();
+  const { displayedWorkOrders, deleteWorkOrder } = useWorkOrders();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { setActiveTab, setSelectedWoIdForRealisasi, setIsFinalizingMode } = useUI();
@@ -161,21 +161,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
 
   // Filter logic memoized for performance
   const filteredWOs = React.useMemo(() => {
-    return workOrders.filter((wo) => {
-      // If User role, restrict to their Regu
-      if (isUserRole) {
-        const userRegu = cleanStr(currentUser?.reguName || '');
-        const woRegu = cleanStr(wo.reguName || '');
-        const userName = cleanStr(currentUser?.name || '');
-        const woPetugas = cleanStr(wo.petugasName || '');
-        
-        const matchRegu = userRegu !== '' && (woRegu === userRegu || woRegu.includes(userRegu));
-        const matchReguId = wo.reguId && currentUser?.reguId && String(wo.reguId) === String(currentUser.reguId);
-        const matchPetugas = userName !== '' && (woPetugas === userName || woPetugas.includes(userName));
-        
-        if (!matchRegu && !matchReguId && !matchPetugas) return false;
-      }
-
+    return displayedWorkOrders.filter((wo) => {
       const q = debouncedSearch.toLowerCase();
       const matchesSearch =
         (wo.nomorWO || '').toLowerCase().includes(q) ||
@@ -210,7 +196,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
       const nameB = (b.reguName || '').toLowerCase();
       return nameA.localeCompare(nameB);
     });
-  }, [workOrders, isUserRole, currentUser, debouncedSearch, filterUlp, filterPenyulang, filterRegu, filterStatus, filterDate]);
+  }, [displayedWorkOrders, debouncedSearch, filterUlp, filterPenyulang, filterRegu, filterStatus, filterDate]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

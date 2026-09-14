@@ -6,6 +6,7 @@ import { useSettings } from './SettingsContext';
 import { useAuth } from './AuthContext';
 import { useToast } from '../hooks/useToast';
 import { SupabaseService } from '../services/supabaseService';
+import { GASApiService } from '../services/gasApiService';
 import { dexieDb, LocalRealisasi, LocalPhoto } from '../services/dexieDb';
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { getLocalDateTimeString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
@@ -240,14 +241,49 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   }, [realisasiList, setRealisasiList, showToast]);
 
   const deleteRealisasi = React.useCallback(async (id: string) => {
+    // 1. Immediate optimistic state update
     setRealisasiList((prev) => prev.filter((rel) => rel.id !== id && rel.syncId !== id));
+
+    // 2. Clear from Dexie local database & photos
     try {
+      await dexieDb.realisasi.where('id').equals(id).or('localId').equals(id).or('serverId').equals(id).or('idempotencyKey').equals(id).delete();
       await dexieDb.realisasi.delete(id);
-      showToast('Realisasi dihapus dari perangkat', 'info');
+      await dexieDb.photos.where('realisasiId').equals(id).delete();
     } catch (e) {
       console.warn('Delete Dexie Realisasi error:', e);
     }
-  }, [setRealisasiList, showToast]);
+
+    // 3. Remote deletion from Supabase Database or Offline Sync Queue
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const unitId = SupabaseService.getActiveUnitId();
+        const res = await SupabaseService.deleteRealisasi(unitId, id);
+        
+        // Also trigger GAS deletion in background if configured
+        if (settings.gasWebAppUrl && settings.spreadsheetId) {
+          GASApiService.deleteRealisasi(settings.gasWebAppUrl, settings.spreadsheetId, id).catch((gasErr) => {
+            console.warn('GAS deleteRealisasi background sync error:', gasErr);
+          });
+        }
+
+        if (res.success) {
+          showToast('Data realisasi berhasil dihapus permanen dari Database', 'success');
+        } else {
+          showToast('Realisasi dihapus di perangkat (Server: ' + (res.error || 'Pending') + ')', 'info');
+        }
+      } catch (err) {
+        console.warn('Delete Supabase Realisasi error:', err);
+        showToast('Data realisasi dihapus dari perangkat', 'info');
+      }
+    } else {
+      try {
+        await offlineSyncQueue.enqueueDeleteRealisasi(id);
+      } catch (e) {
+        console.warn('Enqueue delete error:', e);
+      }
+      showToast('Realisasi dihapus dari perangkat (Akan disinkron ke database saat online)', 'info');
+    }
+  }, [setRealisasiList, showToast, settings.gasWebAppUrl, settings.spreadsheetId]);
 
   return (
     <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, deleteRealisasi, refreshRealisasi }}>

@@ -950,22 +950,70 @@ export class SupabaseService {
    * Delete Realisasi by ID
    */
   static async deleteRealisasi(arg1: string, arg2?: string): Promise<{ success: boolean; error?: string }> {
-    const targetId = arg2 || arg1;
-    try {
-      let { error } = await supabase
-        .from(SUPABASE_TABLES.REALISASI)
-        .delete()
-        .eq('REALISASI_ID', targetId);
+    const targetId = (arg2 || arg1 || '').trim();
+    if (!targetId) return { success: false, error: 'Target ID kosong' };
 
-      if (error) {
-        const err2 = await supabase
+    try {
+      // 1. Purge from local storage caches immediately
+      const unitKeys = ['UL1', 'UL2', 'UL3', 'UL4', ''];
+      unitKeys.forEach((uk) => {
+        const key = uk ? `aphro_realisasi_${uk}` : 'aphro_realisasi';
+        try {
+          const raw = this.safeGetItem(key);
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              const filtered = list.filter((item: any) => 
+                String(item.id || '').trim() !== targetId && 
+                String(item.REALISASI_ID || '').trim() !== targetId && 
+                String(item.realisasi_id || '').trim() !== targetId && 
+                String(item.syncId || '').trim() !== targetId
+              );
+              this.safeSetItem(key, JSON.stringify(filtered));
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+
+      // 2. Perform deletion in Supabase Database across all possible column names
+      let lastError: any = null;
+      let isDeleted = false;
+
+      // Primary attempt using .or() matching
+      try {
+        const orRes = await supabase
           .from(SUPABASE_TABLES.REALISASI)
           .delete()
-          .eq('ID', targetId);
-        error = err2.error;
+          .or(`REALISASI_ID.eq.${targetId},ID.eq.${targetId},id.eq.${targetId},realisasi_id.eq.${targetId}`);
+        if (!orRes.error) {
+          isDeleted = true;
+        } else {
+          lastError = orRes.error;
+        }
+      } catch (orErr) {
+        lastError = orErr;
       }
 
-      return { success: !error, error: error?.message };
+      // Secondary fallback attempts for specific columns
+      const candidateCols = ['REALISASI_ID', 'ID', 'id', 'realisasi_id'];
+      for (const col of candidateCols) {
+        try {
+          const colRes = await supabase
+            .from(SUPABASE_TABLES.REALISASI)
+            .delete()
+            .eq(col, targetId);
+          if (!colRes.error) {
+            isDeleted = true;
+            break;
+          }
+        } catch (cErr) {
+          // ignore
+        }
+      }
+
+      return { success: isDeleted || !lastError, error: lastError?.message };
     } catch (err: any) {
       return { success: false, error: err.message };
     }

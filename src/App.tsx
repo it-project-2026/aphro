@@ -77,7 +77,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
-    if (isAdmRole && !['cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'settings'].includes(activeTab)) {
+    if (isAdmRole && !['cetak_laporan', 'riwayat_realisasi', 'realisasi_main', 'input_realisasi', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'settings'].includes(activeTab)) {
       setActiveTab('cetak_laporan');
     }
   }, [isAdmRole, activeTab, setActiveTab]);
@@ -85,6 +85,10 @@ const AppContent: React.FC = () => {
   const renderActivePage = () => {
     if (isAdmRole) {
       switch (activeTab) {
+        case 'riwayat_realisasi':
+        case 'realisasi_main':
+        case 'input_realisasi':
+          return <RealisasiMainPage initialSubTab="history" />;
         case 'rekap_harian':
           return <RekapPekerjaanHarianPage />;
         case 'rekap_penyulang':
@@ -108,6 +112,7 @@ const AppContent: React.FC = () => {
         return <DashboardPage />;
       case 'work_orders': return <WorkOrderMainPage initialSubTab="list" />;
       case 'input_wo': return <WorkOrderMainPage initialSubTab="input" />;
+      case 'riwayat_realisasi': return <RealisasiMainPage initialSubTab="history" />;
       case 'realisasi_main':
       case 'input_realisasi': return <RealisasiMainPage initialSubTab="input" />;
       case 'absensi':

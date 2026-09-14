@@ -78,7 +78,7 @@ export const DashboardPage: React.FC = () => {
   const draggable = useDraggableScroll();
   const { settings } = useSettings();
   const { user: currentUser } = useAuth();
-  const { workOrders } = useWorkOrders();
+  const { displayedWorkOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
   const { ulpList, penyulangList, reguList, petugasList } = useMasterData();
   const { auditLogs } = useNotifications();
@@ -175,7 +175,7 @@ export const DashboardPage: React.FC = () => {
   }, [filterPenyulang]);
 
   const { filteredWOs, filteredRealisasi, topPerformersData } = useDashboardMetrics(
-    workOrders,
+    displayedWorkOrders,
     realisasiList,
     ulpList,
     reguList,
@@ -195,7 +195,7 @@ export const DashboardPage: React.FC = () => {
   // 1. Deduplicate Work Orders based on composite key (Nomor WO + Penyulang)
   const uniqueWorkOrders = React.useMemo(() => {
     const seen = new Map<string, any>();
-    workOrders.forEach((wo) => {
+    displayedWorkOrders.forEach((wo) => {
       if (!wo) return;
       const woNo = (wo.nomorWO || '').trim().toUpperCase();
       const penyulang = (wo.penyulangName || '').trim().toUpperCase();
@@ -218,7 +218,7 @@ export const DashboardPage: React.FC = () => {
       }
     });
     return Array.from(seen.values());
-  }, [workOrders]);
+  }, [displayedWorkOrders]);
 
   // Dynamic Year Options extracted from actual WO & Realisasi dates
   const yearOptions = React.useMemo(() => {

@@ -92,6 +92,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin', 'User'],
     },
     {
+      id: 'riwayat_realisasi',
+      label: 'Riwayat Realisasi',
+      icon: History,
+      roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
+    },
+    {
       id: 'sinkronisasi',
       label: 'Pusat Sinkronisasi',
       icon: RefreshCw,
@@ -160,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   ];
 
   const allowedItems = isAdmRole
-    ? navItems.filter((item) => ['cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi'].includes(item.id))
+    ? navItems.filter((item) => ['cetak_laporan', 'riwayat_realisasi', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi'].includes(item.id))
     : navItems.filter((item) => item.roles.includes(role));
 
   return (

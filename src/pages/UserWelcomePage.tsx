@@ -32,7 +32,7 @@ interface UserWelcomePageProps {
 
 export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi }) => {
   const { user: currentUser, logout } = useAuth();
-  const { workOrders } = useWorkOrders();
+  const { displayedWorkOrders } = useWorkOrders();
   const { settings } = useSettings();
   const { syncWithGAS, isSyncing } = useGASSync();
   const { users, ulpList, reguList } = useMasterData();
@@ -111,7 +111,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
       cleanStr(currentUser.id),
     ].filter(Boolean);
 
-    return workOrders.filter((wo) => {
+    return displayedWorkOrders.filter((wo) => {
       // SuperAdmin sees all
       if (currentUser.role === 'SuperAdmin') return true;
 
@@ -168,7 +168,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
 
       return false;
     });
-  }, [workOrders, currentUser]);
+  }, [displayedWorkOrders, currentUser]);
 
   // Today's Work Orders (or active assigned work orders if none specifically dated today)
   const todaysWorkOrders = useMemo(() => {

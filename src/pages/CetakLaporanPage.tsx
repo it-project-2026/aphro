@@ -179,7 +179,7 @@ export const CetakLaporanPage: React.FC = () => {
 
   const { user: currentUser } = useAuth();
   const { realisasiList } = useRealisasi();
-  const { workOrders } = useWorkOrders();
+  const { workOrders, displayedWorkOrders } = useWorkOrders();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { syncWithGAS, isSyncing } = useGASSync();
@@ -270,7 +270,7 @@ export const CetakLaporanPage: React.FC = () => {
 
     const woSet = new Set<string>();
 
-    workOrders.forEach((wo) => {
+    displayedWorkOrders.forEach((wo) => {
       const matchesUlp =
         filterUlp === 'ALL' ||
         cleanStr(wo.ulpId) === cleanStr(filterUlp) ||
@@ -411,7 +411,7 @@ export const CetakLaporanPage: React.FC = () => {
   }, [realisasiList, workOrdersMap, currentUser, filterUlp, filterPenyulang, filterNoWo, filterRegu, filterDate, isAdmbktUser, ulpList, penyulangList]);
 
   const filteredWOs = useMemo(() => {
-    return workOrders.filter((wo) => {
+    return displayedWorkOrders.filter((wo) => {
       if (!isAdmbktUser && currentUser?.role === 'User' && currentUser?.ulpName) {
         const uUlp = currentUser.ulpName.toLowerCase().trim();
         const woUlp = (wo.ulpName || '').toLowerCase().trim();

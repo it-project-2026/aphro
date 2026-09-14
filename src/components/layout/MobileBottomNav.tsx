@@ -14,6 +14,7 @@ import {
   Printer,
   CalendarRange,
   BarChart3,
+  History,
 } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
@@ -40,6 +41,11 @@ export const MobileBottomNav: React.FC = () => {
           label: 'Cetak Laporan',
           icon: Printer,
           highlight: true,
+        },
+        {
+          id: 'riwayat_realisasi',
+          label: 'Riwayat Realisasi',
+          icon: History,
         },
         {
           id: 'rekap_harian',

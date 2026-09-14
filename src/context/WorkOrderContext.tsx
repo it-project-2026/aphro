@@ -7,6 +7,7 @@ import { SupabaseService } from '../services/supabaseService';
 import { dexieDb } from '../services/dexieDb';
 import { syncManager } from '../services/syncManager';
 import { getLocalDateTimeString, parseDateFromNomorWO } from '../utils/dateUtils';
+import { UL_PRESETS, RekapHarianService, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
 
 interface WorkOrderContextType {
   workOrders: WorkOrder[];
@@ -109,63 +110,151 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   }, [workOrders]);
 
   const displayedWorkOrders = React.useMemo(() => {
-    if (user && user.role === 'User') {
-      const cleanStr = (s?: string | null) => {
-        if (!s) return '';
-        return String(s)
-          .toLowerCase()
-          .replace(/^(regu|tim|petugas)\s+/gi, '')
-          .replace(/[^a-z0-9]/gi, '');
-      };
+    const activeUnitName = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+    const activeUnitKey = RekapHarianService.normalizeUnitKey(activeUnitName);
+    const activeUnitId = SupabaseService.getActiveUnitId();
 
-      const userReguCandidates = [
-        cleanStr(user.reguName),
-        cleanStr(user.userName),
-        cleanStr(user.name),
-        cleanStr(user.nip),
-        cleanStr(user.id),
-      ].filter(Boolean);
+    const cleanStr = (s?: string | null) => {
+      if (!s) return '';
+      return String(s)
+        .toLowerCase()
+        .replace(/^(regu|tim|petugas)\s+/gi, '')
+        .replace(/[^a-z0-9]/gi, '');
+    };
 
-      return correctedWorkOrders.filter((wo) => {
-        if (user.reguId && wo.reguId && user.reguId === wo.reguId) return true;
-        if (user.id && wo.petugasId && user.id === wo.petugasId) return true;
+    // Helper: Verify if Work Order matches active Inisiasi / Unit Layanan
+    const matchesActiveInisiasi = (wo: WorkOrder): boolean => {
+      if (!wo) return false;
 
-        const woReguClean = cleanStr(wo.reguName);
-        if (woReguClean) {
-          for (const uCand of userReguCandidates) {
-            if (
-              woReguClean === uCand ||
-              (woReguClean.length >= 3 && uCand.length >= 3 && (woReguClean.includes(uCand) || uCand.includes(woReguClean)))
-            ) {
-              return true;
+      // 1. Check unitId if specified
+      if (wo.unitId) {
+        const uId = String(wo.unitId).trim().toUpperCase();
+        if (uId === 'UL1' || uId.includes('PADANG') || uId.includes('PDG')) {
+          if (activeUnitKey !== 'PADANG' && activeUnitId !== 'UL1') return false;
+        } else if (uId === 'UL2' || uId.includes('BUKITTINGGI') || uId.includes('BKT')) {
+          if (activeUnitKey !== 'BUKITTINGGI' && activeUnitId !== 'UL2') return false;
+        } else if (uId === 'UL3' || uId.includes('PAYAKUMBUH') || uId.includes('PYK')) {
+          if (activeUnitKey !== 'PAYAKUMBUH' && activeUnitId !== 'UL3') return false;
+        }
+      }
+
+      // 2. Check namaUnitLayanan or unitName
+      const woUnit = (wo as any).namaUnitLayanan || (wo as any).unitName || (wo as any).unit_name;
+      if (woUnit) {
+        const woKey = RekapHarianService.normalizeUnitKey(woUnit);
+        if (woKey !== activeUnitKey) return false;
+      }
+
+      // 3. Check ULP name against UL_PRESETS
+      if (wo.ulpName) {
+        const woUlpClean = cleanStr(wo.ulpName);
+        const activePreset = UL_PRESETS[activeUnitKey];
+        if (activePreset && activePreset.rows) {
+          const isInActivePreset = activePreset.rows.some(r => {
+            const pUlp = cleanStr(r.namaUlp);
+            return woUlpClean.includes(pUlp) || pUlp.includes(woUlpClean);
+          });
+
+          // Check if ULP belongs to another preset
+          let belongsToOtherPreset = false;
+          for (const [presetKey, presetData] of Object.entries(UL_PRESETS)) {
+            if (presetKey !== activeUnitKey) {
+              const inOther = presetData.rows.some(r => {
+                const pUlp = cleanStr(r.namaUlp);
+                return woUlpClean.includes(pUlp) || pUlp.includes(woUlpClean);
+              });
+              if (inOther && !isInActivePreset) {
+                belongsToOtherPreset = true;
+                break;
+              }
             }
           }
-        }
 
-        const woPetugasClean = cleanStr(wo.petugasName);
-        if (woPetugasClean) {
-          for (const uCand of userReguCandidates) {
-            if (
-              woPetugasClean === uCand ||
-              (woPetugasClean.length >= 3 && uCand.length >= 3 && (woPetugasClean.includes(uCand) || uCand.includes(woPetugasClean)))
-            ) {
-              return true;
-            }
-          }
+          if (belongsToOtherPreset) return false;
         }
+      }
 
-        if (user.ulpId && wo.ulpId && user.ulpId === wo.ulpId) return true;
-        if (user.ulpName && wo.ulpName) {
-          const u1 = cleanStr(user.ulpName);
-          const u2 = cleanStr(wo.ulpName);
-          if (u1 && u2 && (u1.includes(u2) || u2.includes(u1))) return true;
-        }
+      return true;
+    };
 
-        return false;
-      });
+    // 1. First filter Work Orders by active Inisiasi
+    const inisiasiWorkOrders = correctedWorkOrders.filter(matchesActiveInisiasi);
+
+    if (!user) return inisiasiWorkOrders;
+
+    // 2. Check Admin / Management permissions
+    const isAdmbktUser = (user.userName || user.name || '').toLowerCase() === 'admbkt';
+    const roleLower = (user.role || '').toLowerCase();
+    const isAdminOrManagement =
+      isAdmbktUser ||
+      roleLower.includes('admin') ||
+      roleLower.includes('super') ||
+      roleLower.includes('adm') ||
+      roleLower.includes('manager') ||
+      roleLower.includes('spv') ||
+      roleLower.includes('supervisor');
+
+    // Admin / Management roles can see all Work Orders in the active Inisiasi
+    if (isAdminOrManagement) {
+      return inisiasiWorkOrders;
     }
-    return correctedWorkOrders;
-  }, [correctedWorkOrders, user]);
+
+    // Regular officers / users ONLY see Work Orders assigned to them or their team
+    const userTimInfo = resolveUserTimRowAndUlp(user, activeUnitName);
+    const userCandidates = [
+      cleanStr(userTimInfo.reguName),
+      cleanStr(user.reguName),
+      cleanStr(user.userName),
+      cleanStr(user.name),
+      cleanStr(user.nip),
+      cleanStr(user.id),
+    ].filter(Boolean);
+
+    return inisiasiWorkOrders.filter((wo) => {
+      // Direct petugasId match (ID, NIP, Username)
+      if (
+        user.id && wo.petugasId &&
+        (String(user.id) === String(wo.petugasId) ||
+         String(user.nip) === String(wo.petugasId) ||
+         String(user.userName) === String(wo.petugasId))
+      ) {
+        return true;
+      }
+
+      // Direct reguId match
+      if (user.reguId && wo.reguId && String(user.reguId) === String(wo.reguId)) {
+        return true;
+      }
+
+      // Match petugasName against user candidates
+      const woPetugasClean = cleanStr(wo.petugasName);
+      if (woPetugasClean) {
+        for (const uCand of userCandidates) {
+          if (
+            woPetugasClean === uCand ||
+            (woPetugasClean.length >= 3 && uCand.length >= 3 && (woPetugasClean.includes(uCand) || uCand.includes(woPetugasClean)))
+          ) {
+            return true;
+          }
+        }
+      }
+
+      // Match reguName against user candidates
+      const woReguClean = cleanStr(wo.reguName);
+      if (woReguClean) {
+        for (const uCand of userCandidates) {
+          if (
+            woReguClean === uCand ||
+            (woReguClean.length >= 3 && uCand.length >= 3 && (woReguClean.includes(uCand) || uCand.includes(woReguClean)))
+          ) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    });
+  }, [correctedWorkOrders, user, settings.namaUnitLayanan]);
 
   const addWorkOrder = React.useCallback(async (woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
     const cleanStr = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
