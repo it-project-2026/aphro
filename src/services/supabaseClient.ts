@@ -293,6 +293,29 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
   END IF;
+-- 13. INDEX PERFORMANCE OPTIMIZATION (HIGH-SPEED QUERIES & DELTA SYNC)
+-- Index untuk WORK_ORDER (unitId, Tanggal, STATUS, REGU_ROW, Nomor_WO)
+CREATE INDEX IF NOT EXISTS idx_wo_unitid ON public."WORK_ORDER" ("unitId");
+CREATE INDEX IF NOT EXISTS idx_wo_tanggal ON public."WORK_ORDER" ("Tanggal" DESC);
+CREATE INDEX IF NOT EXISTS idx_wo_status ON public."WORK_ORDER" ("STATUS");
+CREATE INDEX IF NOT EXISTS idx_wo_regu ON public."WORK_ORDER" ("REGU_ROW");
+CREATE INDEX IF NOT EXISTS idx_wo_nomor ON public."WORK_ORDER" ("Nomor_WO");
+
+-- Index untuk REALISASI (unitId, Tanggal, WO_ID, Nomor_WO, PETUGAS)
+CREATE INDEX IF NOT EXISTS idx_rel_unitid ON public."REALISASI" ("unitId");
+CREATE INDEX IF NOT EXISTS idx_rel_tanggal ON public."REALISASI" ("Tanggal" DESC);
+CREATE INDEX IF NOT EXISTS idx_rel_woid ON public."REALISASI" ("WO_ID");
+CREATE INDEX IF NOT EXISTS idx_rel_nomor ON public."REALISASI" ("Nomor_WO");
+CREATE INDEX IF NOT EXISTS idx_rel_petugas ON public."REALISASI" ("PETUGAS");
+
+-- Index untuk MASTER Data
+CREATE INDEX IF NOT EXISTS idx_ulp_unitid ON public."ULP" ("unitId");
+CREATE INDEX IF NOT EXISTS idx_penyulang_unitid ON public."PENYULANG" ("unitId");
+CREATE INDEX IF NOT EXISTS idx_regu_unitid ON public."REGU_ROW" ("unitId");
+CREATE INDEX IF NOT EXISTS idx_petugas_unitid ON public."PETUGAS" ("unitId");
+CREATE INDEX IF NOT EXISTS idx_users_unitid ON public."USERS" ("unitId");
+CREATE INDEX IF NOT EXISTS idx_absensi_unitid ON public."ABSENSI" ("unitId");
+CREATE INDEX IF NOT EXISTS idx_absensi_tanggal ON public."ABSENSI" ("Tanggal" DESC);
 END $$;
 `;
 

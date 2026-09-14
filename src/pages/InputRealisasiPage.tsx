@@ -315,30 +315,12 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
         const compressedBase64 = await compressImage(watermarkedBase64);
 
-        let driveFileUrl = '';
-        const gasUrl = settings.gasWebAppUrl || localStorage.getItem('aphro_gas_url') || '';
-        if (gasUrl && navigator.onLine) {
-          try {
-            const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
-              base64Data: compressedBase64,
-              nomorWO: selectedWO.nomorWO,
-              reguName: selectedWO.reguName,
-              photoType: type === 'sebelum' ? 'Sebelum' : 'Sesudah',
-            });
-            if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
-              driveFileUrl = uploadRes.fileUrl;
-            }
-          } catch (e) {
-            console.warn('Direct Google Drive upload warning:', e);
-          }
-        }
-
         const photoObj: WatermarkedPhoto = {
           id: `pic-${Date.now()}-${slotIndex}-${Math.random().toString(36).substring(2, 6)}`,
           type,
           slotIndex,
           dataUrl: compressedBase64,
-          fileUrl: driveFileUrl,
+          fileUrl: '',
           originalName: file.name,
           timestamp: timestampStr,
           latitude: lat,
@@ -360,6 +342,23 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
 
         showToast(`Foto ${type} slot ${slotIndex} berhasil diberi watermark!`, 'success');
+
+        // Optional non-blocking background drive upload pre-warming
+        const gasUrl = settings.gasWebAppUrl || localStorage.getItem('aphro_gas_url') || '';
+        if (gasUrl && navigator.onLine) {
+          GASApiService.uploadPhoto(gasUrl, {
+            base64Data: compressedBase64,
+            nomorWO: selectedWO.nomorWO,
+            reguName: selectedWO.reguName,
+            photoType: type === 'sebelum' ? 'Sebelum' : 'Sesudah',
+          }).then((uploadRes) => {
+            if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
+              photoObj.fileUrl = uploadRes.fileUrl;
+            }
+          }).catch((e) => {
+            console.warn('Background Google Drive upload note:', e);
+          });
+        }
       } catch (err: any) {
         showToast(`Gagal memproses watermark foto: ${err.message}`, 'error');
       } finally {

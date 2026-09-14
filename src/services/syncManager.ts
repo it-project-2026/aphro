@@ -568,73 +568,83 @@ export class SyncManager {
           let isSuccess = false;
           let updatedPayload = { ...item.payload };
 
-          // 1. HANDLE PHOTO UPLOADS TO GOOGLE DRIVE (If any)
+          // 1. HANDLE PHOTO UPLOADS TO GOOGLE DRIVE (If any - Non-blocking / Parallel)
           if (this.gasUrl && navigator.onLine) {
             // Realisasi Photos
             if (item.tableName === 'REALISASI' && (item.type === 'CREATE' || item.type === 'UPDATE')) {
+              const photoPromises: Promise<any>[] = [];
               if (Array.isArray(updatedPayload.photosSebelum)) {
-                for (let j = 0; j < updatedPayload.photosSebelum.length; j++) {
-                  const photo = updatedPayload.photosSebelum[j];
+                updatedPayload.photosSebelum.forEach((photo: any, j: number) => {
                   if (photo && photo.dataUrl && photo.dataUrl.startsWith('data:image/')) {
-                    try {
-                      const uploadRes = await GASApiService.uploadPhoto(this.gasUrl, {
+                    photoPromises.push(
+                      GASApiService.uploadPhoto(this.gasUrl, {
                         base64Data: photo.dataUrl,
                         nomorWO: updatedPayload.nomorWO,
                         reguName: updatedPayload.reguName,
                         photoType: 'SEBELUM',
                         folderId: this.spreadsheetId
-                      });
-                      if (uploadRes.status === 'success' && uploadRes.fileUrl) {
-                        updatedPayload.photosSebelum[j].fileUrl = uploadRes.fileUrl;
-                        updatedPayload.fotoSebelumUrl = uploadRes.fileUrl;
-                      }
-                    } catch (e) { console.warn('Photo upload failed:', e); }
+                      }).then((uploadRes) => {
+                        if (uploadRes.status === 'success' && uploadRes.fileUrl) {
+                          updatedPayload.photosSebelum[j].fileUrl = uploadRes.fileUrl;
+                          updatedPayload.fotoSebelumUrl = uploadRes.fileUrl;
+                        }
+                      }).catch((e) => console.warn('Photo upload sebelum error:', e))
+                    );
                   }
-                }
+                });
               }
               if (Array.isArray(updatedPayload.photosSesudah)) {
-                for (let j = 0; j < updatedPayload.photosSesudah.length; j++) {
-                  const photo = updatedPayload.photosSesudah[j];
+                updatedPayload.photosSesudah.forEach((photo: any, j: number) => {
                   if (photo && photo.dataUrl && photo.dataUrl.startsWith('data:image/')) {
-                    try {
-                      const uploadRes = await GASApiService.uploadPhoto(this.gasUrl, {
+                    photoPromises.push(
+                      GASApiService.uploadPhoto(this.gasUrl, {
                         base64Data: photo.dataUrl,
                         nomorWO: updatedPayload.nomorWO,
                         reguName: updatedPayload.reguName,
                         photoType: 'SESUDAH',
                         folderId: this.spreadsheetId
-                      });
-                      if (uploadRes.status === 'success' && uploadRes.fileUrl) {
-                        updatedPayload.photosSesudah[j].fileUrl = uploadRes.fileUrl;
-                        updatedPayload.fotoSesudahUrl = uploadRes.fileUrl;
-                      }
-                    } catch (e) { console.warn('Photo upload failed:', e); }
+                      }).then((uploadRes) => {
+                        if (uploadRes.status === 'success' && uploadRes.fileUrl) {
+                          updatedPayload.photosSesudah[j].fileUrl = uploadRes.fileUrl;
+                          updatedPayload.fotoSesudahUrl = uploadRes.fileUrl;
+                        }
+                      }).catch((e) => console.warn('Photo upload sesudah error:', e))
+                    );
                   }
-                }
+                });
+              }
+              if (photoPromises.length > 0) {
+                await Promise.allSettled(photoPromises);
               }
             }
 
             // Absensi Photos
             if (item.tableName === 'ABSENSI' && (item.type === 'CREATE' || item.type === 'UPDATE')) {
+              const absPromises: Promise<any>[] = [];
               if (updatedPayload.fotoMasuk && updatedPayload.fotoMasuk.startsWith('data:image/')) {
-                try {
-                  const res = await GASApiService.uploadPhoto(this.gasUrl, {
+                absPromises.push(
+                  GASApiService.uploadPhoto(this.gasUrl, {
                     base64Data: updatedPayload.fotoMasuk,
                     reguName: updatedPayload.reguName,
                     photoType: 'ABSENSI_MASUK'
-                  });
-                  if (res.status === 'success' && res.fileUrl) updatedPayload.fotoMasuk = res.fileUrl;
-                } catch (e) {}
+                  }).then((res) => {
+                    if (res.status === 'success' && res.fileUrl) updatedPayload.fotoMasuk = res.fileUrl;
+                  }).catch(() => {})
+                );
               }
               if (updatedPayload.fotoKeluar && updatedPayload.fotoKeluar.startsWith('data:image/')) {
-                try {
-                  const res = await GASApiService.uploadPhoto(this.gasUrl, {
+                absPromises.push(
+                  GASApiService.uploadPhoto(this.gasUrl, {
                     base64Data: updatedPayload.fotoKeluar,
                     reguName: updatedPayload.reguName,
                     photoType: 'ABSENSI_PULANG'
-                  });
-                  if (res.status === 'success' && res.fileUrl) updatedPayload.fotoKeluar = res.fileUrl;
-                } catch (e) {}
+                  }).then((res) => {
+                    if (res.status === 'success' && res.fileUrl) updatedPayload.fotoKeluar = res.fileUrl;
+                  }).catch(() => {})
+                );
+              }
+              if (absPromises.length > 0) {
+                await Promise.allSettled(absPromises);
               }
             }
           }
@@ -704,10 +714,6 @@ export class SyncManager {
         type: 'PENDING_QUEUE_CHANGED',
         data: remainingOps,
       });
-
-      if (successCount > 0) {
-        await this.syncAllRequired(true);
-      }
 
       return { successCount, failCount, totalCount };
     } finally {

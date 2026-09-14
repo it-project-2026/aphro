@@ -39,16 +39,18 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const refreshWorkOrders = React.useCallback(async (page: number = 0) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
-    setIsLoading(true);
 
     try {
-      // 1. Load local offline Work Orders from Dexie DB first
+      // 1. INSTANT LOCAL-FIRST: Load local offline Work Orders from Dexie DB (< 50-100ms)
       const cachedLocals = await dexieDb.work_orders.toArray();
       if (cachedLocals.length > 0 && page === 0) {
         setWorkOrders(cachedLocals);
+        setIsLoading(false); // Instantly unblock UI
+      } else if (page === 0) {
+        setIsLoading(true);
       }
 
-      // 2. Fetch remote Work Orders from Supabase if online
+      // 2. BACKGROUND DELTA SYNC: Fetch remote Work Orders from Supabase if online
       if (typeof navigator !== 'undefined' && navigator.onLine) {
         const unitId = SupabaseService.getActiveUnitId();
         const res = await SupabaseService.fetchWorkOrders(unitId, page, 1000, page === 0 ? undefined : lastSyncRef.current);

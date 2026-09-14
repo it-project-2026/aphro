@@ -24,7 +24,7 @@ export class GASApiService {
   /**
    * Fetch with AbortController timeout and exponential backoff retry
    */
-  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 25000, retries = 3): Promise<Response> {
+  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 10000, retries = 1): Promise<Response> {
     // Wrap in queue to prevent concurrent requests to GAS side
     return new Promise((resolve, reject) => {
       requestQueue = requestQueue.then(async () => {
@@ -34,8 +34,8 @@ export class GASApiService {
         } catch (err) {
           reject(err);
         }
-        // Small gap between requests to GAS
-        await new Promise(r => setTimeout(r, 800));
+        // Brief gap between requests to GAS
+        await new Promise(r => setTimeout(r, 100));
       });
     });
   }
@@ -62,12 +62,12 @@ export class GASApiService {
         const isLastAttempt = attempt === retries;
         if (isLastAttempt) {
           if (err.name === 'AbortError') {
-            throw new Error('Koneksi ke Google Spreadsheet Timeout (>25 detik). Periksa koneksi internet atau status Web App GAS.');
+            throw new Error('Koneksi ke Google Spreadsheet Timeout (>10 detik).');
           }
           throw err;
         }
-        // Wait with exponential backoff and random jitter before retry
-        const delay = Math.pow(2, attempt) * 1500 + Math.floor(Math.random() * 1000);
+        // Quick retry delay
+        const delay = 600 + Math.floor(Math.random() * 400);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }

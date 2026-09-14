@@ -540,10 +540,7 @@ export class SupabaseService {
   /**
    * Fetch Realisasi from Supabase REALISASI table filtered by unitId
    */
-  /**
-   * Fetch Realisasi from Supabase REALISASI table filtered by unitId with pagination.
-   */
-  static async fetchRealisasi(unitId?: string, page: number = 0, pageSize: number = 1000): Promise<{
+  static async fetchRealisasi(unitId?: string, page: number = 0, pageSize: number = 2000): Promise<{
     success: boolean;
     data: Realisasi[];
     source: 'supabase' | 'cache' | 'initial';
@@ -551,66 +548,32 @@ export class SupabaseService {
     const targetUnitId = unitId || this.getActiveUnitId();
 
     try {
-      let allRawData: any[] = [];
-      let batchPage = 0;
-      let hasMore = true;
+      let query = supabase
+        .from(SUPABASE_TABLES.REALISASI)
+        .select('*');
 
-      // Loop to fetch all batches up to 10,000 rows so no dates (e.g. Sept 1-8) are cut off
-      while (hasMore && batchPage < 10) {
-        const from = batchPage * pageSize;
-        const to = from + pageSize - 1;
+      if (targetUnitId && targetUnitId !== 'ALL') {
+        query = query.or(`unitId.eq.${targetUnitId},unitId.is.null`);
+      }
 
-        let res = await supabase
+      let { data, error } = await query
+        .order('TANGGAL', { ascending: false, nullsFirst: false })
+        .limit(pageSize);
+
+      if (error || !data || data.length === 0) {
+        const fallbackRes = await supabase
           .from(SUPABASE_TABLES.REALISASI)
           .select('*')
-          .or(`unitId.eq.${targetUnitId},unitId.is.null`)
           .order('TANGGAL', { ascending: false, nullsFirst: false })
-          .range(from, to);
-
-        if (res.error || !res.data || res.data.length === 0) {
-          res = await supabase
-            .from(SUPABASE_TABLES.REALISASI)
-            .select('*')
-            .eq('unitId', targetUnitId)
-            .order('TANGGAL', { ascending: false, nullsFirst: false })
-            .range(from, to);
-        }
-
-        if (res.data && res.data.length > 0) {
-          allRawData = allRawData.concat(res.data);
-          if (res.data.length < pageSize) {
-            hasMore = false;
-          }
-        } else {
-          hasMore = false;
-        }
-        batchPage++;
-      }
-
-      if (allRawData.length === 0 && targetUnitId === 'UL1') {
-        batchPage = 0;
-        hasMore = true;
-        while (hasMore && batchPage < 10) {
-          const from = batchPage * pageSize;
-          const to = from + pageSize - 1;
-          const checkBkt = await supabase
-            .from(SUPABASE_TABLES.REALISASI)
-            .select('*')
-            .eq('unitId', 'UL2')
-            .order('TANGGAL', { ascending: false, nullsFirst: false })
-            .range(from, to);
-          if (checkBkt.data && checkBkt.data.length > 0) {
-            allRawData = allRawData.concat(checkBkt.data);
-            if (checkBkt.data.length < pageSize) hasMore = false;
-          } else {
-            hasMore = false;
-          }
-          batchPage++;
+          .limit(pageSize);
+        if (fallbackRes.data && fallbackRes.data.length > 0) {
+          data = fallbackRes.data;
+          error = fallbackRes.error;
         }
       }
 
-      if (Array.isArray(allRawData) && allRawData.length > 0) {
-        const list: Realisasi[] = allRawData.map((row: any) => this.normalizeRealisasiRow(row));
+      if (Array.isArray(data) && data.length > 0) {
+        const list: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
         this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(list));
         return { success: true, data: list, source: 'supabase' };
       }
@@ -1471,38 +1434,12 @@ export class SupabaseService {
 
     try {
       let [usersRes, ulpRes, pylRes, reguRes, ptgRes] = await Promise.all([
-        supabase.from(SUPABASE_TABLES.USERS).select('*').eq('unitId', targetUnitId),
-        supabase.from(SUPABASE_TABLES.ULP).select('*').eq('unitId', targetUnitId),
-        supabase.from(SUPABASE_TABLES.PENYULANG).select('*').eq('unitId', targetUnitId),
-        supabase.from(SUPABASE_TABLES.REGU_ROW).select('*').eq('unitId', targetUnitId),
-        supabase.from(SUPABASE_TABLES.PETUGAS).select('*').eq('unitId', targetUnitId),
+        supabase.from(SUPABASE_TABLES.USERS).select('*'),
+        supabase.from(SUPABASE_TABLES.ULP).select('*'),
+        supabase.from(SUPABASE_TABLES.PENYULANG).select('*'),
+        supabase.from(SUPABASE_TABLES.REGU_ROW).select('*'),
+        supabase.from(SUPABASE_TABLES.PETUGAS).select('*'),
       ]);
-
-      // Fallbacks if filtered query returned no data
-      if (!ulpRes.data || ulpRes.data.length === 0) {
-        ulpRes = await supabase.from(SUPABASE_TABLES.ULP).select('*');
-      }
-      if (!pylRes.data || pylRes.data.length === 0) {
-        pylRes = await supabase.from(SUPABASE_TABLES.PENYULANG).select('*');
-      }
-      
-      // Fallback query for REGU_ROW across multiple table name variations
-      if (!reguRes.data || reguRes.data.length === 0 || reguRes.error) {
-        reguRes = await supabase.from(SUPABASE_TABLES.REGU_ROW).select('*');
-      }
-      if (!reguRes.data || reguRes.data.length === 0 || reguRes.error) {
-        reguRes = await supabase.from('regu_row').select('*');
-      }
-      if (!reguRes.data || reguRes.data.length === 0 || reguRes.error) {
-        reguRes = await supabase.from('REGU').select('*');
-      }
-      if (!reguRes.data || reguRes.data.length === 0 || reguRes.error) {
-        reguRes = await supabase.from('regu').select('*');
-      }
-
-      if (!ptgRes.data || ptgRes.data.length === 0) {
-        ptgRes = await supabase.from(SUPABASE_TABLES.PETUGAS).select('*');
-      }
 
       const users: User[] = (usersRes.data || []).map((u: any) => this.normalizeUserRow(u));
 
