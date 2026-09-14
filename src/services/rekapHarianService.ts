@@ -827,10 +827,6 @@ export class RekapHarianService {
    * Helper to parse date parts from various formats accurately
    * Uses unified normalizeDateISO logic
    */
-  /**
-   * Helper to parse date parts from various formats accurately
-   * Uses unified normalizeDateISO logic
-   */
   static parseDateParts(dateInput: any) {
     if (!dateInput) return null;
     let dateStr = '';

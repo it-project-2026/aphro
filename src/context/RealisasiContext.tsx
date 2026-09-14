@@ -33,7 +33,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   const mapLocalToUI = (allLocal: LocalRealisasi[]): Realisasi[] => {
     return allLocal.map((loc) => ({
       id: loc.serverId || loc.localId || loc.id,
-      unitId: loc.ulpName || '',
+      unitId: (loc as any).unitId || loc.ulpName || '',
       workOrderId: loc.workOrderId || '',
       nomorWO: loc.nomorWO,
       ulpName: loc.ulpName,
@@ -86,6 +86,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
                 localId: item.id || `REL-${Date.now()}`,
                 serverId: item.id,
                 idempotencyKey: item.syncId || item.id,
+                unitId: item.unitId || '',
                 nomorWO: item.nomorWO,
                 ulpName: item.ulpName || '',
                 reguName: item.reguName || '',

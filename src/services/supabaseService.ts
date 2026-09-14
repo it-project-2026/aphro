@@ -574,24 +574,30 @@ export class SupabaseService {
         query = query.or(`TANGGAL.gte.${syncDate},Tanggal.gte.${syncDate},WAKTU.gte.${lastSyncTime}`);
       }
 
-      let { data, error } = await query
-        .order('TANGGAL', { ascending: false, nullsFirst: false })
-        .limit(pageSize);
+      let allData: any[] = [];
+      let from = 0;
+      const step = 1000;
+      let hasMore = true;
 
-      if (!lastSyncTime && (error || !data || data.length === 0)) {
-        const fallbackRes = await supabase
-          .from(SUPABASE_TABLES.REALISASI)
-          .select('*')
+      while (hasMore) {
+        const { data, error } = await query
           .order('TANGGAL', { ascending: false, nullsFirst: false })
-          .limit(pageSize);
-        if (fallbackRes.data && fallbackRes.data.length > 0) {
-          data = fallbackRes.data;
-          error = fallbackRes.error;
+          .range(from, from + step - 1);
+
+        if (error || !data || data.length === 0) {
+          hasMore = false;
+        } else {
+          allData = allData.concat(data);
+          if (data.length < step) {
+            hasMore = false;
+          } else {
+            from += step;
+          }
         }
       }
 
-      if (Array.isArray(data)) {
-        const list: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
+      if (allData.length > 0) {
+        const list: Realisasi[] = allData.map((row: any) => this.normalizeRealisasiRow(row));
         if (!lastSyncTime) {
           this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(list));
         }
@@ -710,9 +716,30 @@ export class SupabaseService {
             query = query.ilike('Nomor_WO', `%${nomorWO}%`);
           }
 
-          const { data, error } = await query.order('TANGGAL', { ascending: false }).limit(2500);
-          if (!error && Array.isArray(data)) {
-            let relList: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
+          let allRelData: any[] = [];
+          let relFrom = 0;
+          const relStep = 1000;
+          let relHasMore = true;
+
+          while (relHasMore) {
+            const { data, error } = await query
+              .order('TANGGAL', { ascending: false, nullsFirst: false })
+              .range(relFrom, relFrom + relStep - 1);
+
+            if (error || !data || data.length === 0) {
+              relHasMore = false;
+            } else {
+              allRelData = allRelData.concat(data);
+              if (data.length < relStep) {
+                relHasMore = false;
+              } else {
+                relFrom += relStep;
+              }
+            }
+          }
+
+          if (allRelData.length > 0) {
+            let relList: Realisasi[] = allRelData.map((row: any) => this.normalizeRealisasiRow(row));
 
             // Fetch related Work Orders to cross-reference Feeder/Penyulang and details
             let woList: WorkOrder[] = [];
