@@ -60,14 +60,17 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const [users, setUsers] = usePersistState<User[]>('aphro_synced_users', INITIAL_USERS);
 
   const refreshMasterData = React.useCallback(async (forceRefresh = false) => {
-    // Check if we need to refresh based on timestamp (1 hour cache)
+    const unitId = SupabaseService.getActiveUnitId();
+    const lastSyncUnit = localStorage.getItem('aphro_master_data_sync_unit');
+    const unitChanged = lastSyncUnit !== unitId;
     const lastSync = localStorage.getItem('aphro_master_data_sync_time');
-    if (!forceRefresh && lastSync && (Date.now() - parseInt(lastSync, 10) < 3600000)) {
+
+    // Check if we need to refresh based on timestamp (1 hour cache) or unit change
+    if (!forceRefresh && !unitChanged && lastSync && (Date.now() - parseInt(lastSync, 10) < 3600000)) {
       return; // Data is still fresh
     }
 
     try {
-      const unitId = SupabaseService.getActiveUnitId();
       const res = await SupabaseService.fetchMasterData(unitId);
       if (res) {
         if (res.ulp?.length > 0) setUlpList(res.ulp);
@@ -76,8 +79,9 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
         if (res.petugas?.length > 0) setPetugasList(res.petugas);
         if (res.users?.length > 0) setUsers(res.users);
 
-        // Update sync timestamp
+        // Update sync timestamp and sync unit
         localStorage.setItem('aphro_master_data_sync_time', Date.now().toString());
+        localStorage.setItem('aphro_master_data_sync_unit', unitId);
       }
     } catch (err) {
       console.warn('Error loading Master Data from Supabase:', err);

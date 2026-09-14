@@ -26,6 +26,7 @@ import { AbsensiPetugas } from '../types';
 import { getLocalDateTimeString, getWIBDateString, normalizeDateISO } from '../utils/dateUtils';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 import { useSettings } from '../context/SettingsContext';
+import { getPrimaryTimRowForUnit, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
 import { GASApiService } from '../services/gasApiService';
 import { getActiveGasConfig } from '../config/gasConfig';
 
@@ -36,7 +37,7 @@ interface AbsensiKerjaPageProps {
 export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess }) => {
   const draggable = useDraggableScroll();
   const { user: currentUser, logout } = useAuth();
-  const { petugasList, users, reguList } = useMasterData();
+  const { petugasList, users, reguList, ulpList } = useMasterData();
   const { absensiList, addAbsensi } = useAbsensi();
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
@@ -73,71 +74,14 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     }) || null;
   }, [currentUser, users]);
 
-  // Robustly resolve the active user's Regu Name
-  const effectiveReguName = useMemo(() => {
-    // 1. Direct from currentUser.reguName if available and not empty / placeholder
-    if (
-      currentUser?.reguName &&
-      currentUser.reguName.trim() !== '' &&
-      currentUser.reguName !== 'Belum Ada Regu'
-    ) {
-      return currentUser.reguName.trim();
-    }
+  // Resolve the active user's Regu Name and ULP Name based on USERS login and active INISIASI unit
+  const resolvedIdentity = useMemo(() => {
+    const activeUnitName = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+    return resolveUserTimRowAndUlp(currentUser, activeUnitName, users, ulpList, reguList);
+  }, [currentUser, settings.namaUnitLayanan, users, ulpList, reguList]);
 
-    // 2. From matched user in master users table
-    if (
-      matchedMasterUser?.reguName &&
-      matchedMasterUser.reguName.trim() !== '' &&
-      matchedMasterUser.reguName !== 'Belum Ada Regu'
-    ) {
-      return matchedMasterUser.reguName.trim();
-    }
-
-    // 3. Fallback: match by username pattern (e.g. 'row08' -> number 8)
-    const userIdentifier = (currentUser?.userName || currentUser?.nip || currentUser?.id || '').toLowerCase().trim();
-    const userRowNumber = extractRowNumber(userIdentifier);
-    if (userRowNumber !== null) {
-      // Find matching regu in reguList
-      const matchedRegu = reguList.find((r) => {
-        const rNum = extractRowNumber(r.namaRegu || r.kodeRegu);
-        return rNum === userRowNumber;
-      });
-      if (matchedRegu?.namaRegu) return matchedRegu.namaRegu;
-
-      // Find matching regu in petugasList
-      const matchedPetugasRegu = petugasList.find((p) => {
-        const pNum = extractRowNumber(p.reguName);
-        return pNum === userRowNumber;
-      });
-      if (matchedPetugasRegu?.reguName) return matchedPetugasRegu.reguName;
-    }
-
-    // 4. Role fallbacks
-    if (currentUser?.role === 'SuperAdmin' || currentUser?.role === 'Admin') {
-      return 'Manajemen/Admin';
-    }
-
-    return currentUser?.name || 'Belum Ada Regu';
-  }, [currentUser, matchedMasterUser, reguList, petugasList]);
-
-  // Robustly resolve the active user's ULP Name
-  const effectiveUlpName = useMemo(() => {
-    if (
-      currentUser?.ulpName &&
-      currentUser.ulpName.trim() !== '' &&
-      currentUser.ulpName !== 'Belum Ada ULP'
-    ) {
-      return currentUser.ulpName.trim();
-    }
-    if (
-      matchedMasterUser?.ulpName &&
-      matchedMasterUser.ulpName.trim() !== '' &&
-      matchedMasterUser.ulpName !== 'Belum Ada ULP'
-    ) {
-      return matchedMasterUser.ulpName.trim();
-    }
-    return 'Belum Ada ULP';
-  }, [currentUser, matchedMasterUser]);
+  const effectiveReguName = resolvedIdentity.reguName;
+  const effectiveUlpName = resolvedIdentity.ulpName;
 
   const reguName = effectiveReguName;
   const ulpName = effectiveUlpName;

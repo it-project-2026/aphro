@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
+import { useMasterData } from '../../context/MasterDataContext';
 import { useUI } from '../../context/UIContext';
 import { useGASSync } from '../../hooks/useGASSync';
 import { useToast } from '../../hooks/useToast';
+import { resolveUserTimRowAndUlp } from '../../services/rekapHarianService';
 import { APP_LOGO_URL } from '../../data/initialData';
 import {
   LayoutDashboard,
@@ -53,7 +55,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
     }
   };
 
+  const { users, ulpList, reguList } = useMasterData();
+
+  const userIdentity = useMemo(() => {
+    const activeUnit = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+    return resolveUserTimRowAndUlp(currentUser, activeUnit, users, ulpList, reguList);
+  }, [currentUser, settings.namaUnitLayanan, users, ulpList, reguList]);
+
   const role = currentUser?.role || 'User';
+  const displayedUserName = userIdentity.reguName || userIdentity.name;
 
   const isAdmRole = currentUser && (
     (currentUser.role || '').toUpperCase() === 'ADM' ||
@@ -199,7 +209,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                 Akses Terotentikasi
               </p>
               <p className="text-xs font-bold text-slate-900 dark:text-white mt-0.5 truncate">
-                {currentUser?.name}
+                {displayedUserName}
               </p>
               <span className="inline-block mt-1.5 px-2 py-0.5 text-[10px] font-bold rounded-full bg-teal-600 text-white shadow-xs">
                 {role === 'User' ? 'Petugas ROW' : role}

@@ -12,6 +12,7 @@ import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 import { useSettings } from '../context/SettingsContext';
 import { GASApiService } from '../services/gasApiService';
 import { getActiveGasConfig } from '../config/gasConfig';
+import { getPrimaryTimRowForUnit, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
 import {
   UserCheck,
   Calendar,
@@ -83,7 +84,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
   const { user: currentUser } = useAuth();
   const { absensiList, addAbsensi, updateAbsensi, deleteAbsensi, refreshAbsensi } = useAbsensi();
-  const { ulpList, reguList, petugasList } = useMasterData();
+  const { users, ulpList, reguList, petugasList } = useMasterData();
   const { showToast } = useToast();
   const { settings } = useSettings();
 
@@ -104,8 +105,9 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   }, [initialSubTab, isAdmRole]);
 
   const todayStr = getLocalDateTimeString().slice(0, 10);
-  const reguName = currentUser?.reguName || currentUser?.reguId || (currentUser?.role === 'SuperAdmin' || currentUser?.role === 'Admin' ? 'Manajemen/Admin' : 'Belum Ada Regu');
-  const ulpName = currentUser?.ulpName || currentUser?.ulpId || 'Belum Ada ULP';
+
+  const activeUnitName = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+  const primaryInfo = getPrimaryTimRowForUnit(activeUnitName);
 
   // Helper to normalize strings for comparison
   const cleanStr = (s?: string | null) => {
@@ -116,6 +118,17 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       .replace(/^(regu|tim|petugas|kelompok|regu_row|ulp)\s+/gi, '')
       .replace(/[^a-z0-9]/gi, '');
   };
+
+  // Resolve identity based on logged-in USERS account and active INISIASI unit
+  const resolvedIdentity = useMemo(() => {
+    return resolveUserTimRowAndUlp(currentUser, activeUnitName, users, ulpList, reguList);
+  }, [currentUser, activeUnitName, users, ulpList, reguList]);
+
+  const effectiveReguName = resolvedIdentity.reguName;
+  const effectiveUlpName = resolvedIdentity.ulpName;
+
+  const reguName = effectiveReguName;
+  const ulpName = effectiveUlpName;
 
   const extractRowNumber = (s?: string | null): number | null => {
     if (!s) return null;

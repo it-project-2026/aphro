@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useSettings } from '../context/SettingsContext';
 import { useGASSync } from '../context/GASSyncContext';
+import { useMasterData } from '../context/MasterDataContext';
+import { resolveUserTimRowAndUlp } from '../services/rekapHarianService';
 import { useToast } from '../hooks/useToast';
 import { APP_LOGO_URL } from '../data/initialData';
 import { 
@@ -33,7 +35,17 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   const { workOrders } = useWorkOrders();
   const { settings } = useSettings();
   const { syncWithGAS, isSyncing } = useGASSync();
+  const { users, ulpList, reguList } = useMasterData();
   const { showToast } = useToast();
+
+  const userIdentity = useMemo(() => {
+    const activeUnit = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+    return resolveUserTimRowAndUlp(currentUser, activeUnit, users, ulpList, reguList);
+  }, [currentUser, settings.namaUnitLayanan, users, ulpList, reguList]);
+
+  const displayedName = userIdentity.name;
+  const displayedRegu = userIdentity.reguName;
+  const displayedUlp = userIdentity.ulpName;
 
   const handleRefreshWO = async () => {
     try {
@@ -221,17 +233,17 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
                   {greeting}, Petugas Lapangan!
                 </p>
                 <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-                  {currentUser?.name || currentUser?.userName || currentUser?.nip || 'Petugas Regu ROW'}
+                  {displayedName}
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs">
-                  {currentUser?.reguName && (
+                  {displayedRegu && (
                     <span className="px-2.5 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-[#008396] dark:text-teal-400 font-bold border border-teal-100 dark:border-teal-800/30">
-                      {currentUser.reguName}
+                      {displayedRegu}
                     </span>
                   )}
-                  {currentUser?.ulpName && (
+                  {displayedUlp && (
                     <span className="px-2.5 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 font-bold border border-teal-100 dark:border-teal-800/30">
-                      {currentUser.ulpName}
+                      {displayedUlp}
                     </span>
                   )}
                   <span className="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700 uppercase">

@@ -21,6 +21,7 @@ import {
   DEFAULT_UL_OPTIONS,
   DEFAULT_INISIASI_SPREADSHEET_ID,
 } from './inisiasiService';
+import { UL_PRESETS, RekapHarianService } from './rekapHarianService';
 import {
   INITIAL_ULP,
   INITIAL_PENYULANG,
@@ -1355,6 +1356,60 @@ export class SupabaseService {
   /**
    * Fetch all master data for the given unitId
    */
+  /**
+   * Mendapatkan default ULP & Regu ROW yang sesuai dengan Unit Layanan (UL) terpilih.
+   */
+  static getDefaultMasterForUnit(targetUnitId: string): { ulp: ULP[]; regu: ReguROW[] } {
+    let unitName = 'UL BUKITTINGGI';
+    const savedName = this.safeGetItem('aphro_nama_unit_layanan');
+    if (savedName) {
+      unitName = savedName;
+    } else {
+      const matchOpt = DEFAULT_UL_OPTIONS.find((u) => u.id === targetUnitId);
+      if (matchOpt) unitName = matchOpt.namaUL;
+    }
+
+    const unitKey = RekapHarianService.normalizeUnitKey(unitName);
+    const preset = UL_PRESETS[unitKey] || UL_PRESETS.BUKITTINGGI;
+
+    const ulpMap = new Map<string, ULP>();
+    preset.rows.forEach((r, idx) => {
+      const ulpNameClean = r.namaUlp.toUpperCase();
+      if (!ulpMap.has(ulpNameClean)) {
+        ulpMap.set(ulpNameClean, {
+          id: `ulp-${unitKey.toLowerCase()}-${idx + 1}`,
+          kodeULP: r.kodeUnit || `132${idx + 1}`,
+          namaULP: ulpNameClean,
+          manajer: '-',
+          kontak: '-',
+          alamat: `Kantor ${ulpNameClean}`,
+          status: 'Aktif',
+        });
+      }
+    });
+
+    const ulpList = Array.from(ulpMap.values());
+    const reguList: ReguROW[] = preset.rows.map((r, idx) => {
+      const matchingUlp = ulpMap.get(r.namaUlp.toUpperCase());
+      return {
+        id: `rgu-${unitKey.toLowerCase()}-${idx + 1}`,
+        kodeRegu: `REG-${String(idx + 1).padStart(2, '0')}`,
+        namaRegu: r.timRow,
+        penanggungJawab: '-',
+        jumlahAnggota: 5,
+        kontak: '-',
+        ulpId: matchingUlp?.id || targetUnitId,
+        ulpName: r.namaUlp.toUpperCase(),
+        status: 'Aktif',
+      };
+    });
+
+    return { ulp: ulpList, regu: reguList };
+  }
+
+  /**
+   * Fetch master data from Supabase for a given unitId.
+   */
   static async fetchMasterData(unitId?: string): Promise<{
     users: User[];
     ulp: ULP[];
@@ -1364,6 +1419,7 @@ export class SupabaseService {
     source: 'supabase' | 'cache' | 'initial';
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
+    const defaults = this.getDefaultMasterForUnit(targetUnitId);
 
     try {
       let [usersRes, ulpRes, pylRes, reguRes, ptgRes] = await Promise.all([
@@ -1402,7 +1458,7 @@ export class SupabaseService {
 
       const users: User[] = (usersRes.data || []).map((u: any) => this.normalizeUserRow(u));
 
-      const ulp: ULP[] = (ulpRes.data || []).map((u: any) => ({
+      let ulp: ULP[] = (ulpRes.data || []).map((u: any) => ({
         id: String(u.ID || u.id || `ulp-${Math.random().toString(36).substr(2, 6)}`),
         kodeULP: String(u.Kode_ULP || u.kode_ulp || ''),
         namaULP: String(u.Nama_ULP || u.nama_ulp || ''),
@@ -1411,6 +1467,15 @@ export class SupabaseService {
         alamat: String(u.Alamat || u.alamat || ''),
         status: (u.Status === 'Non-Aktif' || u.status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
       }));
+
+      // Filter ULP by targetUnitId if property exists, or if empty fallback to unit default
+      const filteredUlp = ulp.filter((u: any) => {
+        if (u.unitId) return String(u.unitId) === targetUnitId;
+        return true;
+      });
+      if (filteredUlp.length > 0) {
+        ulp = filteredUlp;
+      }
 
       const penyulang: Penyulang[] = (pylRes.data || []).map((p: any) => ({
         id: String(p.ID || p.id || `pyl-${Math.random().toString(36).substr(2, 6)}`),
@@ -1423,7 +1488,17 @@ export class SupabaseService {
         status: 'Normal',
       }));
 
-      const regu: ReguROW[] = (reguRes.data || [])
+      const rawReguList = reguRes.data || [];
+      // Filter regus strictly to target unit if unitId is defined on the database rows
+      const unitSpecificRawRegus = rawReguList.filter((r: any) => {
+        const itemUnitId = r.unitId || r.unit_id || r.unitID || r.Unit_ID;
+        if (itemUnitId) {
+          return String(itemUnitId).toUpperCase() === targetUnitId.toUpperCase();
+        }
+        return true;
+      });
+
+      let regu: ReguROW[] = unitSpecificRawRegus
         .map((r: any) => {
           const rawName =
             r.Nama_Regu ??
@@ -1463,48 +1538,12 @@ export class SupabaseService {
         })
         .filter((r) => r.namaRegu && r.namaRegu !== '-');
 
-      // Reconstruction Fallback if REGU_ROW table is empty in Supabase
+      // Fallback: If no regu found for this unit from DB query, use unit preset defaults
       if (regu.length === 0) {
-        const extractedNames = new Set<string>();
-
-        // From Users
-        users.forEach((u) => {
-          if (u.reguName && u.reguName.trim() && u.reguName.trim() !== '-') {
-            extractedNames.add(u.reguName.trim());
-          }
-        });
-
-        // From local Work Orders cache
-        try {
-          const cachedWo = this.safeGetItem(`aphro_wo_${targetUnitId}`) || this.safeGetItem('aphro_work_orders');
-          if (cachedWo) {
-            const parsed = JSON.parse(cachedWo);
-            if (Array.isArray(parsed)) {
-              parsed.forEach((w: any) => {
-                const name = w.reguName || w.REGU_ROW || w.regu || w.Regu;
-                if (name && String(name).trim() && String(name).trim() !== '-') {
-                  extractedNames.add(String(name).trim());
-                }
-              });
-            }
-          }
-        } catch {}
-
-        let idx = 1;
-        extractedNames.forEach((reguName) => {
-          regu.push({
-            id: `rgu-auto-${idx}`,
-            kodeRegu: `REG-${String(idx).padStart(2, '0')}`,
-            namaRegu: reguName,
-            penanggungJawab: '-',
-            jumlahAnggota: 5,
-            kontak: '-',
-            ulpId: targetUnitId,
-            ulpName: '',
-            status: 'Aktif',
-          });
-          idx++;
-        });
+        regu = defaults.regu;
+      }
+      if (ulp.length === 0) {
+        ulp = defaults.ulp;
       }
 
       const petugas: Petugas[] = (ptgRes.data || []).map((ptg: any) => ({
@@ -1520,25 +1559,23 @@ export class SupabaseService {
         status: (ptg.Status === 'Non-Aktif' || ptg.status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
       }));
 
-      if (users.length > 0 || ulp.length > 0 || penyulang.length > 0 || regu.length > 0 || petugas.length > 0) {
-        return {
-          users: users.length > 0 ? users : INITIAL_USERS,
-          ulp: ulp.length > 0 ? ulp : INITIAL_ULP,
-          penyulang: penyulang.length > 0 ? penyulang : INITIAL_PENYULANG,
-          regu: regu.length > 0 ? regu : INITIAL_REGU,
-          petugas: petugas.length > 0 ? petugas : INITIAL_PETUGAS,
-          source: 'supabase',
-        };
-      }
+      return {
+        users: users.length > 0 ? users : INITIAL_USERS,
+        ulp: ulp.length > 0 ? ulp : defaults.ulp,
+        penyulang: penyulang.length > 0 ? penyulang : INITIAL_PENYULANG,
+        regu: regu.length > 0 ? regu : defaults.regu,
+        petugas: petugas.length > 0 ? petugas : INITIAL_PETUGAS,
+        source: 'supabase',
+      };
     } catch (err) {
       console.warn('Supabase fetchMasterData error:', err);
     }
 
     return {
       users: INITIAL_USERS,
-      ulp: INITIAL_ULP,
+      ulp: defaults.ulp,
       penyulang: INITIAL_PENYULANG,
-      regu: INITIAL_REGU,
+      regu: defaults.regu,
       petugas: INITIAL_PETUGAS,
       source: 'initial',
     };

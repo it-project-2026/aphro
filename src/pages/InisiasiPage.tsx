@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useUI } from '../context/UIContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../hooks/useToast';
 import { InisiasiUnit } from '../types';
 import {
   InisiasiService,
   DEFAULT_UL_OPTIONS,
 } from '../services/inisiasiService';
+import { getPrimaryTimRowForUnit } from '../services/rekapHarianService';
 import { SupabaseService } from '../services/supabaseService';
 import { SUPABASE_URL, SUPABASE_DATABASE_NAME, SUPABASE_TABLES } from '../services/supabaseClient';
 import { APP_LOGO_URL } from '../data/initialData';
@@ -37,6 +39,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
   const { settings, updateSettings } = useSettings();
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
+  const { login } = useAuth();
 
   const [ulOptions, setUlOptions] = useState<InisiasiUnit[]>(DEFAULT_UL_OPTIONS);
   const [selectedULName, setSelectedULName] = useState<string>('');
@@ -113,10 +116,41 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
         absensiFolderId: selectedUnit.folderIdAbsensi || settings.absensiFolderId,
       });
 
-      // Clear old data caches to force fresh fetch for new unit
+      // Clear old data caches and master data to force fresh fetch for new unit
       localStorage.removeItem('pln_work_orders');
       localStorage.removeItem('pln_realisasi');
       localStorage.removeItem('pln_absensi');
+      localStorage.removeItem('aphro_master_data_sync_time');
+      localStorage.removeItem('aphro_master_data_sync_unit');
+      localStorage.removeItem('aphro_regu');
+      localStorage.removeItem('aphro_ulp');
+      localStorage.removeItem('aphro_penyulang');
+      localStorage.removeItem('aphro_ptg');
+      localStorage.removeItem('aphro_synced_users');
+      localStorage.removeItem(`aphro_wo_${selectedUnit.id}`);
+      localStorage.removeItem(`aphro_realisasi_${selectedUnit.id}`);
+
+      // Ensure current active user in storage remains logged in without overwriting user name
+      try {
+        const savedUserStr = localStorage.getItem('aphro_user') || localStorage.getItem('pln_mobile_user');
+        if (savedUserStr) {
+          const parsedUser = JSON.parse(savedUserStr);
+          if (parsedUser) {
+            // Only update demo accounts
+            if (parsedUser.name?.startsWith('Demo')) {
+              const primaryInfo = getPrimaryTimRowForUnit(selectedUnit.namaUL || selectedUnit.id);
+              parsedUser.name = primaryInfo.name;
+              parsedUser.reguName = primaryInfo.reguName;
+              parsedUser.ulpName = primaryInfo.ulpName;
+            }
+            localStorage.setItem('aphro_user', JSON.stringify(parsedUser));
+            localStorage.setItem('pln_mobile_user', JSON.stringify(parsedUser));
+            login(parsedUser);
+          }
+        }
+      } catch (e) {
+        console.warn('Error updating user on initiation:', e);
+      }
 
       showToast(`Berhasil tersambung ke Supabase (${selectedUnit.namaUL})!`, 'success');
 

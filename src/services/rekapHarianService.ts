@@ -24,49 +24,48 @@ export const UL_PRESETS: Record<string, ULConfigPreset> = {
     kodeUL: 'BKT',
     namaUL: 'UL BUKITTINGGI',
     rows: [
-      { namaUlp: 'ULP BUKITTINGGI', timRow: 'TIM ROW 3', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13221' },
-      { namaUlp: 'ULP PADANG PANJANG', timRow: 'TIM ROW 4', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13222' },
-      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 7', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13223' },
-      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 8', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13223' },
-      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 5', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13224' },
-      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 6', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13224' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 9', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 10', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
-      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 11', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
-      { namaUlp: 'ULP BASO', timRow: 'TIM ROW 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13226' },
-      { namaUlp: 'ULP KOTO TUO', timRow: 'TIM ROW 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13227' },
+      { namaUlp: 'ULP KOTO TUO', timRow: 'TIM ROW 01 Koto Tuo', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13227' },
+      { namaUlp: 'ULP BASO', timRow: 'TIM ROW 02 Baso', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13226' },
+      { namaUlp: 'ULP BUKITTINGGI', timRow: 'TIM ROW 03 Bukittinggi Kota', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13221' },
+      { namaUlp: 'ULP PADANG PANJANG', timRow: 'TIM ROW 04 Padang Panjang', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13222' },
+      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 05 Lubuk Basung 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13224' },
+      { namaUlp: 'ULP LUBUK BASUNG', timRow: 'TIM ROW 06 Lubuk Basung 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13224' },
+      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 07 Lubuk Sikaping 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13223' },
+      { namaUlp: 'ULP LUBUK SIKAPING', timRow: 'TIM ROW 08 Lubuk Sikaping 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13223' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 09 Simpang Empat 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 10 Simpang Empat 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
+      { namaUlp: 'ULP SIMPANG EMPAT', timRow: 'TIM ROW 11 Simpang Empat 3', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13225' },
     ],
   },
   PADANG: {
     kodeUL: 'PDG',
     namaUL: 'UL PADANG',
     rows: [
-      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Alpha (Tim Utama)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13211' },
-      { namaUlp: 'ULP PADANG BARAT', timRow: 'Regu ROW Charlie (Rapid Response)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13211' },
-      { namaUlp: 'ULP INDARUNG', timRow: 'Regu ROW Bravo (Tim Indarung)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13212' },
-      { namaUlp: 'ULP KURANJI', timRow: 'Regu ROW Alpha (Tim Utama)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13213' },
-      { namaUlp: 'ULP TABING', timRow: 'Regu ROW Delta (Tim Tabing)', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13214' },
+      { namaUlp: 'ULP BELANTI', timRow: 'TIM ROW 01 Belanti', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13211' },
+      { namaUlp: 'ULP PADANG BARAT', timRow: 'TIM ROW 02 Padang Barat', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13211' },
+      { namaUlp: 'ULP INDARUNG', timRow: 'TIM ROW 03 Indarung', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13212' },
+      { namaUlp: 'ULP KURANJI', timRow: 'TIM ROW 04 Kuranji', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13213' },
+      { namaUlp: 'ULP TABING', timRow: 'TIM ROW 05 Tabing', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13214' },
+      { namaUlp: 'ULP LUBUK BEGALUNG', timRow: 'TIM ROW 06 Lubuk Begalung', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13215' },
     ],
   },
   PAYAKUMBUH: {
     kodeUL: 'PYK',
     namaUL: 'UL PAYAKUMBUH',
     rows: [
-      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13231' },
-      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13231' },
-      { namaUlp: 'ULP LIMA PULUH KOTA', timRow: 'TIM ROW 3', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13232' },
-      { namaUlp: 'ULP SULIKI', timRow: 'TIM ROW 4', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13233' },
+      { namaUlp: 'ULP PAYAKUMBUH KOTA', timRow: 'TIM ROW 01 Payakumbuh Kota', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13231' },
+      { namaUlp: 'ULP LIMA PULUH KOTA', timRow: 'TIM ROW 02 Lima Puluh Kota', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13232' },
+      { namaUlp: 'ULP SULIKI', timRow: 'TIM ROW 03 Suliki', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13233' },
     ],
   },
   SOLOK: {
     kodeUL: 'SLK',
     namaUL: 'UL SOLOK',
     rows: [
-      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 1', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13241' },
-      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 2', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13241' },
-      { namaUlp: 'ULP SAWAHLUNTO', timRow: 'TIM ROW 3', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13242' },
-      { namaUlp: 'ULP SIJUNJUNG', timRow: 'TIM ROW 4', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13243' },
-      { namaUlp: 'ULP MUARA LABUH', timRow: 'TIM ROW 5', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13244' },
+      { namaUlp: 'ULP SOLOK KOTA', timRow: 'TIM ROW 01 Solok Kota', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13241' },
+      { namaUlp: 'ULP SAWAHLUNTO', timRow: 'TIM ROW 02 Sawahlunto', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13242' },
+      { namaUlp: 'ULP SIJUNJUNG', timRow: 'TIM ROW 03 Sijunjung', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13243' },
+      { namaUlp: 'ULP MUARA LABUH', timRow: 'TIM ROW 04 Muara Labuh', target: TARGET_KMS_PER_TIM_ROW, kodeUnit: '13244' },
     ],
   },
 };
@@ -80,16 +79,168 @@ export const DEFAULT_REKAP_ROWS = UL_PRESETS.BUKITTINGGI.rows.map((r, idx) => ({
   target: r.target,
 }));
 
+export function getPrimaryTimRowForUnit(unitNameOrId: string) {
+  const key = RekapHarianService.normalizeUnitKey(unitNameOrId);
+  const preset = UL_PRESETS[key] || UL_PRESETS.BUKITTINGGI;
+  const firstRow = preset.rows[0];
+  return {
+    name: firstRow.timRow,
+    reguName: firstRow.timRow,
+    ulpName: firstRow.namaUlp,
+  };
+}
+
+export function resolveUserTimRowAndUlp(
+  user: any,
+  unitNameOrId?: string | null,
+  masterUsers?: any[],
+  ulpList?: any[],
+  reguList?: any[]
+): { name: string; reguName: string; ulpName: string } {
+  // 1. Determine active Inisiasi unit key (prioritizing active unit selection over legacy user.unitId)
+  const activeUnitInput =
+    unitNameOrId ||
+    localStorage.getItem('aphro_nama_unit_layanan') ||
+    localStorage.getItem('aphro_selected_unit_id') ||
+    user?.unitId ||
+    user?.unit_id ||
+    'UL PADANG';
+
+  const unitKey = RekapHarianService.normalizeUnitKey(activeUnitInput);
+  const primaryInfo = getPrimaryTimRowForUnit(unitKey);
+  const preset = UL_PRESETS[unitKey] || UL_PRESETS.PADANG;
+
+  if (!user) {
+    return {
+      name: primaryInfo.name,
+      reguName: primaryInfo.reguName,
+      ulpName: primaryInfo.ulpName,
+    };
+  }
+
+  // 2. Check Admin / Management role
+  const roleUpper = (user.role || '').toUpperCase();
+  const userNameLower = (user.userName || user.nip || user.id || '').toLowerCase();
+  if (roleUpper === 'SUPERADMIN' || roleUpper === 'ADMIN' || roleUpper === 'ADM' || userNameLower === 'admbkt') {
+    return {
+      name: user.name || user.userName || 'Admin',
+      reguName: 'Manajemen/Admin',
+      ulpName: user.ulpName || 'SEMUA ULP',
+    };
+  }
+
+  // Helper clean string
+  const cleanStr = (s?: string | null) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // Helper extract row number (e.g., 'row01', 'USERS 01', 'usr-01', '01' -> 1)
+  const extractRowNumber = (s?: string | null): number | null => {
+    if (!s) return null;
+    const str = String(s).trim();
+    const m = str.match(/(?:row|users|user|usr)[-_\s]*0?(\d+)/i) || str.match(/\b0?(\d+)\b/);
+    return m ? parseInt(m[1], 10) : null;
+  };
+
+  // Filter reguList strictly by active unitKey
+  const unitReguList = (reguList || []).filter((r: any) => {
+    const rUnitId = r.unitId || r.unit_id || r.ulpId;
+    if (!rUnitId) return false;
+    return RekapHarianService.normalizeUnitKey(rUnitId) === unitKey;
+  });
+
+  // Filter ulpList strictly by active unitKey
+  const unitUlpList = (ulpList || []).filter((u: any) => {
+    const uUnitId = u.unitId || u.unit_id;
+    if (!uUnitId) return false;
+    return RekapHarianService.normalizeUnitKey(uUnitId) === unitKey;
+  });
+
+  // Determine row number from user identifiers
+  const userIdentifier = `${user.userName || ''} ${user.nip || ''} ${user.id || ''} ${user.name || ''} ${user.reguName || ''}`;
+  const userRowNum = extractRowNumber(userIdentifier);
+
+  let resolvedReguName: string | null = null;
+  let resolvedUlpName: string | null = null;
+
+  // Priority 1: Match row number directly against ACTIVE unit's preset rows (e.g. UL1 row 1 -> TIM ROW 01 Belanti, UL2 row 1 -> TIM ROW 01 Koto Tuo)
+  if (userRowNum !== null && userRowNum > 0) {
+    const presetRow = preset.rows.find(r => extractRowNumber(r.timRow) === userRowNum) || preset.rows[userRowNum - 1];
+    if (presetRow) {
+      resolvedReguName = presetRow.timRow;
+      resolvedUlpName = presetRow.namaUlp;
+    }
+  }
+
+  // Priority 2: Check if user.reguName explicitly belongs to active unit's preset rows or unitReguList
+  if (!resolvedReguName && user.reguName && user.reguName.trim() !== '' && user.reguName !== 'Belum Ada Regu') {
+    const matchedPreset = preset.rows.find(r => cleanStr(r.timRow) === cleanStr(user.reguName));
+    const matchedRegu = unitReguList.find(r => cleanStr(r.namaRegu) === cleanStr(user.reguName));
+    if (matchedPreset) {
+      resolvedReguName = matchedPreset.timRow;
+      resolvedUlpName = matchedPreset.namaUlp;
+    } else if (matchedRegu) {
+      resolvedReguName = matchedRegu.namaRegu;
+    }
+  }
+
+  // Priority 3: Check if user.name matches any timRow in active unit's preset
+  if (!resolvedReguName && user.name) {
+    const matchedPreset = preset.rows.find(r => cleanStr(r.timRow) === cleanStr(user.name));
+    if (matchedPreset) {
+      resolvedReguName = matchedPreset.timRow;
+      resolvedUlpName = matchedPreset.namaUlp;
+    }
+  }
+
+  // Priority 4: Fallback to active unit's primary tim row
+  if (!resolvedReguName) {
+    resolvedReguName = primaryInfo.reguName;
+    resolvedUlpName = primaryInfo.ulpName;
+  }
+
+  // Resolve ULP Name for active unit if not set
+  if (!resolvedUlpName) {
+    const presetRow = preset.rows.find(r => 
+      cleanStr(r.timRow) === cleanStr(resolvedReguName) || 
+      (userRowNum !== null && extractRowNumber(r.timRow) === userRowNum)
+    );
+    if (presetRow?.namaUlp) {
+      resolvedUlpName = presetRow.namaUlp;
+    }
+  }
+
+  if (!resolvedUlpName && user.ulpName) {
+    const isUlpInActiveUnit = preset.rows.some(r => cleanStr(r.namaUlp) === cleanStr(user.ulpName)) ||
+      unitUlpList.some(u => cleanStr(u.namaULP) === cleanStr(user.ulpName));
+    if (isUlpInActiveUnit) {
+      resolvedUlpName = user.ulpName.trim();
+    }
+  }
+
+  if (!resolvedUlpName) {
+    resolvedUlpName = primaryInfo.ulpName;
+  }
+
+  const resolvedUserName: string = user.name && !user.name.toUpperCase().startsWith('TIM ROW')
+    ? user.name
+    : resolvedReguName || 'Petugas Regu ROW';
+
+  return {
+    name: resolvedUserName,
+    reguName: resolvedReguName,
+    ulpName: resolvedUlpName,
+  };
+}
+
 export class RekapHarianService {
   /**
    * Normalisasi key Unit Layanan untuk storage dan preset
    */
   static normalizeUnitKey(unitName: string): string {
-    const upper = (unitName || '').toUpperCase();
-    if (upper.includes('PADANG')) return 'PADANG';
-    if (upper.includes('PAYAKUMBUH')) return 'PAYAKUMBUH';
-    if (upper.includes('SOLOK')) return 'SOLOK';
-    if (upper.includes('BUKITTINGGI')) return 'BUKITTINGGI';
+    const upper = (unitName || '').toUpperCase().trim();
+    if (upper.includes('PADANG') || upper === 'UL1' || upper.includes('PDG')) return 'PADANG';
+    if (upper.includes('PAYAKUMBUH') || upper === 'UL4' || upper.includes('PYK')) return 'PAYAKUMBUH';
+    if (upper.includes('SOLOK') || upper === 'UL3' || upper.includes('SLK')) return 'SOLOK';
+    if (upper.includes('BUKITTINGGI') || upper === 'UL2' || upper.includes('BKT')) return 'BUKITTINGGI';
     return upper.replace(/[^A-Z0-9]/g, '_') || 'BUKITTINGGI';
   }
 

@@ -3,6 +3,7 @@ import { usePersistState } from '../hooks/usePersistState';
 import { User, UserRole } from '../types';
 import { AuthContextData } from './contextConstants';
 import { dexieDb } from '../services/dexieDb';
+import { getPrimaryTimRowForUnit } from '../services/rekapHarianService';
 
 interface AuthContextType {
   user: User | null;
@@ -44,10 +45,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginAsRole = React.useCallback((role: UserRole) => {
     const safeRole = role || '';
+    let name = `Demo ${role}`;
+    let reguName: string | undefined = undefined;
+    let ulpName: string | undefined = undefined;
+
+    if (role === 'User') {
+      const activeUnit = localStorage.getItem('aphro_nama_unit_layanan') || localStorage.getItem('aphro_selected_unit_id') || 'UL BUKITTINGGI';
+      const primary = getPrimaryTimRowForUnit(activeUnit);
+      name = primary.name;
+      reguName = primary.reguName;
+      ulpName = primary.ulpName;
+    }
+
     const mockUser: User = {
       id: `usr-${safeRole.toLowerCase()}`,
       nip: (role || '').toUpperCase(),
-      name: `Demo ${role}`,
+      name,
+      reguName,
+      ulpName,
       email: `${safeRole.toLowerCase()}@pln.co.id`,
       role: role
     };
