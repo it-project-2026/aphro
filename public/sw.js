@@ -1,7 +1,5 @@
-const CACHE_NAME = 'aphro-v3';
+const CACHE_NAME = 'aphro-v2026.09.15.01';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/favicon.ico',
   '/favicon.png',
@@ -12,7 +10,7 @@ const ASSETS_TO_CACHE = [
   '/apple-touch-icon.png'
 ];
 
-// Install Event: Cache essential shell assets
+// Install Event: Precache static app shell assets (Excluding index.html & version.json)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -38,26 +36,51 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch Event: Network First Strategy
-// This ensures that for data-heavy apps, we always try to get fresh data first.
+// Listen for SKIP_WAITING message from client
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Fetch Event: Smart Cache Strategy
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
+  const url = new URL(event.request.url);
+
+  // 1. Always Network-Only for version.json & Supabase API calls
+  if (url.pathname.endsWith('/version.json') || url.pathname.includes('/rest/v1/') || url.hostname.includes('supabase')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 2. Network-First for HTML navigation / index.html (Never rely on stale index.html)
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-cache' })
+        .then((networkResponse) => networkResponse)
+        .catch(() => caches.match('/index.html') || caches.match('/'))
+    );
+    return;
+  }
+
+  // 3. Cache-First for Hashed JS/CSS and static assets
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        // If successful, optionally update the cache
-        return caches.open(CACHE_NAME).then((cache) => {
-          if (ASSETS_TO_CACHE.includes(new URL(event.request.url).pathname)) {
-            cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        });
-      })
-      .catch(() => {
-        // If network fails, try to serve from cache
-        return caches.match(event.request);
-      })
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(event.request).then((networkResponse) => {
+        // Cache static assets dynamically (excluding API/HTML)
+        if (networkResponse.status === 200 && (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|woff2?)$/))) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+        }
+        return networkResponse;
+      });
+    })
   );
 });

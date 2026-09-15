@@ -31,6 +31,8 @@ import {
   BarChart3,
 } from 'lucide-react';
 
+import { APP_VERSION } from '../../config/version';
+
 interface SidebarProps {
   isOpen: boolean;
   onCloseMobile: () => void;
@@ -293,8 +295,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
           <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate">
             {settings.namaUnitLayanan}
           </p>
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-            {settings.versiAplikasi}
+          <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mt-0.5">
+            APHRO v{APP_VERSION}
           </p>
         </div>
       </aside>

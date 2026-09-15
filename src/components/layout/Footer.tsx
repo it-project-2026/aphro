@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSettings } from '../../context/SettingsContext';
+import { APP_VERSION } from '../../config/version';
 import { Phone, Mail, MapPin } from 'lucide-react';
 
 export const Footer: React.FC = () => {
@@ -9,8 +10,11 @@ export const Footer: React.FC = () => {
     <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs py-4 sm:py-6 px-3 sm:px-6 pb-24 lg:pb-6 transition-colors duration-200">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
         <div className="space-y-0.5">
-          <p className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm">
-            {settings.namaUnitLayanan}
+          <p className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center justify-center md:justify-start gap-2">
+            <span>{settings.namaUnitLayanan}</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold border border-slate-200 dark:border-slate-700">
+              APHRO v{APP_VERSION}
+            </span>
           </p>
           <p className="text-[10px] sm:text-xs">© 13307BKT- 2026 PLN ES UP4 Sumatera Barat. All rights reserved.</p>
         </div>

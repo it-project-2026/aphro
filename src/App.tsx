@@ -14,6 +14,7 @@ import { MobileBottomNav } from './components/layout/MobileBottomNav';
 import { Footer } from './components/layout/Footer';
 import { ToastContainer } from './components/common/ToastContainer';
 import { SyncStatusBanner } from './components/common/SyncStatusBanner';
+import { VersionUpdateNotification } from './components/common/VersionUpdateNotification';
 import { NotificationListener } from './components/layout/NotificationListener';
 import { Database, Loader2 } from 'lucide-react';
 
@@ -251,6 +252,7 @@ export default function App() {
   return (
     <GlobalProvider>
       <AppContent />
+      <VersionUpdateNotification />
     </GlobalProvider>
   );
 }
