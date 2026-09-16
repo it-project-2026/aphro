@@ -22,7 +22,7 @@ import 'leaflet/dist/leaflet.css';
 import {
   Printer,
   FileText,
-  Map,
+  Map as MapIcon,
   Download,
   Filter,
   Image as ImageIcon,
@@ -38,6 +38,9 @@ import {
   Info,
   ChevronDown,
   Sparkles,
+  RotateCcw,
+  MapPin,
+  ExternalLink,
 } from 'lucide-react';
 import { SupabaseService } from '../services/supabaseService';
 import { Realisasi, WorkOrder } from '../types';
@@ -222,18 +225,12 @@ export const CetakLaporanPage: React.FC = () => {
     return ulpList;
   }, [ulpList, activeUnitId]);
 
-  // 1. Core Selection States (ULP, Periode, Jenis Laporan)
+  // 1. Core Selection States (Nomor WO Filter Only & Jenis Laporan)
   const [reportType, setReportType] = useState<'foto' | 'peta' | 'work_order'>('foto');
-  const [filterUlp, setFilterUlp] = useState<string>('ALL');
-  const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfMonthString());
-  const [filterEndDate, setFilterEndDate] = useState<string>(getTodayDateString());
+  const [filterNoWo, setFilterNoWo] = useState<string>('');
+  const [searchTermWO, setSearchTermWO] = useState<string>('');
 
-  // 2. Secondary Filter States
-  const [filterPenyulang, setFilterPenyulang] = useState('ALL');
-  const [filterRegu, setFilterRegu] = useState('ALL');
-  const [filterNoWo, setFilterNoWo] = useState('ALL');
-
-  // 3. Server Query Result States (Targeted Dataset)
+  // 2. Server Query Result States (Targeted Dataset)
   const [targetedRealisasi, setTargetedRealisasi] = useState<Realisasi[]>([]);
   const [targetedWorkOrders, setTargetedWorkOrders] = useState<WorkOrder[]>([]);
   const [isLoadingQuery, setIsLoadingQuery] = useState(false);
@@ -244,6 +241,7 @@ export const CetakLaporanPage: React.FC = () => {
     endDate: string;
     type: string;
     total: number;
+    nomorWO?: string;
     executedAt: string;
   } | null>(null);
 
@@ -255,100 +253,32 @@ export const CetakLaporanPage: React.FC = () => {
   const [isRoutingLoading, setIsRoutingLoading] = useState(false);
   const mapCaptureRef = useRef<MapReportCaptureRef>(null);
 
-  // Set default ULP based on user context
-  useEffect(() => {
-    if (currentUser?.ulpName && filterUlp === 'ALL' && currentUser.role === 'User') {
-      const matched = scopedUlpList.find(
-        (u) => u.namaULP.toLowerCase().trim() === currentUser.ulpName?.toLowerCase().trim() ||
-               u.id.toLowerCase().trim() === currentUser.ulpName?.toLowerCase().trim()
-      );
-      if (matched) {
-        setFilterUlp(matched.namaULP);
-      } else {
-        setFilterUlp(currentUser.ulpName);
-      }
-    }
-  }, [currentUser, scopedUlpList, filterUlp]);
-
   // Clean string helper
   const cleanStr = (s?: string | null) => {
     if (!s) return '';
     return String(s).toLowerCase().trim().replace(/[^a-z0-9]/gi, '');
   };
 
-  // Selected ULP and Feeder display helpers
-  const selectedUlpObj = useMemo(() => {
-    return scopedUlpList.find((u) => u.id === filterUlp || u.namaULP === filterUlp) ||
-           ulpList.find((u) => u.id === filterUlp || u.namaULP === filterUlp);
-  }, [scopedUlpList, ulpList, filterUlp]);
-
-  const selectedUlpName = useMemo(() => {
-    if (selectedUlpObj) return selectedUlpObj.namaULP;
-    if (filterUlp !== 'ALL') return filterUlp;
-    return scopedUlpList[0]?.namaULP || targetedRealisasi[0]?.ulpName || targetedWorkOrders[0]?.ulpName || 'BUKITTINGGI';
-  }, [selectedUlpObj, filterUlp, scopedUlpList, targetedRealisasi, targetedWorkOrders]);
-
-  const selectedPenyulangObj = useMemo(() => {
-    return penyulangList.find((p) => p.id === filterPenyulang || p.namaPenyulang === filterPenyulang);
-  }, [penyulangList, filterPenyulang]);
-
-  const selectedPenyulangName = useMemo(() => {
-    if (selectedPenyulangObj) return selectedPenyulangObj.namaPenyulang;
-    if (filterPenyulang !== 'ALL') return filterPenyulang;
-    return targetedRealisasi[0]?.penyulangName || targetedWorkOrders[0]?.penyulangName || penyulangList[0]?.namaPenyulang || 'SEMUA FEEDER';
-  }, [selectedPenyulangObj, filterPenyulang, targetedRealisasi, targetedWorkOrders, penyulangList]);
-
+  // Dynamic area, ULP, and Penyulang resolvers based on selected WO
   const selectedAreaName = useMemo(() => {
     return settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
   }, [settings.namaUnitLayanan]);
 
-  // Available Penyulang list based strictly on active unitId and selected ULP
-  const availablePenyulangList = useMemo(() => {
-    const unitPenyulangs = penyulangList.filter((p: any) => {
-      if (p.unitId && String(p.unitId).toUpperCase() === activeUnitId.toUpperCase()) return true;
-      if (p.ulpId && String(p.ulpId).toUpperCase() === activeUnitId.toUpperCase()) return true;
-      const matchesScoped = scopedUlpList.some(u => 
-        cleanStr(u.namaULP) === cleanStr(p.ulpName) || cleanStr(u.id) === cleanStr(p.ulpId)
-      );
-      return matchesScoped;
-    });
+  const selectedUlpName = useMemo(() => {
+    if (filterNoWo !== 'ALL') {
+      const matched = targetedRealisasi.find(r => r.nomorWO === filterNoWo) || targetedWorkOrders.find(w => w.nomorWO === filterNoWo);
+      if (matched?.ulpName) return matched.ulpName;
+    }
+    return scopedUlpList[0]?.namaULP || targetedRealisasi[0]?.ulpName || targetedWorkOrders[0]?.ulpName || activeUnitName || 'BUKITTINGGI';
+  }, [filterNoWo, targetedRealisasi, targetedWorkOrders, scopedUlpList, activeUnitName]);
 
-    const baseList = unitPenyulangs.length > 0 ? unitPenyulangs : penyulangList;
-
-    if (filterUlp === 'ALL') return baseList;
-    const targetUlpName = selectedUlpName;
-
-    return baseList.filter((p) => {
-      if (cleanStr(p.ulpId) === cleanStr(filterUlp) || cleanStr(p.ulpName) === cleanStr(filterUlp)) return true;
-      if (selectedUlpObj && (cleanStr(p.ulpId) === cleanStr(selectedUlpObj.id) || cleanStr(p.ulpName) === cleanStr(selectedUlpObj.namaULP))) return true;
-      if (p.ulpName && targetUlpName && (cleanStr(p.ulpName) === cleanStr(targetUlpName) || cleanStr(p.ulpName).includes(cleanStr(targetUlpName)))) return true;
-      return false;
-    });
-  }, [penyulangList, activeUnitId, scopedUlpList, filterUlp, selectedUlpObj, selectedUlpName]);
-
-  // Available Regu list based strictly on active unitId and selected ULP
-  const availableReguList = useMemo(() => {
-    const unitRegus = reguList.filter((r: any) => {
-      if (r.unitId && String(r.unitId).toUpperCase() === activeUnitId.toUpperCase()) return true;
-      if (r.ulpId && String(r.ulpId).toUpperCase() === activeUnitId.toUpperCase()) return true;
-      const matchesScoped = scopedUlpList.some(u => 
-        cleanStr(u.namaULP) === cleanStr(r.ulpName) || cleanStr(u.id) === cleanStr(r.ulpId)
-      );
-      return matchesScoped;
-    });
-
-    const baseList = unitRegus.length > 0 ? unitRegus : reguList;
-
-    if (filterUlp === 'ALL') return baseList;
-    const targetUlpName = selectedUlpName;
-
-    return baseList.filter((r) => {
-      if (cleanStr(r.ulpId) === cleanStr(filterUlp) || cleanStr(r.ulpName) === cleanStr(filterUlp)) return true;
-      if (selectedUlpObj && (cleanStr(r.ulpId) === cleanStr(selectedUlpObj.id) || cleanStr(r.ulpName) === cleanStr(selectedUlpObj.namaULP))) return true;
-      if (r.ulpName && targetUlpName && (cleanStr(r.ulpName) === cleanStr(targetUlpName) || cleanStr(r.ulpName).includes(cleanStr(targetUlpName)))) return true;
-      return false;
-    });
-  }, [reguList, activeUnitId, scopedUlpList, filterUlp, selectedUlpObj, selectedUlpName]);
+  const selectedPenyulangName = useMemo(() => {
+    if (filterNoWo !== 'ALL') {
+      const matched = targetedRealisasi.find(r => r.nomorWO === filterNoWo) || targetedWorkOrders.find(w => w.nomorWO === filterNoWo);
+      if (matched?.penyulangName) return matched.penyulangName;
+    }
+    return targetedRealisasi[0]?.penyulangName || targetedWorkOrders[0]?.penyulangName || penyulangList[0]?.namaPenyulang || 'SEMUA FEEDER';
+  }, [filterNoWo, targetedRealisasi, targetedWorkOrders, penyulangList]);
 
   // Pre-load Work Orders belonging to this initiated unitId for the dropdown
   const [unitWorkOrders, setUnitWorkOrders] = useState<WorkOrder[]>([]);
@@ -360,11 +290,27 @@ export const CetakLaporanPage: React.FC = () => {
         const { dexieDb } = await import('../services/dexieDb');
         const localWos = await dexieDb.work_orders.toArray();
         const forUnit = localWos.filter((w: any) => {
-          if (w.unitId && String(w.unitId).toUpperCase() === activeUnitId.toUpperCase()) return true;
+          if (!w.unitId || String(w.unitId).toUpperCase() === activeUnitId.toUpperCase()) return true;
           return scopedUlpList.some(u => cleanStr(u.namaULP) === cleanStr(w.ulpName));
         });
+
         if (isMounted) {
           setUnitWorkOrders(forUnit.length > 0 ? forUnit : localWos);
+        }
+
+        if (navigator.onLine) {
+          const res = await SupabaseService.fetchTargetedReportData({
+            jenisLaporan: 'work_order',
+            unitId: activeUnitId,
+          });
+          if (isMounted && res.success && res.workOrders.length > 0) {
+            setUnitWorkOrders((prev) => {
+              const map = new Map<string, WorkOrder>();
+              prev.forEach((w) => { if (w.nomorWO) map.set(w.nomorWO, w); });
+              res.workOrders.forEach((w) => { if (w.nomorWO) map.set(w.nomorWO, w); });
+              return Array.from(map.values());
+            });
+          }
         }
       } catch {
         // Fallback
@@ -374,22 +320,13 @@ export const CetakLaporanPage: React.FC = () => {
     return () => { isMounted = false; };
   }, [activeUnitId, scopedUlpList]);
 
-  // Available WO Numbers following active unitId, selected ULP, and selected Penyulang
+  // Available WO Numbers list for dropdown
   const availableWONumbers = useMemo(() => {
     const woSet = new Set<string>();
 
-    // 1. From unit work orders matching active filters
     unitWorkOrders.forEach((wo) => {
-      if (filterUlp !== 'ALL' && selectedUlpName) {
-        if (cleanStr(wo.ulpName) !== cleanStr(selectedUlpName) && !cleanStr(wo.ulpName).includes(cleanStr(selectedUlpName))) return;
-      }
-      if (filterPenyulang !== 'ALL' && selectedPenyulangName) {
-        if (cleanStr(wo.penyulangName) !== cleanStr(selectedPenyulangName)) return;
-      }
       if (wo.nomorWO) woSet.add(wo.nomorWO);
     });
-
-    // 2. From currently targeted query results
     targetedWorkOrders.forEach((wo) => {
       if (wo.nomorWO) woSet.add(wo.nomorWO);
     });
@@ -397,24 +334,35 @@ export const CetakLaporanPage: React.FC = () => {
       if (rel.nomorWO) woSet.add(rel.nomorWO);
     });
 
-    return Array.from(woSet).sort();
-  }, [unitWorkOrders, targetedWorkOrders, targetedRealisasi, filterUlp, selectedUlpName, filterPenyulang, selectedPenyulangName]);
+    let list = Array.from(woSet).sort();
+    if (searchTermWO.trim() !== '') {
+      const q = searchTermWO.toLowerCase().trim();
+      list = list.filter((num) => num.toLowerCase().includes(q));
+    }
+    return list;
+  }, [unitWorkOrders, targetedWorkOrders, targetedRealisasi, searchTermWO]);
 
   // ==========================================
   // TARGETED QUERY EXECUTION (PostgreSQL / Supabase)
   // ==========================================
   const handleExecuteTargetedQuery = useCallback(async (isSilent: boolean = false) => {
+    if (!filterNoWo) {
+      setTargetedRealisasi([]);
+      setTargetedWorkOrders([]);
+      setLastQueriedParams(null);
+      setIsLoadingQuery(false);
+      if (!isSilent) {
+        showToast('Silakan pilih Nomor Work Order (WO) pada filter terlebih dahulu.', 'warning');
+      }
+      return;
+    }
+
     setIsLoadingQuery(true);
 
     try {
       const result = await SupabaseService.fetchTargetedReportData({
         jenisLaporan: reportType,
-        unitId: activeUnitId, // Mengikuti unitId Inisiasi yang aktif
-        ulpName: filterUlp !== 'ALL' ? selectedUlpName : undefined,
-        startDate: filterStartDate || undefined,
-        endDate: filterEndDate || undefined,
-        penyulangName: filterPenyulang !== 'ALL' ? selectedPenyulangName : undefined,
-        reguName: filterRegu !== 'ALL' ? filterRegu : undefined,
+        unitId: activeUnitId,
         nomorWO: filterNoWo !== 'ALL' ? filterNoWo : undefined,
       });
 
@@ -424,20 +372,23 @@ export const CetakLaporanPage: React.FC = () => {
         setDataSource(result.source === 'supabase' ? 'PostgreSQL/Supabase' : 'Dexie DB (Offline)');
 
         setLastQueriedParams({
-          ulp: filterUlp === 'ALL' ? `Semua ULP (${activeUnitName})` : selectedUlpName,
-          startDate: filterStartDate,
-          endDate: filterEndDate,
+          ulp: activeUnitName,
+          startDate: '-',
+          endDate: '-',
           type: reportType === 'foto' ? 'Laporan Foto Realisasi' : reportType === 'peta' ? 'Laporan Peta Spasial' : 'Laporan Rekapitulasi WO',
           total: result.totalCount,
+          nomorWO: filterNoWo !== 'ALL' ? filterNoWo : 'Semua Work Order',
           executedAt: new Date().toLocaleTimeString('id-ID'),
         });
 
         if (!isSilent) {
-          showToast(`Berhasil memuat ${result.totalCount} data dari ${result.source === 'supabase' ? 'PostgreSQL Server' : 'Dexie Offline Cache'} (Unit: ${activeUnitName})`, 'success');
+          showToast(`Berhasil memuat ${result.totalCount} data dari ${result.source === 'supabase' ? 'PostgreSQL Server' : 'Dexie Offline Cache'} (WO: ${filterNoWo !== 'ALL' ? filterNoWo : 'Semua'})`, 'success');
         }
       } else {
+        setTargetedRealisasi([]);
+        setTargetedWorkOrders([]);
         if (!isSilent) {
-          showToast('Tidak ada data yang ditemukan untuk filter yang dipilih.', 'info');
+          showToast('Tidak ada data yang ditemukan untuk Nomor WO ini.', 'info');
         }
       }
     } catch (err: any) {
@@ -448,15 +399,21 @@ export const CetakLaporanPage: React.FC = () => {
     } finally {
       setIsLoadingQuery(false);
     }
-  }, [reportType, activeUnitId, activeUnitName, filterUlp, selectedUlpName, filterStartDate, filterEndDate, filterPenyulang, selectedPenyulangName, filterRegu, filterNoWo, showToast]);
+  }, [reportType, activeUnitId, activeUnitName, filterNoWo, showToast]);
 
   // Initial load and automated query trigger on main filter change
   useEffect(() => {
+    if (!filterNoWo) {
+      setTargetedRealisasi([]);
+      setTargetedWorkOrders([]);
+      setLastQueriedParams(null);
+      return;
+    }
     const timer = setTimeout(() => {
       handleExecuteTargetedQuery(true);
     }, 250);
     return () => clearTimeout(timer);
-  }, [reportType, filterUlp, filterStartDate, filterEndDate, activeUnitId]);
+  }, [reportType, filterNoWo, activeUnitId, handleExecuteTargetedQuery]);
 
   // Map WO by ID and Nomor_WO for robust lookup
   const workOrdersMap = useMemo(() => {
@@ -481,18 +438,8 @@ export const CetakLaporanPage: React.FC = () => {
     if (matchedWo?.penyulangName && matchedWo.penyulangName.trim() !== '' && matchedWo.penyulangName !== '-') {
       return matchedWo.penyulangName;
     }
-    if (filterPenyulang !== 'ALL' && selectedPenyulangName && selectedPenyulangName !== 'Semua Penyulang') {
-      return selectedPenyulangName;
-    }
-    const targetUlp = rel?.ulpName || matchedWo?.ulpName || selectedUlpName;
-    if (targetUlp) {
-      const matchFeeder = availablePenyulangList.find(p => cleanStr(p.ulpName) === cleanStr(targetUlp) || cleanStr(p.ulpId) === cleanStr(targetUlp));
-      if (matchFeeder?.namaPenyulang) {
-        return matchFeeder.namaPenyulang;
-      }
-    }
     return selectedPenyulangName !== 'Semua Penyulang' ? selectedPenyulangName : '-';
-  }, [workOrdersMap, filterPenyulang, selectedPenyulangName, selectedUlpName, availablePenyulangList]);
+  }, [workOrdersMap, selectedPenyulangName]);
 
   // Non-overlapping GIS Map points for Map Report
   const nonOverlappingMapPoints = useMemo(() => {
@@ -619,21 +566,29 @@ export const CetakLaporanPage: React.FC = () => {
 
   // Print handler
   const handlePrint = () => {
+    if (!filterNoWo) {
+      showToast('Silakan pilih Nomor Work Order (WO) pada filter terlebih dahulu.', 'warning');
+      return;
+    }
     window.print();
   };
 
   // PDF Export Handler
   const handleExportPDF = async () => {
-    if (reportType === 'foto') {
-      const enrichedRealisasi = targetedRealisasi.map((rel) => ({
-        ...rel,
-        penyulangName: resolvePenyulangName(rel),
-      }));
-      generateCetakPhotoPDF(enrichedRealisasi, workOrdersMap, settings, selectedUlpName, targetedWorkOrders);
-      showToast('PDF Laporan Foto Realisasi Berhasil Dibuat', 'success');
-    } else if (reportType === 'peta') {
-      setIsGeneratingPDF(true);
-      try {
+    if (!filterNoWo) {
+      showToast('Silakan pilih Nomor Work Order (WO) pada filter terlebih dahulu.', 'warning');
+      return;
+    }
+    setIsGeneratingPDF(true);
+    try {
+      if (reportType === 'foto') {
+        const enrichedRealisasi = targetedRealisasi.map((rel) => ({
+          ...rel,
+          penyulangName: resolvePenyulangName(rel),
+        }));
+        await generateCetakPhotoPDF(enrichedRealisasi, workOrdersMap, settings, selectedUlpName, targetedWorkOrders);
+        showToast('PDF Laporan Foto Realisasi Berhasil Dibuat', 'success');
+      } else if (reportType === 'peta') {
         const exportPoints: MapPoint[] = nonOverlappingMapPoints.map((pt, idx) => ({
           id: pt.id,
           nomorWO: pt.nomorWO,
@@ -661,31 +616,25 @@ export const CetakLaporanPage: React.FC = () => {
         );
         
         showToast('PDF Laporan Peta Berhasil Dibuat', 'success');
-      } catch (error) {
-        console.error('Failed to generate enhanced PDF:', error);
-        showToast('Gagal membuat PDF Laporan Peta', 'error');
-        
-        generateLaporanPetaPDF(
-          targetedWorkOrders,
-          settings,
-          selectedUlpName,
-          selectedPenyulangName,
-          targetedRealisasi,
-          latestMapImage || undefined,
-          nonOverlappingMapPoints
-        );
-      } finally {
-        setIsGeneratingPDF(false);
+      } else {
+        // Work Order PDF
+        await generateCetakPhotoPDF(targetedRealisasi, workOrdersMap, settings, selectedUlpName, targetedWorkOrders);
+        showToast('PDF Rekapitulasi Work Order Berhasil Dibuat', 'success');
       }
-    } else {
-      // Work Order PDF
-      generateCetakPhotoPDF(targetedRealisasi, workOrdersMap, settings, selectedUlpName, targetedWorkOrders);
-      showToast('PDF Rekapitulasi Work Order Berhasil Dibuat', 'success');
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      showToast('Gagal membuat PDF Laporan', 'error');
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
   // Excel Export Handler
   const handleExportExcel = async () => {
+    if (!filterNoWo) {
+      showToast('Silakan pilih Nomor Work Order (WO) pada filter terlebih dahulu.', 'warning');
+      return;
+    }
     setIsGeneratingExcel(true);
     try {
       if (reportType === 'foto') {
@@ -707,33 +656,6 @@ export const CetakLaporanPage: React.FC = () => {
       showToast('Gagal mengunduh file Excel: ' + (err.message || String(err)), 'error');
     } finally {
       setIsGeneratingExcel(false);
-    }
-  };
-
-  // Quick period helper
-  const handleApplyPreset = (preset: 'today' | '7days' | 'this_month' | 'last_month') => {
-    const now = new Date();
-    const todayStr = getTodayDateString();
-
-    if (preset === 'today') {
-      setFilterStartDate(todayStr);
-      setFilterEndDate(todayStr);
-    } else if (preset === '7days') {
-      const past7 = new Date(now);
-      past7.setDate(past7.getDate() - 7);
-      const past7Str = `${past7.getFullYear()}-${String(past7.getMonth() + 1).padStart(2, '0')}-${String(past7.getDate()).padStart(2, '0')}`;
-      setFilterStartDate(past7Str);
-      setFilterEndDate(todayStr);
-    } else if (preset === 'this_month') {
-      setFilterStartDate(getFirstDayOfMonthString());
-      setFilterEndDate(todayStr);
-    } else if (preset === 'last_month') {
-      const firstDayPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-      const startStr = `${firstDayPrevMonth.getFullYear()}-${String(firstDayPrevMonth.getMonth() + 1).padStart(2, '0')}-01`;
-      const endStr = `${lastDayPrevMonth.getFullYear()}-${String(lastDayPrevMonth.getMonth() + 1).padStart(2, '0')}-${String(lastDayPrevMonth.getDate()).padStart(2, '0')}`;
-      setFilterStartDate(startStr);
-      setFilterEndDate(endStr);
     }
   };
 
@@ -844,7 +766,7 @@ export const CetakLaporanPage: React.FC = () => {
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              <Map className="w-4 h-4" />
+              <MapIcon className="w-4 h-4" />
               <span>2. Laporan Peta & Rute Spasial</span>
             </button>
 
@@ -862,7 +784,7 @@ export const CetakLaporanPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. Step: Dedicated Targeted Filter Panel Card */}
+        {/* 2. Step: Dedicated Targeted Filter Panel Card - NOMOR WO ONLY */}
         <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/60 dark:border-slate-800">
             <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-200">
@@ -871,164 +793,82 @@ export const CetakLaporanPage: React.FC = () => {
               </div>
               <div>
                 <span className="text-xs font-black uppercase tracking-wider block text-[#008396] dark:text-teal-400">
-                  PARAMETER QUERY DATABASE POSTGRESQL
+                  FILTER PARAMETER WORK ORDER (WO)
                 </span>
                 <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
-                  Database mengeksekusi: <code className="font-mono text-teal-600 dark:text-teal-400">WHERE ulp = ... AND tanggal BETWEEN ...</code>
+                  Pilih atau cari Nomor Work Order (WO) untuk memuat laporan & eviden tertarget.
                 </span>
               </div>
             </div>
 
-            {/* Quick Period Presets */}
-            <div className="flex flex-wrap items-center gap-2 text-[10px]">
+            {/* Quick Actions */}
+            <div className="flex items-center space-x-2 text-[10px]">
               <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 rounded-lg text-teal-800 dark:text-teal-300 font-bold">
                 <Building2 className="w-3 h-3 text-[#00A2B9]" />
                 <span>Unit Inisiasi: <span className="font-extrabold text-[#008396] dark:text-teal-400">{activeUnitName}</span> (<code className="font-mono">{activeUnitId}</code>)</span>
               </div>
-              <span className="text-slate-400 font-bold ml-1">Preset:</span>
-              <button
-                type="button"
-                onClick={() => handleApplyPreset('today')}
-                className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 transition-colors shadow-2xs"
-              >
-                Hari Ini
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApplyPreset('7days')}
-                className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 transition-colors shadow-2xs"
-              >
-                7 Hari
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApplyPreset('this_month')}
-                className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 transition-colors shadow-2xs"
-              >
-                Bulan Ini
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApplyPreset('last_month')}
-                className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 transition-colors shadow-2xs"
-              >
-                Bulan Lalu
-              </button>
+              {filterNoWo !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterNoWo('ALL');
+                    setSearchTermWO('');
+                  }}
+                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-extrabold rounded-lg transition-colors shadow-2xs flex items-center space-x-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Tampilkan Semua WO</span>
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-            {/* 1. Pilih ULP */}
-            <div className="flex flex-col space-y-1.5">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end">
+            {/* Search WO Text Filter */}
+            <div className="md:col-span-5 flex flex-col space-y-1.5">
               <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Building2 className="w-3 h-3 text-[#00A2B9]" />
-                <span>Pilih ULP ({activeUnitId})</span>
+                <Search className="w-3 h-3 text-[#00A2B9]" />
+                <span>Cari Nomor Work Order</span>
               </span>
-              <select
-                value={filterUlp}
-                onChange={(e) => {
-                  setFilterUlp(e.target.value);
-                  setFilterPenyulang('ALL');
-                  setFilterRegu('ALL');
-                  setFilterNoWo('ALL');
-                }}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
-              >
-                <option value="ALL">Semua ULP di {activeUnitName}</option>
-                {scopedUlpList.map((u, idx) => (
-                  <option key={`${u.id}-${idx}`} value={u.namaULP}>
-                    {u.namaULP}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Ketik Nomor WO (cth: WO-2026-0915)..."
+                  value={searchTermWO}
+                  onChange={(e) => setSearchTermWO(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all shadow-xs pr-8"
+                />
+                {searchTermWO && (
+                  <button
+                    onClick={() => setSearchTermWO('')}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* 2. Tanggal Mulai */}
-            <div className="flex flex-col space-y-1.5">
+            {/* Select WO Dropdown */}
+            <div className="md:col-span-7 flex flex-col space-y-1.5">
               <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-[#00A2B9]" />
-                <span>Tanggal Mulai</span>
-              </span>
-              <input
-                type="date"
-                value={filterStartDate}
-                onChange={(e) => setFilterStartDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
-              />
-            </div>
-
-            {/* 3. Tanggal Selesai */}
-            <div className="flex flex-col space-y-1.5">
-              <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-[#00A2B9]" />
-                <span>Tanggal Selesai</span>
-              </span>
-              <input
-                type="date"
-                value={filterEndDate}
-                onChange={(e) => setFilterEndDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
-              />
-            </div>
-
-            {/* 4. Penyulang (Feeder) */}
-            <div className="flex flex-col space-y-1.5">
-              <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Penyulang (Feeder)
-              </span>
-              <select
-                value={filterPenyulang}
-                onChange={(e) => {
-                  setFilterPenyulang(e.target.value);
-                  setFilterNoWo('ALL');
-                }}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
-              >
-                <option value="ALL">Semua Penyulang</option>
-                {availablePenyulangList.map((p, idx) => (
-                  <option key={`${p.id}-${idx}`} value={p.namaPenyulang}>
-                    {p.namaPenyulang}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 5. Regu Pelaksana */}
-            <div className="flex flex-col space-y-1.5">
-              <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Regu Pelaksana
-              </span>
-              <select
-                value={filterRegu}
-                onChange={(e) => {
-                  setFilterRegu(e.target.value);
-                  setFilterNoWo('ALL');
-                }}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
-              >
-                <option value="ALL">Semua Regu</option>
-                {availableReguList.map((r, idx) => (
-                  <option key={`${r.id}-${idx}`} value={r.namaRegu}>
-                    {r.namaRegu}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 6. Nomor WO */}
-            <div className="flex flex-col space-y-1.5">
-              <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Nomor Work Order
+                <FileSpreadsheet className="w-3 h-3 text-[#00A2B9]" />
+                <span>Pilih Nomor Work Order ({availableWONumbers.length} WO Ditemukan)</span>
               </span>
               <select
                 value={filterNoWo}
                 onChange={(e) => setFilterNoWo(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs"
+                className={`w-full px-3 py-2 text-xs rounded-xl border ${
+                  !filterNoWo
+                    ? 'border-amber-400 dark:border-amber-500 bg-amber-50/70 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 font-extrabold ring-2 ring-amber-400/20'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-bold'
+                } focus:ring-2 focus:ring-[#00A2B9]/20 outline-none transition-all cursor-pointer shadow-xs`}
               >
-                <option value="ALL">Semua Nomor WO</option>
+                <option value="">-- SILAKAN PILIH NOMOR WORK ORDER (WO) --</option>
+                <option value="ALL">📋 Semua Work Order (Seluruh List Unit {activeUnitName})</option>
                 {availableWONumbers.map((woNum, idx) => (
                   <option key={`${woNum}-${idx}`} value={woNum}>
-                    {woNum}
+                    📌 WO: {woNum}
                   </option>
                 ))}
               </select>
@@ -1045,11 +885,11 @@ export const CetakLaporanPage: React.FC = () => {
                 <span>{dataSource}</span>
               </span>
               <span className="font-bold text-slate-800 dark:text-slate-200">
-                🏢 ULP: <strong className="text-teal-700 dark:text-teal-400">{lastQueriedParams.ulp}</strong>
+                🏢 Unit: <strong className="text-teal-700 dark:text-teal-400">{activeUnitName}</strong>
               </span>
               <span className="text-slate-400">•</span>
               <span className="font-bold text-slate-800 dark:text-slate-200">
-                📅 Periode: <strong className="text-slate-900 dark:text-white">{formatDateDisplay(lastQueriedParams.startDate)} s/d {formatDateDisplay(lastQueriedParams.endDate)}</strong>
+                📌 Nomor WO: <strong className="text-slate-900 dark:text-white">{filterNoWo !== 'ALL' ? filterNoWo : 'Semua Work Order'}</strong>
               </span>
               <span className="text-slate-400">•</span>
               <span className="font-bold text-slate-800 dark:text-slate-200">
@@ -1069,9 +909,25 @@ export const CetakLaporanPage: React.FC = () => {
       {/* 4. Step: Tampilkan Hasil (Printable Document & Live Preview Surface) */}
       <div className="bg-white text-slate-900 p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-md space-y-6 print:p-0 print:border-none print:shadow-none overflow-hidden">
         
-        {/* ======================================================== */}
-        {/* VIEW 1: Subhalaman Laporan CETAK PHOTO (Foto Realisasi)  */}
-        {/* ======================================================== */}
+        {!filterNoWo ? (
+          <div className="py-20 px-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-900/30 flex flex-col items-center justify-center space-y-4 my-2">
+            <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/80 border border-amber-200 dark:border-amber-800/80 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-xs">
+              <Filter className="w-8 h-8" />
+            </div>
+            <div className="max-w-md space-y-2">
+              <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-200">
+                Data Tidak Ditampilkan Sebelum Pemilihan Filter
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+                Silakan pilih <strong className="text-amber-700 dark:text-amber-400">Nomor Work Order (WO)</strong> pada panel filter di atas untuk memuat dan menampilkan dokumen laporan eksekusi, foto eviden, maupun peta spasial.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* ======================================================== */}
+            {/* VIEW 1: Subhalaman Laporan CETAK PHOTO (Foto Realisasi)  */}
+            {/* ======================================================== */}
         {reportType === 'foto' && (
           <div className="space-y-6">
             {/* Top Header Labels */}
@@ -1099,7 +955,7 @@ export const CetakLaporanPage: React.FC = () => {
                   </tr>
                   <tr className="bg-[#008396] text-white font-bold text-[11px] uppercase tracking-wider">
                     <th colSpan={14} className="p-1.5 border-b border-[#008396] bg-[#008396] text-center">
-                      PLN ELECTRICITY SERVICES • PERIODE: {formatDateDisplay(filterStartDate)} S/D {formatDateDisplay(filterEndDate)}
+                      PLN ELECTRICITY SERVICES • WORK ORDER: {filterNoWo !== 'ALL' ? filterNoWo : 'SEMUA WORK ORDER'}
                     </th>
                   </tr>
                   <tr className="bg-[#008396] text-white font-bold text-[10px] uppercase">
@@ -1197,8 +1053,22 @@ export const CetakLaporanPage: React.FC = () => {
                           <td className="p-2 border border-slate-200 uppercase text-[10px]">
                             {rel.kendala || 'NIHIL'}
                           </td>
-                          <td className="p-2 border border-slate-200 font-mono text-[9px] text-slate-700 whitespace-pre-line font-medium">
-                            {`${lat.toFixed(6)},\n${lng.toFixed(6)}`}
+                          <td className="p-2 border border-slate-200 font-mono text-[9px]">
+                            {lat && lng ? (
+                              <a
+                                href={`https://www.google.com/maps?q=${lat},${lng}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/80 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80 transition-all hover:scale-105 shadow-2xs group font-mono font-bold"
+                                title="Klik untuk membuka titik lokasi di Google Maps"
+                              >
+                                <MapPin className="w-3 h-3 text-rose-500 shrink-0 group-hover:animate-bounce" />
+                                <span>{lat.toFixed(5)}, {lng.toFixed(5)}</span>
+                                <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 shrink-0 ml-0.5" />
+                              </a>
+                            ) : (
+                              <span className="text-slate-400 italic text-[10px]">-</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1238,7 +1108,7 @@ export const CetakLaporanPage: React.FC = () => {
                     FEEDER {selectedPenyulangName}
                   </h4>
                   <p className="font-extrabold text-[10px] sm:text-xs text-slate-800 uppercase">
-                    ULP {selectedUlpName} • PERIODE: {formatDateDisplay(filterStartDate)} S/D {formatDateDisplay(filterEndDate)}
+                    ULP {selectedUlpName} • WORK ORDER: {filterNoWo !== 'ALL' ? filterNoWo : 'SEMUA WORK ORDER'}
                   </p>
                 </div>
 
@@ -1367,7 +1237,7 @@ export const CetakLaporanPage: React.FC = () => {
                 <div className="font-extrabold text-slate-900 border-b border-slate-900 pb-1 uppercase flex justify-between items-center">
                   <span>KETERANGAN REKAPITULASI :</span>
                   <span className="text-slate-600 font-semibold">
-                    PERIODE: {formatDateDisplay(filterStartDate)} S/D {formatDateDisplay(filterEndDate)}
+                    WORK ORDER: {filterNoWo !== 'ALL' ? filterNoWo : 'SEMUA WORK ORDER'}
                   </span>
                 </div>
 
@@ -1488,6 +1358,8 @@ export const CetakLaporanPage: React.FC = () => {
             <p className="font-bold text-slate-900 mt-12">Pengatur ULP</p>
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

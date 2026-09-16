@@ -23,7 +23,7 @@ export function generateWatermarkedImage(params: WatermarkParams): Promise<strin
 
     if (typeof params.imageFile === 'string') {
       sourceSrc = params.imageFile;
-    } else if (params.imageFile instanceof Blob || params.imageFile instanceof File) {
+    } else if (params.imageFile instanceof Blob) {
       objectUrlToRevoke = URL.createObjectURL(params.imageFile);
       sourceSrc = objectUrlToRevoke;
     } else {

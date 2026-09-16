@@ -7,80 +7,157 @@ import { formatDateTime, formatDateOnly, formatExecutionDateTime } from './dateF
 import { getWIBDateString } from './dateUtils';
 
 /**
- * Utility to convert an image URL or dataUrl into base64 for ExcelJS embedding
+ * Utility to convert an image URL or dataUrl into compressed base64 for ExcelJS/PDF embedding.
+ * Uses an offscreen canvas to scale down image dimensions (max 320x240) and compress to ~15KB-30KB JPEG,
+ * dramatically saving memory and speeding up file exports.
  */
-async function urlToBase64Image(url: string): Promise<{ base64: string; extension: 'jpeg' | 'png' } | null> {
+const imageCache = new Map<string, { base64: string; extension: 'jpeg' | 'png' }>();
+
+export async function urlToBase64Image(
+  url: string,
+  maxWidth = 320,
+  maxHeight = 240,
+  quality = 0.70
+): Promise<{ base64: string; extension: 'jpeg' | 'png' } | null> {
   if (!url || typeof url !== 'string') return null;
 
-  // 1. Data URL
-  if (url.startsWith('data:image/')) {
-    const isPng = url.startsWith('data:image/png');
-    const parts = url.split(',');
-    if (parts.length > 1 && parts[1].trim().length > 0) {
-      return { base64: parts[1].trim(), extension: isPng ? 'png' : 'jpeg' };
-    }
-    return null;
+  const cacheKey = `${url}_${maxWidth}x${maxHeight}_q${quality}`;
+  if (imageCache.has(cacheKey)) {
+    return imageCache.get(cacheKey)!;
   }
 
-  // 2. Load via HTML Image & Canvas
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
+
+    const cleanup = () => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+    };
+
     img.onload = () => {
       try {
         const canvas = document.createElement('canvas');
-        const maxW = 400;
-        const maxH = 300;
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) {
+          cleanup();
+          resolve(null);
+          return;
+        }
+
         let w = img.width || 400;
         let h = img.height || 300;
-        if (w > maxW || h > maxH) {
-          const ratio = Math.min(maxW / w, maxH / h);
+
+        if (w > maxWidth || h > maxHeight) {
+          const ratio = Math.min(maxWidth / w, maxHeight / h);
           w = Math.round(w * ratio);
           h = Math.round(h * ratio);
         }
+
         canvas.width = Math.max(w, 10);
         canvas.height = Math.max(h, 10);
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          const base64 = dataUrl.split(',')[1];
-          if (base64) {
-            resolve({ base64, extension: 'jpeg' });
-            return;
-          }
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const base64 = dataUrl.split(',')[1];
+
+        // Immediately release canvas memory
+        canvas.width = 0;
+        canvas.height = 0;
+        cleanup();
+
+        if (base64) {
+          const res = { base64, extension: 'jpeg' as const };
+          imageCache.set(cacheKey, res);
+          resolve(res);
+          return;
         }
       } catch (e) {
         console.warn('Canvas toDataURL failed:', e);
       }
+      cleanup();
       resolve(null);
     };
 
     img.onerror = () => {
-      fetch(url)
-        .then((res) => res.blob())
-        .then((blob) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            if (result && result.startsWith('data:image/')) {
-              const isPng = result.startsWith('data:image/png');
-              const base64 = result.split(',')[1];
-              resolve(base64 ? { base64, extension: isPng ? 'png' : 'jpeg' } : null);
-            } else {
-              resolve(null);
-            }
-          };
-          reader.onerror = () => resolve(null);
-          reader.readAsDataURL(blob);
-        })
-        .catch(() => resolve(null));
+      cleanup();
+      if (url.startsWith('http')) {
+        fetch(url)
+          .then((res) => res.blob())
+          .then((blob) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const result = reader.result as string;
+              if (result && result.startsWith('data:image/')) {
+                const fallbackImg = new Image();
+                fallbackImg.onload = () => {
+                  try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    if (ctx) {
+                      let w = fallbackImg.width || 320;
+                      let h = fallbackImg.height || 240;
+                      const ratio = Math.min(maxWidth / w, maxHeight / h);
+                      w = Math.round(w * ratio);
+                      h = Math.round(h * ratio);
+                      canvas.width = Math.max(w, 10);
+                      canvas.height = Math.max(h, 10);
+                      ctx.fillStyle = '#FFFFFF';
+                      ctx.fillRect(0, 0, canvas.width, canvas.height);
+                      ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
+                      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                      const base64 = dataUrl.split(',')[1];
+                      canvas.width = 0;
+                      canvas.height = 0;
+                      fallbackImg.src = '';
+                      if (base64) {
+                        const res = { base64, extension: 'jpeg' as const };
+                        imageCache.set(cacheKey, res);
+                        resolve(res);
+                        return;
+                      }
+                    }
+                  } catch {}
+                  resolve(null);
+                };
+                fallbackImg.onerror = () => resolve(null);
+                fallbackImg.src = result;
+              } else {
+                resolve(null);
+              }
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          })
+          .catch(() => resolve(null));
+      } else {
+        resolve(null);
+      }
     };
 
     img.src = url;
   });
+}
+
+/**
+ * Preloads and compresses photos in parallel chunks for maximum export speed and memory efficiency.
+ */
+export async function batchPreloadImages(
+  urls: (string | undefined | null)[],
+  maxWidth = 320,
+  maxHeight = 240,
+  quality = 0.70
+): Promise<void> {
+  const uniqueUrls = Array.from(new Set(urls.filter((u): u is string => typeof u === 'string' && u.length > 0)));
+  const chunkSize = 6;
+  for (let i = 0; i < uniqueUrls.length; i += chunkSize) {
+    const chunk = uniqueUrls.slice(i, i + chunkSize);
+    await Promise.all(chunk.map((url) => urlToBase64Image(url, maxWidth, maxHeight, quality)));
+  }
 }
 
 /**
@@ -244,6 +321,14 @@ export async function exportCetakPhotoToExcel(
     });
   }
 
+  // Pre-load & compress photos in parallel batch before generating Excel
+  const allPhotoUrls: string[] = [];
+  dataItems.forEach((item) => {
+    if (item.fotoSebelumUrl) allPhotoUrls.push(item.fotoSebelumUrl);
+    if (item.fotoSesudahUrl) allPhotoUrls.push(item.fotoSesudahUrl);
+  });
+  await batchPreloadImages(allPhotoUrls, 320, 240, 0.70);
+
   const thinSlateBorder: Partial<ExcelJS.Borders> = {
     top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
     left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
@@ -347,13 +432,26 @@ export async function exportCetakPhotoToExcel(
 /**
  * Generate PDF Report for Cetak Photo (Format REKAP HASIL ROW PLN ELECTRICITY SERVICES)
  */
-export function generateCetakPhotoPDF(
+export async function generateCetakPhotoPDF(
   realisasiList: Realisasi[],
   workOrdersMap: Record<string, WorkOrder>,
   settings: AppSettings,
   filterUlpName?: string,
   fallbackWorkOrders: WorkOrder[] = []
 ) {
+  // Pre-load and downscale image thumbnails in parallel to keep PDF lightweight
+  const allPhotoUrls: string[] = [];
+  realisasiList.forEach((rel) => {
+    const b = rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl;
+    const a = rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl;
+    if (b) allPhotoUrls.push(b);
+    if (a) allPhotoUrls.push(a);
+  });
+  fallbackWorkOrders.forEach((wo) => {
+    if (wo.lampiranUrl) allPhotoUrls.push(wo.lampiranUrl);
+  });
+  await batchPreloadImages(allPhotoUrls, 240, 180, 0.65);
+
   const doc = new jsPDF('landscape', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth(); // 297mm
 
@@ -487,9 +585,11 @@ export function generateCetakPhotoPDF(
         if (data.column.index === 7) {
           const imgBefore = rel?.photosSebelum?.[0]?.dataUrl || rel?.fotoSebelumUrl;
           if (imgBefore) {
+            const cached = imageCache.get(`${imgBefore}_240x180_q0.65`);
+            const finalImg = cached ? `data:image/jpeg;base64,${cached.base64}` : imgBefore;
             try {
               doc.addImage(
-                imgBefore,
+                finalImg,
                 'JPEG',
                 data.cell.x + 1,
                 data.cell.y + 1,
@@ -506,9 +606,11 @@ export function generateCetakPhotoPDF(
         if (data.column.index === 8) {
           const imgAfter = rel?.photosSesudah?.[0]?.dataUrl || rel?.fotoSesudahUrl;
           if (imgAfter) {
+            const cached = imageCache.get(`${imgAfter}_240x180_q0.65`);
+            const finalImg = cached ? `data:image/jpeg;base64,${cached.base64}` : imgAfter;
             try {
               doc.addImage(
-                imgAfter,
+                finalImg,
                 'JPEG',
                 data.cell.x + 1,
                 data.cell.y + 1,
@@ -551,6 +653,10 @@ export async function exportCetakPetaToExcel(
   const areaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
   const ulpTitle = filterUlpName && filterUlpName !== 'ALL' ? filterUlpName.toUpperCase() : (mapPoints[0]?.ulpName?.toUpperCase() || 'BASO');
   const feederTitle = filterPenyulangName && filterPenyulangName !== 'ALL' ? filterPenyulangName.toUpperCase() : (mapPoints[0]?.penyulangName?.toUpperCase() || '1 BASO - G.H. TANJUNG ALAM');
+
+  // Preload map point photos
+  const allPhotoUrls = mapPoints.map((pt) => pt.photoUrl).filter(Boolean);
+  await batchPreloadImages(allPhotoUrls, 320, 240, 0.70);
 
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Peta Pohon ROW');

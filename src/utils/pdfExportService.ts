@@ -39,9 +39,9 @@ export async function generateEnhancedLaporanPetaPDF(
     drawPDFHeader(doc, feederTitle, ulpTitle, i + 1, tiles.length, undefined);
 
     // Generate Map Image for this tile including the route
-    const mapImage = await generateMapImageForTile(tile, 2000, 1000, routePositions); 
+    const mapImage = await generateMapImageForTile(tile, 1600, 800, routePositions); 
     if (mapImage) {
-      doc.addImage(mapImage, 'PNG', 8, 28, 281, 122);
+      doc.addImage(mapImage, 'JPEG', 8, 28, 281, 122);
     }
 
     // Draw Legend and Info Box
@@ -449,7 +449,10 @@ async function generateMapImageForTile(
       ctx.shadowBlur = 0;
     });
 
-    return canvas.toDataURL('image/png');
+    const resUrl = canvas.toDataURL('image/jpeg', 0.85);
+    canvas.width = 0;
+    canvas.height = 0;
+    return resUrl;
   } catch (error) {
     console.warn('ArcGIS map tile canvas tainted or blocked, falling back to offline-first clean vector map:', error);
     return generateVectorMapImageForTile(tile, width, height, routePositions);
