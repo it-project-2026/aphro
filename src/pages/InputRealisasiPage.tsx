@@ -284,11 +284,14 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     type: 'sebelum' | 'sesudah',
     slotIndex: 1 | 2 | 3
   ) => {
-    const file = e.target.files?.[0];
+    const fileInput = e.target;
+    const file = fileInput.files?.[0];
+
     if (!file) return;
 
     if (!selectedWO) {
       showToast('Pilih Work Order terlebih dahulu', 'warning');
+      if (fileInput) fileInput.value = '';
       return;
     }
 
@@ -302,6 +305,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           timeStyle: 'medium',
         });
 
+        // Single-pass memory-efficient watermark generation
         const watermarkedBase64 = await generateWatermarkedImage({
           imageFile: file,
           userName: petugasName,
@@ -313,13 +317,14 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           customTimestamp: timestampStr,
         });
 
-        const compressedBase64 = await compressImage(watermarkedBase64);
+        // Clear input value immediately so DOM releases file handle
+        if (fileInput) fileInput.value = '';
 
         const photoObj: WatermarkedPhoto = {
           id: `pic-${Date.now()}-${slotIndex}-${Math.random().toString(36).substring(2, 6)}`,
           type,
           slotIndex,
-          dataUrl: compressedBase64,
+          dataUrl: watermarkedBase64,
           fileUrl: '',
           originalName: file.name,
           timestamp: timestampStr,
@@ -347,7 +352,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         const gasUrl = settings.gasWebAppUrl || localStorage.getItem('aphro_gas_url') || '';
         if (gasUrl && navigator.onLine) {
           GASApiService.uploadPhoto(gasUrl, {
-            base64Data: compressedBase64,
+            base64Data: watermarkedBase64,
             nomorWO: selectedWO.nomorWO,
             reguName: selectedWO.reguName,
             photoType: type === 'sebelum' ? 'Sebelum' : 'Sesudah',
@@ -360,8 +365,9 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           });
         }
       } catch (err: any) {
-        showToast(`Gagal memproses watermark foto: ${err.message}`, 'error');
+        showToast(`Foto gagal diproses: ${err?.message || 'Silakan coba ambil foto kembali.'}`, 'error');
       } finally {
+        if (fileInput) fileInput.value = '';
         setIsProcessing(false);
       }
     };

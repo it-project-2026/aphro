@@ -5,83 +5,85 @@
  */
 
 export const compressImage = (base64Str: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    // Jika bukan base64, kembalikan apa adanya
-    if (!base64Str || !base64Str.startsWith('data:image')) {
+  return new Promise((resolve) => {
+    // 1. If empty or not image dataUrl, return as is
+    if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:image')) {
+      return resolve(base64Str || '');
+    }
+
+    // 2. Check size of base64 string directly
+    // Base64 size is roughly 1.33x binary size.
+    // 350KB binary = ~466KB base64 content length
+    const parts = base64Str.split(',');
+    const base64Content = parts.length > 1 ? parts[1] : parts[0];
+    const estimatedSizeBytes = Math.round((base64Content.length * 3) / 4);
+
+    // If ALREADY <= 350KB, DO NOT RE-DECODE OR RE-CANVAS! Return immediately!
+    if (estimatedSizeBytes <= 350 * 1024) {
       return resolve(base64Str);
     }
 
+    // 3. If larger than 350KB, perform single-pass fast resize & compression
     const img = new Image();
-    img.src = base64Str;
-    
+
+    const cleanup = () => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+    };
+
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let width = img.width;
-      let height = img.height;
-
-      // 1. Resize: Max 1280px
-      const MAX_SIZE = 1280;
-      if (width > height) {
-        if (width > MAX_SIZE) {
-          height *= MAX_SIZE / width;
-          width = MAX_SIZE;
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) {
+          cleanup();
+          return resolve(base64Str);
         }
-      } else {
-        if (height > MAX_SIZE) {
-          width *= MAX_SIZE / height;
-          height = MAX_SIZE;
+
+        let width = img.width || 1280;
+        let height = img.height || 960;
+        const MAX_SIZE = 1280;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
         }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Immediately release source img memory
+        cleanup();
+
+        // Target single pass with quality 0.75
+        const resultBase64 = canvas.toDataURL('image/jpeg', 0.75);
+
+        // Clean up canvas
+        canvas.width = 0;
+        canvas.height = 0;
+
+        resolve(resultBase64);
+      } catch (err) {
+        cleanup();
+        resolve(base64Str);
       }
-
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        return reject(new Error('Gagal mendapatkan context canvas'));
-      }
-
-      // Draw and Compress
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      // 2. Initial Compression (75% quality)
-      let quality = 0.75;
-      let resultBase64 = canvas.toDataURL('image/jpeg', quality);
-
-      // 3. Iterative adjustment if size > 300KB
-      // Base64 size is roughly 1.33x actual file size
-      const MAX_FILE_SIZE = 300 * 1024; // 300KB
-      
-      // Hitung estimasi ukuran dari base64
-      const getBase64Size = (s: string) => {
-        const parts = s.split(',');
-        const base64Content = parts.length > 1 ? parts[1] : parts[0];
-        return Math.round((base64Content.length * 3) / 4);
-      };
-
-      let currentSize = getBase64Size(resultBase64);
-      
-      // Jika masih terlalu besar, turunkan kualitas secara bertahap
-      while (currentSize > MAX_FILE_SIZE && quality > 0.1) {
-        quality -= 0.1;
-        resultBase64 = canvas.toDataURL('image/jpeg', quality);
-        currentSize = getBase64Size(resultBase64);
-      }
-
-      // Clean up canvas memory immediately
-      const dataUrl = resultBase64;
-      canvas.width = 0;
-      canvas.height = 0;
-      img.onload = null;
-      img.onerror = null;
-
-      resolve(dataUrl);
     };
 
-    img.onerror = (err) => {
-      img.onload = null;
-      img.onerror = null;
-      reject(err);
+    img.onerror = () => {
+      cleanup();
+      resolve(base64Str);
     };
+
+    img.src = base64Str;
   });
 };

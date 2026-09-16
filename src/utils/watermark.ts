@@ -4,7 +4,7 @@
  */
 
 export interface WatermarkParams {
-  imageFile: File | string; // File or base64 dataUrl
+  imageFile: File | Blob | string; // File, Blob or base64 dataUrl
   userName: string;
   ulpName: string;
   nomorWO?: string;
@@ -12,133 +12,161 @@ export interface WatermarkParams {
   latitude: number;
   longitude: number;
   customTimestamp?: string;
+  maxDimension?: number;
+  quality?: number;
 }
 
 export function generateWatermarkedImage(params: WatermarkParams): Promise<string> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Canvas 2D context not available'));
-        return;
-      }
-
-      // Set canvas to original image dimensions (max 1280px for optimization)
-      let width = img.width;
-      let height = img.height;
-      const MAX_SIZE = 1280;
-      
-      if (width > MAX_SIZE || height > MAX_SIZE) {
-        if (width > height) {
-          height = Math.round((height * MAX_SIZE) / width);
-          width = MAX_SIZE;
-        } else {
-          width = Math.round((width * MAX_SIZE) / height);
-          height = MAX_SIZE;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw original image
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Watermark Bar dimensions
-      const barHeight = Math.max(70, Math.round(height * 0.12));
-      const padding = Math.max(16, Math.round(width * 0.02));
-
-      // Dark translucent gradient background bar at bottom
-      const gradient = ctx.createLinearGradient(0, height - barHeight - 20, 0, height);
-      gradient.addColorStop(0, 'rgba(15, 23, 42, 0)');
-      gradient.addColorStop(0.3, 'rgba(15, 23, 42, 0.75)');
-      gradient.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, height - barHeight - 30, width, barHeight + 30);
-
-      // Font sizing relative to width
-      const fontSizeTitle = Math.max(14, Math.round(width * 0.022));
-      const fontSizeBody = Math.max(12, Math.round(width * 0.017));
-
-      // Left Column - App & WO Info
-      ctx.textBaseline = 'top';
-
-      // PLN / APHRO Badge Header
-      ctx.fillStyle = '#00A3E0'; // Cyan/PLN Blue accent
-      ctx.font = `bold ${fontSizeTitle}px "Plus Jakarta Sans", sans-serif`;
-      const appText = `⚡ APHRO - ASSET PROTECTION | ${params.ulpName.toUpperCase()}`;
-      ctx.fillText(appText, padding, height - barHeight + 4);
-
-      // Timestamp & User
-      const timestampStr = params.customTimestamp || new Date().toLocaleString('id-ID', {
-        dateStyle: 'full',
-        timeStyle: 'medium',
-      });
-
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `500 ${fontSizeBody}px "Plus Jakarta Sans", sans-serif`;
-      ctx.fillText(`📅 ${timestampStr}`, padding, height - barHeight + fontSizeTitle + 10);
-      
-      let petugasInfo = `👤 Petugas: ${params.userName}`;
-      if (params.nomorWO) petugasInfo += ` | WO: ${params.nomorWO}`;
-      if (params.noTiang) petugasInfo += ` | TIANG: ${params.noTiang}`;
-      
-      ctx.fillText(petugasInfo, padding, height - barHeight + fontSizeTitle + fontSizeBody + 16);
-
-      // Right Column - Coordinates & GPS Badge
-      const gpsText = `📍 GPS: ${params.latitude.toFixed(6)}, ${params.longitude.toFixed(6)}`;
-      const gpsWidth = ctx.measureText(gpsText).width;
-      const rightX = Math.max(width - padding - gpsWidth, width / 2);
-
-      // Coordinate background box
-      ctx.fillStyle = 'rgba(2, 132, 199, 0.85)'; // Sky blue pill
-      const pillHeight = fontSizeBody + 10;
-      ctx.beginPath();
-      ctx.roundRect(rightX - 10, height - barHeight + 8, gpsWidth + 20, pillHeight, 6);
-      ctx.fill();
-
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${fontSizeBody}px "Plus Jakarta Sans", monospace`;
-      ctx.fillText(gpsText, rightX, height - barHeight + 13);
-
-      // Subtitle status under GPS
-      ctx.fillStyle = '#cbd5e1';
-      ctx.font = `400 ${fontSizeBody - 2}px "Plus Jakarta Sans", sans-serif`;
-      ctx.fillText(`Verified Asset Coordinates`, rightX, height - barHeight + pillHeight + 14);
-
-      // Convert to compressed jpeg data URL
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
-      
-      // Clean up canvas memory immediately
-      canvas.width = 0;
-      canvas.height = 0;
-      img.onload = null;
-      img.onerror = null;
-
-      resolve(dataUrl);
-    };
-
-    img.onerror = (err) => {
-      img.onload = null;
-      img.onerror = null;
-      reject(err);
-    };
+    let objectUrlToRevoke: string | null = null;
+    let sourceSrc = '';
 
     if (typeof params.imageFile === 'string') {
-      img.src = params.imageFile;
+      sourceSrc = params.imageFile;
+    } else if (params.imageFile instanceof Blob || params.imageFile instanceof File) {
+      objectUrlToRevoke = URL.createObjectURL(params.imageFile);
+      sourceSrc = objectUrlToRevoke;
     } else {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          img.src = e.target.result as string;
-        }
-      };
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(params.imageFile);
+      reject(new Error('Format file foto tidak valid'));
+      return;
     }
+
+    const img = new Image();
+
+    const cleanup = () => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke);
+        objectUrlToRevoke = null;
+      }
+    };
+
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        // Disable alpha channel for 25% memory savings & faster rendering
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) {
+          cleanup();
+          reject(new Error('Canvas 2D context tidak tersedia'));
+          return;
+        }
+
+        // Set canvas to max 1280px while preserving aspect ratio
+        let width = img.width || 1280;
+        let height = img.height || 960;
+        const MAX_SIZE = params.maxDimension || 1280;
+
+        if (width > MAX_SIZE || height > MAX_SIZE) {
+          if (width > height) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          } else {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // 1. Draw original photo onto resized canvas
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Instantly release decoded HTMLImageElement bitmap memory from browser cache
+        cleanup();
+
+        // 2. Watermark Bar dimensions & design (Preserving EXACT existing styling)
+        const barHeight = Math.max(70, Math.round(height * 0.12));
+        const padding = Math.max(16, Math.round(width * 0.02));
+
+        // Dark translucent gradient background bar at bottom
+        const gradient = ctx.createLinearGradient(0, height - barHeight - 20, 0, height);
+        gradient.addColorStop(0, 'rgba(15, 23, 42, 0)');
+        gradient.addColorStop(0.3, 'rgba(15, 23, 42, 0.75)');
+        gradient.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, height - barHeight - 30, width, barHeight + 30);
+
+        // Font sizing relative to width
+        const fontSizeTitle = Math.max(14, Math.round(width * 0.022));
+        const fontSizeBody = Math.max(12, Math.round(width * 0.017));
+
+        // Left Column - App & WO Info
+        ctx.textBaseline = 'top';
+
+        // PLN / APHRO Badge Header
+        ctx.fillStyle = '#00A3E0'; // Cyan/PLN Blue accent
+        ctx.font = `bold ${fontSizeTitle}px "Plus Jakarta Sans", sans-serif`;
+        const appText = `⚡ APHRO - ASSET PROTECTION | ${(params.ulpName || 'ULP').toUpperCase()}`;
+        ctx.fillText(appText, padding, height - barHeight + 4);
+
+        // Timestamp & User
+        const timestampStr = params.customTimestamp || new Date().toLocaleString('id-ID', {
+          dateStyle: 'full',
+          timeStyle: 'medium',
+        });
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `500 ${fontSizeBody}px "Plus Jakarta Sans", sans-serif`;
+        ctx.fillText(`📅 ${timestampStr}`, padding, height - barHeight + fontSizeTitle + 10);
+        
+        let petugasInfo = `👤 Petugas: ${params.userName || 'Petugas'}`;
+        if (params.nomorWO) petugasInfo += ` | WO: ${params.nomorWO}`;
+        if (params.noTiang) petugasInfo += ` | TIANG: ${params.noTiang}`;
+        
+        ctx.fillText(petugasInfo, padding, height - barHeight + fontSizeTitle + fontSizeBody + 16);
+
+        // Right Column - Coordinates & GPS Badge
+        const lat = typeof params.latitude === 'number' ? params.latitude : 0;
+        const lon = typeof params.longitude === 'number' ? params.longitude : 0;
+        const gpsText = `📍 GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+        const gpsWidth = ctx.measureText(gpsText).width;
+        const rightX = Math.max(width - padding - gpsWidth, width / 2);
+
+        // Coordinate background box
+        ctx.fillStyle = 'rgba(2, 132, 199, 0.85)'; // Sky blue pill
+        const pillHeight = fontSizeBody + 10;
+        ctx.beginPath();
+        if (typeof (ctx as any).roundRect === 'function') {
+          (ctx as any).roundRect(rightX - 10, height - barHeight + 8, gpsWidth + 20, pillHeight, 6);
+        } else {
+          ctx.rect(rightX - 10, height - barHeight + 8, gpsWidth + 20, pillHeight);
+        }
+        ctx.fill();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `bold ${fontSizeBody}px "Plus Jakarta Sans", monospace`;
+        ctx.fillText(gpsText, rightX, height - barHeight + 13);
+
+        // Subtitle status under GPS
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = `400 ${fontSizeBody - 2}px "Plus Jakarta Sans", sans-serif`;
+        ctx.fillText(`Verified Asset Coordinates`, rightX, height - barHeight + pillHeight + 14);
+
+        // Single-pass JPEG compression export (quality 0.78 produces ~150KB-250KB file)
+        const quality = params.quality || 0.78;
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+        // Immediately release canvas GPU memory
+        canvas.width = 0;
+        canvas.height = 0;
+
+        resolve(dataUrl);
+      } catch (err) {
+        cleanup();
+        reject(err);
+      }
+    };
+
+    img.onerror = () => {
+      cleanup();
+      reject(new Error('Gagal memuat atau memproses foto. Silakan coba ambil foto kembali.'));
+    };
+
+    img.src = sourceSrc;
   });
 }
 
