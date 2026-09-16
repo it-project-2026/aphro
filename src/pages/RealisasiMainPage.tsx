@@ -28,6 +28,7 @@ import { resolveUserTimRowAndUlp, RekapHarianService } from '../services/rekapHa
 import { SupabaseService } from '../services/supabaseService';
 import { InputRealisasiPage } from './InputRealisasiPage';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
+import { EditRealisasiModal } from '../components/common/EditRealisasiModal';
 
 interface RealisasiMainPageProps {
   initialSubTab?: 'input' | 'history' | 'finalize';
@@ -45,6 +46,8 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
 
   const [activeSubTab, setActiveSubTab] = useState<'input' | 'history' | 'finalize'>(initialSubTab);
   const [editingRealisasi, setEditingRealisasi] = useState<any | null>(null);
+  const [selectedForEditModal, setSelectedForEditModal] = useState<any | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showPostSaveModal, setShowPostSaveModal] = useState(false);
   const [lastSavedWo, setLastSavedWo] = useState<any | null>(null);
 
@@ -356,8 +359,8 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   const selectedUlpName = rawUlpName.replace(/^ULP\s*/i, '').trim() || 'UNIT LAYANAN';
 
   const handleEditRealisasi = (rel: any) => {
-    setEditingRealisasi(rel);
-    setActiveSubTab('input');
+    setSelectedForEditModal(rel);
+    setIsEditModalOpen(true);
   };
 
   return (
@@ -906,13 +909,15 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                             </td>
                              <td className="p-2 border border-slate-100 dark:border-slate-800">
                               <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  onClick={() => handleEditRealisasi(rel)}
-                                  className="p-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
-                                  title="Edit Realisasi"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
+                                {isAdmbktUser && (
+                                  <button
+                                    onClick={() => handleEditRealisasi(rel)}
+                                    className="p-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                                    title="Edit Realisasi (Admin/Adm)"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                                 <button
                                   onClick={async () => {
                                     if (window.confirm('Hapus data realisasi ini? Perubahan akan langsung sinkron ke Supabase Database.')) {
@@ -971,6 +976,12 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         onClose={() => setPreviewPhoto(null)}
         imageUrl={previewPhoto?.url || ''}
         title={previewPhoto?.title}
+      />
+
+      <EditRealisasiModal
+        realisasi={selectedForEditModal}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
       />
     </div>
   );

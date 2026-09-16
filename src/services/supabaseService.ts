@@ -40,22 +40,35 @@ import { GASApiService } from './gasApiService';
 import { getActiveGasConfig } from '../config/gasConfig';
 
 export const WORK_ORDER_SELECT_FIELDS = [
-  'id', 'WO_ID', 'unitId', 'Nomor_WO', 'Tanggal', 'ULP', 'Penyulang',
-  'Regu_ROW', 'VOLUME', 'SATUAN', 'TOTAL_REALISASI', 'SATUAN_TOTAL_REALISASI',
-  'WO_AWAL', 'WO_AKHIR', 'STATUS', 'LOKASI_START', 'LOKASI_FINISH',
-  'PEKERJAAN', 'DESKRIPSI', 'PRIORITAS', 'PETUGAS', 'Created_At', 'updatedAt'
+  'WO_ID', 'unitId', 'PEKERJAAN', 'Nomor_WO', 'Tanggal', 'ULP', 'Penyulang',
+  'Regu_ROW', 'VOLUME', 'SATUAN', 'WO_AWAL', 'WO_AKHIR', 'STATUS',
+  'LOKASI_START', 'LOKASI_FINISH', 'TOTAL_REALISASI', 'SATUAN_TOTAL_REALISASI', 'Created_At'
 ].join(',');
 
 export const REALISASI_LIGHT_SELECT_FIELDS = [
-  'ID', 'id', 'unitId', 'WO_ID', 'Nomor_WO', 'ULP', 'REGU_ROW', 'Regu_ROW',
-  'PENYULANG', 'NO_TIANG', 'TANGGAL', 'Tanggal', 'WAKTU', 'PETUGAS',
-  'Jenis_Tanaman', 'TIPE_POHON', 'Pertumbuhan_Tanaman', 'Kendala', 'Lokasi_kerja',
-  'LATITUDE', 'LONGITUDE', 'Latitude_Longitude', 'Keterangan', 'STATUS',
-  'FOTO_SEBELUM_URL', 'FOTO_SETELAH_URL', 'Created_At', 'Timestamp'
+  'ID', 'unitId', 'WO_ID', 'Nomor_WO', 'ULP', 'REGU_ROW', 'PENYULANG',
+  'NO_TIANG', 'TANGGAL', 'Foto_Sebelum', 'Foto_Sesudah', 'Jenis_Tanaman',
+  'Keterangan', 'Pertumbuhan_Tanaman', 'Kendala', 'Latitude_Longitude',
+  'Lokasi_kerja', 'Timestamp'
+].join(',');
+
+export const ABSENSI_SELECT_FIELDS = [
+  'ID', 'unitId', 'TANGGAL', 'NAMA_REGU', 'ULP',
+  'PETUGAS_1', 'KET_1', 'PETUGAS_2', 'KET_2', 'PETUGAS_3', 'KET_3', 'PETUGAS_4',
+  'KET_4', 'PETUGAS_5', 'KET_5', 'FOTO_MASUK', '"TIMESTAMP MASUK"', 'FOTO_KELUAR', '"TIMESTAMP KELUAR"'
 ].join(',');
 
 export class SupabaseService {
   public static readonly DB_NAME = SUPABASE_DATABASE_NAME;
+
+  /**
+   * Safe unit filter to prevent cross-unit data leakage while capturing unit-matching legacy rows
+   */
+  public static getUnitQueryFilter(targetUnitId: string): string {
+    const cleanId = (targetUnitId || '').toUpperCase().trim();
+    const stdId = InisiasiService.getStandardUnitId(cleanId) || cleanId || 'UL1';
+    return `unitId.eq.${stdId}`;
+  }
 
   static safeGetItem(key: string): string | null {
     try {
@@ -209,7 +222,7 @@ export class SupabaseService {
   static async fetchWorkOrders(
     unitId?: string, 
     page: number = 0, 
-    pageSize: number = 500,
+    pageSize: number = 200,
     lastSyncTime?: string
   ): Promise<{
     success: boolean;
@@ -228,7 +241,8 @@ export class SupabaseService {
         .select(WORK_ORDER_SELECT_FIELDS);
 
       if (targetUnitId && targetUnitId !== 'ALL') {
-        query = query.eq('unitId', targetUnitId);
+        const unitFilter = this.getUnitQueryFilter(targetUnitId);
+        query = query.or(unitFilter);
       }
 
       // Delta Sync Filter: If lastSyncTime is provided, only query records created/updated after lastSyncTime
@@ -237,26 +251,17 @@ export class SupabaseService {
         query = query.or(`Created_At.gte.${lastSyncTime},Tanggal.gte.${syncDate}`);
       }
 
-      // 3. Add order and range
-      let { data, error } = await query
+      // 3. Add order and range (Strict Max 200 per request)
+      const { data, error } = await query
         .order('Tanggal', { ascending: false, nullsFirst: false })
         .range(from, to);
 
-      if (!lastSyncTime && (error || !data || data.length === 0)) {
-        // Fallback to Nomor_WO order if Tanggal order fails or returns nothing (only on full cold start)
-        const fallbackRes = await supabase
-          .from(SUPABASE_TABLES.WORK_ORDER)
-          .select(WORK_ORDER_SELECT_FIELDS)
-          .eq('unitId', targetUnitId)
-          .order('Nomor_WO', { ascending: false })
-          .range(from, to);
-        if (fallbackRes.data && fallbackRes.data.length > 0) {
-          data = fallbackRes.data;
-          error = fallbackRes.error;
-        }
+      if (error) {
+        console.warn('Supabase fetchWorkOrders query error:', error.message);
+        return { success: false, data: [], source: 'supabase', message: error.message };
       }
 
-      if (!error && Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         const workOrders: WorkOrder[] = data.map((row: any) => this.normalizeWorkOrderRow(row));
         
         // Cache only the first page and only if NOT incremental sync
@@ -272,9 +277,9 @@ export class SupabaseService {
         };
       }
       return { success: true, data: [], source: 'supabase', message: 'Tidak ada data Work Order ditemukan.' };
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Error loading Work Orders from Supabase:', err);
-      return { success: false, data: [], source: 'supabase', message: 'Gagal memuat data Work Order.' };
+      return { success: false, data: [], source: 'supabase', message: err?.message || 'Gagal memuat data Work Order.' };
     }
 
     // Check cached data for this unit
@@ -651,7 +656,7 @@ export class SupabaseService {
     source: 'supabase' | 'dexie';
   }> {
     const { jenisLaporan, unitId, ulpName, startDate, endDate, penyulangName, reguName, nomorWO } = params;
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
 
     // 1. Online targeted SQL query directly to PostgreSQL / Supabase
     if (isOnline && isSupabaseConfigured()) {
@@ -662,7 +667,8 @@ export class SupabaseService {
             .select(WORK_ORDER_SELECT_FIELDS);
 
           if (unitId && unitId !== 'ALL') {
-            query = query.eq('unitId', unitId);
+            const unitFilter = this.getUnitQueryFilter(unitId);
+            query = query.or(unitFilter);
           }
           if (ulpName && ulpName !== 'ALL') {
             query = query.ilike('ULP', `%${ulpName}%`);
@@ -683,7 +689,7 @@ export class SupabaseService {
             query = query.ilike('Nomor_WO', `%${nomorWO}%`);
           }
 
-          const { data, error } = await query.order('Tanggal', { ascending: false }).limit(1000);
+          const { data, error } = await query.order('Tanggal', { ascending: false }).limit(200);
           if (!error && Array.isArray(data)) {
             const woList: WorkOrder[] = data.map((row: any) => this.normalizeWorkOrderRow(row));
             return {
@@ -701,16 +707,17 @@ export class SupabaseService {
             .select(REALISASI_LIGHT_SELECT_FIELDS);
 
           if (unitId && unitId !== 'ALL') {
-            query = query.or(`unitId.eq.${unitId},unitId.is.null`);
+            const unitFilter = this.getUnitQueryFilter(unitId);
+            query = query.or(unitFilter);
           }
           if (ulpName && ulpName !== 'ALL') {
             query = query.ilike('ULP', `%${ulpName}%`);
           }
           if (startDate) {
-            query = query.or(`TANGGAL.gte.${startDate},Tanggal.gte.${startDate},WAKTU.gte.${startDate}`);
+            query = query.gte('TANGGAL', startDate);
           }
           if (endDate) {
-            query = query.or(`TANGGAL.lte.${endDate},Tanggal.lte.${endDate},WAKTU.lte.${endDate}T23:59:59`);
+            query = query.lte('TANGGAL', endDate);
           }
           if (penyulangName && penyulangName !== 'ALL') {
             query = query.ilike('PENYULANG', `%${penyulangName}%`);
@@ -732,16 +739,27 @@ export class SupabaseService {
             // Fetch related Work Orders to cross-reference Feeder/Penyulang and details
             let woList: WorkOrder[] = [];
             try {
+              const distinctNomorWOs = Array.from(
+                new Set(relList.map((r) => r.nomorWO).filter((n) => n && n !== '-' && n !== 'ALL'))
+              );
+
               let woQuery = supabase
                 .from(SUPABASE_TABLES.WORK_ORDER)
-                .select('id, WO_ID, unitId, Nomor_WO, Penyulang, ULP');
+                .select('WO_ID, unitId, Nomor_WO, Penyulang, ULP');
+
               if (unitId && unitId !== 'ALL') {
-                woQuery = woQuery.or(`unitId.eq.${unitId},unitId.is.null`);
+                woQuery = woQuery.eq('unitId', unitId);
               }
-              if (ulpName && ulpName !== 'ALL') {
+
+              if (nomorWO && nomorWO !== 'ALL') {
+                woQuery = woQuery.eq('Nomor_WO', nomorWO);
+              } else if (distinctNomorWOs.length > 0) {
+                woQuery = woQuery.in('Nomor_WO', distinctNomorWOs.slice(0, 50));
+              } else if (ulpName && ulpName !== 'ALL') {
                 woQuery = woQuery.ilike('ULP', `%${ulpName}%`);
               }
-              const { data: woData } = await woQuery.limit(500);
+
+              const { data: woData } = await woQuery.limit(50);
               if (Array.isArray(woData)) {
                 woList = woData.map((row: any) => this.normalizeWorkOrderRow(row));
                 const woMapById: Record<string, WorkOrder> = {};
@@ -1051,6 +1069,15 @@ export class SupabaseService {
     }
 
     const latLng = (rel.latitude && rel.longitude) ? `${rel.latitude}, ${rel.longitude}` : '';
+    
+    // Ensure huge base64 strings don't cause 413 / timeout on Supabase text upsert
+    const safeFotoSebelum = (finalFotoSebelum && finalFotoSebelum.startsWith('data:image')) 
+      ? (rel.fotoSebelumUrl && !rel.fotoSebelumUrl.startsWith('data:image') ? rel.fotoSebelumUrl : '') 
+      : finalFotoSebelum;
+    const safeFotoSesudah = (finalFotoSesudah && finalFotoSesudah.startsWith('data:image')) 
+      ? (rel.fotoSesudahUrl && !rel.fotoSesudahUrl.startsWith('data:image') ? rel.fotoSesudahUrl : '') 
+      : finalFotoSesudah;
+
     const payload: Record<string, any> = {
       ID: rel.id,
       unitId: targetUnitId,
@@ -1071,21 +1098,21 @@ export class SupabaseService {
       LONGITUDE: rel.longitude || 0,
       Latitude_Longitude: latLng,
       Keterangan: rel.keterangan || '',
-      FOTO_SEBELUM_URL: formatDriveViewUrl(finalFotoSebelum),
-      FOTO_SETELAH_URL: formatDriveViewUrl(finalFotoSesudah),
+      FOTO_SEBELUM_URL: formatDriveViewUrl(safeFotoSebelum),
+      FOTO_SETELAH_URL: formatDriveViewUrl(safeFotoSesudah),
       STATUS: 'SELESAI',
       WAKTU: rel.createdAt || getLocalDateTimeString(),
       Timestamp: rel.createdAt || getLocalDateTimeString(),
     };
 
     try {
-      // Single canonical upsert using primary key 'ID' and returning lightweight select fields (no base64)
+      // Single canonical upsert using primary key 'ID' and returning lightweight select fields
       let res = await supabase
         .from(SUPABASE_TABLES.REALISASI)
         .upsert([payload], { onConflict: 'ID' })
         .select(REALISASI_LIGHT_SELECT_FIELDS);
 
-      // Handle transient errors (500, 502, 503, network timeout) with a single retry after 500ms - NO retry on 400 Bad Request
+      // Handle transient errors (500, 502, 503, network timeout) with a single retry after 500ms
       if (res.error && (res.error.code === '500' || res.error.code === '503' || res.error.message?.includes('timeout') || res.error.message?.includes('fetch'))) {
         await new Promise((r) => setTimeout(r, 500));
         res = await supabase
@@ -1095,11 +1122,27 @@ export class SupabaseService {
       }
 
       if (res.error) {
+        // Verification Check: Verify if record with ID was actually inserted into Supabase despite error/timeout
+        try {
+          const { data: checkData } = await supabase
+            .from(SUPABASE_TABLES.REALISASI)
+            .select('ID')
+            .eq('ID', rel.id)
+            .maybeSingle();
+
+          if (checkData && checkData.ID === rel.id) {
+            console.log(`[SupabaseService] Realisasi ${rel.id} verified as saved in Supabase database.`);
+            return { success: true, data: rel };
+          }
+        } catch (checkErr) {
+          console.warn('[SupabaseService] Timeout check DB query error:', checkErr);
+        }
+
         console.error('Supabase saveRealisasi error:', res.error);
         return { success: false, error: res.error.message };
       }
 
-      const savedItem = res.data && res.data.length > 0 ? this.normalizeRealisasiRow(res.data[0]) : undefined;
+      const savedItem = res.data && res.data.length > 0 ? this.normalizeRealisasiRow(res.data[0]) : rel;
       return { success: true, data: savedItem };
     } catch (err: any) {
       console.error('Supabase saveRealisasi catch error:', err);
@@ -1188,6 +1231,43 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Admin/Adm Partial Edit Realisasi
+   * Updates ONLY TANGGAL and Latitude_Longitude (and numeric LATITUDE/LONGITUDE)
+   * ID is used as primary key.
+   * Timestamp and Lokasi_kerja are strictly NOT modified.
+   */
+  static async updateRealisasiAdmin(
+    id: string,
+    params: { tanggal: string; latitude: number; longitude: number }
+  ): Promise<{ success: boolean; error?: string }> {
+    const latLngStr = `${params.latitude}, ${params.longitude}`;
+
+    const payload: Record<string, any> = {
+      TANGGAL: params.tanggal,
+      Latitude_Longitude: latLngStr,
+      LATITUDE: params.latitude,
+      LONGITUDE: params.longitude,
+    };
+
+    try {
+      const { error } = await supabase
+        .from(SUPABASE_TABLES.REALISASI)
+        .update(payload)
+        .eq('ID', id);
+
+      if (error) {
+        console.error('Supabase updateRealisasiAdmin error:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Supabase updateRealisasiAdmin catch error:', err);
+      return { success: false, error: err.message || 'Gagal memperbarui data Realisasi' };
+    }
+  }
+
   // ==========================================
   // 4. ABSENSI TABLE OPERATIONS
   // ==========================================
@@ -1203,17 +1283,34 @@ export class SupabaseService {
     message?: string;
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
+    let unitFilter = '';
 
     try {
-      // 1. Fetch with unitId filter, ordered by date descending (up to 1000 records)
-      const { data, error } = await supabase
+      // 1. Fetch with explicit ABSENSI_SELECT_FIELDS and strict unit filter (Max 200 records)
+      let query = supabase
         .from(SUPABASE_TABLES.ABSENSI)
-        .select('*')
-        .eq('unitId', targetUnitId)
-        .order('TANGGAL', { ascending: false })
-        .range(0, 999);
+        .select(ABSENSI_SELECT_FIELDS);
 
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (targetUnitId && targetUnitId !== 'ALL') {
+        unitFilter = this.getUnitQueryFilter(targetUnitId);
+        query = query.or(unitFilter);
+      }
+
+      const { data, error } = await query
+        .order('TANGGAL', { ascending: false })
+        .range(0, 199);
+
+      if (error) {
+        console.warn('[ABSENSI QUERY ERROR]', {
+          unitId: targetUnitId,
+          queryFilter: unitFilter,
+          selectFields: ABSENSI_SELECT_FIELDS,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+      } else if (Array.isArray(data) && data.length > 0) {
         const list: Absensi[] = data.map((row: any) => this.normalizeAbsensiRow(row));
         this.safeSetItem(`aphro_absensi_${targetUnitId}`, JSON.stringify(list));
         return { 
@@ -1223,14 +1320,12 @@ export class SupabaseService {
           message: `Berhasil memuat ${list.length} data absensi terbaru.` 
         };
       }
-      return { success: true, data: [], source: 'supabase', message: 'Tidak ada data absensi ditemukan.' };
     } catch (err) {
       console.warn('Error loading Absensi from Supabase:', err);
-      return { success: false, data: [], source: 'supabase', message: 'Gagal memuat data absensi.' };
     }
 
     try {
-      const cached = this.safeGetItem(`aphro_absensi_${targetUnitId}`);
+      const cached = this.safeGetItem(`aphro_absensi_${targetUnitId}`) || this.safeGetItem('aphro_absensi');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1641,13 +1736,24 @@ export class SupabaseService {
     const defaults = this.getDefaultMasterForUnit(targetUnitId);
 
     try {
-      let [usersRes, ulpRes, pylRes, reguRes, ptgRes] = await Promise.all([
-        supabase.from(SUPABASE_TABLES.USERS).select('ID, id, username, name, nip, email, role, regu, reguName, unitId, status'),
-        supabase.from(SUPABASE_TABLES.ULP).select('ID, Kode_ULP, Nama_ULP, Manajer, Kontak, Alamat, Status, unitId'),
-        supabase.from(SUPABASE_TABLES.PENYULANG).select('ID, Kode_Penyulang, Nama_Penyulang, ULP, unitId'),
-        supabase.from(SUPABASE_TABLES.REGU_ROW).select('ID, Kode_Regu, Nama_Regu, ULP, unitId'),
-        supabase.from(SUPABASE_TABLES.PETUGAS).select('ID, Nama_Petugas, NIP, Jabatan, Regu, ULP, Status, unitId'),
-      ]);
+      let usersQ = supabase.from(SUPABASE_TABLES.USERS).select('Id, unitId, UserID, Username, Password, Nama_Regu, Role, ULP, Status');
+      let ulpQ = supabase.from(SUPABASE_TABLES.ULP).select('ID, unitId, Kode_ULP, Nama_ULP, Manajer, Kontak, Alamat, Status');
+      let pylQ = supabase.from(SUPABASE_TABLES.PENYULANG).select('ID, unitId, Nama_Penyulang, ULP');
+      let reguQ = supabase.from(SUPABASE_TABLES.REGU_ROW).select('ID, unitId, Kode_Regu, Nama_Regu, ULP, Jumlah_Anggota, Kontak, Status');
+      let ptgQ = supabase.from(SUPABASE_TABLES.PETUGAS).select('ID, unitId, Nama, Regu, ULP, Nomor_HP, Role, Status');
+
+      if (targetUnitId && targetUnitId !== 'ALL') {
+        usersQ = usersQ.eq('unitId', targetUnitId);
+        ulpQ = ulpQ.eq('unitId', targetUnitId);
+        pylQ = pylQ.eq('unitId', targetUnitId);
+        reguQ = reguQ.eq('unitId', targetUnitId);
+        ptgQ = ptgQ.eq('unitId', targetUnitId);
+      }
+
+      // Execute in controlled batches to limit concurrency to max 2 requests at a time
+      const [usersRes, ulpRes] = await Promise.all([usersQ, ulpQ]);
+      const [pylRes, reguRes] = await Promise.all([pylQ, reguQ]);
+      const ptgRes = await ptgQ;
 
       const rawUsers = (usersRes.data || []).map((u: any) => this.normalizeUserRow(u));
       const users: User[] = rawUsers.filter((u: User) => {
@@ -1798,12 +1904,14 @@ export class SupabaseService {
   static async fetchAllData(unitId?: string) {
     const targetUnitId = unitId || this.getActiveUnitId();
 
-    const [woRes, relRes, absRes, masterRes] = await Promise.all([
+    // Concurrency limit: max 2 requests at a time to prevent request spikes
+    const [woRes, relRes] = await Promise.all([
       this.fetchWorkOrders(targetUnitId),
       this.fetchRealisasi(targetUnitId),
-      this.fetchAbsensi(targetUnitId),
-      this.fetchMasterData(targetUnitId),
     ]);
+
+    const absRes = await this.fetchAbsensi(targetUnitId);
+    const masterRes = await this.fetchMasterData(targetUnitId);
 
     return {
       workOrders: woRes.data,
@@ -2212,8 +2320,17 @@ export class SupabaseService {
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
     const targetUnitId = unitIdInput || activeInisiasi.unitId;
 
+    if (!safeUsername) {
+      return { success: false, message: 'Username tidak boleh kosong.' };
+    }
+
     try {
-      const { data, error } = await supabase.from(SUPABASE_TABLES.USERS).select('*');
+      const userSelectFields = 'ID, id, UserID, userid, Username, username, Nama, nama, Name, name, Password, password, Role, role, Regu, regu, Regu_Name, reguName, ULP, ulp, Status, status, NIP, nip, Email, email, unitId, unit_id, UnitID, Unit_ID, kodeUnit, Kode_Unit';
+      const { data, error } = await supabase
+        .from(SUPABASE_TABLES.USERS)
+        .select(userSelectFields)
+        .or(`Username.ilike.${safeUsername},username.ilike.${safeUsername},UserID.ilike.${safeUsername},userid.ilike.${safeUsername},ID.ilike.${safeUsername},id.ilike.${safeUsername}`);
+
       if (!error && Array.isArray(data) && data.length > 0) {
         // First: search for user matching username AND unitId
         let matchedRow = data.find((u: any) => {

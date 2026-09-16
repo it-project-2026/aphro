@@ -5,6 +5,7 @@ import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { SupabaseService } from '../services/supabaseService';
 import { dexieDb } from '../services/dexieDb';
+import { INITIAL_WORK_ORDERS } from '../data/initialData';
 import { syncManager } from '../services/syncManager';
 import { getLocalDateTimeString, parseDateFromNomorWO } from '../utils/dateUtils';
 import { UL_PRESETS, RekapHarianService, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
@@ -53,7 +54,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       // 2. BACKGROUND DELTA SYNC: Fetch remote Work Orders from Supabase if online
       if (typeof navigator !== 'undefined' && navigator.onLine) {
         const unitId = SupabaseService.getActiveUnitId();
-        const res = await SupabaseService.fetchWorkOrders(unitId, page, 1000, page === 0 ? undefined : lastSyncRef.current);
+        const res = await SupabaseService.fetchWorkOrders(unitId, page, 200, page === 0 ? undefined : lastSyncRef.current);
 
         if (res.success && res.data) {
           const corrected = res.data.map((wo) => {
@@ -68,16 +69,21 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
             return wo;
           });
 
-          // Save into Dexie DB
-          await dexieDb.work_orders.bulkPut(
-            corrected.map((wo) => ({
-              ...wo,
-              syncStatus: 'SYNCED',
-              updatedAt: wo.updatedAt || getLocalDateTimeString(),
-            }))
-          );
+          if (corrected.length > 0) {
+            // Save into Dexie DB
+            await dexieDb.work_orders.bulkPut(
+              corrected.map((wo) => ({
+                ...wo,
+                syncStatus: 'SYNCED',
+                updatedAt: wo.updatedAt || getLocalDateTimeString(),
+              }))
+            );
 
-          setWorkOrders((prev) => (page === 0 ? corrected : [...prev, ...corrected]));
+            setWorkOrders((prev) => (page === 0 ? corrected : [...prev, ...corrected]));
+          } else if (page === 0 && cachedLocals.length === 0) {
+            // Only set INITIAL_WORK_ORDERS if BOTH remote and local Dexie are empty
+            setWorkOrders(INITIAL_WORK_ORDERS);
+          }
 
           if (page === 0) {
             lastSyncRef.current = getLocalDateTimeString();
@@ -135,8 +141,8 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           if (activeUnitKey !== 'PADANG' && activeUnitId !== 'UL1') return false;
         } else if (uId === 'UL2' || uId.includes('BUKITTINGGI') || uId.includes('BKT')) {
           if (activeUnitKey !== 'BUKITTINGGI' && activeUnitId !== 'UL2') return false;
-        } else if (uId === 'UL3' || uId.includes('PAYAKUMBUH') || uId.includes('PYK')) {
-          if (activeUnitKey !== 'PAYAKUMBUH' && activeUnitId !== 'UL3') return false;
+        } else if (uId === 'UL3' || uId === 'UL4' || uId.includes('PAYAKUMBUH') || uId.includes('PYK')) {
+          if (activeUnitKey !== 'PAYAKUMBUH' && activeUnitId !== 'UL3' && activeUnitId !== 'UL4') return false;
         }
       }
 

@@ -16,6 +16,12 @@ interface RealisasiContextType {
   setRealisasiList: React.Dispatch<React.SetStateAction<Realisasi[]>>;
   addRealisasi: (rel: Omit<Realisasi, 'id' | 'createdAt'>) => Promise<Realisasi>;
   updateRealisasi: (id: string, updates: Partial<Realisasi>) => void;
+  updateRealisasiAdmin: (
+    id: string,
+    newTanggal: string,
+    newLat: number,
+    newLng: number
+  ) => Promise<{ success: boolean; error?: string }>;
   deleteRealisasi: (id: string) => void;
   refreshRealisasi: () => Promise<void>;
 }
@@ -251,6 +257,61 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     }
   }, [realisasiList, setRealisasiList, showToast]);
 
+  const updateRealisasiAdmin = React.useCallback(async (
+    id: string,
+    newTanggal: string,
+    newLat: number,
+    newLng: number
+  ): Promise<{ success: boolean; error?: string }> => {
+    // 1. Partial UPDATE to Supabase Database
+    const res = await SupabaseService.updateRealisasiAdmin(id, {
+      tanggal: newTanggal,
+      latitude: newLat,
+      longitude: newLng,
+    });
+
+    if (!res.success) {
+      showToast('Data Realisasi gagal diperbarui.', 'error');
+      return { success: false, error: res.error };
+    }
+
+    // 2. Direct Local State Update (No full reload / 1000 fetch!)
+    setRealisasiList((prev) =>
+      prev.map((rel) =>
+        rel.id === id || rel.syncId === id
+          ? {
+              ...rel,
+              tanggalRealisasi: newTanggal,
+              latitude: newLat,
+              longitude: newLng,
+            }
+          : rel
+      )
+    );
+
+    // 3. Direct Local Dexie Database Update by ID
+    try {
+      await dexieDb.realisasi
+        .where('id')
+        .equals(id)
+        .or('localId')
+        .equals(id)
+        .or('serverId')
+        .equals(id)
+        .modify({
+          tanggalRealisasi: newTanggal,
+          latitude: newLat,
+          longitude: newLng,
+          updatedAt: getLocalDateTimeString(),
+        });
+    } catch (err) {
+      console.warn('Update Dexie Realisasi Admin error:', err);
+    }
+
+    showToast('Data Realisasi berhasil diperbarui.', 'success');
+    return { success: true };
+  }, [setRealisasiList, showToast]);
+
   const deleteRealisasi = React.useCallback(async (id: string) => {
     // 1. Immediate optimistic state update
     setRealisasiList((prev) => prev.filter((rel) => rel.id !== id && rel.syncId !== id));
@@ -297,7 +358,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   }, [setRealisasiList, showToast, settings.gasWebAppUrl, settings.spreadsheetId]);
 
   return (
-    <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, deleteRealisasi, refreshRealisasi }}>
+    <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, updateRealisasiAdmin, deleteRealisasi, refreshRealisasi }}>
       {children}
     </RealisasiContext.Provider>
   );

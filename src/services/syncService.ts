@@ -356,7 +356,7 @@ export class SyncService {
       const woRes = await SupabaseService.fetchWorkOrders(
         unitId,
         0,
-        previousSyncTime ? 500 : 1000,
+        200,
         previousSyncTime || undefined
       );
 

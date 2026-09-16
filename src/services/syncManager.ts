@@ -680,8 +680,8 @@ export class SyncManager {
             isSuccess = true;
           }
 
-          // Remove item from IndexedDB if success OR if retried >= 2 times
-          if (isSuccess || item.retryCount >= 2) {
+          // Remove item from IndexedDB ONLY if success - NEVER delete failed items
+          if (isSuccess) {
             await idbService.removePendingOperation(item.idempotencyKey);
             successCount++;
 
@@ -697,15 +697,10 @@ export class SyncManager {
             failCount++;
           }
         } catch (err: any) {
-          if (item.retryCount >= 2) {
-            await idbService.removePendingOperation(item.idempotencyKey);
-            successCount++;
-          } else {
-            item.status = 'FAILED';
-            item.error = err.message || 'Koneksi ke Supabase terputus';
-            await idbService.updatePendingOperation(item);
-            failCount++;
-          }
+          item.status = 'FAILED';
+          item.error = err.message || 'Koneksi ke Supabase terputus';
+          await idbService.updatePendingOperation(item);
+          failCount++;
         }
       }
 

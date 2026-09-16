@@ -58,9 +58,11 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     try {
       const unitId = user?.unitId || SupabaseService.getActiveUnitId();
       const res = await SupabaseService.fetchAbsensi(unitId);
-      if (res.success && res.data) {
+      if (res.success && res.data && res.data.length > 0) {
         const filtered = res.data.filter(a => !a.unitId || InisiasiService.isUserMatchingUnit(a.unitId, unitId));
-        setAbsensiList(filtered);
+        if (filtered.length > 0) {
+          setAbsensiList(filtered);
+        }
       }
     } catch (err) {
       console.warn('Error loading Absensi from Supabase:', err);

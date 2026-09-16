@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { useSettings } from '../context/SettingsContext';
+import { useWorkOrders } from '../context/WorkOrderContext';
+import { useRealisasi } from '../context/RealisasiContext';
 import { useToast } from '../hooks/useToast';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { MapReportCapture, MapReportCaptureRef } from '../components/MapReportCapture';
@@ -188,6 +190,8 @@ export const CetakLaporanPage: React.FC = () => {
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { showToast } = useToast();
+  const { workOrders = [] } = useWorkOrders() || {};
+  const { realisasiList = [] } = useRealisasi() || {};
 
   // Active Inisiasi Unit ID & Name
   const activeUnitId = useMemo(() => SupabaseService.getActiveUnitId(), [settings.namaUnitLayanan]);
@@ -298,7 +302,7 @@ export const CetakLaporanPage: React.FC = () => {
           setUnitWorkOrders(forUnit.length > 0 ? forUnit : localWos);
         }
 
-        if (navigator.onLine) {
+        if (navigator.onLine && forUnit.length === 0) {
           const res = await SupabaseService.fetchTargetedReportData({
             jenisLaporan: 'work_order',
             unitId: activeUnitId,
@@ -324,11 +328,17 @@ export const CetakLaporanPage: React.FC = () => {
   const availableWONumbers = useMemo(() => {
     const woSet = new Set<string>();
 
+    workOrders.forEach((wo) => {
+      if (wo.nomorWO) woSet.add(wo.nomorWO);
+    });
     unitWorkOrders.forEach((wo) => {
       if (wo.nomorWO) woSet.add(wo.nomorWO);
     });
     targetedWorkOrders.forEach((wo) => {
       if (wo.nomorWO) woSet.add(wo.nomorWO);
+    });
+    realisasiList.forEach((rel) => {
+      if (rel.nomorWO) woSet.add(rel.nomorWO);
     });
     targetedRealisasi.forEach((rel) => {
       if (rel.nomorWO) woSet.add(rel.nomorWO);
@@ -340,7 +350,7 @@ export const CetakLaporanPage: React.FC = () => {
       list = list.filter((num) => num.toLowerCase().includes(q));
     }
     return list;
-  }, [unitWorkOrders, targetedWorkOrders, targetedRealisasi, searchTermWO]);
+  }, [workOrders, unitWorkOrders, targetedWorkOrders, realisasiList, targetedRealisasi, searchTermWO]);
 
   // ==========================================
   // TARGETED QUERY EXECUTION (PostgreSQL / Supabase)

@@ -141,6 +141,15 @@ class OfflineSyncQueueEngine {
     this.isProcessing = true;
 
     try {
+      // 0. Recovery: Reset any orphaned 'SYNCING' items back to 'PENDING' before fetching queue
+      const orphaned = await dexieDb.sync_queue.where('status').equals('SYNCING').toArray();
+      if (orphaned.length > 0) {
+        for (const item of orphaned) {
+          item.status = 'PENDING';
+          await dexieDb.sync_queue.put(item);
+        }
+      }
+
       const pendingItems = await dexieDb.sync_queue
         .where('status')
         .equals('PENDING')
