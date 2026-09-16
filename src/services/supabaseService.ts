@@ -39,6 +39,21 @@ import { parseNumeric } from '../utils/metricUtils';
 import { GASApiService } from './gasApiService';
 import { getActiveGasConfig } from '../config/gasConfig';
 
+export const WORK_ORDER_SELECT_FIELDS = [
+  'id', 'WO_ID', 'unitId', 'Nomor_WO', 'Tanggal', 'ULP', 'Penyulang',
+  'Regu_ROW', 'VOLUME', 'SATUAN', 'TOTAL_REALISASI', 'SATUAN_TOTAL_REALISASI',
+  'WO_AWAL', 'WO_AKHIR', 'STATUS', 'LOKASI_START', 'LOKASI_FINISH',
+  'PEKERJAAN', 'DESKRIPSI', 'PRIORITAS', 'PETUGAS', 'Created_At', 'updatedAt'
+].join(',');
+
+export const REALISASI_LIGHT_SELECT_FIELDS = [
+  'ID', 'id', 'unitId', 'WO_ID', 'Nomor_WO', 'ULP', 'REGU_ROW', 'Regu_ROW',
+  'PENYULANG', 'NO_TIANG', 'TANGGAL', 'Tanggal', 'WAKTU', 'PETUGAS',
+  'Jenis_Tanaman', 'TIPE_POHON', 'Pertumbuhan_Tanaman', 'Kendala', 'Lokasi_kerja',
+  'LATITUDE', 'LONGITUDE', 'Latitude_Longitude', 'Keterangan', 'STATUS',
+  'FOTO_SEBELUM_URL', 'FOTO_SETELAH_URL', 'Created_At', 'Timestamp'
+].join(',');
+
 export class SupabaseService {
   public static readonly DB_NAME = SUPABASE_DATABASE_NAME;
 
@@ -127,7 +142,7 @@ export class SupabaseService {
     try {
       const { data, error } = await supabase
         .from(SUPABASE_TABLES.INISIASI)
-        .select('*');
+        .select('ID, Kode_UL, Nama_UL, Folder_id_Foto, Folder_id_absensi');
 
       if (!error && Array.isArray(data) && data.length > 0) {
         const units: InisiasiUnit[] = data.map((row: any, idx: number) => ({
@@ -210,7 +225,7 @@ export class SupabaseService {
       // 1. Start query
       let query = supabase
         .from(SUPABASE_TABLES.WORK_ORDER)
-        .select('*');
+        .select(WORK_ORDER_SELECT_FIELDS);
 
       if (targetUnitId && targetUnitId !== 'ALL') {
         query = query.eq('unitId', targetUnitId);
@@ -231,7 +246,7 @@ export class SupabaseService {
         // Fallback to Nomor_WO order if Tanggal order fails or returns nothing (only on full cold start)
         const fallbackRes = await supabase
           .from(SUPABASE_TABLES.WORK_ORDER)
-          .select('*')
+          .select(WORK_ORDER_SELECT_FIELDS)
           .eq('unitId', targetUnitId)
           .order('Nomor_WO', { ascending: false })
           .range(from, to);
@@ -545,24 +560,29 @@ export class SupabaseService {
   // ==========================================
 
   /**
-   * Fetch Realisasi from Supabase REALISASI table filtered by unitId with delta sync support
+   * Fetch Realisasi from Supabase REALISASI table filtered by unitId with pagination and delta sync support.
+   * Uses lightweight column selection by default to prevent downloading massive base64 photo payloads.
    */
   static async fetchRealisasi(
     unitId?: string, 
     page: number = 0, 
-    pageSize: number = 2000,
-    lastSyncTime?: string
+    pageSize: number = 100,
+    lastSyncTime?: string,
+    includePhotos: boolean = false
   ): Promise<{
     success: boolean;
     data: Realisasi[];
     source: 'supabase' | 'cache' | 'initial';
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
+    // Cap maximum page size to 100 per request as mandated by PERBAIKAN 2
+    const effectivePageSize = Math.min(pageSize || 100, 100);
+    const selectFields = includePhotos ? '*' : REALISASI_LIGHT_SELECT_FIELDS;
 
     try {
       let query = supabase
         .from(SUPABASE_TABLES.REALISASI)
-        .select('*');
+        .select(selectFields);
 
       if (targetUnitId && targetUnitId !== 'ALL') {
         query = query.or(`unitId.eq.${targetUnitId},unitId.is.null`);
@@ -571,38 +591,24 @@ export class SupabaseService {
       // Delta Sync Filter: If lastSyncTime is provided, only fetch records updated/created after lastSyncTime
       if (lastSyncTime) {
         const syncDate = lastSyncTime.split('T')[0].split(' ')[0];
-        query = query.or(`TANGGAL.gte.${syncDate},Tanggal.gte.${syncDate},WAKTU.gte.${lastSyncTime}`);
+        query = query.or(`TANGGAL.gte.${syncDate},Tanggal.gte.${syncDate},WAKTU.gte.${lastSyncTime},Created_At.gte.${lastSyncTime}`);
       }
 
-      let allData: any[] = [];
-      let from = 0;
-      const step = 1000;
-      let hasMore = true;
+      const from = page * effectivePageSize;
+      const to = from + effectivePageSize - 1;
 
-      while (hasMore) {
-        const { data, error } = await query
-          .order('TANGGAL', { ascending: false, nullsFirst: false })
-          .range(from, from + step - 1);
+      const { data, error } = await query
+        .order('TANGGAL', { ascending: false, nullsFirst: false })
+        .range(from, to);
 
-        if (error || !data || data.length === 0) {
-          hasMore = false;
-        } else {
-          allData = allData.concat(data);
-          if (data.length < step) {
-            hasMore = false;
-          } else {
-            from += step;
-          }
-        }
-      }
-
-      if (allData.length > 0) {
-        const list: Realisasi[] = allData.map((row: any) => this.normalizeRealisasiRow(row));
-        if (!lastSyncTime) {
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const list: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
+        if (!lastSyncTime && page === 0) {
           this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(list));
         }
         return { success: true, data: list, source: 'supabase' };
       }
+      return { success: true, data: [], source: 'supabase' };
     } catch (err) {
       console.warn('Supabase fetch REALISASI error in catch block:', err);
     }
@@ -653,7 +659,7 @@ export class SupabaseService {
         if (jenisLaporan === 'work_order') {
           let query = supabase
             .from(SUPABASE_TABLES.WORK_ORDER)
-            .select('*');
+            .select(WORK_ORDER_SELECT_FIELDS);
 
           if (unitId && unitId !== 'ALL') {
             query = query.eq('unitId', unitId);
@@ -677,7 +683,7 @@ export class SupabaseService {
             query = query.ilike('Nomor_WO', `%${nomorWO}%`);
           }
 
-          const { data, error } = await query.order('Tanggal', { ascending: false }).limit(2000);
+          const { data, error } = await query.order('Tanggal', { ascending: false }).limit(1000);
           if (!error && Array.isArray(data)) {
             const woList: WorkOrder[] = data.map((row: any) => this.normalizeWorkOrderRow(row));
             return {
@@ -692,7 +698,7 @@ export class SupabaseService {
           // 'realisasi' | 'foto' | 'peta'
           let query = supabase
             .from(SUPABASE_TABLES.REALISASI)
-            .select('*');
+            .select(REALISASI_LIGHT_SELECT_FIELDS);
 
           if (unitId && unitId !== 'ALL') {
             query = query.or(`unitId.eq.${unitId},unitId.is.null`);
@@ -716,42 +722,26 @@ export class SupabaseService {
             query = query.ilike('Nomor_WO', `%${nomorWO}%`);
           }
 
-          let allRelData: any[] = [];
-          let relFrom = 0;
-          const relStep = 1000;
-          let relHasMore = true;
+          const { data, error } = await query
+            .order('TANGGAL', { ascending: false, nullsFirst: false })
+            .limit(100);
 
-          while (relHasMore) {
-            const { data, error } = await query
-              .order('TANGGAL', { ascending: false, nullsFirst: false })
-              .range(relFrom, relFrom + relStep - 1);
-
-            if (error || !data || data.length === 0) {
-              relHasMore = false;
-            } else {
-              allRelData = allRelData.concat(data);
-              if (data.length < relStep) {
-                relHasMore = false;
-              } else {
-                relFrom += relStep;
-              }
-            }
-          }
-
-          if (allRelData.length > 0) {
-            let relList: Realisasi[] = allRelData.map((row: any) => this.normalizeRealisasiRow(row));
+          if (!error && Array.isArray(data) && data.length > 0) {
+            let relList: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
 
             // Fetch related Work Orders to cross-reference Feeder/Penyulang and details
             let woList: WorkOrder[] = [];
             try {
-              let woQuery = supabase.from(SUPABASE_TABLES.WORK_ORDER).select('*');
+              let woQuery = supabase
+                .from(SUPABASE_TABLES.WORK_ORDER)
+                .select('id, WO_ID, unitId, Nomor_WO, Penyulang, ULP');
               if (unitId && unitId !== 'ALL') {
                 woQuery = woQuery.or(`unitId.eq.${unitId},unitId.is.null`);
               }
               if (ulpName && ulpName !== 'ALL') {
                 woQuery = woQuery.ilike('ULP', `%${ulpName}%`);
               }
-              const { data: woData } = await woQuery.limit(2000);
+              const { data: woData } = await woQuery.limit(500);
               if (Array.isArray(woData)) {
                 woList = woData.map((row: any) => this.normalizeWorkOrderRow(row));
                 const woMapById: Record<string, WorkOrder> = {};
@@ -958,7 +948,7 @@ export class SupabaseService {
     const fotoSebelumImg = formatDriveImageUrl(rawFotoSebelum);
     const fotoSesudahImg = formatDriveImageUrl(rawFotoSesudah);
 
-    const relId = String(row.REALISASI_ID || row.realisasi_id || row.ID || row.id || `REL-${Date.now()}`);
+    const relId = String(row.ID || row.id || `REL-${Date.now()}`);
 
     return {
       id: relId,
@@ -1017,7 +1007,7 @@ export class SupabaseService {
   /**
    * Save Realisasi to Supabase REALISASI table
    */
-  static async saveRealisasi(unitId: string, rel: Realisasi): Promise<{ success: boolean; error?: string }> {
+  static async saveRealisasi(unitId: string, rel: Realisasi): Promise<{ success: boolean; data?: Realisasi; error?: string }> {
     const targetUnitId = unitId || this.getActiveUnitId();
     let finalFotoSebelum = rel.fotoSebelumUrl || rel.photosSebelum?.[0]?.dataUrl || '';
     let finalFotoSesudah = rel.fotoSesudahUrl || rel.photosSesudah?.[0]?.dataUrl || '';
@@ -1062,7 +1052,6 @@ export class SupabaseService {
 
     const latLng = (rel.latitude && rel.longitude) ? `${rel.latitude}, ${rel.longitude}` : '';
     const payload: Record<string, any> = {
-      REALISASI_ID: rel.id,
       ID: rel.id,
       unitId: targetUnitId,
       WO_ID: rel.workOrderId || rel.id,
@@ -1071,10 +1060,9 @@ export class SupabaseService {
       REGU_ROW: rel.reguName || '',
       PENYULANG: rel.penyulangName || '',
       NO_TIANG: rel.noTiang || '',
-      Tanggal: rel.tanggalRealisasi,
-      TANGGAL: rel.tanggalRealisasi,
+      Tanggal: rel.tanggalRealisasi || getWIBDateString(),
+      TANGGAL: rel.tanggalRealisasi || getWIBDateString(),
       PETUGAS: rel.petugasName || rel.reguName || '',
-      TIPE_POHON: rel.jenisTanaman || '',
       Jenis_Tanaman: rel.jenisTanaman || '',
       Pertumbuhan_Tanaman: rel.pertumbuhanTanaman || '',
       Kendala: rel.kendala || '',
@@ -1083,68 +1071,36 @@ export class SupabaseService {
       LONGITUDE: rel.longitude || 0,
       Latitude_Longitude: latLng,
       Keterangan: rel.keterangan || '',
-      FOTO_SEBELUM: formatDriveViewUrl(finalFotoSebelum),
-      Foto_Sebelum: formatDriveViewUrl(finalFotoSebelum),
-      FOTO_SETELAH: formatDriveViewUrl(finalFotoSesudah),
-      Foto_Sesudah: formatDriveViewUrl(finalFotoSesudah),
+      FOTO_SEBELUM_URL: formatDriveViewUrl(finalFotoSebelum),
+      FOTO_SETELAH_URL: formatDriveViewUrl(finalFotoSesudah),
       STATUS: 'SELESAI',
       WAKTU: rel.createdAt || getLocalDateTimeString(),
       Timestamp: rel.createdAt || getLocalDateTimeString(),
     };
 
     try {
-      const tryUpsert = async (currPayload: Record<string, any>): Promise<{ success: boolean; error?: string }> => {
-        let { data, error } = await supabase
+      // Single canonical upsert using primary key 'ID' and returning lightweight select fields (no base64)
+      let res = await supabase
+        .from(SUPABASE_TABLES.REALISASI)
+        .upsert([payload], { onConflict: 'ID' })
+        .select(REALISASI_LIGHT_SELECT_FIELDS);
+
+      // Handle transient errors (500, 502, 503, network timeout) with a single retry after 500ms - NO retry on 400 Bad Request
+      if (res.error && (res.error.code === '500' || res.error.code === '503' || res.error.message?.includes('timeout') || res.error.message?.includes('fetch'))) {
+        await new Promise((r) => setTimeout(r, 500));
+        res = await supabase
           .from(SUPABASE_TABLES.REALISASI)
-          .upsert([currPayload], { onConflict: 'REALISASI_ID' })
-          .select();
-
-        if (error && (error.code === 'PGRST204' || error.message?.includes('Could not find the'))) {
-          const match = error.message?.match(/Could not find the '([^']+)' column/);
-          if (match && match[1]) {
-            const badCol = match[1];
-            delete currPayload[badCol];
-            return tryUpsert(currPayload);
-          } else {
-            const optionalCols = ['FOTO_SEBELUM', 'Foto_Sebelum', 'FOTO_SETELAH', 'Foto_Sesudah', 'TIPE_POHON', 'TANGGAL', 'WAKTU', 'PETUGAS', 'Pertumbuhan_Tanaman', 'Kendala'];
-            for (const col of optionalCols) {
-              if (currPayload[col]) delete currPayload[col];
-            }
-            const retryRes = await supabase
-              .from(SUPABASE_TABLES.REALISASI)
-              .upsert([currPayload], { onConflict: 'REALISASI_ID' })
-              .select();
-            if (!retryRes.error) return { success: true };
-            error = retryRes.error;
-          }
-        }
-
-        if (error) {
-          const err2 = await supabase
-            .from(SUPABASE_TABLES.REALISASI)
-            .upsert([currPayload], { onConflict: 'ID' })
-            .select();
-          if (!err2.error) return { success: true };
-          error = err2.error;
-        }
-
-        if (error) {
-          const err3 = await supabase
-            .from(SUPABASE_TABLES.REALISASI)
-            .insert([currPayload])
-            .select();
-          if (!err3.error) return { success: true };
-          error = err3.error;
-        }
-
-        return { success: !error, error: error?.message };
-      };
-
-      const result = await tryUpsert(payload);
-      if (!result.success) {
-        console.error('Supabase saveRealisasi all attempts failed:', result.error);
+          .upsert([payload], { onConflict: 'ID' })
+          .select(REALISASI_LIGHT_SELECT_FIELDS);
       }
-      return result;
+
+      if (res.error) {
+        console.error('Supabase saveRealisasi error:', res.error);
+        return { success: false, error: res.error.message };
+      }
+
+      const savedItem = res.data && res.data.length > 0 ? this.normalizeRealisasiRow(res.data[0]) : undefined;
+      return { success: true, data: savedItem };
     } catch (err: any) {
       console.error('Supabase saveRealisasi catch error:', err);
       return { success: false, error: err.message };
@@ -1209,7 +1165,6 @@ export class SupabaseService {
             if (Array.isArray(list)) {
               const filtered = list.filter((item: any) => 
                 String(item.id || '').trim() !== targetId && 
-                String(item.REALISASI_ID || '').trim() !== targetId && 
                 String(item.realisasi_id || '').trim() !== targetId && 
                 String(item.syncId || '').trim() !== targetId
               );
@@ -1221,43 +1176,13 @@ export class SupabaseService {
         }
       });
 
-      // 2. Perform deletion in Supabase Database across all possible column names
-      let lastError: any = null;
-      let isDeleted = false;
+      // 2. Perform deletion in Supabase Database using primary key ID
+      const { error } = await supabase
+        .from(SUPABASE_TABLES.REALISASI)
+        .delete()
+        .or(`ID.eq.${targetId},id.eq.${targetId}`);
 
-      // Primary attempt using .or() matching
-      try {
-        const orRes = await supabase
-          .from(SUPABASE_TABLES.REALISASI)
-          .delete()
-          .or(`REALISASI_ID.eq.${targetId},ID.eq.${targetId},id.eq.${targetId},realisasi_id.eq.${targetId}`);
-        if (!orRes.error) {
-          isDeleted = true;
-        } else {
-          lastError = orRes.error;
-        }
-      } catch (orErr) {
-        lastError = orErr;
-      }
-
-      // Secondary fallback attempts for specific columns
-      const candidateCols = ['REALISASI_ID', 'ID', 'id', 'realisasi_id'];
-      for (const col of candidateCols) {
-        try {
-          const colRes = await supabase
-            .from(SUPABASE_TABLES.REALISASI)
-            .delete()
-            .eq(col, targetId);
-          if (!colRes.error) {
-            isDeleted = true;
-            break;
-          }
-        } catch (cErr) {
-          // ignore
-        }
-      }
-
-      return { success: isDeleted || !lastError, error: lastError?.message };
+      return { success: !error, error: error?.message };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
@@ -1717,11 +1642,11 @@ export class SupabaseService {
 
     try {
       let [usersRes, ulpRes, pylRes, reguRes, ptgRes] = await Promise.all([
-        supabase.from(SUPABASE_TABLES.USERS).select('*'),
-        supabase.from(SUPABASE_TABLES.ULP).select('*'),
-        supabase.from(SUPABASE_TABLES.PENYULANG).select('*'),
-        supabase.from(SUPABASE_TABLES.REGU_ROW).select('*'),
-        supabase.from(SUPABASE_TABLES.PETUGAS).select('*'),
+        supabase.from(SUPABASE_TABLES.USERS).select('ID, id, username, name, nip, email, role, regu, reguName, unitId, status'),
+        supabase.from(SUPABASE_TABLES.ULP).select('ID, Kode_ULP, Nama_ULP, Manajer, Kontak, Alamat, Status, unitId'),
+        supabase.from(SUPABASE_TABLES.PENYULANG).select('ID, Kode_Penyulang, Nama_Penyulang, ULP, unitId'),
+        supabase.from(SUPABASE_TABLES.REGU_ROW).select('ID, Kode_Regu, Nama_Regu, ULP, unitId'),
+        supabase.from(SUPABASE_TABLES.PETUGAS).select('ID, Nama_Petugas, NIP, Jabatan, Regu, ULP, Status, unitId'),
       ]);
 
       const rawUsers = (usersRes.data || []).map((u: any) => this.normalizeUserRow(u));
@@ -2016,7 +1941,7 @@ export class SupabaseService {
         upsertErr.message?.includes('unique')
       ) {
         // Query existing table rows
-        const { data: existingRows, error: selErr } = await supabase.from(tableName).select('*');
+        const { data: existingRows, error: selErr } = await supabase.from(tableName).select('ID, id');
         if (!selErr && Array.isArray(existingRows)) {
           const existingIds = new Set(
             existingRows.map((r: any) =>
@@ -2203,7 +2128,6 @@ export class SupabaseService {
     // 8. Seed REALISASI
     try {
       const relPayload = INITIAL_REALISASI.map(rel => ({
-        REALISASI_ID: rel.id,
         ID: rel.id,
         unitId: targetUnitId,
         WO_ID: rel.workOrderId || rel.id,
@@ -2215,7 +2139,6 @@ export class SupabaseService {
         Tanggal: rel.tanggalRealisasi || getWIBDateString(),
         TANGGAL: rel.tanggalRealisasi || getWIBDateString(),
         PETUGAS: rel.petugasName || rel.reguName || '',
-        TIPE_POHON: rel.jenisTanaman || '',
         Jenis_Tanaman: rel.jenisTanaman || '',
         Pertumbuhan_Tanaman: rel.pertumbuhanTanaman || '',
         Kendala: rel.kendala || '',
@@ -2224,15 +2147,13 @@ export class SupabaseService {
         LONGITUDE: rel.longitude || 0,
         Latitude_Longitude: `${rel.latitude || 0}, ${rel.longitude || 0}`,
         Keterangan: rel.keterangan || '',
-        FOTO_SEBELUM: rel.fotoSebelumUrl || '',
-        Foto_Sebelum: rel.fotoSebelumUrl || '',
-        FOTO_SETELAH: rel.fotoSesudahUrl || '',
-        Foto_Sesudah: rel.fotoSesudahUrl || '',
+        FOTO_SEBELUM_URL: rel.fotoSebelumUrl || '',
+        FOTO_SETELAH_URL: rel.fotoSesudahUrl || '',
         STATUS: 'SELESAI',
         WAKTU: rel.createdAt || getLocalDateTimeString(),
         Timestamp: rel.createdAt || getLocalDateTimeString(),
       }));
-      const res = await this.smartSeedTable(SUPABASE_TABLES.REALISASI, relPayload, 'REALISASI_ID');
+      const res = await this.smartSeedTable(SUPABASE_TABLES.REALISASI, relPayload, 'ID');
       if (res.success) inserted['REALISASI'] = res.count;
       else errors['REALISASI'] = res.error || 'Gagal seed REALISASI';
     } catch (e: any) {

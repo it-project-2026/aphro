@@ -376,7 +376,7 @@ export class SyncService {
       const relRes = await SupabaseService.fetchRealisasi(
         unitId,
         0,
-        previousSyncTime ? 500 : 2000,
+        100,
         previousSyncTime || undefined
       );
 

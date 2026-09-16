@@ -29,6 +29,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   const [realisasiList, setRealisasiList] = usePersistState<Realisasi[]>('aphro_realisasi', INITIAL_REALISASI);
 
   const lastFetchTime = React.useRef(0);
+  const lastSyncRef = React.useRef<string | undefined>(undefined);
 
   const mapLocalToUI = (allLocal: LocalRealisasi[]): Realisasi[] => {
     return allLocal.map((loc) => ({
@@ -77,46 +78,49 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
       // 2. BACKGROUND DELTA SYNC: Check Supabase asynchronously without blocking UI
       if (typeof navigator !== 'undefined' && navigator.onLine) {
         const unitId = SupabaseService.getActiveUnitId();
-        SupabaseService.fetchRealisasi(unitId).then(async (res) => {
-          if (res.success && res.data && res.data.length > 0) {
-            // Bulk Put remote records into Dexie
-            await dexieDb.realisasi.bulkPut(
-              res.data.map((item) => ({
-                id: item.id || item.syncId || `REL-${Date.now()}`,
-                localId: item.id || `REL-${Date.now()}`,
-                serverId: item.id,
-                idempotencyKey: item.syncId || item.id,
-                unitId: item.unitId || '',
-                nomorWO: item.nomorWO,
-                ulpName: item.ulpName || '',
-                reguName: item.reguName || '',
-                penyulangName: item.penyulangName || '',
-                petugasId: item.petugasId || '',
-                petugasName: item.petugasName || '',
-                noTiang: item.noTiang || '',
-                tanggalRealisasi: item.tanggalRealisasi,
-                jenisTanaman: item.jenisTanaman || '',
-                keterangan: item.keterangan || '',
-                pertumbuhanTanaman: item.pertumbuhanTanaman || '',
-                kendala: item.kendala || '',
-                latitude: item.latitude || 0,
-                longitude: item.longitude || 0,
-                createdAt: item.createdAt || getLocalDateTimeString(),
-                updatedAt: getLocalDateTimeString(),
-                syncStatus: 'SYNCED' as const,
-                progressPercent: 100,
-                status: item.status || 'Selesai',
-                fotoSebelumUrl: item.fotoSebelumUrl,
-                fotoSesudahUrl: item.fotoSesudahUrl,
-                photosSebelum: item.photosSebelum || [],
-                photosSesudah: item.photosSesudah || [],
-                workOrderId: item.workOrderId,
-              }))
-            );
+        SupabaseService.fetchRealisasi(unitId, 0, 100, lastSyncRef.current, false).then(async (res) => {
+          if (res.success && res.data) {
+            if (res.data.length > 0) {
+              // Bulk Put remote records into Dexie
+              await dexieDb.realisasi.bulkPut(
+                res.data.map((item) => ({
+                  id: item.id || item.syncId || `REL-${Date.now()}`,
+                  localId: item.id || `REL-${Date.now()}`,
+                  serverId: item.id,
+                  idempotencyKey: item.syncId || item.id,
+                  unitId: item.unitId || '',
+                  nomorWO: item.nomorWO,
+                  ulpName: item.ulpName || '',
+                  reguName: item.reguName || '',
+                  penyulangName: item.penyulangName || '',
+                  petugasId: item.petugasId || '',
+                  petugasName: item.petugasName || '',
+                  noTiang: item.noTiang || '',
+                  tanggalRealisasi: item.tanggalRealisasi,
+                  jenisTanaman: item.jenisTanaman || '',
+                  keterangan: item.keterangan || '',
+                  pertumbuhanTanaman: item.pertumbuhanTanaman || '',
+                  kendala: item.kendala || '',
+                  latitude: item.latitude || 0,
+                  longitude: item.longitude || 0,
+                  createdAt: item.createdAt || getLocalDateTimeString(),
+                  updatedAt: getLocalDateTimeString(),
+                  syncStatus: 'SYNCED' as const,
+                  progressPercent: 100,
+                  status: item.status || 'Selesai',
+                  fotoSebelumUrl: item.fotoSebelumUrl,
+                  fotoSesudahUrl: item.fotoSesudahUrl,
+                  photosSebelum: item.photosSebelum || [],
+                  photosSesudah: item.photosSesudah || [],
+                  workOrderId: item.workOrderId,
+                }))
+              );
 
-            // Update UI with newly merged local + remote records
-            const updatedAll = await dexieDb.realisasi.toArray();
-            setRealisasiList(mapLocalToUI(updatedAll));
+              // Update UI with newly merged local + remote records
+              const updatedAll = await dexieDb.realisasi.toArray();
+              setRealisasiList(mapLocalToUI(updatedAll));
+            }
+            lastSyncRef.current = getLocalDateTimeString();
           }
         }).catch((fetchErr) => {
           console.warn('Background Supabase fetchRealisasi error:', fetchErr);

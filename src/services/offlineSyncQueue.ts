@@ -291,10 +291,11 @@ class OfflineSyncQueueEngine {
     } catch (error: any) {
       console.warn(`[SyncQueueEngine] Sync failed for key ${item.idempotencyKey}:`, error);
 
-      const nextRetry = item.retryCount + 1;
-      const backoffDelayMs = this.calculateBackoffMs(nextRetry);
+      const errStr = String(error?.message || error || '').toLowerCase();
+      const isClientError = errStr.includes('400') || errStr.includes('pgrst') || errStr.includes('column') || errStr.includes('schema') || errStr.includes('bad request');
 
-      item.retryCount = nextRetry;
+      const nextRetry = item.retryCount + 1;
+      item.retryCount = isClientError ? 99 : nextRetry;
       item.status = 'FAILED';
       item.error = error?.message || 'Gagal terhubung ke server.';
       await dexieDb.sync_queue.put(item);
@@ -304,12 +305,13 @@ class OfflineSyncQueueEngine {
         await dexieDb.realisasi.update(item.payload.realisasi.localId, {
           syncStatus: 'FAILED',
           syncError: item.error,
-          retryCount: nextRetry,
+          retryCount: item.retryCount,
         });
       }
 
-      // Schedule next retry if online
-      if (navigator.onLine && nextRetry <= 5) {
+      // Schedule next retry if online and NOT a 400/schema error, maximum 2 retries
+      if (navigator.onLine && !isClientError && nextRetry <= 2) {
+        const backoffDelayMs = this.calculateBackoffMs(nextRetry);
         setTimeout(() => {
           this.processQueue();
         }, backoffDelayMs);
