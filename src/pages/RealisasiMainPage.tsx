@@ -10,7 +10,9 @@ import {
   RotateCw,
   CheckCircle2,
   Camera,
-  FileCheck2
+  FileCheck2,
+  MapPin,
+  ExternalLink
 } from 'lucide-react';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { useAuth } from '../context/AuthContext';
@@ -885,8 +887,22 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                             <td className="p-2 border border-slate-100 dark:border-slate-800 uppercase">
                               {rel.kendala || 'NIHIL'}
                             </td>
-                            <td className="p-2 border border-slate-100 dark:border-slate-800 font-mono text-[8px] text-slate-500">
-                              {lat && lng ? `${lat.toFixed(6)},\n${lng.toFixed(6)}` : '-'}
+                            <td className="p-2 border border-slate-100 dark:border-slate-800 font-mono text-[9px]">
+                              {lat && lng ? (
+                                <a
+                                  href={`https://www.google.com/maps?q=${lat},${lng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/80 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80 transition-all hover:scale-105 shadow-2xs group font-mono font-bold"
+                                  title="Klik untuk membuka titik lokasi di Google Maps"
+                                >
+                                  <MapPin className="w-3 h-3 text-rose-500 shrink-0 group-hover:animate-bounce" />
+                                  <span>{lat.toFixed(5)}, {lng.toFixed(5)}</span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 shrink-0 ml-0.5" />
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 italic text-[10px]">-</span>
+                              )}
                             </td>
                              <td className="p-2 border border-slate-100 dark:border-slate-800">
                               <div className="flex items-center justify-center gap-1.5">
