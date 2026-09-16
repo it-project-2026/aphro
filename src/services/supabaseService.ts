@@ -879,6 +879,98 @@ export class SupabaseService {
   }
 
   /**
+   * Dedicated targeted query for REKAP PEKERJAAN HARIAN and REKAP PENYULANG HARIAN.
+   * Isolates specifically to the user's unit and selected year/month.
+   * Uses explicit, narrow SELECT columns and chunked pagination so no records are truncated.
+   */
+  static async fetchRekapPeriodData(
+    unitNameOrId: string,
+    year: number,
+    monthIndex: number
+  ): Promise<{
+    success: boolean;
+    workOrders: WorkOrder[];
+    realisasiList: Realisasi[];
+    message?: string;
+  }> {
+    const cleanId = (unitNameOrId || '').toUpperCase().trim();
+    const stdId = InisiasiService.getStandardUnitId(cleanId) || (cleanId.startsWith('UL') ? cleanId : 'UL1');
+    const monthPadded = String(monthIndex + 1).padStart(2, '0');
+    const startDate = `${year}-${monthPadded}-01`;
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const endDate = `${year}-${monthPadded}-${String(lastDay).padStart(2, '0')}`;
+
+    try {
+      // 1. Fetch WORK_ORDER for the period using explicit select fields
+      let woQuery = supabase
+        .from(SUPABASE_TABLES.WORK_ORDER)
+        .select(WORK_ORDER_SELECT_FIELDS)
+        .gte('Tanggal', startDate)
+        .lte('Tanggal', endDate);
+
+      if (stdId && stdId !== 'ALL') {
+        woQuery = woQuery.or(this.getUnitQueryFilter(stdId));
+      }
+
+      const { data: woData, error: woError } = await woQuery.order('Tanggal', { ascending: true });
+      if (woError) {
+        console.warn('Rekap period WO query warning:', woError.message);
+      }
+
+      const workOrders: WorkOrder[] = Array.isArray(woData)
+        ? woData.map((row: any) => this.normalizeWorkOrderRow(row))
+        : [];
+
+      // 2. Fetch REALISASI for the period using lightweight explicit select fields with pagination
+      let allRelRows: any[] = [];
+      let page = 0;
+      const chunkSize = 1000;
+
+      while (true) {
+        let relQuery = supabase
+          .from(SUPABASE_TABLES.REALISASI)
+          .select('ID, unitId, WO_ID, Nomor_WO, ULP, REGU_ROW, PENYULANG, TANGGAL, Keterangan, Jenis_Tanaman')
+          .gte('TANGGAL', startDate)
+          .lte('TANGGAL', endDate);
+
+        if (stdId && stdId !== 'ALL') {
+          relQuery = relQuery.or(`unitId.eq.${stdId},unitId.is.null`);
+        }
+
+        const { data: relChunk, error: relError } = await relQuery
+          .order('TANGGAL', { ascending: true })
+          .range(page * chunkSize, (page + 1) * chunkSize - 1);
+
+        if (relError || !relChunk || relChunk.length === 0) {
+          if (relError) console.warn('Rekap period REALISASI query error:', relError.message);
+          break;
+        }
+
+        allRelRows = allRelRows.concat(relChunk);
+        if (relChunk.length < chunkSize) break;
+        page++;
+      }
+
+      const realisasiList: Realisasi[] = allRelRows.map((row: any) => this.normalizeRealisasiRow(row));
+
+      return {
+        success: true,
+        workOrders,
+        realisasiList,
+        message: `Memuat ${workOrders.length} Work Order dan ${realisasiList.length} Realisasi untuk periode ${monthPadded}/${year}.`,
+      };
+    } catch (err: any) {
+      console.warn('fetchRekapPeriodData exception:', err);
+      return {
+        success: false,
+        workOrders: [],
+        realisasiList: [],
+        message: err.message,
+      };
+    }
+  }
+
+  /**
    * Normalize Supabase REALISASI row
    */
   static normalizeRealisasiRow(row: any): Realisasi {

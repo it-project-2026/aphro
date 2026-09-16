@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aphro-v2026.09.15.01';
+const CACHE_NAME = 'aphro-v2026.09.16.01';
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/favicon.ico',
@@ -57,11 +57,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Network-First for HTML navigation / index.html (Never rely on stale index.html)
+  // 2. Network-First for HTML navigation / index.html (Always get fresh bundle pointers when online)
   if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(
       fetch(event.request, { cache: 'no-cache' })
-        .then((networkResponse) => networkResponse)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          }
+          return networkResponse;
+        })
         .catch(() => caches.match('/index.html') || caches.match('/'))
     );
     return;

@@ -13,6 +13,7 @@ import {
 import {
   RekapHarianService,
 } from '../services/rekapHarianService';
+import { SupabaseService } from '../services/supabaseService';
 import {
   RekapItemData,
   exportRekapHarianToExcel,
@@ -86,11 +87,25 @@ export const RekapPenyulangHarianPage: React.FC = () => {
       let currentWorkOrders = workOrders;
 
       if (navigator.onLine) {
-        showToast('Mengambil data terbaru dari Supabase Database...', 'info');
-        const freshData = await syncWithGAS();
-        if (freshData) {
-          if (Array.isArray(freshData.realisasi)) currentRealisasi = freshData.realisasi;
-          if (Array.isArray(freshData.workOrders)) currentWorkOrders = freshData.workOrders;
+        showToast('Mengambil data rekap periode dari database...', 'info');
+        const periodRes = await SupabaseService.fetchRekapPeriodData(
+          selectedULKey,
+          selectedYear,
+          selectedMonthIdx
+        );
+        if (periodRes.success && (periodRes.realisasiList.length > 0 || periodRes.workOrders.length > 0)) {
+          currentRealisasi = periodRes.realisasiList;
+          currentWorkOrders = periodRes.workOrders;
+        }
+
+        try {
+          const freshData = await syncWithGAS();
+          if (freshData) {
+            if (Array.isArray(freshData.realisasi) && freshData.realisasi.length > 0) currentRealisasi = freshData.realisasi;
+            if (Array.isArray(freshData.workOrders) && freshData.workOrders.length > 0) currentWorkOrders = freshData.workOrders;
+          }
+        } catch {
+          // Optional GAS sync
         }
       }
 
@@ -124,21 +139,54 @@ export const RekapPenyulangHarianPage: React.FC = () => {
   // Load Data
   useEffect(() => {
     setIsLoading(true);
-    const timer = setTimeout(() => {
-      const data = RekapHarianService.loadRekapPenyulangData(
-        selectedULKey,
-        selectedYear,
-        selectedMonthIdx,
-        realisasiList,
-        ulpList,
-        penyulangList,
-        workOrders
-      );
-      setRekapRows(data);
-      setIsLoading(false);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [selectedULKey, selectedYear, selectedMonthIdx, realisasiList, ulpList, penyulangList, workOrders]);
+    // 1. Render data awal dari cache lokal / context yang ada
+    const initialData = RekapHarianService.loadRekapPenyulangData(
+      selectedULKey,
+      selectedYear,
+      selectedMonthIdx,
+      realisasiList,
+      ulpList,
+      penyulangList,
+      workOrders
+    );
+    setRekapRows(initialData);
+    setIsLoading(false);
+
+    // 2. Ambil data periode targeted secara spesifik dari database untuk memastikan seluruh TEBANG/PANGKAS termuat
+    let isCancelled = false;
+    const loadTargetedPeriodData = async () => {
+      try {
+        const periodRes = await SupabaseService.fetchRekapPeriodData(
+          selectedULKey,
+          selectedYear,
+          selectedMonthIdx
+        );
+        if (!isCancelled && periodRes.success && (periodRes.realisasiList.length > 0 || periodRes.workOrders.length > 0)) {
+          const freshData = RekapHarianService.loadRekapPenyulangData(
+            selectedULKey,
+            selectedYear,
+            selectedMonthIdx,
+            periodRes.realisasiList,
+            ulpList,
+            penyulangList,
+            periodRes.workOrders
+          );
+          setRekapRows(freshData);
+          RekapHarianService.saveRekapPenyulangData(selectedULKey, selectedYear, selectedMonthIdx, freshData);
+        }
+      } catch (err) {
+        console.warn('Rekap penyulang period fetch error:', err);
+      }
+    };
+
+    if (navigator.onLine) {
+      loadTargetedPeriodData();
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, penyulangList]);
 
   const availableUlps = useMemo(() => {
     const set = new Set<string>();

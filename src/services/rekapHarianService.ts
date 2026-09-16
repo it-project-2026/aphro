@@ -705,6 +705,16 @@ export class RekapHarianService {
 
               updatedDaily[dayKey].targetKms += targetKms;
               updatedDaily[dayKey].realisasiKms += realisasiKms;
+
+              // Also aggregate TEBANG and PANGKAS if defined on Work Order level
+              const normPekerjaan = normalize(wo.pekerjaan || (wo as any).PEKERJAAN || wo.jenisPekerjaan || '');
+              if (normPekerjaan === 'TEBANG' || normPekerjaan.includes('TEBANG')) {
+                const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
+                updatedDaily[dayKey].tebang1 += (isNaN(vol) ? 1 : vol);
+              } else if (normPekerjaan === 'PANGKAS' || normPekerjaan.includes('PANGKAS')) {
+                const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
+                updatedDaily[dayKey].pangkas += (isNaN(vol) ? 1 : vol);
+              }
             }
           }
         });
@@ -864,7 +874,32 @@ export class RekapHarianService {
       .trim();
     const normalizeNumbers = (s: string) => s.replace(/(\d+)/g, (m) => parseInt(m, 10).toString());
 
-    return currentRows.map((row) => {
+    // Dynamically include any teams from realisasi or workOrders that are not in currentRows
+    const existingTeams = new Set(currentRows.map(r => normalizeNumbers(stripPrefix(r.timRow))));
+    const dynamicRows = [...currentRows];
+
+    const addMissingTeam = (ulp?: string, regu?: string) => {
+      if (!regu) return;
+      const cleanKey = normalizeNumbers(stripPrefix(regu));
+      if (!existingTeams.has(cleanKey)) {
+        existingTeams.add(cleanKey);
+        dynamicRows.push({
+          id: `row-team-dyn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          noUrut: dynamicRows.length + 1,
+          kodeUnit: `1320${dynamicRows.length + 1}`,
+          namaUlp: (ulp || 'ULP UTAMA').toUpperCase(),
+          timRow: regu.trim().toUpperCase(),
+          target: TARGET_KMS_PER_TIM_ROW,
+          keterangan: '',
+          dailyValues: {}
+        });
+      }
+    };
+
+    realisasiList?.forEach(r => addMissingTeam(r.ulpName, r.reguName || r.petugasName));
+    workOrders?.forEach(w => addMissingTeam(w.ulpName, w.reguName));
+
+    return dynamicRows.map((row) => {
       const updatedDaily = { ...row.dailyValues };
       
       // Reset ALL days for the current month
@@ -971,6 +1006,16 @@ export class RekapHarianService {
 
               updatedDaily[targetDayKey].targetKms += targetKms;
               updatedDaily[targetDayKey].realisasiKms += realisasiKms;
+
+              // Also aggregate TEBANG and PANGKAS if defined on Work Order level
+              const normPekerjaan = normalize(wo.pekerjaan || (wo as any).PEKERJAAN || wo.jenisPekerjaan || '');
+              if (normPekerjaan === 'TEBANG' || normPekerjaan.includes('TEBANG')) {
+                const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
+                updatedDaily[targetDayKey].tebang1 += (isNaN(vol) ? 1 : vol);
+              } else if (normPekerjaan === 'PANGKAS' || normPekerjaan.includes('PANGKAS')) {
+                const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
+                updatedDaily[targetDayKey].pangkas += (isNaN(vol) ? 1 : vol);
+              }
             }
           }
         });
