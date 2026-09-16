@@ -21,6 +21,7 @@ import {
   RefreshCw,
   ExternalLink,
   Settings as SettingsIcon,
+  Building2,
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { APP_LOGO_URL } from '../../data/initialData';
@@ -108,13 +109,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
 
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
-            {/* Dynamic Unit Name Header Tag */}
-            <div className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded-full min-w-0">
+            {/* Dynamic Unit Name Header Tag - Clickable to open Inisiasi Page */}
+            <button
+              onClick={() => setActiveTab('inisiasi')}
+              className="flex items-center space-x-1.5 px-2 sm:px-3 py-1 bg-teal-50 hover:bg-teal-100/80 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 rounded-full min-w-0 transition-colors cursor-pointer group"
+              title="Buka Halaman Inisiasi Unit Layanan"
+            >
               <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#00A2B9] animate-pulse shrink-0" />
-              <span className="text-[11px] sm:text-xs font-bold text-teal-900 dark:text-teal-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs uppercase">
+              <span className="text-[11px] sm:text-xs font-bold text-teal-900 dark:text-teal-300 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-xs uppercase group-hover:underline">
                 {settings.namaUnitLayanan}
               </span>
-            </div>
+              <Building2 className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0 ml-0.5" />
+            </button>
           </div>
         </div>
 

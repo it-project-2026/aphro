@@ -151,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       id: 'inisiasi',
       label: 'Inisiasi Unit Layanan',
       icon: Building2,
-      roles: ['SuperAdmin', 'Admin'],
+      roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
     },
     {
       id: 'settings',

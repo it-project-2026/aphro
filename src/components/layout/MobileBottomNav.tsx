@@ -15,6 +15,7 @@ import {
   CalendarRange,
   BarChart3,
   History,
+  Building2,
 } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
@@ -84,6 +85,11 @@ export const MobileBottomNav: React.FC = () => {
           id: 'sinkronisasi',
           label: 'Sinkron',
           icon: RefreshCw,
+        },
+        {
+          id: 'inisiasi',
+          label: 'Inisiasi',
+          icon: Building2,
         },
         {
           id: 'absensi_pulang',
