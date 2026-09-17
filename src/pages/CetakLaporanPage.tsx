@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { SupabaseService } from '../services/supabaseService';
 import { Realisasi, WorkOrder } from '../types';
+import { resolveRealisasiWoStatus } from '../utils/integrityLogger';
 
 // Component to dynamically fit map view to markers/route
 function RecenterMap({ positions }: { positions: [number, number][] }) {
@@ -448,7 +449,8 @@ export const CetakLaporanPage: React.FC = () => {
     if (rel?.penyulangName && rel.penyulangName.trim() !== '' && rel.penyulangName !== '-' && rel.penyulangName !== 'null') {
       return rel.penyulangName;
     }
-    const matchedWo = wo || (rel ? (workOrdersMap[rel.workOrderId] || workOrdersMap[rel.nomorWO] || (rel.id ? workOrdersMap[rel.id] : undefined)) : undefined);
+    const cleanWoId = rel?.workOrderId?.trim();
+    const matchedWo = wo || (cleanWoId ? workOrdersMap[cleanWoId] : (rel?.nomorWO ? workOrdersMap[rel.nomorWO] : undefined));
     if (matchedWo?.penyulangName && matchedWo.penyulangName.trim() !== '' && matchedWo.penyulangName !== '-') {
       return matchedWo.penyulangName;
     }
@@ -459,7 +461,8 @@ export const CetakLaporanPage: React.FC = () => {
   const nonOverlappingMapPoints = useMemo(() => {
     const rawPoints = targetedRealisasi.length > 0
       ? targetedRealisasi.map((rel, idx) => {
-          const wo = workOrdersMap[rel.workOrderId] || workOrdersMap[rel.nomorWO];
+          const cleanWoId = rel.workOrderId?.trim();
+          const wo = cleanWoId ? workOrdersMap[cleanWoId] : (rel.nomorWO ? workOrdersMap[rel.nomorWO] : undefined);
           const lat = rel.latitude || wo?.latitude || -0.286071;
           const lng = rel.longitude || wo?.longitude || 100.449261;
           const jenisTanaman = rel.jenisTanaman || wo?.jenisPekerjaan || 'PEMBANGKASAN POHON (ROW)';
@@ -469,7 +472,7 @@ export const CetakLaporanPage: React.FC = () => {
 
           return {
             id: rel.id || `rel-${idx}`,
-            nomorWO: rel.nomorWO || wo?.nomorWO || `WO-${idx + 1}`,
+            nomorWO: rel.nomorWO || wo?.nomorWO || '-',
             ulpName: rel.ulpName || wo?.ulpName || selectedUlpName,
             penyulangName: feeder,
             jenisTanaman,
@@ -490,7 +493,7 @@ export const CetakLaporanPage: React.FC = () => {
           const feeder = resolvePenyulangName(undefined, wo);
           return {
             id: wo.id || `wo-${idx}`,
-            nomorWO: wo.nomorWO || `WO-${idx + 1}`,
+            nomorWO: wo.nomorWO || '-',
             ulpName: wo.ulpName || selectedUlpName,
             penyulangName: feeder,
             jenisTanaman: wo.jenisPekerjaan || 'PEMBANGKASAN POHON (ROW)',
@@ -1101,15 +1104,29 @@ export const CetakLaporanPage: React.FC = () => {
                     </tr>
                   ) : (
                     targetedRealisasi.map((rel, idx) => {
-                      const wo = workOrdersMap[rel.workOrderId] || workOrdersMap[rel.nomorWO];
+                      const cleanWoId = rel.workOrderId?.trim();
+                      const wo = cleanWoId ? workOrdersMap[cleanWoId] : (rel.nomorWO ? workOrdersMap[rel.nomorWO] : undefined);
                       const lat = rel.latitude || wo?.latitude || -0.286071;
                       const lng = rel.longitude || wo?.longitude || 100.449261;
                       const feederName = resolvePenyulangName(rel, wo);
+                      const woStatus = resolveRealisasiWoStatus(rel, workOrdersMap);
 
                       return (
                         <tr key={`cetak-photo-${rel.id}-${idx}`} className="hover:bg-teal-50/50 transition-colors">
-                          <td className="p-2 border border-slate-200 font-extrabold text-teal-800 text-[10px]">
-                            {rel.nomorWO || wo?.nomorWO || '-'}
+                          <td className="p-2 border border-slate-200 text-[10px]">
+                            {woStatus.statusType === 'LINKED' ? (
+                              <span className="font-extrabold text-teal-800">
+                                {woStatus.displayNomorWO}
+                              </span>
+                            ) : woStatus.statusType === 'UNLINKED' ? (
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                                WO TIDAK TERHUBUNG
+                              </span>
+                            ) : (
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+                                WORK_ORDER TIDAK DITEMUKAN
+                              </span>
+                            )}
                           </td>
                           <td className="p-2 border border-slate-200 uppercase font-semibold text-[10px]">
                             {selectedAreaName}

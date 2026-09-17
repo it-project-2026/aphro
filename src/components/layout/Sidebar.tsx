@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   ClipboardList,
   FilePlus,
+  FilePlus2,
   CheckSquare,
   MapPin,
   Printer,
@@ -92,6 +93,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       label: 'Manajemen Realisasi',
       icon: CheckSquare,
       roles: ['SuperAdmin', 'Admin', 'User'],
+    },
+    {
+      id: 'input_realisasi_manual',
+      label: 'Input Manual Realisasi',
+      icon: FilePlus2,
+      roles: ['SuperAdmin', 'Admin'],
     },
     {
       id: 'riwayat_realisasi',

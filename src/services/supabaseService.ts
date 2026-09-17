@@ -38,6 +38,7 @@ import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { parseNumeric } from '../utils/metricUtils';
 import { GASApiService } from './gasApiService';
 import { getActiveGasConfig } from '../config/gasConfig';
+import { auditRealisasiMutation } from '../utils/integrityLogger';
 
 export const WORK_ORDER_SELECT_FIELDS = [
   'WO_ID', 'unitId', 'PEKERJAAN', 'Nomor_WO', 'Tanggal', 'ULP', 'Penyulang',
@@ -67,7 +68,25 @@ export class SupabaseService {
   public static getUnitQueryFilter(targetUnitId: string): string {
     const cleanId = (targetUnitId || '').toUpperCase().trim();
     const stdId = InisiasiService.getStandardUnitId(cleanId) || cleanId || 'UL1';
-    return `unitId.eq.${stdId}`;
+    
+    const variants: string[] = [
+      `unitId.eq.${stdId}`,
+      `unitId.eq.${stdId.toLowerCase()}`,
+      `unitId.is.null`,
+      `unitId.eq.`,
+    ];
+
+    if (stdId === 'UL1') {
+      variants.push('unitId.eq.PDG', 'unitId.eq.pdg', 'unitId.ilike.%PADANG%');
+    } else if (stdId === 'UL2') {
+      variants.push('unitId.eq.BKT', 'unitId.eq.bkt', 'unitId.ilike.%BUKITTINGGI%');
+    } else if (stdId === 'UL3') {
+      variants.push('unitId.eq.SLK', 'unitId.eq.slk', 'unitId.ilike.%SOLOK%');
+    } else if (stdId === 'UL4') {
+      variants.push('unitId.eq.PYK', 'unitId.eq.pyk', 'unitId.ilike.%PAYAKUMBUH%');
+    }
+
+    return variants.join(',');
   }
 
   static safeGetItem(key: string): string | null {
@@ -93,50 +112,49 @@ export class SupabaseService {
   }
 
   /**
-   * Get currently active unitId from localStorage (Defaults to 'UL2' for UL BUKITTINGGI)
+   * Get currently active unitId from user session or localStorage (Source of Truth)
    */
   static getActiveUnitId(): string {
     try {
-      const unitName = (
-        this.safeGetItem('aphro_nama_unit_layanan') || ''
-      ).toUpperCase();
+      // 1. Check logged-in user session first as the primary source of truth
+      const savedUserStr = this.safeGetItem('aphro_user') || this.safeGetItem('pln_mobile_user');
+      if (savedUserStr) {
+        try {
+          const u = JSON.parse(savedUserStr);
+          if (u?.unitId) {
+            const std = InisiasiService.getStandardUnitId(String(u.unitId));
+            if (std) return std;
+          }
+        } catch {}
+      }
 
+      // 2. Check active inisiasi selection
       const selected = this.safeGetItem('aphro_selected_inisiasi_ul');
-      let parsedId = '';
-      let parsedName = '';
       if (selected) {
         try {
           const parsed = JSON.parse(selected);
-          parsedId = parsed?.id ? String(parsed.id) : '';
-          parsedName = parsed?.namaUL ? String(parsed.namaUL).toUpperCase() : '';
+          if (parsed?.id) {
+            const std = InisiasiService.getStandardUnitId(String(parsed.id));
+            if (std) return std;
+          }
         } catch {}
       }
-      const directId = this.safeGetItem('aphro_selected_unit_id') || '';
 
-      const activeName = unitName || parsedName;
-      if (activeName.includes('BUKITTINGGI') || activeName.includes('BKT')) {
-        // Ensure local storage reflects UL2 for Bukittinggi
-        if (directId === 'UL1' || parsedId === 'UL1') {
-          this.safeSetItem('aphro_selected_unit_id', 'UL2');
-        }
-        return 'UL2';
-      }
-      if (activeName.includes('PADANG') || activeName.includes('PDG')) {
-        return 'UL1';
-      }
-      if (activeName.includes('SOLOK') || activeName.includes('SLK')) {
-        return 'UL3';
-      }
-      if (activeName.includes('PAYAKUMBUH') || activeName.includes('PYK')) {
-        return 'UL4';
+      const directId = this.safeGetItem('aphro_selected_unit_id') || this.safeGetItem('aphro_unit_id');
+      if (directId) {
+        const std = InisiasiService.getStandardUnitId(directId);
+        if (std) return std;
       }
 
-      if (directId) return directId;
-      if (parsedId) return parsedId;
+      const unitName = (this.safeGetItem('aphro_nama_unit_layanan') || '').toUpperCase();
+      if (unitName.includes('PADANG') || unitName.includes('PDG')) return 'UL1';
+      if (unitName.includes('BUKITTINGGI') || unitName.includes('BKT')) return 'UL2';
+      if (unitName.includes('SOLOK') || unitName.includes('SLK')) return 'UL3';
+      if (unitName.includes('PAYAKUMBUH') || unitName.includes('PYK')) return 'UL4';
     } catch {
       // Fallback
     }
-    return 'UL2'; // UL BUKITTINGGI is the primary active unit
+    return 'UL2'; // Default unit fallback
   }
 
   // ==========================================
@@ -571,7 +589,7 @@ export class SupabaseService {
   static async fetchRealisasi(
     unitId?: string, 
     page: number = 0, 
-    pageSize: number = 100,
+    pageSize: number = 200,
     lastSyncTime?: string,
     includePhotos: boolean = false
   ): Promise<{
@@ -580,8 +598,7 @@ export class SupabaseService {
     source: 'supabase' | 'cache' | 'initial';
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
-    // Cap maximum page size to 100 per request as mandated by PERBAIKAN 2
-    const effectivePageSize = Math.min(pageSize || 100, 100);
+    const effectivePageSize = Math.min(pageSize || 200, 200);
     const selectFields = includePhotos ? '*' : REALISASI_LIGHT_SELECT_FIELDS;
 
     try {
@@ -590,13 +607,14 @@ export class SupabaseService {
         .select(selectFields);
 
       if (targetUnitId && targetUnitId !== 'ALL') {
-        query = query.or(`unitId.eq.${targetUnitId},unitId.is.null`);
+        const unitFilter = this.getUnitQueryFilter(targetUnitId);
+        query = query.or(unitFilter);
       }
 
       // Delta Sync Filter: If lastSyncTime is provided, only fetch records updated/created on or after syncDate
       if (lastSyncTime) {
         const syncDate = lastSyncTime.split('T')[0].split(' ')[0];
-        query = query.or(`TANGGAL.gte.${syncDate},Timestamp.gte.${syncDate}`);
+        query = query.gte('TANGGAL', syncDate);
       }
 
       const from = page * effectivePageSize;
@@ -605,6 +623,29 @@ export class SupabaseService {
       const { data, error } = await query
         .order('TANGGAL', { ascending: false, nullsFirst: false })
         .range(from, to);
+
+      // MANDATORY DIAGNOSTIC LOGGING (Langkah 1 & 6)
+      console.log(`[REALISASI QUERY]`, {
+        unitId: targetUnitId,
+        WO_ID: 'ALL',
+        tanggal: lastSyncTime ? `gte.${lastSyncTime}` : 'ALL (Full History)',
+        'jumlah data dari Supabase': Array.isArray(data) ? data.length : 0,
+        error: error ? error.message : null,
+      });
+
+      const savedUserStr = this.safeGetItem('aphro_user') || this.safeGetItem('pln_mobile_user');
+      let sessionUnit = '-';
+      try {
+        sessionUnit = savedUserStr ? JSON.parse(savedUserStr)?.unitId || '-' : '-';
+      } catch {}
+
+      console.log(`[REALISASI UNIT TRACE]`, {
+        'LOGIN UNIT': sessionUnit,
+        'SESSION UNIT': sessionUnit,
+        'QUERY UNIT': targetUnitId,
+        'DATABASE UNIT': targetUnitId,
+        'RESULT COUNT': Array.isArray(data) ? data.length : 0,
+      });
 
       if (!error && Array.isArray(data) && data.length > 0) {
         const list: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
@@ -1059,11 +1100,16 @@ export class SupabaseService {
     const fotoSesudahImg = formatDriveImageUrl(rawFotoSesudah);
 
     const relId = String(row.ID || row.id || `REL-${Date.now()}`);
+    let cleanWoId = String(row.WO_ID || row.wo_id || row.workOrderId || '').trim();
+    // Guard: Prevent legacy self-referencing artifact where WO_ID was incorrectly set to relId
+    if (cleanWoId === relId || cleanWoId.startsWith('REL-')) {
+      cleanWoId = '';
+    }
 
     return {
       id: relId,
       unitId: String(row.unitId || ''),
-      workOrderId: String(row.WO_ID || row.wo_id || row.workOrderId || ''),
+      workOrderId: cleanWoId,
       nomorWO: rawNoWo,
       ulpName,
       reguName,
@@ -1126,14 +1172,19 @@ export class SupabaseService {
     const gasUrl = gasConfig.gasWebAppUrl;
     const fotoFolderId = gasConfig.driveFolderId || '1idu8U3COKEqdcCewdWntu9X06ZMnzskr';
 
+    // Quick photo upload with short timeout so it never hangs or delays Supabase insertion
     if (finalFotoSebelum && finalFotoSebelum.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
-        const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
+        const uploadPromise = GASApiService.uploadPhoto(gasUrl, {
           base64Data: finalFotoSebelum,
           reguName: rel.reguName || 'ROW',
           photoType: 'Realisasi_Sebelum',
           folderId: fotoFolderId,
         });
+        const uploadRes = await Promise.race([
+          uploadPromise,
+          new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+        ]);
         if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
           finalFotoSebelum = uploadRes.fileUrl;
           rel.fotoSebelumUrl = uploadRes.fileUrl;
@@ -1145,12 +1196,16 @@ export class SupabaseService {
 
     if (finalFotoSesudah && finalFotoSesudah.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
-        const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
+        const uploadPromise = GASApiService.uploadPhoto(gasUrl, {
           base64Data: finalFotoSesudah,
           reguName: rel.reguName || 'ROW',
           photoType: 'Realisasi_Sesudah',
           folderId: fotoFolderId,
         });
+        const uploadRes = await Promise.race([
+          uploadPromise,
+          new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+        ]);
         if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
           finalFotoSesudah = uploadRes.fileUrl;
           rel.fotoSesudahUrl = uploadRes.fileUrl;
@@ -1174,7 +1229,7 @@ export class SupabaseService {
     const payload: Record<string, any> = {
       ID: rel.id,
       unitId: targetUnitId,
-      WO_ID: rel.workOrderId || rel.id,
+      WO_ID: rel.workOrderId || '',
       Nomor_WO: rel.nomorWO || '',
       ULP: rel.ulpName || '',
       REGU_ROW: rel.reguName || '',
@@ -1344,34 +1399,107 @@ export class SupabaseService {
   }
 
   /**
-   * Admin/Adm Partial Edit Realisasi
-   * Updates ONLY TANGGAL and Latitude_Longitude
+   * Admin/Adm Edit Realisasi
+   * Updates all Realisasi fields including Tanggal, Koordinat, Atribut Pekerjaan, and Foto (Sebelum & Sesudah)
    * ID is used as primary key.
-   * Timestamp and Lokasi_kerja are strictly NOT modified.
    */
   static async updateRealisasiAdmin(
     id: string,
-    params: { tanggal: string; latitude: number; longitude: number }
-  ): Promise<{ success: boolean; error?: string }> {
-    const latLngStr = `${params.latitude}, ${params.longitude}`;
+    params: {
+      tanggal?: string;
+      tanggalRealisasi?: string;
+      latitude?: number;
+      longitude?: number;
+      nomorWO?: string;
+      workOrderId?: string;
+      ulpName?: string;
+      reguName?: string;
+      penyulangName?: string;
+      noTiang?: string;
+      petugasId?: string;
+      petugasName?: string;
+      jenisTanaman?: string;
+      keterangan?: string;
+      pertumbuhanTanaman?: string;
+      kendala?: string;
+      lokasiKerja?: string;
+      fotoSebelumUrl?: string;
+      fotoSesudahUrl?: string;
+      unitId?: string;
+      [key: string]: any;
+    }
+  ): Promise<{ success: boolean; data?: Realisasi; error?: string }> {
+    const payload: Record<string, any> = {};
 
-    const payload: Record<string, any> = {
-      TANGGAL: params.tanggal,
-      Latitude_Longitude: latLngStr,
-    };
+    const finalTanggal = params.tanggal || params.tanggalRealisasi;
+    if (finalTanggal) {
+      payload.TANGGAL = finalTanggal;
+    }
+
+    if (params.latitude !== undefined && params.longitude !== undefined) {
+      payload.Latitude_Longitude = `${params.latitude}, ${params.longitude}`;
+      payload.LATITUDE = params.latitude;
+      payload.LONGITUDE = params.longitude;
+    }
+
+    if (params.nomorWO !== undefined) payload.Nomor_WO = params.nomorWO;
+    if (params.workOrderId !== undefined) payload.WO_ID = params.workOrderId;
+    if (params.ulpName !== undefined) payload.ULP = params.ulpName;
+    if (params.reguName !== undefined) payload.REGU_ROW = params.reguName;
+    if (params.penyulangName !== undefined) payload.PENYULANG = params.penyulangName;
+    if (params.noTiang !== undefined) payload.NO_TIANG = params.noTiang;
+    if (params.jenisTanaman !== undefined) payload.Jenis_Tanaman = params.jenisTanaman;
+    if (params.keterangan !== undefined) payload.Keterangan = params.keterangan;
+    if (params.pertumbuhanTanaman !== undefined) payload.Pertumbuhan_Tanaman = params.pertumbuhanTanaman;
+    if (params.kendala !== undefined) payload.Kendala = params.kendala;
+    if (params.lokasiKerja !== undefined) payload.Lokasi_kerja = params.lokasiKerja;
+
+    if (params.fotoSebelumUrl !== undefined) {
+      payload.Foto_Sebelum = formatDriveViewUrl(params.fotoSebelumUrl);
+    }
+    if (params.fotoSesudahUrl !== undefined) {
+      payload.Foto_Sesudah = formatDriveViewUrl(params.fotoSesudahUrl);
+    }
+
+    if (params.unitId !== undefined) {
+      payload.unitId = params.unitId;
+    }
 
     try {
-      const { error } = await supabase
-        .from(SUPABASE_TABLES.REALISASI)
-        .update(payload)
-        .eq('ID', id);
+      let currentPayload = { ...payload };
+      let res: any = null;
+      let attempts = 0;
+      const maxAttempts = 5;
 
-      if (error) {
-        console.error('Supabase updateRealisasiAdmin error:', error);
-        return { success: false, error: error.message };
+      while (attempts < maxAttempts) {
+        attempts++;
+        res = await supabase
+          .from(SUPABASE_TABLES.REALISASI)
+          .update(currentPayload)
+          .eq('ID', id)
+          .select(REALISASI_LIGHT_SELECT_FIELDS);
+
+        if (!res.error) break;
+
+        const errMsg = res.error?.message || '';
+        const missingColMatch = errMsg.match(/Could not find the '([^']+)' column/i);
+        if (res.error?.code === 'PGRST204' && missingColMatch && missingColMatch[1]) {
+          const missingCol = missingColMatch[1];
+          console.warn(`[SupabaseService] Column '${missingCol}' not found in REALISASI table during update. Dropping and retrying...`);
+          delete currentPayload[missingCol];
+          continue;
+        }
+
+        break;
       }
 
-      return { success: true };
+      if (res?.error) {
+        console.error('Supabase updateRealisasiAdmin error:', res.error);
+        return { success: false, error: res.error.message || 'Gagal memperbarui data Realisasi' };
+      }
+
+      const updatedData = res?.data && res.data.length > 0 ? this.normalizeRealisasiRow(res.data[0]) : undefined;
+      return { success: true, data: updatedData };
     } catch (err: any) {
       console.error('Supabase updateRealisasiAdmin catch error:', err);
       return { success: false, error: err.message || 'Gagal memperbarui data Realisasi' };
@@ -1640,19 +1768,14 @@ export class SupabaseService {
     const targetUnitId = unitId || this.getActiveUnitId();
 
     try {
-      // 1. Try querying with unitId filter
-      let { data, error } = await supabase
-        .from(SUPABASE_TABLES.USERS)
-        .select('*')
-        .eq('unitId', targetUnitId);
-
-      // 2. If no data with unitId, fetch all users
-      if ((!data || data.length === 0) && !error) {
-        const allRes = await supabase.from(SUPABASE_TABLES.USERS).select('*');
-        if (allRes.data && allRes.data.length > 0) {
-          data = allRes.data;
-        }
+      let query = supabase.from(SUPABASE_TABLES.USERS).select('*');
+      
+      if (targetUnitId && targetUnitId !== 'ALL') {
+        const stdId = InisiasiService.getStandardUnitId(targetUnitId) || targetUnitId;
+        query = query.or(`unitId.eq.${stdId},unitId.eq.${stdId.toLowerCase()}`);
       }
+
+      const { data, error } = await query;
 
       if (!error && Array.isArray(data) && data.length > 0) {
         const users = data.map((row: any) => this.normalizeUserRow(row));
@@ -2348,7 +2471,7 @@ export class SupabaseService {
       const relPayload = INITIAL_REALISASI.map(rel => ({
         ID: rel.id,
         unitId: targetUnitId,
-        WO_ID: rel.workOrderId || rel.id,
+        WO_ID: rel.workOrderId || '',
         Nomor_WO: rel.nomorWO || '',
         ULP: rel.ulpName || '',
         REGU_ROW: rel.reguName || '',

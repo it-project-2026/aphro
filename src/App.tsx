@@ -116,6 +116,7 @@ const AppContent: React.FC = () => {
       case 'riwayat_realisasi': return <RealisasiMainPage initialSubTab="history" />;
       case 'realisasi_main':
       case 'input_realisasi': return <RealisasiMainPage initialSubTab="input" />;
+      case 'input_realisasi_manual': return <RealisasiMainPage initialSubTab="manual_admin" />;
       case 'absensi':
       case 'absensi_pulang': return <AbsensiMainPage initialSubTab="absensi_pulang" />;
       case 'monitoring_absensi': return <AbsensiMainPage initialSubTab="monitoring_absensi" />;

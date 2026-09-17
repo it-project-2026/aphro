@@ -6,6 +6,7 @@ import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
 import { parseNumeric } from '../utils/metricUtils';
 import { dexieDb } from './dexieDb';
 import { offlineSyncQueue } from './offlineSyncQueue';
+import { auditRealisasiMutation } from '../utils/integrityLogger';
 
 export function normalizeUser(u: any): User {
   if (!u || typeof u !== 'object') {
@@ -225,9 +226,15 @@ export function normalizeRealisasi(r: any): any {
   const fotoSebelumImg = formatDriveImageUrl(rawFotoSebelum);
   const fotoSesudahImg = formatDriveImageUrl(rawFotoSesudah);
 
+  const relId = String(r.id || r.ID || r.Id || 'rel-' + Math.random().toString(36).substring(2, 7));
+  let cleanWoId = String(r.WO_ID || r.workOrderId || r.woId || '').trim();
+  if (cleanWoId === relId || cleanWoId.startsWith('REL-')) {
+    cleanWoId = '';
+  }
+
   return {
-    id: String(r.id || r.ID || r.Id || 'rel-' + Math.random().toString(36).substring(2, 7)),
-    workOrderId: String(r.WO_ID || r.workOrderId || r.woId || ''),
+    id: relId,
+    workOrderId: cleanWoId,
     nomorWO: String(r.Nomor_WO || r.nomorWO || r.NO_WO || ''),
     ulpName: String(r.ULP || r.ulpName || ''),
     reguName: String(r.REGU_ROW || r.reguName || r.REGU || ''),
@@ -383,13 +390,37 @@ export class SyncService {
       let realisasiChanged = 0;
       if (relRes.success && Array.isArray(relRes.data) && relRes.data.length > 0) {
         realisasiChanged = relRes.data.length;
-        await dexieDb.realisasi.bulkPut(
-          relRes.data.map((item) => ({
-            id: item.id || item.syncId || `REL-${Date.now()}`,
-            localId: item.id || `REL-${Date.now()}`,
+        const existingLocalList = await dexieDb.realisasi.toArray();
+        const existingLocalMap = new Map(existingLocalList.map((r) => [r.id || r.localId, r]));
+
+        const verifiedItems = relRes.data.map((item) => {
+          const itemId = item.id || item.syncId || `REL-${Date.now()}`;
+          const existing = existingLocalMap.get(itemId);
+          let finalNomorWo = item.nomorWO;
+          let finalWoId = item.workOrderId;
+
+          if (existing) {
+            // Check for unauthorized mutation of historical data
+            const isValid = auditRealisasiMutation(
+              existing,
+              item,
+              'SyncService.syncDelta',
+              'Background / Manual Sync delta fetch'
+            );
+            if (!isValid) {
+              // Preserve original immutable fields
+              finalNomorWo = existing.nomorWO || item.nomorWO;
+              finalWoId = existing.workOrderId || item.workOrderId;
+            }
+          }
+
+          return {
+            id: itemId,
+            localId: itemId,
             serverId: item.id,
             idempotencyKey: item.syncId || item.id,
-            nomorWO: item.nomorWO,
+            unitId: item.unitId || unitId || '',
+            nomorWO: finalNomorWo,
             ulpName: item.ulpName || '',
             reguName: item.reguName || '',
             petugasId: item.petugasId || '',
@@ -411,9 +442,11 @@ export class SyncService {
             fotoSesudahUrl: item.fotoSesudahUrl,
             photosSebelum: item.photosSebelum || [],
             photosSesudah: item.photosSesudah || [],
-            workOrderId: item.workOrderId,
-          }))
-        );
+            workOrderId: finalWoId,
+          };
+        });
+
+        await dexieDb.realisasi.bulkPut(verifiedItems);
       }
 
       // 4. Update sync timestamp upon success

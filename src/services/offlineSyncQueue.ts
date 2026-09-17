@@ -255,7 +255,7 @@ class OfflineSyncQueueEngine {
         // Update Dexie status to SYNCING
         await dexieDb.realisasi.update(realisasi.localId, { syncStatus: 'SYNCING' });
 
-        const unitId = SupabaseService.getActiveUnitId();
+        const unitId = item.payload?.realisasi?.unitId || SupabaseService.getActiveUnitId();
         const serverResult = await SupabaseService.saveRealisasiIdempotent(unitId, realisasi, photos);
 
         if (serverResult.success) {

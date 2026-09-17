@@ -9,18 +9,28 @@ import { SupabaseService } from '../services/supabaseService';
 import { GASApiService } from '../services/gasApiService';
 import { dexieDb, LocalRealisasi, LocalPhoto } from '../services/dexieDb';
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
-import { getLocalDateTimeString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
+import { getLocalDateTimeString, getWIBDateString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
+import { auditRealisasiMutation } from '../utils/integrityLogger';
 
 interface RealisasiContextType {
   realisasiList: Realisasi[];
   setRealisasiList: React.Dispatch<React.SetStateAction<Realisasi[]>>;
   addRealisasi: (rel: Omit<Realisasi, 'id' | 'createdAt'>) => Promise<Realisasi>;
+  addManualRealisasiAdmin: (
+    relData: Partial<Realisasi> & {
+      unitId: string;
+      tanggalRealisasi: string;
+      latitude: number;
+      longitude: number;
+      [key: string]: any;
+    }
+  ) => Promise<{ success: boolean; data?: Realisasi; error?: string }>;
   updateRealisasi: (id: string, updates: Partial<Realisasi>) => void;
   updateRealisasiAdmin: (
     id: string,
-    newTanggal: string,
-    newLat: number,
-    newLng: number
+    arg2: string | (Partial<Realisasi> & { tanggal?: string; latitude?: number; longitude?: number; [key: string]: any }),
+    arg3?: number,
+    arg4?: number
   ) => Promise<{ success: boolean; error?: string }>;
   deleteRealisasi: (id: string) => void;
   refreshRealisasi: () => Promise<void>;
@@ -81,21 +91,44 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
         setRealisasiList(mapLocalToUI(localRecords));
       }
 
-      // 2. BACKGROUND DELTA SYNC: Check Supabase asynchronously without blocking UI
+      // 2. BACKGROUND / FULL SYNC: Fetch Supabase asynchronously without blocking UI
       if (typeof navigator !== 'undefined' && navigator.onLine) {
         const unitId = SupabaseService.getActiveUnitId();
-        SupabaseService.fetchRealisasi(unitId, 0, 100, lastSyncRef.current, false).then(async (res) => {
+        // If force is true or local cache is empty, do a full fetch (lastSyncTime = undefined)
+        const syncTimeToUse = (force || localRecords.length === 0) ? undefined : lastSyncRef.current;
+        
+        SupabaseService.fetchRealisasi(unitId, 0, 200, syncTimeToUse, false).then(async (res) => {
           if (res.success && res.data) {
             if (res.data.length > 0) {
-              // Bulk Put remote records into Dexie
-              await dexieDb.realisasi.bulkPut(
-                res.data.map((item) => ({
-                  id: item.id || item.syncId || `REL-${Date.now()}`,
-                  localId: item.id || `REL-${Date.now()}`,
+              const existingLocalList = await dexieDb.realisasi.toArray();
+              const existingLocalMap = new Map(existingLocalList.map((r) => [r.id || r.localId, r]));
+
+              const verifiedRemoteItems = res.data.map((item) => {
+                const itemId = item.id || item.syncId || `REL-${Date.now()}`;
+                const existing = existingLocalMap.get(itemId);
+                let finalNomorWo = item.nomorWO;
+                let finalWoId = item.workOrderId;
+
+                if (existing) {
+                  const isValid = auditRealisasiMutation(
+                    existing,
+                    item,
+                    'RealisasiContext.refreshRealisasi',
+                    'Background Supabase Delta Fetch'
+                  );
+                  if (!isValid) {
+                    finalNomorWo = existing.nomorWO || item.nomorWO;
+                    finalWoId = existing.workOrderId || item.workOrderId;
+                  }
+                }
+
+                return {
+                  id: itemId,
+                  localId: itemId,
                   serverId: item.id,
                   idempotencyKey: item.syncId || item.id,
-                  unitId: item.unitId || '',
-                  nomorWO: item.nomorWO,
+                  unitId: item.unitId || unitId || '',
+                  nomorWO: finalNomorWo,
                   ulpName: item.ulpName || '',
                   reguName: item.reguName || '',
                   penyulangName: item.penyulangName || '',
@@ -118,12 +151,16 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
                   fotoSesudahUrl: item.fotoSesudahUrl,
                   photosSebelum: item.photosSebelum || [],
                   photosSesudah: item.photosSesudah || [],
-                  workOrderId: item.workOrderId,
-                }))
-              );
+                  workOrderId: finalWoId,
+                };
+              });
+
+              // Bulk Put remote records into Dexie
+              await dexieDb.realisasi.bulkPut(verifiedRemoteItems);
 
               // Update UI with newly merged local + remote records
               const updatedAll = await dexieDb.realisasi.toArray();
+              console.log(`[REALISASI CONTEXT] Loaded ${updatedAll.length} records into Dexie and React state.`);
               setRealisasiList(mapLocalToUI(updatedAll));
             }
             lastSyncRef.current = getLocalDateTimeString();
@@ -201,8 +238,11 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
+    const targetUnitId = relData.unitId || SupabaseService.getActiveUnitId();
+
     const localRecord: LocalRealisasi = {
       ...relData,
+      unitId: targetUnitId,
       localId,
       idempotencyKey,
       syncStatus: 'PENDING',
@@ -213,29 +253,168 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
       status: 'Selesai',
     };
 
-    // 1. Enqueue in Offline Sync Queue & Dexie DB
-    await offlineSyncQueue.enqueueRealisasi(localRecord, localPhotos);
-
     const newRelUI: Realisasi = {
       ...relData,
+      unitId: targetUnitId,
       id: localId,
       createdAt: timestamp,
       syncId: idempotencyKey,
       isSynced: false,
     };
 
-    // 2. Immediate Optimistic UI Update from Local DB
+    // 1. Immediate Optimistic UI Update in React state & local Dexie DB
     setRealisasiList((prev) => [newRelUI, ...prev]);
 
-    // 3. User feedback message
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      showToast('Realisasi tersimpan di perangkat dan menunggu sinkronisasi.', 'info');
+    // 2. Try direct Supabase insertion if online for near-zero latency
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        // Save initial pending state to Dexie first
+        await dexieDb.realisasi.put({
+          ...localRecord,
+          syncStatus: 'SYNCING',
+        });
+
+        const saveRes = await SupabaseService.saveRealisasi(targetUnitId, {
+          ...newRelUI,
+          id: localId,
+        });
+
+        if (saveRes && saveRes.success) {
+          const finalItem = saveRes.data || newRelUI;
+          // Mark as SYNCED in Dexie
+          await dexieDb.realisasi.put({
+            ...localRecord,
+            id: finalItem.id || localId,
+            serverId: finalItem.id,
+            syncStatus: 'SYNCED',
+            updatedAt: getLocalDateTimeString(),
+          });
+
+          // Save photos in Dexie as SYNCED
+          for (const photo of localPhotos) {
+            await dexieDb.photos.put({
+              ...photo,
+              syncStatus: 'SYNCED',
+            });
+          }
+
+          // Update UI state with real synced flag
+          setRealisasiList((prev) =>
+            prev.map((item) =>
+              item.id === localId || item.syncId === idempotencyKey
+                ? { ...finalItem, isSynced: true, syncId: idempotencyKey }
+                : item
+            )
+          );
+
+          showToast('Data Realisasi berhasil tersimpan langsung ke Supabase.', 'success');
+          return { ...finalItem, isSynced: true, syncId: idempotencyKey };
+        } else {
+          // If direct save failed, fallback to offlineSyncQueue
+          console.warn('[RealisasiContext] Direct Supabase save returned error, enqueuing to sync queue:', saveRes?.error);
+          await offlineSyncQueue.enqueueRealisasi(localRecord, localPhotos);
+          showToast('Realisasi tersimpan lokal dan masuk antrean sinkronisasi.', 'info');
+        }
+      } catch (directErr) {
+        console.warn('[RealisasiContext] Direct save failed, falling back to sync queue:', directErr);
+        await offlineSyncQueue.enqueueRealisasi(localRecord, localPhotos);
+        showToast('Realisasi tersimpan lokal dan masuk antrean sinkronisasi.', 'info');
+      }
     } else {
-      showToast('Realisasi tersimpan di perangkat. Memulai sinkronisasi...', 'info');
+      // Offline mode: enqueue in Offline Sync Queue
+      await offlineSyncQueue.enqueueRealisasi(localRecord, localPhotos);
+      showToast('Realisasi tersimpan di perangkat (Mode Offline).', 'info');
     }
 
     return newRelUI;
   }, [setRealisasiList, showToast]);
+
+  /**
+   * Admin Manual Realisasi Insertion
+   * Inserts complete manual Realisasi record directly without auto-generating/guessing WO or dates.
+   * Performs direct save to Supabase, updates local Dexie cache, and updates React state.
+   */
+  const addManualRealisasiAdmin = React.useCallback(async (
+    relData: Partial<Realisasi> & {
+      unitId: string;
+      tanggalRealisasi: string;
+      latitude: number;
+      longitude: number;
+      [key: string]: any;
+    }
+  ): Promise<{ success: boolean; data?: Realisasi; error?: string }> => {
+    const timestamp = getLocalDateTimeString();
+    const targetId = relData.id?.trim() || `REL-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const targetUnitId = relData.unitId || SupabaseService.getActiveUnitId();
+
+    const fullRealisasi: Realisasi = {
+      id: targetId,
+      unitId: targetUnitId,
+      workOrderId: (relData.workOrderId || relData.nomorWO || '').trim(),
+      nomorWO: (relData.nomorWO || '').trim(),
+      ulpName: (relData.ulpName || '').trim(),
+      reguName: (relData.reguName || '').trim(),
+      penyulangName: (relData.penyulangName || '').trim(),
+      noTiang: (relData.noTiang || '').trim(),
+      tanggalRealisasi: (relData.tanggalRealisasi || getWIBDateString()).trim(),
+      petugasId: (relData.petugasId || user?.userName || 'Admin').trim(),
+      petugasName: (relData.petugasName || user?.name || 'Admin').trim(),
+      jenisTanaman: (relData.jenisTanaman || 'Kelapa Sawit').trim(),
+      keterangan: (relData.keterangan || 'TEBANG').trim(),
+      pertumbuhanTanaman: (relData.pertumbuhanTanaman || 'CEPAT').trim(),
+      kendala: (relData.kendala || 'Tidak Ada Kendala').trim(),
+      lokasiKerja: (relData.lokasiKerja || '').trim(),
+      latitude: Number(relData.latitude || 0),
+      longitude: Number(relData.longitude || 0),
+      progressPercent: 100,
+      status: 'Selesai',
+      photosSebelum: relData.photosSebelum || [],
+      photosSesudah: relData.photosSesudah || [],
+      fotoSebelumUrl: (relData.fotoSebelumUrl || '').trim(),
+      fotoSesudahUrl: (relData.fotoSesudahUrl || '').trim(),
+      createdAt: relData.createdAt || timestamp,
+      isSynced: true,
+      syncId: targetId,
+    };
+
+    // 1. Direct Save to Supabase (public.REALISASI)
+    const saveRes = await SupabaseService.saveRealisasi(targetUnitId, fullRealisasi);
+
+    if (!saveRes.success) {
+      showToast(saveRes.error || 'Gagal menyimpan Realisasi Manual ke Database Supabase.', 'error');
+      return { success: false, error: saveRes.error };
+    }
+
+    const savedRecord = saveRes.data || fullRealisasi;
+
+    // 2. Direct Local State Update (No full table reload / No N+1 fetch)
+    setRealisasiList((prev) => [savedRecord, ...prev.filter((item) => item.id !== savedRecord.id)]);
+
+    // 3. Direct Dexie Local Storage Update
+    try {
+      const localDexieRow: LocalRealisasi = {
+        ...savedRecord,
+        localId: savedRecord.id,
+        idempotencyKey: targetId,
+        syncStatus: 'SYNCED',
+        updatedAt: timestamp,
+      };
+      await dexieDb.realisasi.put(localDexieRow);
+    } catch (dexieErr) {
+      console.warn('Manual Realisasi Dexie save warning:', dexieErr);
+    }
+
+    // 4. Audit Log
+    auditRealisasiMutation(
+      null,
+      savedRecord,
+      'addManualRealisasiAdmin',
+      `Input manual oleh Admin untuk Unit ${targetUnitId}, WO: ${savedRecord.nomorWO}, Tanggal: ${savedRecord.tanggalRealisasi}`
+    );
+
+    showToast('Data Realisasi Manual berhasil disimpan ke Database.', 'success');
+    return { success: true, data: savedRecord };
+  }, [user, setRealisasiList, showToast]);
 
   const updateRealisasi = React.useCallback(async (id: string, updates: Partial<Realisasi>) => {
     const existing = realisasiList.find((r) => r.id === id || r.syncId === id);
@@ -259,31 +438,42 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
 
   const updateRealisasiAdmin = React.useCallback(async (
     id: string,
-    newTanggal: string,
-    newLat: number,
-    newLng: number
+    arg2: string | (Partial<Realisasi> & { tanggal?: string; latitude?: number; longitude?: number }),
+    arg3?: number,
+    arg4?: number
   ): Promise<{ success: boolean; error?: string }> => {
-    // 1. Partial UPDATE to Supabase Database
-    const res = await SupabaseService.updateRealisasiAdmin(id, {
-      tanggal: newTanggal,
-      latitude: newLat,
-      longitude: newLng,
-    });
+    let updatePayload: Partial<Realisasi> & { tanggal?: string; latitude?: number; longitude?: number };
+    if (typeof arg2 === 'object' && arg2 !== null) {
+      updatePayload = { ...arg2 };
+    } else {
+      updatePayload = {
+        tanggal: String(arg2 || ''),
+        tanggalRealisasi: String(arg2 || ''),
+        latitude: Number(arg3 || 0),
+        longitude: Number(arg4 || 0),
+      };
+    }
+
+    const finalTanggal = updatePayload.tanggal || updatePayload.tanggalRealisasi || '';
+
+    // 1. UPDATE to Supabase Database
+    const res = await SupabaseService.updateRealisasiAdmin(id, updatePayload);
 
     if (!res.success) {
-      showToast('Data Realisasi gagal diperbarui.', 'error');
+      showToast(res.error || 'Data Realisasi gagal diperbarui di Supabase.', 'error');
       return { success: false, error: res.error };
     }
 
-    // 2. Direct Local State Update (No full reload / 1000 fetch!)
+    // 2. Direct Local State Update
     setRealisasiList((prev) =>
       prev.map((rel) =>
         rel.id === id || rel.syncId === id
           ? {
               ...rel,
-              tanggalRealisasi: newTanggal,
-              latitude: newLat,
-              longitude: newLng,
+              ...updatePayload,
+              tanggalRealisasi: finalTanggal || rel.tanggalRealisasi,
+              latitude: updatePayload.latitude !== undefined ? updatePayload.latitude : rel.latitude,
+              longitude: updatePayload.longitude !== undefined ? updatePayload.longitude : rel.longitude,
             }
           : rel
       )
@@ -291,6 +481,14 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
 
     // 3. Direct Local Dexie Database Update by ID
     try {
+      const dexieUpdates: Record<string, any> = {
+        ...updatePayload,
+        updatedAt: getLocalDateTimeString(),
+      };
+      if (finalTanggal) {
+        dexieUpdates.tanggalRealisasi = finalTanggal;
+      }
+
       await dexieDb.realisasi
         .where('id')
         .equals(id)
@@ -298,12 +496,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
         .equals(id)
         .or('serverId')
         .equals(id)
-        .modify({
-          tanggalRealisasi: newTanggal,
-          latitude: newLat,
-          longitude: newLng,
-          updatedAt: getLocalDateTimeString(),
-        });
+        .modify(dexieUpdates);
     } catch (err) {
       console.warn('Update Dexie Realisasi Admin error:', err);
     }
@@ -358,7 +551,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   }, [setRealisasiList, showToast, settings.gasWebAppUrl, settings.spreadsheetId]);
 
   return (
-    <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, updateRealisasi, updateRealisasiAdmin, deleteRealisasi, refreshRealisasi }}>
+    <RealisasiContext.Provider value={{ realisasiList, setRealisasiList, addRealisasi, addManualRealisasiAdmin, updateRealisasi, updateRealisasiAdmin, deleteRealisasi, refreshRealisasi }}>
       {children}
     </RealisasiContext.Provider>
   );

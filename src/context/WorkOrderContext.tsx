@@ -58,13 +58,15 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
         if (res.success && res.data) {
           const corrected = res.data.map((wo) => {
-            const parsedDate = parseDateFromNomorWO(wo.nomorWO);
             const isNullOrEmpty = !wo.tanggal || 
                                   wo.tanggal === 'null' || 
                                   wo.tanggal === 'undefined' || 
                                   String(wo.tanggal).trim() === '';
-            if (parsedDate && (isNullOrEmpty || wo.tanggal !== parsedDate)) {
-              return { ...wo, tanggal: parsedDate };
+            if (isNullOrEmpty) {
+              const parsedDate = parseDateFromNomorWO(wo.nomorWO);
+              if (parsedDate) {
+                return { ...wo, tanggal: parsedDate };
+              }
             }
             return wo;
           });
@@ -105,13 +107,15 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
   const correctedWorkOrders = React.useMemo(() => {
     return workOrders.map((wo) => {
-      const parsedDate = parseDateFromNomorWO(wo.nomorWO);
       const isNullOrEmpty = !wo.tanggal || 
                             wo.tanggal === 'null' || 
                             wo.tanggal === 'undefined' || 
                             String(wo.tanggal).trim() === '';
-      if (parsedDate && (isNullOrEmpty || wo.tanggal !== parsedDate)) {
-        return { ...wo, tanggal: parsedDate };
+      if (isNullOrEmpty) {
+        const parsedDate = parseDateFromNomorWO(wo.nomorWO);
+        if (parsedDate) {
+          return { ...wo, tanggal: parsedDate };
+        }
       }
       return wo;
     });

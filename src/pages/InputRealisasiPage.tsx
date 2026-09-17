@@ -9,6 +9,7 @@ import { WatermarkedPhoto, WOStatus } from '../types';
 import { generateWatermarkedImage } from '../utils/watermark';
 import { compressImage } from '../utils/imageCompression';
 import { GASApiService } from '../services/gasApiService';
+import { SupabaseService } from '../services/supabaseService';
 import { formatDriveViewUrl } from '../utils/driveUtils';
 import { getWIBDateString, getLocalDateTimeString, normalizeDateISO, formatDateDisplay } from '../utils/dateUtils';
 import {
@@ -466,6 +467,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       } else {
         await addRealisasi({
           workOrderId: selectedWO.id,
+          unitId: selectedWO.unitId || currentUser?.unitId || SupabaseService.getActiveUnitId(),
           nomorWO: selectedWO.nomorWO,
           ulpName: selectedWO.ulpName,
           reguName: selectedWO.reguName,

@@ -12,7 +12,9 @@ import {
   Camera,
   FileCheck2,
   MapPin,
-  ExternalLink
+  ExternalLink,
+  FilePlus2,
+  ShieldCheck,
 } from 'lucide-react';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { useAuth } from '../context/AuthContext';
@@ -24,14 +26,17 @@ import { useToast } from '../hooks/useToast';
 import { formatExecutionDateTime } from '../utils/dateFormatter';
 import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO } from '../utils/dateUtils';
 import { Realisasi } from '../types';
-import { resolveUserTimRowAndUlp, RekapHarianService } from '../services/rekapHarianService';
+import { resolveUserTimRowAndUlp, RekapHarianService, UL_PRESETS } from '../services/rekapHarianService';
 import { SupabaseService } from '../services/supabaseService';
+import { InisiasiService } from '../services/inisiasiService';
 import { InputRealisasiPage } from './InputRealisasiPage';
+import { InputManualRealisasiAdminPage } from './InputManualRealisasiAdminPage';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 import { EditRealisasiModal } from '../components/common/EditRealisasiModal';
+import { resolveRealisasiWoStatus } from '../utils/integrityLogger';
 
 interface RealisasiMainPageProps {
-  initialSubTab?: 'input' | 'history' | 'finalize';
+  initialSubTab?: 'input' | 'manual_admin' | 'history' | 'finalize';
 }
 
 export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSubTab = 'input' }) => {
@@ -44,7 +49,21 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
 
   const draggable = useDraggableScroll();
 
-  const [activeSubTab, setActiveSubTab] = useState<'input' | 'history' | 'finalize'>(initialSubTab);
+  const isAdminUser = useMemo(() => {
+    if (!currentUser) return false;
+    const roleUpper = (currentUser.role || '').toUpperCase();
+    const uName = (currentUser.userName || currentUser.name || '').toLowerCase();
+    return (
+      roleUpper === 'ADMIN' ||
+      roleUpper === 'SUPERADMIN' ||
+      roleUpper === 'SUPER_ADMIN' ||
+      roleUpper === 'SUPER ADMIN' ||
+      uName.includes('admbkt') ||
+      uName.includes('admin')
+    );
+  }, [currentUser]);
+
+  const [activeSubTab, setActiveSubTab] = useState<'input' | 'manual_admin' | 'history' | 'finalize'>(initialSubTab);
   const [editingRealisasi, setEditingRealisasi] = useState<any | null>(null);
   const [selectedForEditModal, setSelectedForEditModal] = useState<any | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -165,92 +184,74 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   };
 
   const canUserAccessRealisasi = React.useCallback((rel: Realisasi) => {
-    // Admin / Management roles can view all records for active Inisiasi Unit
-    if (isAdmbktUser) return true;
     if (!currentUser) return true;
 
-    const roleLower = (currentUser.role || '').toLowerCase();
-    if (
-      roleLower.includes('admin') ||
-      roleLower.includes('super') ||
-      roleLower.includes('adm') ||
-      roleLower.includes('manager') ||
-      roleLower.includes('spv') ||
-      roleLower.includes('supervisor')
-    ) {
-      return true;
-    }
+    const roleUpper = (currentUser.role || '').toUpperCase();
+    const isSuperAdmin = roleUpper === 'SUPER_ADMIN' || roleUpper === 'SUPER ADMIN' || roleUpper === 'SUPERADMIN';
+    
+    // Super Admin can access all units
+    if (isSuperAdmin) return true;
 
     const activeUnitKey = RekapHarianService.normalizeUnitKey(
       settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI'
     );
+    const activeUnitId = currentUser.unitId 
+      ? InisiasiService.getStandardUnitId(currentUser.unitId)
+      : SupabaseService.getActiveUnitId();
 
-    const wo = workOrdersMap[rel.workOrderId] || 
-               workOrdersMap[rel.nomorWO] ||
-               (rel.workOrderId ? workOrdersMap[rel.workOrderId.toLowerCase().trim()] : undefined) ||
-               (rel.nomorWO ? workOrdersMap[rel.nomorWO.toLowerCase().trim()] : undefined);
-
-    // Filter strictly by Active Inisiasi Unit Key
-    const activeUnitId = SupabaseService.getActiveUnitId();
+    // 1. Strict Unit Isolation check: All Unit Admins & Officers only see their own Unit's data
     if (rel.unitId && activeUnitId) {
-      const rUId = String(rel.unitId).trim().toUpperCase();
-      const aUId = String(activeUnitId).trim().toUpperCase();
-      if (rUId === 'UL1' || rUId.includes('PADANG')) {
-        if (aUId !== 'UL1' && activeUnitKey !== 'PADANG') return false;
-      } else if (rUId === 'UL2' || rUId.includes('BUKITTINGGI')) {
-        if (aUId !== 'UL2' && activeUnitKey !== 'BUKITTINGGI') return false;
-      } else if (rUId === 'UL3' || rUId.includes('PAYAKUMBUH')) {
-        if (aUId !== 'UL3' && activeUnitKey !== 'PAYAKUMBUH') return false;
-      } else if (rUId !== aUId) {
+      const rUId = InisiasiService.getStandardUnitId(String(rel.unitId));
+      const aUId = InisiasiService.getStandardUnitId(String(activeUnitId));
+      if (rUId && aUId && rUId !== aUId) {
         return false;
       }
     }
 
-    // Resolve current user's active team ROW info for active Inisiasi
-    const userTimInfo = resolveUserTimRowAndUlp(currentUser, settings.namaUnitLayanan);
+    // 2. Check ULP name preset isolation if unitId is not explicitly set
+    if (!rel.unitId && rel.ulpName) {
+      const activePreset = UL_PRESETS[activeUnitKey];
+      const relUlpClean = cleanStr(rel.ulpName);
+      if (activePreset && activePreset.rows) {
+        let belongsToOtherPreset = false;
+        const isInActivePreset = activePreset.rows.some(r => {
+          const pUlp = cleanStr(r.namaUlp);
+          return relUlpClean.includes(pUlp) || pUlp.includes(relUlpClean);
+        });
 
-    // 1. Direct creator or assignee match
-    const isCreatorOrPetugas =
-      (rel.petugasId && (String(rel.petugasId) === String(currentUser.id) || String(rel.petugasId) === String(currentUser.nip) || String(rel.petugasId) === String(currentUser.userName))) ||
-      (rel.petugasName && (cleanStr(rel.petugasName) === cleanStr(currentUser.name) || cleanStr(rel.petugasName) === cleanStr(currentUser.userName) || cleanStr(rel.petugasName) === cleanStr(userTimInfo.name))) ||
-      (wo?.petugasId && String(wo.petugasId) === String(currentUser.id));
+        for (const [presetKey, presetData] of Object.entries(UL_PRESETS)) {
+          if (presetKey !== activeUnitKey) {
+            const inOther = presetData.rows.some(r => {
+              const pUlp = cleanStr(r.namaUlp);
+              return relUlpClean.includes(pUlp) || pUlp.includes(relUlpClean);
+            });
+            if (inOther && !isInActivePreset) {
+              belongsToOtherPreset = true;
+              break;
+            }
+          }
+        }
 
-    if (isCreatorOrPetugas) return true;
-
-    // 2. Check Tim ROW matching
-    const userReguCandidates = [
-      userTimInfo.reguName,
-      currentUser.reguName,
-      currentUser.userName,
-      currentUser.name,
-      currentUser.nip,
-      currentUser.id
-    ].filter(Boolean);
-
-    for (const candidate of userReguCandidates) {
-      if (matchesReguHelper(rel.reguName, candidate) || matchesReguHelper(wo?.reguName, candidate)) {
-        return true;
+        if (belongsToOtherPreset) return false;
       }
     }
 
-    // 3. Assigned Work Order match
-    const isAssignedWo = displayedWorkOrders.some(woItem => 
-      woItem.id === rel.workOrderId || 
-      woItem.nomorWO === rel.nomorWO || 
-      (rel.nomorWO && woItem.nomorWO && cleanStr(rel.nomorWO) === cleanStr(woItem.nomorWO)) ||
-      (rel.workOrderId && woItem.id && cleanStr(rel.workOrderId) === cleanStr(woItem.id))
-    );
-    if (isAssignedWo) return true;
-
-    // Strict filter: Hide data belonging to other users
-    return false;
-  }, [currentUser, isAdmbktUser, workOrdersMap, displayedWorkOrders, settings.namaUnitLayanan]);
+    // 3. User within active Unit can view all Realisasi records of their Unit in the History Table
+    return true;
+  }, [currentUser, settings.namaUnitLayanan]);
 
   const filteredRealisasi = useMemo(() => {
     const todayStr = getTodayDateString();
 
-    return realisasiList.filter((rel) => {
+    let accessibleCount = 0;
+    let statusFilteredCount = 0;
+    let dateFilteredCount = 0;
+    let todayFilteredCount = 0;
+    let searchFilteredCount = 0;
+
+    const result = realisasiList.filter((rel) => {
       if (!canUserAccessRealisasi(rel)) return false;
+      accessibleCount++;
 
       const wo = workOrdersMap[rel.workOrderId] || 
                  workOrdersMap[rel.nomorWO] ||
@@ -267,6 +268,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
           return false;
         }
       }
+      statusFilteredCount++;
 
       // 2. Resolve canonical item date
       const itemDate = getItemDateISO(rel) || (wo ? getItemDateISO(wo) : '');
@@ -278,6 +280,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
           return false;
         }
       }
+      dateFilteredCount++;
 
       // 4. If showOnlyToday is true and no explicit date/search query is active, filter strictly by today's date
       if (showOnlyToday && !filterDate && !debouncedSearch) {
@@ -285,10 +288,14 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
           return false;
         }
       }
+      todayFilteredCount++;
 
       // 5. Search / Filter by No WO or keyword
       const searchLower = debouncedSearch.toLowerCase().trim();
-      if (!searchLower) return true;
+      if (!searchLower) {
+        searchFilteredCount++;
+        return true;
+      }
 
       const relNoWo = (rel.nomorWO || '').toLowerCase();
       const woNo = (wo?.nomorWO || '').toLowerCase();
@@ -306,6 +313,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         (relNoWo.length > 5 && searchLower.includes(relNoWo)) ||
         (woNo.length > 5 && searchLower.includes(woNo))
       ) {
+        searchFilteredCount++;
         return true;
       }
 
@@ -317,8 +325,24 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         (rel.reguName || '').toLowerCase().includes(searchLower) ||
         (rel.petugasName || '').toLowerCase().includes(searchLower);
 
+      if (matchesSearch) {
+        searchFilteredCount++;
+      }
       return matchesSearch;
     });
+
+    // Step-by-step diagnostic logging (Langkah 4)
+    console.log(`[REALISASI FILTER TRACE]`, {
+      'Total data awal (State)': realisasiList.length,
+      'Setelah canUserAccessRealisasi': accessibleCount,
+      'Setelah filterStatus': statusFilteredCount,
+      'Setelah filterDate': dateFilteredCount,
+      'Setelah showOnlyToday': todayFilteredCount,
+      'Setelah search': searchFilteredCount,
+      'Final displayed (filteredRealisasi)': result.length,
+    });
+
+    return result;
   }, [realisasiList, workOrdersMap, debouncedSearch, canUserAccessRealisasi, showOnlyToday, filterDate, filterStatus]);
 
   const noWoOptions = useMemo(() => {
@@ -328,7 +352,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     // Also include realisasi items accessible to current user (which are filtered by active inisiasi)
     const accessibleRealisasiNoWos = realisasiList
       .filter(rel => canUserAccessRealisasi(rel))
-      .map(rel => rel.nomorWO || workOrdersMap[rel.workOrderId]?.nomorWO || workOrdersMap[rel.id]?.nomorWO)
+      .map(rel => rel.nomorWO || (rel.workOrderId ? workOrdersMap[rel.workOrderId]?.nomorWO : undefined))
       .filter(Boolean);
 
     return Array.from(new Set([...Array.from(displayedNoWos), ...accessibleRealisasiNoWos])).sort();
@@ -376,7 +400,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+        <div className="flex flex-wrap items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 gap-1">
           <button
             type="button"
             onClick={() => {
@@ -392,6 +416,25 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
             <CheckSquare className="w-4 h-4" />
             <span>INPUT REALISASI</span>
           </button>
+
+          {/* Admin Dedicated Manual Input Sub-tab */}
+          {isAdminUser && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingRealisasi(null);
+                setActiveSubTab('manual_admin');
+              }}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+                activeSubTab === 'manual_admin'
+                  ? 'bg-amber-600 text-white shadow-md'
+                  : 'text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-white bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/40'
+              }`}
+            >
+              <FilePlus2 className="w-4 h-4" />
+              <span>INPUT MANUAL (ADMIN)</span>
+            </button>
+          )}
           
           <button
             type="button"
@@ -413,7 +456,17 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
 
       {/* Content */}
       <div className="transition-all duration-300">
-        {activeSubTab === 'input' ? (
+        {activeSubTab === 'manual_admin' ? (
+          <InputManualRealisasiAdminPage
+            onSuccess={(savedRel) => {
+              setActiveSubTab('history');
+              showToast(`Data Realisasi manual ${savedRel.nomorWO} berhasil disimpan ke Database.`, 'success');
+            }}
+            onCancel={() => {
+              setActiveSubTab('history');
+            }}
+          />
+        ) : activeSubTab === 'input' ? (
           <InputRealisasiPage 
             editMode={!!editingRealisasi} 
             initialData={editingRealisasi} 
@@ -796,10 +849,27 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                         const lat = rel.latitude || wo?.latitude || 0;
                         const lng = rel.longitude || wo?.longitude || 0;
 
+                        const woStatus = resolveRealisasiWoStatus(rel, workOrdersMap);
+
                         return (
                           <tr key={`rel-history-${rel.id}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                            <td className="p-2 border border-slate-100 dark:border-slate-800 font-bold text-teal-700 dark:text-teal-400">
-                              {rel.nomorWO || wo?.nomorWO || '-'}
+                            <td className="p-2 border border-slate-100 dark:border-slate-800">
+                              {woStatus.statusType === 'LINKED' ? (
+                                <span className="font-bold text-teal-700 dark:text-teal-400">
+                                  {woStatus.displayNomorWO}
+                                </span>
+                              ) : woStatus.statusType === 'UNLINKED' ? (
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 tracking-tight whitespace-nowrap">
+                                  WO TIDAK TERHUBUNG
+                                </span>
+                              ) : (
+                                <span 
+                                  className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 tracking-tight whitespace-nowrap"
+                                  title={`WO ID: ${rel.workOrderId}`}
+                                >
+                                  WORK_ORDER TIDAK DITEMUKAN
+                                </span>
+                              )}
                             </td>
                             <td className="p-2 border border-slate-100 dark:border-slate-800 uppercase font-semibold">
                               {selectedAreaName}
