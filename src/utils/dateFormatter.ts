@@ -59,9 +59,12 @@ export function formatDateTime(dateInput?: string | Date): string {
     const day = dmyTimeMatch[1].padStart(2, '0');
     const month = dmyTimeMatch[2].padStart(2, '0');
     const year = dmyTimeMatch[3];
-    const time = dmyTimeMatch[4] || '00:00:00';
-    const fullTime = time.length === 5 ? `${time}:00` : time;
-    return `${day}-${month}-${year} ${fullTime}`;
+    const time = dmyTimeMatch[4];
+    if (time && time !== '00:00:00' && time !== '00:00') {
+      const fullTime = time.length === 5 ? `${time}:00` : time;
+      return `${day}-${month}-${year} ${fullTime}`;
+    }
+    return `${day}-${month}-${year}`;
   }
 
   // 4. Plain ISO/standard YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm:ss without Z/offset (ALREADY local WIB)
@@ -70,9 +73,12 @@ export function formatDateTime(dateInput?: string | Date): string {
     const year = ymdTimeMatch[1];
     const month = ymdTimeMatch[2].padStart(2, '0');
     const day = ymdTimeMatch[3].padStart(2, '0');
-    const time = ymdTimeMatch[4] || '00:00:00';
-    const fullTime = time.length === 5 ? `${time}:00` : time;
-    return `${day}-${month}-${year} ${fullTime}`;
+    const time = ymdTimeMatch[4];
+    if (time && time !== '00:00:00' && time !== '00:00') {
+      const fullTime = time.length === 5 ? `${time}:00` : time;
+      return `${day}-${month}-${year} ${fullTime}`;
+    }
+    return `${day}-${month}-${year}`;
   }
 
   // 5. Fallback for pure numeric timestamp
@@ -112,28 +118,24 @@ export function formatDateOnly(dateInput?: string | Date): string {
 export function formatExecutionDateTime(rel?: any, wo?: any): string {
   if (!rel && !wo) return '-';
 
-  // 1. Prefer explicit date fields first
-  const explicitDate = rel?.tanggalRealisasi || rel?.TANGGAL || rel?.Tanggal;
-  if (explicitDate) {
-    return formatDateTime(explicitDate);
-  }
-
-  // 2. Prefer rel.timestamp, rel.createdAt if available
+  // 1. Check real timestamp fields on Realisasi FIRST (with hours, minutes, seconds)
   const relTime =
     rel?.timestamp ||
     rel?.Timestamp ||
     rel?.createdAt ||
     rel?.CREATED_AT ||
-    rel?.Created_At;
+    rel?.Created_At ||
+    rel?.WAKTU ||
+    rel?.waktu;
 
   if (relTime) {
     const formatted = formatDateTime(relTime);
-    if (formatted !== '-' && !formatted.endsWith('00:00:00')) {
+    if (formatted !== '-' && formatted.includes(':') && !formatted.endsWith('00:00:00')) {
       return formatted;
     }
   }
 
-  // 3. Check photo timestamps
+  // 2. Check photo timestamps
   const photoTs =
     rel?.photosSebelum?.[0]?.timestamp ||
     rel?.photosSesudah?.[0]?.timestamp ||
@@ -142,29 +144,35 @@ export function formatExecutionDateTime(rel?: any, wo?: any): string {
 
   if (photoTs) {
     const formatted = formatDateTime(photoTs);
-    if (formatted !== '-' && !formatted.endsWith('00:00:00')) {
+    if (formatted !== '-' && formatted.includes(':') && !formatted.endsWith('00:00:00')) {
       return formatted;
     }
   }
 
-  // 4. Check wo.createdAt
+  // 3. Check wo timestamps
   const woTime = wo?.createdAt || wo?.CREATED_AT || wo?.Created_At;
   if (woTime) {
     const formatted = formatDateTime(woTime);
-    if (formatted !== '-' && !formatted.endsWith('00:00:00')) {
+    if (formatted !== '-' && formatted.includes(':') && !formatted.endsWith('00:00:00')) {
       return formatted;
     }
   }
 
-  // 5. Fallback to any base date
-  const dateBase =
-    wo?.tanggal ||
-    wo?.TANGGAL ||
-    rel?.createdAt ||
-    wo?.createdAt;
+  // 4. If explicit date exists, format date cleanly
+  const explicitDate = rel?.tanggalRealisasi || rel?.TANGGAL || rel?.Tanggal || wo?.tanggal || wo?.TANGGAL;
+  if (explicitDate) {
+    const formatted = formatDateTime(explicitDate);
+    if (formatted !== '-') {
+      return formatted.replace(/\s+00:00:00$/, '');
+    }
+  }
 
-  if (!dateBase) return '-';
+  // 5. Fallback
+  if (relTime) {
+    const formatted = formatDateTime(relTime);
+    return formatted !== '-' ? formatted.replace(/\s+00:00:00$/, '') : '-';
+  }
 
-  return formatDateTime(dateBase);
+  return '-';
 }
 

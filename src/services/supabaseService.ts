@@ -593,10 +593,10 @@ export class SupabaseService {
         query = query.or(`unitId.eq.${targetUnitId},unitId.is.null`);
       }
 
-      // Delta Sync Filter: If lastSyncTime is provided, only fetch records updated/created after lastSyncTime
+      // Delta Sync Filter: If lastSyncTime is provided, only fetch records updated/created on or after syncDate
       if (lastSyncTime) {
         const syncDate = lastSyncTime.split('T')[0].split(' ')[0];
-        query = query.or(`TANGGAL.gte.${syncDate},Tanggal.gte.${syncDate},WAKTU.gte.${lastSyncTime},Created_At.gte.${lastSyncTime}`);
+        query = query.or(`TANGGAL.gte.${syncDate},Timestamp.gte.${syncDate}`);
       }
 
       const from = page * effectivePageSize;

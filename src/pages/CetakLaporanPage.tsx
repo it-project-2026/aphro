@@ -229,10 +229,12 @@ export const CetakLaporanPage: React.FC = () => {
     return ulpList;
   }, [ulpList, activeUnitId]);
 
-  // 1. Core Selection States (Nomor WO Filter Only & Jenis Laporan)
+  // 1. Core Selection States (Nomor WO Filter, Date Filter & Jenis Laporan)
   const [reportType, setReportType] = useState<'foto' | 'peta' | 'work_order'>('foto');
   const [filterNoWo, setFilterNoWo] = useState<string>('');
   const [searchTermWO, setSearchTermWO] = useState<string>('');
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
 
   // 2. Server Query Result States (Targeted Dataset)
   const [targetedRealisasi, setTargetedRealisasi] = useState<Realisasi[]>([]);
@@ -374,6 +376,8 @@ export const CetakLaporanPage: React.FC = () => {
         jenisLaporan: reportType,
         unitId: activeUnitId,
         nomorWO: filterNoWo !== 'ALL' ? filterNoWo : undefined,
+        startDate: filterStartDate ? filterStartDate : undefined,
+        endDate: filterEndDate ? filterEndDate : undefined,
       });
 
       if (result.success) {
@@ -383,8 +387,8 @@ export const CetakLaporanPage: React.FC = () => {
 
         setLastQueriedParams({
           ulp: activeUnitName,
-          startDate: '-',
-          endDate: '-',
+          startDate: filterStartDate || '-',
+          endDate: filterEndDate || '-',
           type: reportType === 'foto' ? 'Laporan Foto Realisasi' : reportType === 'peta' ? 'Laporan Peta Spasial' : 'Laporan Rekapitulasi WO',
           total: result.totalCount,
           nomorWO: filterNoWo !== 'ALL' ? filterNoWo : 'Semua Work Order',
@@ -398,7 +402,7 @@ export const CetakLaporanPage: React.FC = () => {
         setTargetedRealisasi([]);
         setTargetedWorkOrders([]);
         if (!isSilent) {
-          showToast('Tidak ada data yang ditemukan untuk Nomor WO ini.', 'info');
+          showToast('Tidak ada data yang ditemukan untuk filter ini.', 'info');
         }
       }
     } catch (err: any) {
@@ -409,7 +413,7 @@ export const CetakLaporanPage: React.FC = () => {
     } finally {
       setIsLoadingQuery(false);
     }
-  }, [reportType, activeUnitId, activeUnitName, filterNoWo, showToast]);
+  }, [reportType, activeUnitId, activeUnitName, filterNoWo, filterStartDate, filterEndDate, showToast]);
 
   // Initial load and automated query trigger on main filter change
   useEffect(() => {
@@ -423,7 +427,7 @@ export const CetakLaporanPage: React.FC = () => {
       handleExecuteTargetedQuery(true);
     }, 250);
     return () => clearTimeout(timer);
-  }, [reportType, filterNoWo, activeUnitId, handleExecuteTargetedQuery]);
+  }, [reportType, filterNoWo, filterStartDate, filterEndDate, activeUnitId, handleExecuteTargetedQuery]);
 
   // Map WO by ID and Nomor_WO for robust lookup
   const workOrdersMap = useMemo(() => {
@@ -794,7 +798,7 @@ export const CetakLaporanPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. Step: Dedicated Targeted Filter Panel Card - NOMOR WO ONLY */}
+        {/* 2. Step: Dedicated Targeted Filter Panel Card - NOMOR WO & DATE FILTER */}
         <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/60 dark:border-slate-800">
             <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-200">
@@ -803,10 +807,10 @@ export const CetakLaporanPage: React.FC = () => {
               </div>
               <div>
                 <span className="text-xs font-black uppercase tracking-wider block text-[#008396] dark:text-teal-400">
-                  FILTER PARAMETER WORK ORDER (WO)
+                  FILTER PARAMETER LAPORAN & WORK ORDER (WO)
                 </span>
                 <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
-                  Pilih atau cari Nomor Work Order (WO) untuk memuat laporan & eviden tertarget.
+                  Pilih rentang tanggal dan Nomor Work Order (WO) untuk memuat dokumen laporan tertarget.
                 </span>
               </div>
             </div>
@@ -817,19 +821,113 @@ export const CetakLaporanPage: React.FC = () => {
                 <Building2 className="w-3 h-3 text-[#00A2B9]" />
                 <span>Unit Inisiasi: <span className="font-extrabold text-[#008396] dark:text-teal-400">{activeUnitName}</span> (<code className="font-mono">{activeUnitId}</code>)</span>
               </div>
-              {filterNoWo !== 'ALL' && (
+              {(filterNoWo !== 'ALL' || filterStartDate || filterEndDate) && (
                 <button
                   type="button"
                   onClick={() => {
                     setFilterNoWo('ALL');
                     setSearchTermWO('');
+                    setFilterStartDate('');
+                    setFilterEndDate('');
                   }}
                   className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-extrabold rounded-lg transition-colors shadow-2xs flex items-center space-x-1"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  <span>Tampilkan Semua WO</span>
+                  <span>Reset Filter</span>
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Date Filter Row */}
+          <div className="bg-white dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-[#00A2B9]" />
+                <span>Filter Rentang Tanggal</span>
+              </span>
+
+              {/* Quick Date Presets */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    const dStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    setFilterStartDate(dStr);
+                    setFilterEndDate(dStr);
+                  }}
+                  className="px-2 py-0.5 bg-slate-100 hover:bg-teal-50 hover:text-[#008396] dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded font-semibold transition-colors"
+                >
+                  Hari Ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    const endStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    const past = new Date();
+                    past.setDate(past.getDate() - 7);
+                    const startStr = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
+                    setFilterStartDate(startStr);
+                    setFilterEndDate(endStr);
+                  }}
+                  className="px-2 py-0.5 bg-slate-100 hover:bg-teal-50 hover:text-[#008396] dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded font-semibold transition-colors"
+                >
+                  7 Hari Terakhir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    const startStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+                    const endStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    setFilterStartDate(startStr);
+                    setFilterEndDate(endStr);
+                  }}
+                  className="px-2 py-0.5 bg-slate-100 hover:bg-teal-50 hover:text-[#008396] dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded font-semibold transition-colors"
+                >
+                  Bulan Ini
+                </button>
+                {(filterStartDate || filterEndDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterStartDate('');
+                      setFilterEndDate('');
+                    }}
+                    className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 rounded font-semibold transition-colors"
+                  >
+                    Semua Tanggal
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold block mb-1">
+                  Tanggal Mulai
+                </label>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold block mb-1">
+                  Tanggal Sampai
+                </label>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-[#00A2B9]/20 outline-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -905,6 +1003,14 @@ export const CetakLaporanPage: React.FC = () => {
               <span className="font-bold text-slate-800 dark:text-slate-200">
                 📑 Jenis: <strong className="text-slate-900 dark:text-white">{lastQueriedParams.type}</strong>
               </span>
+              {(lastQueriedParams.startDate !== '-' || lastQueriedParams.endDate !== '-') && (
+                <>
+                  <span className="text-slate-400">•</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    📅 Tanggal: <strong className="text-slate-900 dark:text-white">{lastQueriedParams.startDate !== '-' ? lastQueriedParams.startDate : 'Awal'} s/d {lastQueriedParams.endDate !== '-' ? lastQueriedParams.endDate : 'Sekarang'}</strong>
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="flex items-center space-x-2 font-bold text-teal-800 dark:text-teal-300">

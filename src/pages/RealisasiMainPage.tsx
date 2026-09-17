@@ -76,10 +76,10 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterDate, setFilterDate] = useState<string>(getTodayDateString());
+  const [filterDate, setFilterDate] = useState<string>('');
 
-  // Default to today on initial mount
-  const [showOnlyToday, setShowOnlyToday] = useState(true);
+  // Default to false on initial mount to show all history records
+  const [showOnlyToday, setShowOnlyToday] = useState(false);
 
   // Debounce search query
   React.useEffect(() => {
@@ -165,8 +165,24 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   };
 
   const canUserAccessRealisasi = React.useCallback((rel: Realisasi) => {
+    // Admin / Management roles can view all records for active Inisiasi Unit
+    if (isAdmbktUser) return true;
+    if (!currentUser) return true;
+
+    const roleLower = (currentUser.role || '').toLowerCase();
+    if (
+      roleLower.includes('admin') ||
+      roleLower.includes('super') ||
+      roleLower.includes('adm') ||
+      roleLower.includes('manager') ||
+      roleLower.includes('spv') ||
+      roleLower.includes('supervisor')
+    ) {
+      return true;
+    }
+
     const activeUnitKey = RekapHarianService.normalizeUnitKey(
-      settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL PADANG'
+      settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI'
     );
 
     const wo = workOrdersMap[rel.workOrderId] || 
@@ -188,30 +204,6 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
       } else if (rUId !== aUId) {
         return false;
       }
-    }
-
-    const itemUnitRaw = rel.unitId || rel.ulpName || (rel as any).namaUnitLayanan || wo?.unitId || wo?.ulpName;
-    if (itemUnitRaw) {
-      const itemUnitKey = RekapHarianService.normalizeUnitKey(itemUnitRaw);
-      if (itemUnitKey !== activeUnitKey) {
-        return false;
-      }
-    }
-
-    // Admin / Management roles can view all records for active Inisiasi Unit
-    if (isAdmbktUser) return true;
-    if (!currentUser) return false;
-
-    const roleLower = (currentUser.role || '').toLowerCase();
-    if (
-      roleLower.includes('admin') ||
-      roleLower.includes('super') ||
-      roleLower.includes('adm') ||
-      roleLower.includes('manager') ||
-      roleLower.includes('spv') ||
-      roleLower.includes('supervisor')
-    ) {
-      return true;
     }
 
     // Resolve current user's active team ROW info for active Inisiasi
