@@ -55,11 +55,13 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     const uName = (currentUser.userName || currentUser.name || '').toLowerCase();
     return (
       roleUpper === 'ADMIN' ||
+      roleUpper === 'ADM' ||
       roleUpper === 'SUPERADMIN' ||
       roleUpper === 'SUPER_ADMIN' ||
       roleUpper === 'SUPER ADMIN' ||
       uName.includes('admbkt') ||
-      uName.includes('admin')
+      uName.includes('admin') ||
+      uName.includes('adm')
     );
   }, [currentUser]);
 

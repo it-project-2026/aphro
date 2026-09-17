@@ -16,6 +16,7 @@ import {
   BarChart3,
   History,
   Building2,
+  FilePlus2,
 } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
@@ -38,10 +39,20 @@ export const MobileBottomNav: React.FC = () => {
   const mobileTabs = isAdmRole
     ? [
         {
+          id: 'input_realisasi_manual',
+          label: 'Input Manual',
+          icon: FilePlus2,
+          highlight: true,
+        },
+        {
+          id: 'input_realisasi',
+          label: 'Realisasi',
+          icon: Camera,
+        },
+        {
           id: 'cetak_laporan',
           label: 'Cetak Laporan',
           icon: Printer,
-          highlight: true,
         },
         {
           id: 'riwayat_realisasi',
