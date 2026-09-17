@@ -11,11 +11,7 @@ import {
   HardDrive, 
   ShieldCheck,
   Zap,
-  RotateCcw,
-  AlertCircle,
-  Calendar,
-  User,
-  Image as ImageIcon
+  RotateCcw
 } from 'lucide-react';
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { dexieDb } from '../services/dexieDb';
@@ -29,9 +25,6 @@ export const SinkronisasiPage: React.FC = () => {
   );
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncProgress, setSyncProgress] = useState<string>('');
-  const [failedItems, setFailedItems] = useState<any[]>([]);
-  const [retryingKey, setRetryingKey] = useState<string | null>(null);
-  const [isRetryingAll, setIsRetryingAll] = useState<boolean>(false);
 
   const [stats, setStats] = useState<{
     pendingCount: number;
@@ -56,14 +49,12 @@ export const SinkronisasiPage: React.FC = () => {
       const summary = await offlineSyncQueue.getQueueSummary();
       const totalWoCount = await dexieDb.work_orders.count();
       const totalPhotoCount = await dexieDb.photos.count();
-      const failed = await offlineSyncQueue.getFailedItems();
 
       setStats({
         ...summary,
         totalWoCount,
         totalPhotoCount,
       });
-      setFailedItems(failed);
     } catch (err) {
       console.warn('Error loading sync stats:', err);
     }
@@ -111,7 +102,7 @@ export const SinkronisasiPage: React.FC = () => {
     showToast('Memulai sinkronisasi data ke server...', 'info');
 
     try {
-      const result = await offlineSyncQueue.processQueue({ includeFailed: true });
+      const result = await offlineSyncQueue.processQueue();
       if (result.success) {
         showToast('Sinkronisasi selesai seluruhnya!', 'success');
       } else {
@@ -122,54 +113,6 @@ export const SinkronisasiPage: React.FC = () => {
     } finally {
       setIsSyncing(false);
       loadStats();
-    }
-  };
-
-  const handleRetryAllFailed = async () => {
-    if (!isOnline) {
-      showToast('Perangkat sedang OFFLINE. Hubungkan internet untuk mencoba lagi.', 'warning');
-      return;
-    }
-    setIsRetryingAll(true);
-    setIsSyncing(true);
-    showToast('Mencoba mengirim ulang seluruh data tertunda...', 'info');
-    try {
-      const res = await offlineSyncQueue.retryFailedItems();
-      if (res.synced > 0) {
-        showToast(`Berhasil mengirim ${res.synced} data Realisasi ke server!`, 'success');
-      } else if (res.failed > 0) {
-        showToast(`Pengiriman gagal (${res.failed} item). Silakan periksa koneksi.`, 'error');
-      } else {
-        showToast('Tidak ada data tertunda yang tersisa.', 'info');
-      }
-    } catch (err: any) {
-      showToast(err?.message || 'Gagal memproses ulang data.', 'error');
-    } finally {
-      setIsRetryingAll(false);
-      setIsSyncing(false);
-      await loadStats();
-    }
-  };
-
-  const handleRetrySingle = async (key: string) => {
-    if (!isOnline) {
-      showToast('Perangkat sedang OFFLINE. Hubungkan internet untuk mencoba lagi.', 'warning');
-      return;
-    }
-    setRetryingKey(key);
-    showToast('Mencoba mengirim ulang data item ini...', 'info');
-    try {
-      const ok = await offlineSyncQueue.retrySingleItem(key);
-      if (ok) {
-        showToast('Item berhasil tersinkronisasi ke server!', 'success');
-      } else {
-        showToast('Gagal mengirim item ke server.', 'error');
-      }
-    } catch (err: any) {
-      showToast(err?.message || 'Gagal mengirim item.', 'error');
-    } finally {
-      setRetryingKey(null);
-      await loadStats();
     }
   };
 
@@ -280,7 +223,7 @@ export const SinkronisasiPage: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Tertunda (Failed)
+              Gagal (Failed)
             </span>
             <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400">
               <AlertTriangle className="w-5 h-5" />
@@ -290,98 +233,10 @@ export const SinkronisasiPage: React.FC = () => {
             {stats.failedCount}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            {stats.failedCount > 0 ? 'Dapat dikirim ulang dengan tombol Coba Lagi' : 'Tidak ada data tertunda'}
+            Akan dicoba ulang otomatis (Retry backoff)
           </p>
         </div>
       </div>
-
-      {/* Failed Items List Section - Displayed when there are failed items */}
-      {stats.failedCount > 0 && (
-        <div className="bg-rose-50/50 dark:bg-rose-950/20 border-2 border-rose-200 dark:border-rose-900/60 rounded-3xl p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center space-x-3">
-              <div className="p-2.5 rounded-2xl bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                  Data Realisasi Tertunda ({stats.failedCount} Item)
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Data tersimpan aman di memori lokal HP dan tidak hilang. Klik tombol untuk mengirim ulang ke database server.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleRetryAllFailed}
-              disabled={isRetryingAll || isSyncing || !isOnline}
-              className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-600/20 flex items-center space-x-2 transition-all disabled:opacity-50"
-            >
-              <RotateCcw className={`w-4 h-4 ${isRetryingAll ? 'animate-spin' : ''}`} />
-              <span>{isRetryingAll ? 'Mengirim Ulang...' : 'Coba Lagi Semua Data'}</span>
-            </button>
-          </div>
-
-          {/* List of items */}
-          <div className="space-y-3 pt-2">
-            {failedItems.map((item, idx) => (
-              <div 
-                key={item.idempotencyKey || idx}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-rose-100 dark:border-rose-900/40 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold font-mono">
-                      WO: {item.nomorWO}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 text-xs font-semibold">
-                      Tiang: {item.noTiang}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 text-[11px] font-bold">
-                      Percobaan: #{item.retryCount}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 pt-0.5">
-                    <span className="flex items-center space-x-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{item.tanggal}</span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <User className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{item.petugas}</span>
-                    </span>
-                    {item.photosCount > 0 && (
-                      <span className="flex items-center space-x-1">
-                        <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{item.photosCount} Foto</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {item.error && (
-                    <div className="text-[11px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1 rounded-lg border border-rose-100 dark:border-rose-900/30 max-w-2xl font-mono truncate">
-                      Pesan: {item.error}
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleRetrySingle(item.idempotencyKey)}
-                  disabled={retryingKey === item.idempotencyKey || isSyncing || !isOnline}
-                  className="w-full sm:w-auto px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold rounded-xl flex items-center justify-center space-x-2 transition-all disabled:opacity-50 shrink-0"
-                >
-                  <RotateCcw className={`w-3.5 h-3.5 ${retryingKey === item.idempotencyKey ? 'animate-spin' : ''}`} />
-                  <span>{retryingKey === item.idempotencyKey ? 'Mengirim...' : 'Coba Lagi'}</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Main Action Control Panel */}
       <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-6">

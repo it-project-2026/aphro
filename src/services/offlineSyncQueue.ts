@@ -127,7 +127,7 @@ class OfflineSyncQueueEngine {
   /**
    * Main Queue Processor with concurrency limit & backoff
    */
-  public async processQueue(options?: { includeFailed?: boolean }): Promise<{ success: boolean; total: number; synced: number; failed: number }> {
+  public async processQueue(): Promise<{ success: boolean; total: number; synced: number; failed: number }> {
     if (this.isProcessing) {
       console.log('[SyncQueueEngine] Queue processor already running.');
       return { success: true, total: 0, synced: 0, failed: 0 };
@@ -147,16 +147,6 @@ class OfflineSyncQueueEngine {
         for (const item of orphaned) {
           item.status = 'PENDING';
           await dexieDb.sync_queue.put(item);
-        }
-      }
-
-      // If includeFailed is requested, reset FAILED items to PENDING so they are re-evaluated
-      if (options?.includeFailed) {
-        const failedItems = await dexieDb.sync_queue.where('status').equals('FAILED').toArray();
-        for (const fItem of failedItems) {
-          fItem.status = 'PENDING';
-          fItem.retryCount = 0;
-          await dexieDb.sync_queue.put(fItem);
         }
       }
 
@@ -288,11 +278,7 @@ class OfflineSyncQueueEngine {
           await dexieDb.sync_queue.delete(item.idempotencyKey);
           return true;
         } else {
-          const customErr: any = new Error(serverResult.error || 'Server database menolak transaksi Realisasi.');
-          customErr.code = serverResult.errorObj?.code;
-          customErr.details = serverResult.errorObj?.details;
-          customErr.hint = serverResult.errorObj?.hint;
-          throw customErr;
+          throw new Error(serverResult.error || 'Server database menolak transaksi Realisasi.');
         }
       } else if (item.tableName === 'WORK_ORDER') {
         const unitId = SupabaseService.getActiveUnitId();
@@ -317,13 +303,10 @@ class OfflineSyncQueueEngine {
       const errStr = String(error?.message || error || '').toLowerCase();
       const isClientError = errStr.includes('400') || errStr.includes('pgrst') || errStr.includes('column') || errStr.includes('schema') || errStr.includes('bad request');
 
-      const nextRetry = (item.retryCount || 0) + 1;
+      const nextRetry = item.retryCount + 1;
       item.retryCount = isClientError ? 99 : nextRetry;
       item.status = 'FAILED';
       item.error = error?.message || 'Gagal terhubung ke server.';
-      item.errorCode = error?.code;
-      item.errorDetails = error?.details || error?.hint;
-      item.lastAttemptAt = getLocalDateTimeString();
       await dexieDb.sync_queue.put(item);
 
       // Update Local Realisasi status
@@ -344,101 +327,6 @@ class OfflineSyncQueueEngine {
       }
 
       return false;
-    }
-  }
-
-  /**
-   * Retry all failed items immediately
-   */
-  public async retryFailedItems(): Promise<{ success: boolean; total: number; synced: number; failed: number }> {
-    const failedItems = await dexieDb.sync_queue.where('status').equals('FAILED').toArray();
-    for (const item of failedItems) {
-      item.status = 'PENDING';
-      item.retryCount = 0;
-      item.error = undefined;
-      item.errorCode = undefined;
-      item.errorDetails = undefined;
-      await dexieDb.sync_queue.put(item);
-
-      if (item.tableName === 'REALISASI' && item.payload?.realisasi?.localId) {
-        await dexieDb.realisasi.update(item.payload.realisasi.localId, {
-          syncStatus: 'PENDING',
-          syncError: undefined,
-        });
-      }
-    }
-
-    return this.processQueue({ includeFailed: true });
-  }
-
-  /**
-   * Retry a single failed item by idempotencyKey
-   */
-  public async retrySingleItem(idempotencyKey: string): Promise<boolean> {
-    const item = await dexieDb.sync_queue.get(idempotencyKey);
-    if (!item) return false;
-
-    item.status = 'PENDING';
-    item.retryCount = 0;
-    item.error = undefined;
-    item.errorCode = undefined;
-    item.errorDetails = undefined;
-    await dexieDb.sync_queue.put(item);
-
-    if (item.tableName === 'REALISASI' && item.payload?.realisasi?.localId) {
-      await dexieDb.realisasi.update(item.payload.realisasi.localId, {
-        syncStatus: 'PENDING',
-        syncError: undefined,
-      });
-    }
-
-    const res = await this.processQueue({ includeFailed: true });
-    return res.synced > 0;
-  }
-
-  /**
-   * Get detailed list of failed items with payload info for UI display
-   */
-  public async getFailedItems(): Promise<Array<{
-    idempotencyKey: string;
-    tableName: string;
-    timestamp: string;
-    error?: string;
-    errorCode?: string;
-    errorDetails?: string;
-    retryCount: number;
-    nomorWO?: string;
-    noTiang?: string;
-    tanggal?: string;
-    petugas?: string;
-    ulp?: string;
-    regu?: string;
-    photosCount?: number;
-  }>> {
-    try {
-      const failedQueue = await dexieDb.sync_queue.where('status').equals('FAILED').toArray();
-      return failedQueue.map((item) => {
-        const rel = item.payload?.realisasi || item.payload || {};
-        const photos = item.payload?.photos || [];
-        return {
-          idempotencyKey: item.idempotencyKey,
-          tableName: item.tableName,
-          timestamp: item.timestamp,
-          error: item.error,
-          errorCode: item.errorCode,
-          errorDetails: item.errorDetails,
-          retryCount: item.retryCount || 0,
-          nomorWO: rel.nomorWO || rel.Nomor_WO || '-',
-          noTiang: rel.noTiang || rel.NO_TIANG || '-',
-          tanggal: rel.tanggalRealisasi || rel.TANGGAL || rel.tanggal || '-',
-          petugas: rel.petugasName || rel.PETUGAS || rel.reguName || '-',
-          ulp: rel.ulpName || rel.ULP || '-',
-          regu: rel.reguName || rel.REGU_ROW || '-',
-          photosCount: Array.isArray(photos) ? photos.length : 0,
-        };
-      });
-    } catch {
-      return [];
     }
   }
 
@@ -467,19 +355,10 @@ class OfflineSyncQueueEngine {
     lastSyncAt: string | null;
   }> {
     try {
-      const queuePending = await dexieDb.sync_queue.where('status').equals('PENDING').count();
-      const queueFailed = await dexieDb.sync_queue.where('status').equals('FAILED').count();
-      const queueSyncing = await dexieDb.sync_queue.where('status').equals('SYNCING').count();
-
-      const relPending = await dexieDb.realisasi.where('syncStatus').equals('PENDING').count();
-      const relFailed = await dexieDb.realisasi.where('syncStatus').equals('FAILED').count();
-      const relSyncing = await dexieDb.realisasi.where('syncStatus').equals('SYNCING').count();
-      const relSynced = await dexieDb.realisasi.where('syncStatus').equals('SYNCED').count();
-
-      const pendingCount = Math.max(queuePending, relPending);
-      const failedCount = Math.max(queueFailed, relFailed);
-      const syncingCount = Math.max(queueSyncing, relSyncing);
-      const syncedCount = relSynced;
+      const pendingCount = await dexieDb.realisasi.where('syncStatus').equals('PENDING').count();
+      const syncingCount = await dexieDb.realisasi.where('syncStatus').equals('SYNCING').count();
+      const syncedCount = await dexieDb.realisasi.where('syncStatus').equals('SYNCED').count();
+      const failedCount = await dexieDb.realisasi.where('syncStatus').equals('FAILED').count();
 
       const lastSyncRecord = await dexieDb.metadata.get('lastSyncAt');
       const lastSyncAt = lastSyncRecord ? lastSyncRecord.value : null;
