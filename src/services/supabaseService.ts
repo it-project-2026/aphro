@@ -1170,6 +1170,7 @@ export class SupabaseService {
       ? (rel.fotoSesudahUrl && !rel.fotoSesudahUrl.startsWith('data:image') ? rel.fotoSesudahUrl : '') 
       : finalFotoSesudah;
 
+    // Strict 18 columns matching Supabase public."REALISASI" table schema
     const payload: Record<string, any> = {
       ID: rel.id,
       unitId: targetUnitId,
@@ -1179,42 +1180,51 @@ export class SupabaseService {
       REGU_ROW: rel.reguName || '',
       PENYULANG: rel.penyulangName || '',
       NO_TIANG: rel.noTiang || '',
-      Tanggal: rel.tanggalRealisasi || getWIBDateString(),
       TANGGAL: rel.tanggalRealisasi || getWIBDateString(),
-      PETUGAS: rel.petugasName || rel.reguName || '',
-      Jenis_Tanaman: rel.jenisTanaman || '',
-      Pertumbuhan_Tanaman: rel.pertumbuhanTanaman || '',
-      Kendala: rel.kendala || '',
-      Lokasi_kerja: rel.lokasiKerja || '',
-      LATITUDE: rel.latitude || 0,
-      LONGITUDE: rel.longitude || 0,
-      Latitude_Longitude: latLng,
-      Keterangan: rel.keterangan || '',
-      // IMPORTANT: REALISASI database uses Foto_Sebelum / Foto_Sesudah.
-      // Do NOT send FOTO_SEBELUM_URL / FOTO_SETELAH_URL because those
-      // columns are not part of the current REALISASI schema and cause
-      // Supabase/PostgREST to reject the entire upsert.
       Foto_Sebelum: formatDriveViewUrl(safeFotoSebelum),
       Foto_Sesudah: formatDriveViewUrl(safeFotoSesudah),
-      STATUS: 'SELESAI',
-      WAKTU: rel.createdAt || getLocalDateTimeString(),
+      Jenis_Tanaman: rel.jenisTanaman || '',
+      Keterangan: rel.keterangan || '',
+      Pertumbuhan_Tanaman: rel.pertumbuhanTanaman || '',
+      Kendala: rel.kendala || '',
+      Latitude_Longitude: latLng,
+      Lokasi_kerja: rel.lokasiKerja || '',
       Timestamp: rel.createdAt || getLocalDateTimeString(),
     };
 
     try {
-      // Single canonical upsert using primary key 'ID' and returning lightweight select fields
-      let res = await supabase
-        .from(SUPABASE_TABLES.REALISASI)
-        .upsert([payload], { onConflict: 'ID' })
-        .select(REALISASI_LIGHT_SELECT_FIELDS);
+      let currentPayload = { ...payload };
+      let res: any = null;
+      let attempts = 0;
+      const maxAttempts = 5;
 
-      // Handle transient errors (500, 502, 503, network timeout) with a single retry after 500ms
-      if (res.error && (res.error.code === '500' || res.error.code === '503' || res.error.message?.includes('timeout') || res.error.message?.includes('fetch'))) {
-        await new Promise((r) => setTimeout(r, 500));
+      // Resilient upsert with auto-recovery for missing column errors (PGRST204)
+      while (attempts < maxAttempts) {
+        attempts++;
         res = await supabase
           .from(SUPABASE_TABLES.REALISASI)
-          .upsert([payload], { onConflict: 'ID' })
+          .upsert([currentPayload], { onConflict: 'ID' })
           .select(REALISASI_LIGHT_SELECT_FIELDS);
+
+        if (!res.error) break;
+
+        // Auto-recover if Postgres reports column not found in schema cache
+        const errMsg = res.error?.message || '';
+        const missingColMatch = errMsg.match(/Could not find the '([^']+)' column/i);
+        if (res.error?.code === 'PGRST204' && missingColMatch && missingColMatch[1]) {
+          const missingCol = missingColMatch[1];
+          console.warn(`[SupabaseService] Column '${missingCol}' not found in REALISASI schema. Dropping and retrying...`);
+          delete currentPayload[missingCol];
+          continue;
+        }
+
+        // Handle transient network errors
+        if (res.error.code === '500' || res.error.code === '503' || res.error.message?.includes('timeout') || res.error.message?.includes('fetch')) {
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+
+        break;
       }
 
       if (res.error) {
@@ -1325,7 +1335,7 @@ export class SupabaseService {
       const { error } = await supabase
         .from(SUPABASE_TABLES.REALISASI)
         .delete()
-        .or(`ID.eq.${targetId},id.eq.${targetId}`);
+        .eq('ID', targetId);
 
       return { success: !error, error: error?.message };
     } catch (err: any) {
@@ -1335,7 +1345,7 @@ export class SupabaseService {
 
   /**
    * Admin/Adm Partial Edit Realisasi
-   * Updates ONLY TANGGAL and Latitude_Longitude (and numeric LATITUDE/LONGITUDE)
+   * Updates ONLY TANGGAL and Latitude_Longitude
    * ID is used as primary key.
    * Timestamp and Lokasi_kerja are strictly NOT modified.
    */
@@ -1348,8 +1358,6 @@ export class SupabaseService {
     const payload: Record<string, any> = {
       TANGGAL: params.tanggal,
       Latitude_Longitude: latLngStr,
-      LATITUDE: params.latitude,
-      LONGITUDE: params.longitude,
     };
 
     try {
@@ -2346,21 +2354,15 @@ export class SupabaseService {
         REGU_ROW: rel.reguName || '',
         PENYULANG: rel.penyulangName || '',
         NO_TIANG: rel.noTiang || '',
-        Tanggal: rel.tanggalRealisasi || getWIBDateString(),
         TANGGAL: rel.tanggalRealisasi || getWIBDateString(),
-        PETUGAS: rel.petugasName || rel.reguName || '',
+        Foto_Sebelum: rel.fotoSebelumUrl || '',
+        Foto_Sesudah: rel.fotoSesudahUrl || '',
         Jenis_Tanaman: rel.jenisTanaman || '',
+        Keterangan: rel.keterangan || '',
         Pertumbuhan_Tanaman: rel.pertumbuhanTanaman || '',
         Kendala: rel.kendala || '',
-        Lokasi_kerja: rel.lokasiKerja || '',
-        LATITUDE: rel.latitude || 0,
-        LONGITUDE: rel.longitude || 0,
         Latitude_Longitude: `${rel.latitude || 0}, ${rel.longitude || 0}`,
-        Keterangan: rel.keterangan || '',
-        FOTO_SEBELUM_URL: rel.fotoSebelumUrl || '',
-        FOTO_SETELAH_URL: rel.fotoSesudahUrl || '',
-        STATUS: 'SELESAI',
-        WAKTU: rel.createdAt || getLocalDateTimeString(),
+        Lokasi_kerja: rel.lokasiKerja || '',
         Timestamp: rel.createdAt || getLocalDateTimeString(),
       }));
       const res = await this.smartSeedTable(SUPABASE_TABLES.REALISASI, relPayload, 'ID');
