@@ -53,6 +53,8 @@ export interface LocalSyncQueueItem {
   retryCount: number;
   status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED';
   error?: string;
+  errorCode?: string;
+  errorDetails?: string;
   lastAttemptAt?: string;
 }
 

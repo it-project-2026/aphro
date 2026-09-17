@@ -651,30 +651,37 @@ export class SyncManager {
 
           // 2. PRIMARY UPSERT TO SUPABASE
           updatedPayload.isSynced = true;
+          let lastError = '';
 
           if (item.tableName === 'WORK_ORDER') {
             if (item.type === 'CREATE' || item.type === 'UPDATE') {
               const res = await SupabaseService.saveWorkOrder(unitId, updatedPayload);
               isSuccess = res.success || !res.error;
+              if (!isSuccess) lastError = res.error || '';
             } else if (item.type === 'DELETE') {
               const res = await SupabaseService.deleteWorkOrder(unitId, updatedPayload.id || updatedPayload.nomorWO);
               isSuccess = res.success || !res.error;
+              if (!isSuccess) lastError = res.error || '';
             }
           } else if (item.tableName === 'REALISASI') {
             if (item.type === 'CREATE' || item.type === 'UPDATE') {
               const res = await SupabaseService.saveRealisasi(unitId, updatedPayload);
               isSuccess = res.success || !res.error;
+              if (!isSuccess) lastError = res.error || '';
             } else if (item.type === 'DELETE') {
               const res = await SupabaseService.deleteRealisasi(unitId, updatedPayload.id);
               isSuccess = res.success || !res.error;
+              if (!isSuccess) lastError = res.error || '';
             }
           } else if (item.tableName === 'ABSENSI') {
             if (item.type === 'CREATE' || item.type === 'UPDATE') {
               const res = await SupabaseService.saveAbsensi(unitId, updatedPayload);
               isSuccess = res.success || !res.error;
+              if (!isSuccess) lastError = res.error || '';
             } else if (item.type === 'DELETE') {
               const res = await SupabaseService.deleteAbsensi(unitId, updatedPayload.id);
               isSuccess = res.success || !res.error;
+              if (!isSuccess) lastError = res.error || '';
             }
           } else {
             isSuccess = true;
@@ -692,7 +699,7 @@ export class SyncManager {
             });
           } else {
             item.status = 'FAILED';
-            item.error = 'Gagal menyimpan ke Supabase';
+            item.error = lastError || 'Gagal menyimpan ke Supabase';
             await idbService.updatePendingOperation(item);
             failCount++;
           }

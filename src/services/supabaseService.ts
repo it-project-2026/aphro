@@ -1117,7 +1117,21 @@ export class SupabaseService {
   /**
    * Save Realisasi to Supabase REALISASI table
    */
-  static async saveRealisasi(unitId: string, rel: Realisasi): Promise<{ success: boolean; data?: Realisasi; error?: string }> {
+  static async saveRealisasi(
+    unitId: string, 
+    rel: Realisasi
+  ): Promise<{ 
+    success: boolean; 
+    data?: Realisasi; 
+    error?: string;
+    errorObj?: {
+      code?: string;
+      message?: string;
+      details?: string;
+      hint?: string;
+      status?: number;
+    };
+  }> {
     const targetUnitId = unitId || this.getActiveUnitId();
     let finalFotoSebelum = rel.fotoSebelumUrl || rel.photosSebelum?.[0]?.dataUrl || '';
     let finalFotoSesudah = rel.fotoSesudahUrl || rel.photosSesudah?.[0]?.dataUrl || '';
@@ -1162,13 +1176,12 @@ export class SupabaseService {
 
     const latLng = (rel.latitude && rel.longitude) ? `${rel.latitude}, ${rel.longitude}` : '';
     
-    // Ensure huge base64 strings don't cause 413 / timeout on Supabase text upsert
-    const safeFotoSebelum = (finalFotoSebelum && finalFotoSebelum.startsWith('data:image')) 
-      ? (rel.fotoSebelumUrl && !rel.fotoSebelumUrl.startsWith('data:image') ? rel.fotoSebelumUrl : '') 
-      : finalFotoSebelum;
-    const safeFotoSesudah = (finalFotoSesudah && finalFotoSesudah.startsWith('data:image')) 
-      ? (rel.fotoSesudahUrl && !rel.fotoSesudahUrl.startsWith('data:image') ? rel.fotoSesudahUrl : '') 
-      : finalFotoSesudah;
+    // Exact column mapping strictly matching Supabase public."REALISASI" table schema:
+    // Columns: ID, unitId, WO_ID, Nomor_WO, ULP, REGU_ROW, PENYULANG, NO_TIANG, TANGGAL,
+    //          Foto_Sebelum, Foto_Sesudah, Jenis_Tanaman, Keterangan, Pertumbuhan_Tanaman,
+    //          Kendala, Latitude_Longitude, Lokasi_kerja, Timestamp
+    const safeFotoSebelum = finalFotoSebelum || rel.fotoSebelumUrl || '';
+    const safeFotoSesudah = finalFotoSesudah || rel.fotoSesudahUrl || '';
 
     const payload: Record<string, any> = {
       ID: rel.id,
@@ -1179,38 +1192,51 @@ export class SupabaseService {
       REGU_ROW: rel.reguName || '',
       PENYULANG: rel.penyulangName || '',
       NO_TIANG: rel.noTiang || '',
-      Tanggal: rel.tanggalRealisasi || getWIBDateString(),
       TANGGAL: rel.tanggalRealisasi || getWIBDateString(),
-      PETUGAS: rel.petugasName || rel.reguName || '',
+      Foto_Sebelum: formatDriveViewUrl(safeFotoSebelum),
+      Foto_Sesudah: formatDriveViewUrl(safeFotoSesudah),
       Jenis_Tanaman: rel.jenisTanaman || '',
+      Keterangan: rel.keterangan || '',
       Pertumbuhan_Tanaman: rel.pertumbuhanTanaman || '',
       Kendala: rel.kendala || '',
-      Lokasi_kerja: rel.lokasiKerja || '',
-      LATITUDE: rel.latitude || 0,
-      LONGITUDE: rel.longitude || 0,
       Latitude_Longitude: latLng,
-      Keterangan: rel.keterangan || '',
-      FOTO_SEBELUM_URL: formatDriveViewUrl(safeFotoSebelum),
-      FOTO_SETELAH_URL: formatDriveViewUrl(safeFotoSesudah),
-      STATUS: 'SELESAI',
-      WAKTU: rel.createdAt || getLocalDateTimeString(),
+      Lokasi_kerja: rel.lokasiKerja || '',
       Timestamp: rel.createdAt || getLocalDateTimeString(),
     };
 
     try {
-      // Single canonical upsert using primary key 'ID' and returning lightweight select fields
-      let res = await supabase
-        .from(SUPABASE_TABLES.REALISASI)
-        .upsert([payload], { onConflict: 'ID' })
-        .select(REALISASI_LIGHT_SELECT_FIELDS);
+      let currentPayload = { ...payload };
+      let res: any = null;
+      let attempts = 0;
+      const maxAttempts = 5;
 
-      // Handle transient errors (500, 502, 503, network timeout) with a single retry after 500ms
-      if (res.error && (res.error.code === '500' || res.error.code === '503' || res.error.message?.includes('timeout') || res.error.message?.includes('fetch'))) {
-        await new Promise((r) => setTimeout(r, 500));
+      // Safe resilient upsert loop with auto-recovery for missing column errors (PGRST204)
+      while (attempts < maxAttempts) {
+        attempts++;
         res = await supabase
           .from(SUPABASE_TABLES.REALISASI)
-          .upsert([payload], { onConflict: 'ID' })
+          .upsert([currentPayload], { onConflict: 'ID' })
           .select(REALISASI_LIGHT_SELECT_FIELDS);
+
+        if (!res.error) break;
+
+        // Auto-recover if Postgres reports column not found in schema cache
+        const errMsg = res.error?.message || '';
+        const missingColMatch = errMsg.match(/Could not find the '([^']+)' column/i);
+        if (res.error?.code === 'PGRST204' && missingColMatch && missingColMatch[1]) {
+          const missingCol = missingColMatch[1];
+          console.warn(`[SupabaseService] Column '${missingCol}' not found in REALISASI table. Removing from payload and retrying...`);
+          delete currentPayload[missingCol];
+          continue;
+        }
+
+        // Handle transient errors (500, 502, 503, network timeout) with a single retry
+        if (res.error.code === '500' || res.error.code === '503' || res.error.message?.includes('timeout') || res.error.message?.includes('fetch')) {
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+
+        break;
       }
 
       if (res.error) {
@@ -1230,15 +1256,46 @@ export class SupabaseService {
           console.warn('[SupabaseService] Timeout check DB query error:', checkErr);
         }
 
-        console.error('Supabase saveRealisasi error:', res.error);
-        return { success: false, error: res.error.message };
+        const errorDetailStr = [
+          res.error.code ? `[Kode: ${res.error.code}]` : '',
+          res.error.message || 'Gagal menyimpan ke Supabase',
+          res.error.details ? `(Detail: ${res.error.details})` : '',
+          res.error.hint ? `(Hint: ${res.error.hint})` : '',
+        ].filter(Boolean).join(' ');
+
+        console.error(`[SupabaseService] saveRealisasi failed for ID ${rel.id}:`, {
+          code: res.error.code,
+          message: res.error.message,
+          details: res.error.details,
+          hint: res.error.hint,
+          payloadKeys: Object.keys(currentPayload),
+        });
+
+        return { 
+          success: false, 
+          error: errorDetailStr,
+          errorObj: {
+            code: res.error.code,
+            message: res.error.message,
+            details: res.error.details,
+            hint: res.error.hint,
+            status: res.status,
+          }
+        };
       }
 
       const savedItem = res.data && res.data.length > 0 ? this.normalizeRealisasiRow(res.data[0]) : rel;
       return { success: true, data: savedItem };
     } catch (err: any) {
       console.error('Supabase saveRealisasi catch error:', err);
-      return { success: false, error: err.message };
+      return { 
+        success: false, 
+        error: err.message || 'Gagal menyimpan ke database Supabase',
+        errorObj: {
+          message: err.message,
+          code: err.code,
+        }
+      };
     }
   }
 
@@ -1249,13 +1306,18 @@ export class SupabaseService {
     unitId: string,
     rel: any,
     photos?: any[]
-  ): Promise<{ success: boolean; serverId?: string; error?: string }> {
+  ): Promise<{ 
+    success: boolean; 
+    serverId?: string; 
+    error?: string;
+    errorObj?: any;
+  }> {
     const targetUnitId = unitId || this.getActiveUnitId();
     const serverId = rel.idempotencyKey || rel.serverId || rel.localId || rel.id || `REL-${Date.now()}`;
 
     // Standardize photo URLs
-    let fotoSebelumUrl = rel.fotoSebelumUrl || '';
-    let fotoSesudahUrl = rel.fotoSesudahUrl || '';
+    let fotoSebelumUrl = rel.fotoSebelumUrl || rel.Foto_Sebelum || '';
+    let fotoSesudahUrl = rel.fotoSesudahUrl || rel.Foto_Sesudah || '';
 
     if (!fotoSebelumUrl && photos && Array.isArray(photos)) {
       const seb = photos.find((p: any) => p.type === 'sebelum');
@@ -1278,6 +1340,7 @@ export class SupabaseService {
       success: res.success,
       serverId,
       error: res.error,
+      errorObj: res.errorObj,
     };
   }
 
@@ -1338,8 +1401,6 @@ export class SupabaseService {
     const payload: Record<string, any> = {
       TANGGAL: params.tanggal,
       Latitude_Longitude: latLngStr,
-      LATITUDE: params.latitude,
-      LONGITUDE: params.longitude,
     };
 
     try {
@@ -2336,21 +2397,15 @@ export class SupabaseService {
         REGU_ROW: rel.reguName || '',
         PENYULANG: rel.penyulangName || '',
         NO_TIANG: rel.noTiang || '',
-        Tanggal: rel.tanggalRealisasi || getWIBDateString(),
         TANGGAL: rel.tanggalRealisasi || getWIBDateString(),
-        PETUGAS: rel.petugasName || rel.reguName || '',
+        Foto_Sebelum: rel.fotoSebelumUrl || '',
+        Foto_Sesudah: rel.fotoSesudahUrl || '',
         Jenis_Tanaman: rel.jenisTanaman || '',
+        Keterangan: rel.keterangan || '',
         Pertumbuhan_Tanaman: rel.pertumbuhanTanaman || '',
         Kendala: rel.kendala || '',
-        Lokasi_kerja: rel.lokasiKerja || '',
-        LATITUDE: rel.latitude || 0,
-        LONGITUDE: rel.longitude || 0,
         Latitude_Longitude: `${rel.latitude || 0}, ${rel.longitude || 0}`,
-        Keterangan: rel.keterangan || '',
-        FOTO_SEBELUM_URL: rel.fotoSebelumUrl || '',
-        FOTO_SETELAH_URL: rel.fotoSesudahUrl || '',
-        STATUS: 'SELESAI',
-        WAKTU: rel.createdAt || getLocalDateTimeString(),
+        Lokasi_kerja: rel.lokasiKerja || '',
         Timestamp: rel.createdAt || getLocalDateTimeString(),
       }));
       const res = await this.smartSeedTable(SUPABASE_TABLES.REALISASI, relPayload, 'ID');

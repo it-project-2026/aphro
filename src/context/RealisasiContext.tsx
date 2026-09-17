@@ -143,7 +143,7 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     // Subscribe to Offline Sync Queue changes to refresh state automatically
     const unsubscribe = offlineSyncQueue.subscribe((evt) => {
       if (evt.status === 'COMPLETED' || evt.status === 'SYNCING') {
-        refreshRealisasi(false);
+        refreshRealisasi(true);
       }
     });
 
