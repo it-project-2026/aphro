@@ -37,7 +37,7 @@ import { generateWatermarkedImage } from '../utils/watermark';
 import { formatDriveImageUrl } from '../utils/driveUtils';
 import { extractExifFromPhoto, ExifPhotoMetadata } from '../utils/exifReader';
 import { GASApiService } from '../services/gasApiService';
-import { RekapHarianService, UL_PRESETS } from '../services/rekapHarianService';
+import { RekapHarianService, UL_PRESETS, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
 import { InisiasiService, DEFAULT_UL_OPTIONS } from '../services/inisiasiService';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 import { Realisasi } from '../types';
@@ -53,10 +53,69 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
 }) => {
   const { user: currentUser } = useAuth();
   const { addManualRealisasiAdmin } = useRealisasi();
-  const { ulpList, reguList, penyulangList } = useMasterData();
+  const { users, ulpList, reguList, penyulangList } = useMasterData();
   const { workOrders, displayedWorkOrders } = useWorkOrders();
   const { settings } = useSettings();
   const { showToast } = useToast();
+
+  const userTimInfo = useMemo(() => {
+    return resolveUserTimRowAndUlp(currentUser, settings.namaUnitLayanan, users, ulpList, reguList);
+  }, [currentUser, settings.namaUnitLayanan, users, ulpList, reguList]);
+
+  const isUserRole = useMemo(() => {
+    if (!currentUser) return false;
+    const r = (currentUser.role || '').toLowerCase();
+    return r === 'user';
+  }, [currentUser]);
+
+  // Determine available WOs for selection dropdown (Role 'User' gets WOs matching their REGU ROW)
+  const availableWorkOrders = useMemo(() => {
+    if (!isUserRole) {
+      return workOrders;
+    }
+
+    const reguTarget = (userTimInfo.reguName || currentUser?.reguName || '').toLowerCase().trim();
+    const userTarget = (currentUser?.name || currentUser?.userName || '').toLowerCase().trim();
+    const userNip = (currentUser?.nip || '').toLowerCase().trim();
+    const userId = String(currentUser?.id || '').toLowerCase().trim();
+
+    const filtered = workOrders.filter((wo) => {
+      // 1. Direct ID/NIP/Username match on wo.petugasId
+      if (
+        wo.petugasId &&
+        (String(wo.petugasId).toLowerCase() === userId ||
+         String(wo.petugasId).toLowerCase() === userNip ||
+         String(wo.petugasId).toLowerCase() === userTarget)
+      ) {
+        return true;
+      }
+
+      // 2. Direct reguId match
+      if (currentUser?.reguId && wo.reguId && String(currentUser.reguId) === String(wo.reguId)) {
+        return true;
+      }
+
+      // 3. Regu Name match
+      const woRegu = (wo.reguName || '').toLowerCase().trim();
+      if (reguTarget && woRegu && (woRegu.includes(reguTarget) || reguTarget.includes(woRegu))) {
+        return true;
+      }
+
+      // 4. Petugas Name match
+      const woPetugas = (wo.petugasName || '').toLowerCase().trim();
+      if (userTarget && woPetugas && (woPetugas.includes(userTarget) || userTarget.includes(woPetugas))) {
+        return true;
+      }
+
+      return false;
+    });
+
+    if (filtered.length === 0 && displayedWorkOrders && displayedWorkOrders.length > 0) {
+      return displayedWorkOrders;
+    }
+
+    return filtered;
+  }, [isUserRole, workOrders, displayedWorkOrders, currentUser, userTimInfo]);
 
   // Role & Unit Authorization Check
   const isSuperAdmin = useMemo(() => {
@@ -152,18 +211,21 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
   const cameraSebelumRef = useRef<HTMLInputElement>(null);
   const cameraSesudahRef = useRef<HTMLInputElement>(null);
 
-  // Auto-fill defaults when unit changes
+  // Auto-fill defaults when unit or user changes
   useEffect(() => {
-    if (unitId) {
+    if (isUserRole && userTimInfo.reguName) {
+      if (!reguName) setReguName(userTimInfo.reguName);
+      if (!ulpName && userTimInfo.ulpName) setUlpName(userTimInfo.ulpName);
+    } else if (unitId) {
       const matchedUnit = DEFAULT_UL_OPTIONS.find((u) => u.id === unitId);
       const presetKey = matchedUnit?.kodeUL === 'BKT' ? 'BUKITTINGGI' : matchedUnit?.kodeUL === 'PDG' ? 'PADANG' : matchedUnit?.kodeUL === 'SLK' ? 'SOLOK' : matchedUnit?.kodeUL === 'PYK' ? 'PAYAKUMBUH' : '';
       const preset = presetKey ? UL_PRESETS[presetKey] : undefined;
       if (preset && preset.rows && preset.rows.length > 0) {
-        if (!ulpName) setUlpName(preset.rows[0].namaUlp || '');
-        if (!reguName) setReguName(preset.rows[0].timRow || '');
+        if (!ulpName) setUlpName(userTimInfo.ulpName || preset.rows[0].namaUlp || '');
+        if (!reguName) setReguName(userTimInfo.reguName || preset.rows[0].timRow || '');
       }
     }
-  }, [unitId]);
+  }, [unitId, isUserRole, userTimInfo]);
 
   // Handle Work Order selection from list (Populates fields without locking them)
   const handleSelectWorkOrder = (selectedId: string) => {
@@ -171,6 +233,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
     if (!selectedId) return;
 
     const matchedWO =
+      availableWorkOrders.find((w) => w.id === selectedId || w.nomorWO === selectedId) ||
       workOrders.find((w) => w.id === selectedId || w.nomorWO === selectedId) ||
       displayedWorkOrders.find((w) => w.id === selectedId || w.nomorWO === selectedId);
 
@@ -452,7 +515,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
           <div className="space-y-1.5">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-black tracking-wide border border-teal-400/30">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>KHUSUS ROLE ADMIN</span>
+              <span>INPUT MANUAL & EDITABLE</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black font-display tracking-tight text-white">
               Input Manual Realisasi
@@ -539,15 +602,21 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
                   onChange={(e) => handleSelectWorkOrder(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 >
-                  <option value="">-- Ketik Manual atau Pilih WO --</option>
-                  {workOrders.map((wo) => (
+                  <option value="">
+                    {isUserRole
+                      ? `-- Pilih WO REGU ${userTimInfo.reguName || currentUser?.reguName || 'ROW'} --`
+                      : '-- Ketik Manual atau Pilih WO --'}
+                  </option>
+                  {availableWorkOrders.map((wo) => (
                     <option key={wo.id} value={wo.id}>
-                      {wo.nomorWO} ({wo.penyulangName || wo.ulpName || 'WO'})
+                      {wo.nomorWO} ({wo.penyulangName || wo.ulpName || 'WO'}) - {wo.reguName || 'Regu ROW'}
                     </option>
                   ))}
                 </select>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Mengisi form otomatis tanpa mengunci field.
+                  {isUserRole
+                    ? `Menampilkan Work Order khusus REGU ROW (${userTimInfo.reguName || currentUser?.reguName || 'Petugas'}). Mengisi form otomatis tanpa mengunci field.`
+                    : 'Mengisi form otomatis tanpa mengunci field.'}
                 </p>
               </div>
 

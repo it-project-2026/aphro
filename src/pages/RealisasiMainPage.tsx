@@ -419,24 +419,22 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
             <span>INPUT REALISASI</span>
           </button>
 
-          {/* Admin Dedicated Manual Input Sub-tab */}
-          {isAdminUser && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditingRealisasi(null);
-                setActiveSubTab('manual_admin');
-              }}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
-                activeSubTab === 'manual_admin'
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-white bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/40'
-              }`}
-            >
-              <FilePlus2 className="w-4 h-4" />
-              <span>INPUT MANUAL (ADMIN)</span>
-            </button>
-          )}
+          {/* Manual Input Sub-tab */}
+          <button
+            type="button"
+            onClick={() => {
+              setEditingRealisasi(null);
+              setActiveSubTab('manual_admin');
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all ${
+              activeSubTab === 'manual_admin'
+                ? 'bg-amber-600 text-white shadow-md'
+                : 'text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-white bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/40'
+            }`}
+          >
+            <FilePlus2 className="w-4 h-4" />
+            <span>INPUT MANUAL REALISASI</span>
+          </button>
           
           <button
             type="button"
