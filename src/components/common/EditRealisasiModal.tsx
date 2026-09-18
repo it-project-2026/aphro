@@ -28,7 +28,7 @@ import { useWorkOrders } from '../../context/WorkOrderContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useToast } from '../../hooks/useToast';
 import { generateWatermarkedImage } from '../../utils/watermark';
-import { formatDriveViewUrl, formatDriveImageUrl } from '../../utils/driveUtils';
+import { formatDriveViewUrl, formatDriveImageUrl, ensureGoogleDrivePhotoUrl } from '../../utils/driveUtils';
 import { GASApiService } from '../../services/gasApiService';
 import { ImagePreviewModal } from './ImagePreviewModal';
 
@@ -271,6 +271,17 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
     setIsSubmitting(true);
 
     try {
+      const finalSebUrl = await ensureGoogleDrivePhotoUrl(fotoSebelumUrl.trim(), {
+        nomorWO: nomorWO.trim(),
+        reguName: reguName.trim(),
+        photoType: 'Realisasi_Sebelum',
+      });
+      const finalSesUrl = await ensureGoogleDrivePhotoUrl(fotoSesudahUrl.trim(), {
+        nomorWO: nomorWO.trim(),
+        reguName: reguName.trim(),
+        photoType: 'Realisasi_Sesudah',
+      });
+
       const updatePayload = {
         tanggal: tanggal.trim(),
         tanggalRealisasi: tanggal.trim(),
@@ -288,8 +299,8 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
         pertumbuhanTanaman: pertumbuhanTanaman.trim(),
         kendala: kendala.trim(),
         lokasiKerja: lokasiKerja.trim(),
-        fotoSebelumUrl: fotoSebelumUrl.trim(),
-        fotoSesudahUrl: fotoSesudahUrl.trim(),
+        fotoSebelumUrl: finalSebUrl,
+        fotoSesudahUrl: finalSesUrl,
       };
 
       const res = await updateRealisasiAdmin(realisasi.id, updatePayload);

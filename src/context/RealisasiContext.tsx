@@ -10,6 +10,7 @@ import { GASApiService } from '../services/gasApiService';
 import { dexieDb, LocalRealisasi, LocalPhoto } from '../services/dexieDb';
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { getLocalDateTimeString, getWIBDateString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
+import { ensureGoogleDrivePhotoUrl, isBase64Image, formatDriveViewUrl } from '../utils/driveUtils';
 import { auditRealisasiMutation } from '../utils/integrityLogger';
 
 interface RealisasiContextType {
@@ -347,6 +348,17 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     const targetId = relData.id?.trim() || `REL-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const targetUnitId = relData.unitId || SupabaseService.getActiveUnitId();
 
+    const fotoSebDrive = await ensureGoogleDrivePhotoUrl(relData.fotoSebelumUrl || relData.photosSebelum?.[0]?.dataUrl, {
+      nomorWO: relData.nomorWO,
+      reguName: relData.reguName || 'ROW',
+      photoType: 'Realisasi_Sebelum',
+    });
+    const fotoSesDrive = await ensureGoogleDrivePhotoUrl(relData.fotoSesudahUrl || relData.photosSesudah?.[0]?.dataUrl, {
+      nomorWO: relData.nomorWO,
+      reguName: relData.reguName || 'ROW',
+      photoType: 'Realisasi_Sesudah',
+    });
+
     const fullRealisasi: Realisasi = {
       id: targetId,
       unitId: targetUnitId,
@@ -370,8 +382,8 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
       status: 'Selesai',
       photosSebelum: relData.photosSebelum || [],
       photosSesudah: relData.photosSesudah || [],
-      fotoSebelumUrl: (relData.fotoSebelumUrl || '').trim(),
-      fotoSesudahUrl: (relData.fotoSesudahUrl || '').trim(),
+      fotoSebelumUrl: fotoSebDrive || (isBase64Image(relData.fotoSebelumUrl) ? '' : relData.fotoSebelumUrl || ''),
+      fotoSesudahUrl: fotoSesDrive || (isBase64Image(relData.fotoSesudahUrl) ? '' : relData.fotoSesudahUrl || ''),
       createdAt: relData.createdAt || timestamp,
       isSynced: true,
       syncId: targetId,
@@ -455,6 +467,21 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
     }
 
     const finalTanggal = updatePayload.tanggal || updatePayload.tanggalRealisasi || '';
+
+    if (updatePayload.fotoSebelumUrl && isBase64Image(updatePayload.fotoSebelumUrl)) {
+      updatePayload.fotoSebelumUrl = await ensureGoogleDrivePhotoUrl(updatePayload.fotoSebelumUrl, {
+        nomorWO: updatePayload.nomorWO,
+        reguName: updatePayload.reguName || 'ROW',
+        photoType: 'Realisasi_Sebelum',
+      });
+    }
+    if (updatePayload.fotoSesudahUrl && isBase64Image(updatePayload.fotoSesudahUrl)) {
+      updatePayload.fotoSesudahUrl = await ensureGoogleDrivePhotoUrl(updatePayload.fotoSesudahUrl, {
+        nomorWO: updatePayload.nomorWO,
+        reguName: updatePayload.reguName || 'ROW',
+        photoType: 'Realisasi_Sesudah',
+      });
+    }
 
     // 1. UPDATE to Supabase Database
     const res = await SupabaseService.updateRealisasiAdmin(id, updatePayload);

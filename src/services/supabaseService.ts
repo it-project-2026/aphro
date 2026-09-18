@@ -34,7 +34,7 @@ import {
   INITIAL_ABSENSI,
 } from '../data/initialData';
 import { getLocalDateTimeString, getWIBDateString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
-import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
+import { formatDriveViewUrl, formatDriveImageUrl, ensureGoogleDrivePhotoUrl, isBase64Image } from '../utils/driveUtils';
 import { parseNumeric } from '../utils/metricUtils';
 import { GASApiService } from './gasApiService';
 import { getActiveGasConfig } from '../config/gasConfig';
@@ -1172,58 +1172,33 @@ export class SupabaseService {
     const gasUrl = gasConfig.gasWebAppUrl;
     const fotoFolderId = gasConfig.driveFolderId || '1idu8U3COKEqdcCewdWntu9X06ZMnzskr';
 
-    // Quick photo upload with short timeout so it never hangs or delays Supabase insertion
-    if (finalFotoSebelum && finalFotoSebelum.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
-      try {
-        const uploadPromise = GASApiService.uploadPhoto(gasUrl, {
-          base64Data: finalFotoSebelum,
-          reguName: rel.reguName || 'ROW',
-          photoType: 'Realisasi_Sebelum',
-          folderId: fotoFolderId,
-        });
-        const uploadRes = await Promise.race([
-          uploadPromise,
-          new Promise<null>((r) => setTimeout(() => r(null), 3000)),
-        ]);
-        if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
-          finalFotoSebelum = uploadRes.fileUrl;
-          rel.fotoSebelumUrl = uploadRes.fileUrl;
-        }
-      } catch (e) {
-        console.warn('Auto upload Google Drive foto sebelum warning:', e);
-      }
+    if (finalFotoSebelum && isBase64Image(finalFotoSebelum)) {
+      finalFotoSebelum = await ensureGoogleDrivePhotoUrl(finalFotoSebelum, {
+        gasUrl,
+        nomorWO: rel.nomorWO,
+        reguName: rel.reguName || 'ROW',
+        photoType: 'Realisasi_Sebelum',
+        folderId: fotoFolderId,
+      });
+      if (finalFotoSebelum) rel.fotoSebelumUrl = finalFotoSebelum;
     }
 
-    if (finalFotoSesudah && finalFotoSesudah.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
-      try {
-        const uploadPromise = GASApiService.uploadPhoto(gasUrl, {
-          base64Data: finalFotoSesudah,
-          reguName: rel.reguName || 'ROW',
-          photoType: 'Realisasi_Sesudah',
-          folderId: fotoFolderId,
-        });
-        const uploadRes = await Promise.race([
-          uploadPromise,
-          new Promise<null>((r) => setTimeout(() => r(null), 3000)),
-        ]);
-        if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
-          finalFotoSesudah = uploadRes.fileUrl;
-          rel.fotoSesudahUrl = uploadRes.fileUrl;
-        }
-      } catch (e) {
-        console.warn('Auto upload Google Drive foto sesudah warning:', e);
-      }
+    if (finalFotoSesudah && isBase64Image(finalFotoSesudah)) {
+      finalFotoSesudah = await ensureGoogleDrivePhotoUrl(finalFotoSesudah, {
+        gasUrl,
+        nomorWO: rel.nomorWO,
+        reguName: rel.reguName || 'ROW',
+        photoType: 'Realisasi_Sesudah',
+        folderId: fotoFolderId,
+      });
+      if (finalFotoSesudah) rel.fotoSesudahUrl = finalFotoSesudah;
     }
 
     const latLng = (rel.latitude && rel.longitude) ? `${rel.latitude}, ${rel.longitude}` : '';
     
     // Ensure huge base64 strings don't cause 413 / timeout on Supabase text upsert
-    const safeFotoSebelum = (finalFotoSebelum && finalFotoSebelum.startsWith('data:image')) 
-      ? (rel.fotoSebelumUrl && !rel.fotoSebelumUrl.startsWith('data:image') ? rel.fotoSebelumUrl : '') 
-      : finalFotoSebelum;
-    const safeFotoSesudah = (finalFotoSesudah && finalFotoSesudah.startsWith('data:image')) 
-      ? (rel.fotoSesudahUrl && !rel.fotoSesudahUrl.startsWith('data:image') ? rel.fotoSesudahUrl : '') 
-      : finalFotoSesudah;
+    const safeFotoSebelum = isBase64Image(finalFotoSebelum) ? '' : formatDriveViewUrl(finalFotoSebelum);
+    const safeFotoSesudah = isBase64Image(finalFotoSesudah) ? '' : formatDriveViewUrl(finalFotoSesudah);
 
     // Strict 18 columns matching Supabase public."REALISASI" table schema
     const payload: Record<string, any> = {
@@ -1455,10 +1430,20 @@ export class SupabaseService {
     if (params.lokasiKerja !== undefined) payload.Lokasi_kerja = params.lokasiKerja;
 
     if (params.fotoSebelumUrl !== undefined) {
-      payload.Foto_Sebelum = formatDriveViewUrl(params.fotoSebelumUrl);
+      const urlSeb = await ensureGoogleDrivePhotoUrl(params.fotoSebelumUrl, {
+        nomorWO: params.nomorWO,
+        reguName: params.reguName || 'ROW',
+        photoType: 'Realisasi_Sebelum',
+      });
+      payload.Foto_Sebelum = isBase64Image(urlSeb) ? '' : formatDriveViewUrl(urlSeb);
     }
     if (params.fotoSesudahUrl !== undefined) {
-      payload.Foto_Sesudah = formatDriveViewUrl(params.fotoSesudahUrl);
+      const urlSes = await ensureGoogleDrivePhotoUrl(params.fotoSesudahUrl, {
+        nomorWO: params.nomorWO,
+        reguName: params.reguName || 'ROW',
+        photoType: 'Realisasi_Sesudah',
+      });
+      payload.Foto_Sesudah = isBase64Image(urlSes) ? '' : formatDriveViewUrl(urlSes);
     }
 
     if (params.unitId !== undefined) {
@@ -1636,38 +1621,24 @@ export class SupabaseService {
     const gasUrl = gasConfig.gasWebAppUrl;
     const absensiFolderId = gasConfig.absensiFolderId || '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5';
 
-    if (finalFotoMasuk && finalFotoMasuk.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
-      try {
-        const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
-          base64Data: finalFotoMasuk,
-          reguName: abs.reguName,
-          photoType: 'Absensi_Masuk',
-          folderId: absensiFolderId,
-        });
-        if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
-          finalFotoMasuk = uploadRes.fileUrl;
-          abs.fotoMasuk = uploadRes.fileUrl;
-        }
-      } catch (e) {
-        console.warn('Auto upload Google Drive foto masuk warning:', e);
-      }
+    if (finalFotoMasuk && isBase64Image(finalFotoMasuk)) {
+      finalFotoMasuk = await ensureGoogleDrivePhotoUrl(finalFotoMasuk, {
+        gasUrl,
+        reguName: abs.reguName,
+        photoType: 'Absensi_Masuk',
+        folderId: absensiFolderId,
+      });
+      if (finalFotoMasuk) abs.fotoMasuk = finalFotoMasuk;
     }
 
-    if (finalFotoKeluar && finalFotoKeluar.startsWith('data:image') && gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
-      try {
-        const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
-          base64Data: finalFotoKeluar,
-          reguName: abs.reguName,
-          photoType: 'Absensi_Keluar',
-          folderId: absensiFolderId,
-        });
-        if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
-          finalFotoKeluar = uploadRes.fileUrl;
-          abs.fotoKeluar = uploadRes.fileUrl;
-        }
-      } catch (e) {
-        console.warn('Auto upload Google Drive foto keluar warning:', e);
-      }
+    if (finalFotoKeluar && isBase64Image(finalFotoKeluar)) {
+      finalFotoKeluar = await ensureGoogleDrivePhotoUrl(finalFotoKeluar, {
+        gasUrl,
+        reguName: abs.reguName,
+        photoType: 'Absensi_Keluar',
+        folderId: absensiFolderId,
+      });
+      if (finalFotoKeluar) abs.fotoKeluar = finalFotoKeluar;
     }
 
     const payload: any = {
@@ -1676,8 +1647,8 @@ export class SupabaseService {
       TANGGAL: abs.tanggal || getWIBDateString(),
       NAMA_REGU: abs.reguName || '',
       ULP: abs.ulpName || '',
-      FOTO_MASUK: formatDriveViewUrl(finalFotoMasuk),
-      FOTO_KELUAR: formatDriveViewUrl(finalFotoKeluar),
+      FOTO_MASUK: isBase64Image(finalFotoMasuk) ? '' : formatDriveViewUrl(finalFotoMasuk),
+      FOTO_KELUAR: isBase64Image(finalFotoKeluar) ? '' : formatDriveViewUrl(finalFotoKeluar),
       'TIMESTAMP MASUK': abs.timestampMasuk || (finalFotoMasuk ? getLocalDateTimeString() : null),
       'TIMESTAMP KELUAR': abs.timestampKeluar || (finalFotoKeluar ? getLocalDateTimeString() : null),
     };

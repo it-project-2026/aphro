@@ -34,7 +34,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
-import { formatDriveImageUrl } from '../utils/driveUtils';
+import { formatDriveImageUrl, ensureGoogleDrivePhotoUrl } from '../utils/driveUtils';
 import { extractExifFromPhoto, ExifPhotoMetadata } from '../utils/exifReader';
 import { GASApiService } from '../services/gasApiService';
 import { RekapHarianService, UL_PRESETS, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
@@ -423,6 +423,17 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
     try {
       const generatedId = customId.trim() || `REL-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
+      const finalSebUrl = await ensureGoogleDrivePhotoUrl(fotoSebelumUrl.trim(), {
+        nomorWO: nomorWO.trim(),
+        reguName: reguName.trim(),
+        photoType: 'Realisasi_Sebelum',
+      });
+      const finalSesUrl = await ensureGoogleDrivePhotoUrl(fotoSesudahUrl.trim(), {
+        nomorWO: nomorWO.trim(),
+        reguName: reguName.trim(),
+        photoType: 'Realisasi_Sesudah',
+      });
+
       const payload = {
         id: generatedId,
         unitId: unitId.trim(),
@@ -442,8 +453,8 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         lokasiKerja: lokasiKerja.trim(),
         latitude: latNum,
         longitude: lngNum,
-        fotoSebelumUrl: fotoSebelumUrl.trim(),
-        fotoSesudahUrl: fotoSesudahUrl.trim(),
+        fotoSebelumUrl: finalSebUrl,
+        fotoSesudahUrl: finalSesUrl,
         photosSebelum: fotoSebelumUrl
           ? [
               {
