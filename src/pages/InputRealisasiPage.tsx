@@ -10,7 +10,7 @@ import { generateWatermarkedImage } from '../utils/watermark';
 import { compressImage } from '../utils/imageCompression';
 import { GASApiService } from '../services/gasApiService';
 import { SupabaseService } from '../services/supabaseService';
-import { formatDriveViewUrl } from '../utils/driveUtils';
+import { formatDriveViewUrl, ensureGoogleDrivePhotoUrl } from '../utils/driveUtils';
 import { getWIBDateString, getLocalDateTimeString, normalizeDateISO, formatDateDisplay } from '../utils/dateUtils';
 import {
   Camera,
@@ -434,11 +434,22 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     showToast('Menyimpan realisasi & mengunggah foto ke Google Drive...', 'info');
 
     try {
-      // Pass fileUrl if already uploaded or dataUrl for GAS to upload once
-      const fotoSebelumRaw = photosSebelum[0]?.fileUrl || photosSebelum[0]?.dataUrl || '';
-      const fotoSesudahRaw = photosSesudah[0]?.fileUrl || photosSesudah[0]?.dataUrl || '';
-      const fotoSebelumUrl = photosSebelum[0]?.fileUrl ? formatDriveViewUrl(photosSebelum[0].fileUrl) : fotoSebelumRaw;
-      const fotoSesudahUrl = photosSesudah[0]?.fileUrl ? formatDriveViewUrl(photosSesudah[0].fileUrl) : fotoSesudahRaw;
+      const finalSebUrl = await ensureGoogleDrivePhotoUrl(
+        photosSebelum[0]?.fileUrl || photosSebelum[0]?.dataUrl || '',
+        {
+          nomorWO: selectedWO.nomorWO,
+          reguName: selectedWO.reguName,
+          photoType: 'Realisasi_Sebelum',
+        }
+      );
+      const finalSesUrl = await ensureGoogleDrivePhotoUrl(
+        photosSesudah[0]?.fileUrl || photosSesudah[0]?.dataUrl || '',
+        {
+          nomorWO: selectedWO.nomorWO,
+          reguName: selectedWO.reguName,
+          photoType: 'Realisasi_Sesudah',
+        }
+      );
 
       if (editMode && initialData) {
         await updateRealisasi(initialData.id, {
@@ -449,8 +460,8 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           penyulangName: selectedWO.penyulangName,
           noTiang,
           tanggalRealisasi,
-          fotoSebelumUrl,
-          fotoSesudahUrl,
+          fotoSebelumUrl: finalSebUrl,
+          fotoSesudahUrl: finalSesUrl,
           photosSebelum,
           photosSesudah,
           petugasName,
@@ -475,8 +486,8 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           noTiang,
           tanggalRealisasi,
           petugasId: currentUser?.id || 'usr-3',
-          fotoSebelumUrl,
-          fotoSesudahUrl,
+          fotoSebelumUrl: finalSebUrl,
+          fotoSesudahUrl: finalSesUrl,
           photosSebelum,
           photosSesudah,
           petugasName,

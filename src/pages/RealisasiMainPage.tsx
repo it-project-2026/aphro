@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CheckSquare,
   History,
@@ -15,6 +15,8 @@ import {
   ExternalLink,
   FilePlus2,
   ShieldCheck,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +31,7 @@ import { Realisasi } from '../types';
 import { resolveUserTimRowAndUlp, RekapHarianService, UL_PRESETS } from '../services/rekapHarianService';
 import { SupabaseService } from '../services/supabaseService';
 import { InisiasiService } from '../services/inisiasiService';
+import { dexieDb } from '../services/dexieDb';
 import { InputRealisasiPage } from './InputRealisasiPage';
 import { InputManualRealisasiAdminPage } from './InputManualRealisasiAdminPage';
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
@@ -41,7 +44,15 @@ interface RealisasiMainPageProps {
 
 export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSubTab = 'input' }) => {
   const { user: currentUser } = useAuth();
-  const { realisasiList, deleteRealisasi, refreshRealisasi } = useRealisasi();
+  const {
+    realisasiList,
+    pagination,
+    isLoading,
+    error,
+    fetchRealisasiFromApi,
+    deleteRealisasi,
+    refreshRealisasi,
+  } = useRealisasi();
   const { workOrders, displayedWorkOrders, updateWorkOrder } = useWorkOrders();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
@@ -78,14 +89,10 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   const [finalizeSatuan, setFinalizeSatuan] = useState<'KMS' | 'GAWANG'>('KMS');
   const [selectedWoForFinalize, setSelectedWoForFinalize] = useState<string>('');
 
-  React.useEffect(() => {
-    refreshRealisasi();
-  }, [refreshRealisasi, activeSubTab]);
-
   // Photo Preview State
   const [previewPhoto, setPreviewPhoto] = useState<{ url: string; title: string; driveUrl?: string } | null>(null);
 
-  // Filters for History Tab
+  // Filters & Pagination for History Tab
   const getTodayDateString = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -94,13 +101,44 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     return `${year}-${month}-${day}`;
   };
 
+  const [filterNomorWO, setFilterNomorWO] = useState<string>('');
+  const [localWoNumbers, setLocalWoNumbers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterDate, setFilterDate] = useState<string>('');
+  const [tanggalDari, setTanggalDari] = useState<string>('');
+  const [tanggalSampai, setTanggalSampai] = useState<string>('');
+  const [ulpFilter, setUlpFilter] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(20);
 
-  // Default to false on initial mount to show all history records
-  const [showOnlyToday, setShowOnlyToday] = useState(false);
+  // Preload local work order numbers from IndexedDB (Dexie)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchExtraWos = async () => {
+      try {
+        const [cachedWos, cachedRels] = await Promise.all([
+          dexieDb.work_orders.toArray().catch(() => []),
+          dexieDb.realisasi.toArray().catch(() => []),
+        ]);
+        if (!isMounted) return;
+        const set = new Set<string>();
+        cachedWos.forEach((w: any) => {
+          if (w.nomorWO && w.nomorWO.trim()) set.add(w.nomorWO.trim());
+        });
+        cachedRels.forEach((r: any) => {
+          if (r.nomorWO && r.nomorWO.trim()) set.add(r.nomorWO.trim());
+        });
+        setLocalWoNumbers(Array.from(set));
+      } catch {
+        // ignore
+      }
+    };
+    fetchExtraWos();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Debounce search query
   React.useEffect(() => {
@@ -110,8 +148,31 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  // Fetch realisasi from API when subtab, pagination, date range, or filterNomorWO changes
+  // STRICT REQUIREMENT: Only fetch if a filterNomorWO has been chosen!
+  React.useEffect(() => {
+    if (activeSubTab === 'history') {
+      if (filterNomorWO && filterNomorWO.trim()) {
+        fetchRealisasiFromApi({
+          page,
+          limit,
+          tanggalDari,
+          tanggalSampai,
+          ULP: ulpFilter,
+          Nomor_WO: filterNomorWO.trim(),
+        });
+      }
+    }
+  }, [
+    activeSubTab,
+    filterNomorWO,
+    page,
+    limit,
+    tanggalDari,
+    tanggalSampai,
+    ulpFilter,
+    fetchRealisasiFromApi,
+  ]);
 
   const isAdmbktUser = useMemo(() => {
     if (!currentUser) return true;
@@ -242,138 +303,110 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     return true;
   }, [currentUser, settings.namaUnitLayanan]);
 
-  const filteredRealisasi = useMemo(() => {
-    const todayStr = getTodayDateString();
+  // Available WO Numbers list for dropdown filter
+  const availableWONumbers = useMemo(() => {
+    const woSet = new Set<string>();
 
-    let accessibleCount = 0;
-    let statusFilteredCount = 0;
-    let dateFilteredCount = 0;
-    let todayFilteredCount = 0;
-    let searchFilteredCount = 0;
+    workOrders.forEach((wo) => {
+      if (wo.nomorWO && wo.nomorWO.trim()) woSet.add(wo.nomorWO.trim());
+    });
+    displayedWorkOrders.forEach((wo) => {
+      if (wo.nomorWO && wo.nomorWO.trim()) woSet.add(wo.nomorWO.trim());
+    });
+    localWoNumbers.forEach((no) => {
+      if (no && no.trim()) woSet.add(no.trim());
+    });
+    realisasiList.forEach((rel) => {
+      if (rel.nomorWO && rel.nomorWO.trim()) woSet.add(rel.nomorWO.trim());
+      const wo = workOrdersMap[rel.workOrderId];
+      if (wo?.nomorWO && wo.nomorWO.trim()) woSet.add(wo.nomorWO.trim());
+    });
 
-    const result = realisasiList.filter((rel) => {
-      if (!canUserAccessRealisasi(rel)) return false;
-      accessibleCount++;
+    return Array.from(woSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [workOrders, displayedWorkOrders, localWoNumbers, realisasiList, workOrdersMap]);
 
-      const wo = workOrdersMap[rel.workOrderId] || 
-                 workOrdersMap[rel.nomorWO] ||
-                 (rel.workOrderId ? workOrdersMap[rel.workOrderId.toLowerCase().trim()] : undefined) ||
-                 (rel.nomorWO ? workOrdersMap[rel.nomorWO.toLowerCase().trim()] : undefined);
-      const relStatus = (rel.status || wo?.status || 'Selesai').trim();
+  // Tampilan Data hanya sesuai dengan Filter (dengan tampilan Kosong jika belum dipilih lewat Filter)
+  const displayList = useMemo(() => {
+    if (!filterNomorWO || !filterNomorWO.trim()) {
+      return [];
+    }
 
-      // 1. Filter by Status
+    const cleanFilter = filterNomorWO.trim().toLowerCase();
+
+    return realisasiList.filter((rel) => {
+      const wo = workOrdersMap[rel.workOrderId];
+      const rWo = (rel.nomorWO || '').trim().toLowerCase();
+      const mWo = (wo?.nomorWO || '').trim().toLowerCase();
+      const rWoId = (rel.workOrderId || '').trim().toLowerCase();
+
+      // Check if matches the selected Nomor WO
+      const matchesWO = 
+        rWo === cleanFilter ||
+        mWo === cleanFilter ||
+        rWoId === cleanFilter ||
+        rWo.includes(cleanFilter) ||
+        mWo.includes(cleanFilter);
+
+      if (!matchesWO) return false;
+
+      // Status filter
       if (filterStatus !== 'ALL') {
-        if (filterStatus.toLowerCase() === 'selesai' && relStatus.toLowerCase() !== 'selesai' && relStatus.toLowerCase() !== 'closed') {
-          return false;
-        }
-        if (filterStatus.toLowerCase() !== 'selesai' && relStatus.toLowerCase() !== filterStatus.toLowerCase()) {
-          return false;
-        }
-      }
-      statusFilteredCount++;
-
-      // 2. Resolve canonical item date
-      const itemDate = getItemDateISO(rel) || (wo ? getItemDateISO(wo) : '');
-
-      // 3. Filter by explicit Date if selected
-      if (filterDate) {
-        const normFilterDate = normalizeDateISO(filterDate);
-        if (normFilterDate && itemDate !== normFilterDate) {
-          return false;
-        }
-      }
-      dateFilteredCount++;
-
-      // 4. If showOnlyToday is true and no explicit date/search query is active, filter strictly by today's date
-      if (showOnlyToday && !filterDate && !debouncedSearch) {
-        if (itemDate && itemDate !== todayStr) {
-          return false;
-        }
-      }
-      todayFilteredCount++;
-
-      // 5. Search / Filter by No WO or keyword
-      const searchLower = debouncedSearch.toLowerCase().trim();
-      if (!searchLower) {
-        searchFilteredCount++;
-        return true;
+        const relStatus = rel.status || wo?.status || 'Proses';
+        if (filterStatus === 'Selesai' && relStatus !== 'Selesai') return false;
+        if (filterStatus === 'Belum Selesai' && relStatus === 'Selesai') return false;
       }
 
-      const relNoWo = (rel.nomorWO || '').toLowerCase();
-      const woNo = (wo?.nomorWO || '').toLowerCase();
-      const relWoId = (rel.workOrderId || '').toLowerCase();
-      const cleanSearch = cleanStr(debouncedSearch);
-
-      // Exact or partial match for No WO when filtered via dropdown or search
-      if (
-        relNoWo === searchLower ||
-        woNo === searchLower ||
-        relWoId === searchLower ||
-        (cleanSearch && (cleanStr(rel.nomorWO) === cleanSearch || cleanStr(wo?.nomorWO) === cleanSearch)) ||
-        relNoWo.includes(searchLower) ||
-        woNo.includes(searchLower) ||
-        (relNoWo.length > 5 && searchLower.includes(relNoWo)) ||
-        (woNo.length > 5 && searchLower.includes(woNo))
-      ) {
-        searchFilteredCount++;
-        return true;
+      // ULP filter
+      if (ulpFilter) {
+        const uFilter = ulpFilter.toLowerCase().trim();
+        const rUlp = (rel.ulpName || wo?.ulpName || '').toLowerCase();
+        if (!rUlp.includes(uFilter)) return false;
       }
 
-      const matchesSearch =
-        relNoWo.includes(searchLower) ||
-        woNo.includes(searchLower) ||
-        (rel.noTiang || '').toLowerCase().includes(searchLower) ||
-        (rel.penyulangName || '').toLowerCase().includes(searchLower) ||
-        (rel.reguName || '').toLowerCase().includes(searchLower) ||
-        (rel.petugasName || '').toLowerCase().includes(searchLower);
-
-      if (matchesSearch) {
-        searchFilteredCount++;
+      // Date range filter
+      if (tanggalDari) {
+        const rDate = getItemDateISO(rel) || rel.tanggalRealisasi || '';
+        if (rDate && rDate < tanggalDari) return false;
       }
-      return matchesSearch;
+      if (tanggalSampai) {
+        const rDate = getItemDateISO(rel) || rel.tanggalRealisasi || '';
+        if (rDate && rDate > tanggalSampai) return false;
+      }
+
+      // Search query filter (tiang, feeder, tim, keterangan)
+      if (debouncedSearch) {
+        const q = debouncedSearch.toLowerCase().trim();
+        const matchSearch =
+          (rel.nomorWO || '').toLowerCase().includes(q) ||
+          (rel.noTiang || '').toLowerCase().includes(q) ||
+          (rel.penyulangName || '').toLowerCase().includes(q) ||
+          (rel.reguName || '').toLowerCase().includes(q) ||
+          (rel.keterangan || '').toLowerCase().includes(q);
+        if (!matchSearch) return false;
+      }
+
+      return canUserAccessRealisasi(rel);
     });
+  }, [
+    filterNomorWO,
+    realisasiList,
+    workOrdersMap,
+    filterStatus,
+    ulpFilter,
+    tanggalDari,
+    tanggalSampai,
+    debouncedSearch,
+    canUserAccessRealisasi,
+  ]);
 
-    // Step-by-step diagnostic logging (Langkah 4)
-    console.log(`[REALISASI FILTER TRACE]`, {
-      'Total data awal (State)': realisasiList.length,
-      'Setelah canUserAccessRealisasi': accessibleCount,
-      'Setelah filterStatus': statusFilteredCount,
-      'Setelah filterDate': dateFilteredCount,
-      'Setelah showOnlyToday': todayFilteredCount,
-      'Setelah search': searchFilteredCount,
-      'Final displayed (filteredRealisasi)': result.length,
-    });
-
-    return result;
-  }, [realisasiList, workOrdersMap, debouncedSearch, canUserAccessRealisasi, showOnlyToday, filterDate, filterStatus]);
-
-  const noWoOptions = useMemo(() => {
-    // Collect No WO from displayedWorkOrders (already filtered by active inisiasi & user role)
-    const displayedNoWos = new Set(displayedWorkOrders.map(wo => wo.nomorWO).filter(Boolean));
-
-    // Also include realisasi items accessible to current user (which are filtered by active inisiasi)
-    const accessibleRealisasiNoWos = realisasiList
-      .filter(rel => canUserAccessRealisasi(rel))
-      .map(rel => rel.nomorWO || (rel.workOrderId ? workOrdersMap[rel.workOrderId]?.nomorWO : undefined))
-      .filter(Boolean);
-
-    return Array.from(new Set([...Array.from(displayedNoWos), ...accessibleRealisasiNoWos])).sort();
-  }, [displayedWorkOrders, realisasiList, workOrdersMap, canUserAccessRealisasi]);
-
-  const paginatedRealisasi = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredRealisasi.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredRealisasi, currentPage]);
-
-  const totalPages = Math.ceil(filteredRealisasi.length / itemsPerPage);
   const selectedAreaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
 
-  // Reset page when search changes
+  // Reset page when search or filters change
   React.useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearch]);
+    setPage(1);
+  }, [filterNomorWO, debouncedSearch, ulpFilter, tanggalDari, tanggalSampai, filterStatus]);
   
-  const rawUlpName = currentUser?.ulpName || filteredRealisasi[0]?.ulpName || 'UNIT LAYANAN';
+  const rawUlpName = currentUser?.ulpName || displayList[0]?.ulpName || 'UNIT LAYANAN';
   const selectedUlpName = rawUlpName.replace(/^ULP\s*/i, '').trim() || 'UNIT LAYANAN';
 
   const handleEditRealisasi = (rel: any) => {
@@ -668,20 +701,128 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
               </div>
             )}
             {/* Filters Bar for History */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm no-print space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center space-x-2">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tampilan Tanggal:</span>
-                  <div className="inline-flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm no-print space-y-4">
+              {/* PRIMARY FILTER: Nomor Work Order (WO) */}
+              <div className="p-4 rounded-2xl bg-teal-50/70 dark:bg-slate-900/80 border border-teal-200/80 dark:border-teal-900/60 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-teal-600 text-white shadow-2xs">
+                      <Filter className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <label htmlFor="filter-nomor-wo" className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1">
+                        <span>Filter Nomor Work Order (WO)</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Wajib dipilih: Data Riwayat Realisasi hanya ditampilkan sesuai Nomor WO yang dipilih (kosong jika belum dipilih).
+                      </p>
+                    </div>
+                  </div>
+                  {filterNomorWO && (
                     <button
                       type="button"
                       onClick={() => {
-                        setShowOnlyToday(true);
-                        setFilterDate(getTodayDateString());
+                        setFilterNomorWO('');
+                        setPage(1);
+                      }}
+                      className="self-start sm:self-auto inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Reset Filter WO</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                  <div className="md:col-span-8">
+                    <select
+                      id="filter-nomor-wo"
+                      value={filterNomorWO}
+                      onChange={(e) => {
+                        setFilterNomorWO(e.target.value);
+                        setPage(1);
+                      }}
+                      className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-bold transition-all cursor-pointer ${
+                        !filterNomorWO
+                          ? 'border-amber-400 dark:border-amber-500 bg-white dark:bg-slate-950 text-amber-900 dark:text-amber-200 ring-2 ring-amber-400/20'
+                          : 'border-teal-500 dark:border-teal-500 bg-white dark:bg-slate-950 text-teal-900 dark:text-teal-200 ring-2 ring-teal-500/20'
+                      } focus:outline-none focus:ring-2 focus:ring-teal-500`}
+                    >
+                      <option value="">-- SILAKAN PILIH NOMOR WORK ORDER (WO) --</option>
+                      {availableWONumbers.map((woNum) => {
+                        const woInfo = workOrdersMap[woNum] || workOrdersMap[woNum.toLowerCase()];
+                        return (
+                          <option key={woNum} value={woNum}>
+                            📌 WO: {woNum} {woInfo?.penyulangName ? `• Feeder: ${woInfo.penyulangName}` : ''} {woInfo?.ulpName ? `(${woInfo.ulpName})` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-4">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Ketik cari nomor WO..."
+                        value={filterNomorWO}
+                        onChange={(e) => {
+                          setFilterNomorWO(e.target.value);
+                          setPage(1);
+                        }}
+                        className="w-full pl-8 pr-8 py-2.5 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      {filterNomorWO && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFilterNomorWO('');
+                            setPage(1);
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                          title="Hapus Filter WO"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active Filter Info Status */}
+                {filterNomorWO ? (
+                  <div className="mt-2.5 flex items-center gap-2 text-[11px] font-bold text-teal-800 dark:text-teal-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>
+                      Menampilkan data realisasi untuk Nomor WO: <strong className="underline decoration-teal-500">{filterNomorWO}</strong>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Tabel di bawah saat ini kosong karena belum ada Nomor WO yang dipilih.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Secondary Filters */}
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Preset Tanggal:</span>
+                  <div className="inline-flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700 gap-1 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const today = getTodayDateString();
+                        setTanggalDari(today);
+                        setTanggalSampai(today);
+                        setPage(1);
                       }}
                       className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                        showOnlyToday && !filterDate 
-                          ? 'bg-teal-600 text-white shadow-sm' 
+                        tanggalDari === getTodayDateString() && tanggalSampai === getTodayDateString()
+                          ? 'bg-teal-600 text-white shadow-sm'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
@@ -690,44 +831,33 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                     <button
                       type="button"
                       onClick={() => {
-                        setShowOnlyToday(false);
-                        setFilterDate('');
+                        setTanggalDari('2026-09-01');
+                        setTanggalSampai('2026-09-18');
+                        setPage(1);
                       }}
                       className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                        !showOnlyToday && !filterDate
-                          ? 'bg-teal-600 text-white shadow-sm' 
+                        tanggalDari === '2026-09-01' && tanggalSampai === '2026-09-18'
+                          ? 'bg-teal-600 text-white shadow-sm'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
-                      Semua Riwayat
+                      1 – 18 Sep 2026
                     </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pilih Tanggal:</span>
-                  <div className="relative flex items-center">
-                    <input
-                      type="date"
-                      value={filterDate}
-                      onChange={(e) => {
-                        setFilterDate(e.target.value);
-                        if (e.target.value) {
-                          setShowOnlyToday(false);
-                        }
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTanggalDari('');
+                        setTanggalSampai('');
+                        setPage(1);
                       }}
-                      className="px-3 py-1 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                    {filterDate && (
-                      <button
-                        type="button"
-                        onClick={() => setFilterDate('')}
-                        className="ml-1 px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded"
-                        title="Hapus filter tanggal"
-                      >
-                        ✕
-                      </button>
-                    )}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                        !tanggalDari && !tanggalSampai
+                          ? 'bg-teal-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Semua Tanggal
+                    </button>
                   </div>
                 </div>
 
@@ -746,36 +876,72 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Date Range & Secondary Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-slate-100 dark:border-slate-700">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter No WO</label>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Tanggal Dari</label>
+                  <input
+                    type="date"
+                    value={tanggalDari}
+                    onChange={(e) => {
+                      setTanggalDari(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Tanggal Sampai</label>
+                  <input
+                    type="date"
+                    value={tanggalSampai}
+                    onChange={(e) => {
+                      setTanggalSampai(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Filter ULP</label>
                   <select
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    value={ulpFilter}
+                    onChange={(e) => {
+                      setUlpFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 font-bold"
                   >
-                    <option value="">Semua No WO ({noWoOptions.length})</option>
-                    {noWoOptions.map(wo => (
-                      <option key={wo} value={wo}>{wo}</option>
+                    <option value="">Semua ULP</option>
+                    {ulpList.map((u) => (
+                      <option key={u.id} value={u.kodeULP || u.namaULP}>
+                        {u.namaULP} ({u.kodeULP})
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Pencarian Cepat</label>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wider">Cari Tiang / Feeder / Tim</label>
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Cari No WO, No Tiang, Feeder, atau Tim..."
+                      placeholder="Cari Tiang, Feeder, Tim..."
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setPage(1);
+                      }}
                       className="w-full pl-3 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                     {searchQuery && (
                       <button
                         type="button"
-                        onClick={() => setSearchQuery('')}
+                        onClick={() => {
+                          setSearchQuery('');
+                          setPage(1);
+                        }}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
-                        title="Reset Filter"
+                        title="Reset Pencarian"
                       >
                         ✕
                       </button>
@@ -788,12 +954,25 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
             {/* Riwayat Realisasi Table (Matching CETAK PHOTO format) */}
             <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-md space-y-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-extrabold text-[10px] sm:text-xs text-slate-900 dark:text-slate-200 uppercase tracking-wide border-b border-slate-100 dark:border-slate-700 pb-3">
-                <div>EVIDEN ROW AREA {selectedAreaName} — ULP {selectedUlpName} ({filteredRealisasi.length} Data)</div>
+                <div>
+                  EVIDEN ROW AREA {selectedAreaName} — ULP {selectedUlpName} {filterNomorWO ? `— WO: ${filterNomorWO}` : ''} ({displayList.length} Data)
+                </div>
                 <button
                   type="button"
                   onClick={async () => {
-                    await refreshRealisasi();
-                    showToast('Riwayat realisasi berhasil disegarkan', 'success');
+                    if (filterNomorWO && filterNomorWO.trim()) {
+                      await fetchRealisasiFromApi({
+                        page,
+                        limit,
+                        tanggalDari,
+                        tanggalSampai,
+                        ULP: ulpFilter,
+                        Nomor_WO: filterNomorWO.trim(),
+                      });
+                      showToast(`Data riwayat realisasi WO ${filterNomorWO} berhasil disegarkan`, 'success');
+                    } else {
+                      showToast('Silakan pilih Nomor WO pada filter terlebih dahulu', 'info');
+                    }
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all normal-case tracking-normal"
                 >
@@ -815,7 +994,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                   <thead>
                     <tr className="bg-[#00A2B9] text-white font-extrabold text-xs uppercase">
                       <th colSpan={15} className="p-2 text-center border-b border-[#008396]">
-                        REKAP HASIL ROW (RIWAYAT REALISASI)
+                        REKAP HASIL ROW (RIWAYAT REALISASI) {filterNomorWO ? `— WO: ${filterNomorWO}` : ''}
                       </th>
                     </tr>
                     <tr className="bg-[#008396] text-white font-bold text-[10px] uppercase">
@@ -837,14 +1016,56 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                    {paginatedRealisasi.length === 0 ? (
+                    {displayList.length === 0 ? (
                       <tr>
-                        <td colSpan={15} className="p-12 text-slate-400 italic text-center text-xs">
-                          Belum ada riwayat realisasi yang sesuai dengan filter.
+                        <td colSpan={15} className="p-12 text-slate-400 text-center text-xs">
+                          {!filterNomorWO ? (
+                            <div className="flex flex-col items-center justify-center py-8 px-4">
+                              <div className="w-14 h-14 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-3 shadow-xs">
+                                <Filter className="w-7 h-7" />
+                              </div>
+                              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-1">
+                                Filter Nomor WO Belum Dipilih
+                              </h4>
+                              <p className="text-slate-500 dark:text-slate-400 text-xs max-w-md leading-relaxed mb-4 text-center">
+                                Tampilan data riwayat realisasi saat ini kosong. Silakan pilih <strong>Nomor Work Order (WO)</strong> pada filter di atas untuk memuat dan menampilkan data.
+                              </p>
+                              {availableWONumbers.length > 0 && (
+                                <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-xl">
+                                  <span className="text-[11px] font-semibold text-slate-400 mr-1">Pilih Cepat WO:</span>
+                                  {availableWONumbers.slice(0, 6).map((num) => (
+                                    <button
+                                      key={num}
+                                      type="button"
+                                      onClick={() => {
+                                        setFilterNomorWO(num);
+                                        setPage(1);
+                                      }}
+                                      className="px-2.5 py-1 text-[11px] font-bold bg-slate-100 dark:bg-slate-700 hover:bg-teal-50 dark:hover:bg-teal-950 hover:text-teal-700 dark:hover:text-teal-300 text-slate-700 dark:text-slate-300 rounded-lg transition-colors border border-slate-200 dark:border-slate-600"
+                                    >
+                                      {num}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-8">
+                              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-2">
+                                <Search className="w-6 h-6" />
+                              </div>
+                              <p className="font-bold text-slate-700 dark:text-slate-300 text-xs mb-1">
+                                Tidak ada riwayat realisasi untuk Nomor WO &quot;{filterNomorWO}&quot;
+                              </p>
+                              <p className="text-slate-400 text-[11px]">
+                                Coba periksa status filter atau rentang tanggal, atau pilih Nomor WO lainnya.
+                              </p>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ) : (
-                      paginatedRealisasi.map((rel, idx) => {
+                      displayList.map((rel, idx) => {
                         const wo = workOrdersMap[rel.workOrderId];
                         const lat = rel.latitude || wo?.latitude || 0;
                         const lng = rel.longitude || wo?.longitude || 0;
@@ -982,7 +1203,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                                 )}
                                 <button
                                   onClick={async () => {
-                                    if (window.confirm('Hapus data realisasi ini? Perubahan akan langsung sinkron ke Supabase Database.')) {
+                                    if (window.confirm('Hapus data realisasi ini? Data akan dihapus dari server dan perangkat.')) {
                                       await deleteRealisasi(rel.id);
                                     }
                                   }}
@@ -1001,32 +1222,86 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                   <tfoot>
                     <tr className="bg-teal-50 dark:bg-slate-800 font-extrabold text-xs text-teal-900 dark:text-teal-200 uppercase border-t-2 border-teal-600">
                       <td colSpan={15} className="p-3 text-right">
-                        TOTAL REALISASI: <span className="text-teal-700 dark:text-teal-400 font-black text-sm ml-2">{filteredRealisasi.length} DATA</span>
+                        TOTAL DATA DITEMUKAN: <span className="text-teal-700 dark:text-teal-400 font-black text-sm ml-2">{displayList.length} DATA</span>
                       </td>
                     </tr>
                   </tfoot>
                 </table>
-                {totalPages > 1 && (
-                  <div className="p-4 flex items-center justify-center gap-2">
+
+                {/* Loading State Banner */}
+                {isLoading && (
+                  <div className="p-6 text-center text-teal-600 font-bold text-xs animate-pulse flex items-center justify-center gap-2 bg-slate-50 dark:bg-slate-900">
+                    <RotateCw className="w-4 h-4 animate-spin" />
+                    <span>Memuat data Realisasi dari API server...</span>
+                  </div>
+                )}
+
+                {/* Error State Banner */}
+                {error && !isLoading && (
+                  <div className="p-4 my-2 mx-4 text-center text-rose-700 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-semibold flex items-center justify-between">
+                    <span>Gagal mengambil data Realisasi: {error}</span>
                     <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700 disabled:opacity-50"
+                      type="button"
+                      onClick={() =>
+                        fetchRealisasiFromApi({
+                          page,
+                          limit,
+                          tanggalDari,
+                          tanggalSampai,
+                          ULP: ulpFilter,
+                          Nomor_WO: filterNomorWO ? filterNomorWO.trim() : debouncedSearch,
+                        })
+                      }
+                      className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all"
                     >
-                      Sebelumnya
-                    </button>
-                    <span className="text-sm font-semibold">
-                      Halaman {currentPage} dari {totalPages}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-1 rounded bg-slate-200 dark:bg-slate-700 disabled:opacity-50"
-                    >
-                      Selanjutnya
+                      Coba Lagi
                     </button>
                   </div>
                 )}
+
+                {/* Pagination Navigation */}
+                <div className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Menampilkan <span className="font-extrabold text-teal-700 dark:text-teal-400">{displayList.length}</span> dari <span className="font-extrabold text-teal-700 dark:text-teal-400">{displayList.length}</span> total data
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-medium text-slate-500">Jumlah Per Halaman:</span>
+                    <select
+                      value={limit}
+                      onChange={(e) => {
+                        setLimit(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className="px-2 py-1 text-xs font-bold border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={isLoading || (pagination.hasPreviousPage !== undefined ? !pagination.hasPreviousPage : page <= 1)}
+                      className="px-3 py-1.5 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:opacity-50 transition-all shadow-xs"
+                    >
+                      Sebelumnya
+                    </button>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 px-2">
+                      Halaman {pagination.page || page} dari {pagination.totalPages || 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => p + 1)}
+                      disabled={isLoading || (pagination.hasNextPage !== undefined ? !pagination.hasNextPage : page >= (pagination.totalPages || 1))}
+                      className="px-3 py-1.5 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:opacity-50 transition-all shadow-xs"
+                    >
+                      Berikutnya
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

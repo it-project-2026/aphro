@@ -14,6 +14,15 @@ export function formatDateTime(dateInput?: string | Date): string {
   const s = String(dateInput).trim();
   if (!s || s === 'null' || s === 'undefined') return '-';
 
+  // Safe date-only ISO match (e.g. "2026-09-18T00:00:00.000Z" or "2026-09-18") to prevent timezone shift bug
+  const isoDateOnlyMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s]+00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+  if (isoDateOnlyMatch) {
+    const year = isoDateOnlyMatch[1];
+    const month = isoDateOnlyMatch[2].padStart(2, '0');
+    const day = isoDateOnlyMatch[3].padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+
   // 1. Google Visualization JSON date format: Date(yyyy, m, d, h, m, s) or Date(ms)
   const gvisMatch = s.match(/^Date\((\d+)(?:,\s*(\d+))?(?:,\s*(\d+))?(?:,\s*(\d+))?(?:,\s*(\d+))?(?:,\s*(\d+))?\)/i);
   if (gvisMatch) {

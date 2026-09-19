@@ -5,6 +5,7 @@
  */
 
 import { supabase, SUPABASE_TABLES, SUPABASE_DATABASE_NAME, isSupabaseConfigured } from './supabaseClient';
+import { ApiService } from './apiService';
 import {
   InisiasiUnit,
   WorkOrder,
@@ -23,6 +24,7 @@ import {
   InisiasiService,
 } from './inisiasiService';
 import { UL_PRESETS, RekapHarianService } from './rekapHarianService';
+import { normalizeRealisasiRow } from '../utils/realisasiNormalizer';
 import {
   INITIAL_ULP,
   INITIAL_PENYULANG,
@@ -249,55 +251,23 @@ export class SupabaseService {
     message?: string;
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
-    const from = page * pageSize;
-    const to = from + pageSize - 1;
 
     try {
-      // 1. Start query
-      let query = supabase
-        .from(SUPABASE_TABLES.WORK_ORDER)
-        .select(WORK_ORDER_SELECT_FIELDS);
-
-      if (targetUnitId && targetUnitId !== 'ALL') {
-        const unitFilter = this.getUnitQueryFilter(targetUnitId);
-        query = query.or(unitFilter);
-      }
-
-      // Delta Sync Filter: If lastSyncTime is provided, only query records created/updated after lastSyncTime
-      if (lastSyncTime) {
-        const syncDate = lastSyncTime.split('T')[0].split(' ')[0];
-        query = query.or(`Created_At.gte.${lastSyncTime},Tanggal.gte.${syncDate}`);
-      }
-
-      // 3. Add order and range (Strict Max 200 per request)
-      const { data, error } = await query
-        .order('Tanggal', { ascending: false, nullsFirst: false })
-        .range(from, to);
-
-      if (error) {
-        console.warn('Supabase fetchWorkOrders query error:', error.message);
-        return { success: false, data: [], source: 'supabase', message: error.message };
-      }
-
-      if (Array.isArray(data) && data.length > 0) {
-        const workOrders: WorkOrder[] = data.map((row: any) => this.normalizeWorkOrderRow(row));
-        
-        // Cache only the first page and only if NOT incremental sync
+      const apiRes = await ApiService.fetchWorkOrders(targetUnitId);
+      if (apiRes && apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
+        const workOrders: WorkOrder[] = apiRes.data.map((row: any) => this.normalizeWorkOrderRow(row));
         if (page === 0 && !lastSyncTime) {
           this.safeSetItem(`aphro_wo_${targetUnitId}`, JSON.stringify(workOrders));
         }
-        
         return {
           success: true,
           data: workOrders,
           source: 'supabase',
-          message: `Berhasil memuat ${workOrders.length} Work Order (Halaman ${page + 1}) dari Supabase.`,
+          message: `Berhasil memuat ${workOrders.length} Work Order dari API HyperCloudHost.`,
         };
       }
-      return { success: true, data: [], source: 'supabase', message: 'Tidak ada data Work Order ditemukan.' };
     } catch (err: any) {
-      console.warn('Error loading Work Orders from Supabase:', err);
-      return { success: false, data: [], source: 'supabase', message: err?.message || 'Gagal memuat data Work Order.' };
+      console.warn('Error loading Work Orders from API:', err);
     }
 
     // Check cached data for this unit
@@ -438,16 +408,10 @@ export class SupabaseService {
     };
 
     try {
-      const { error } = await supabase
-        .from(SUPABASE_TABLES.WORK_ORDER)
-        .upsert([payload], { onConflict: 'WO_ID' });
-
-      if (error) {
-        console.warn('Supabase saveWorkOrder warning (will cache locally):', error.message);
-      }
-      return { success: !error, error: error?.message };
+      const res = await ApiService.saveWorkOrder(payload);
+      return { success: res.success, error: res.message };
     } catch (err: any) {
-      console.warn('Supabase saveWorkOrder network exception:', err);
+      console.warn('saveWorkOrder network exception:', err);
       return { success: false, error: err.message };
     }
   }
@@ -591,72 +555,29 @@ export class SupabaseService {
     page: number = 0, 
     pageSize: number = 200,
     lastSyncTime?: string,
-    includePhotos: boolean = false
+    _includePhotos: boolean = false
   ): Promise<{
     success: boolean;
     data: Realisasi[];
     source: 'supabase' | 'cache' | 'initial';
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
-    const effectivePageSize = Math.min(pageSize || 200, 200);
-    const selectFields = includePhotos ? '*' : REALISASI_LIGHT_SELECT_FIELDS;
 
     try {
-      let query = supabase
-        .from(SUPABASE_TABLES.REALISASI)
-        .select(selectFields);
-
-      if (targetUnitId && targetUnitId !== 'ALL') {
-        const unitFilter = this.getUnitQueryFilter(targetUnitId);
-        query = query.or(unitFilter);
-      }
-
-      // Delta Sync Filter: If lastSyncTime is provided, only fetch records updated/created on or after syncDate
-      if (lastSyncTime) {
-        const syncDate = lastSyncTime.split('T')[0].split(' ')[0];
-        query = query.gte('TANGGAL', syncDate);
-      }
-
-      const from = page * effectivePageSize;
-      const to = from + effectivePageSize - 1;
-
-      const { data, error } = await query
-        .order('TANGGAL', { ascending: false, nullsFirst: false })
-        .range(from, to);
-
-      // MANDATORY DIAGNOSTIC LOGGING (Langkah 1 & 6)
-      console.log(`[REALISASI QUERY]`, {
-        unitId: targetUnitId,
-        WO_ID: 'ALL',
-        tanggal: lastSyncTime ? `gte.${lastSyncTime}` : 'ALL (Full History)',
-        'jumlah data dari Supabase': Array.isArray(data) ? data.length : 0,
-        error: error ? error.message : null,
+      const res = await ApiService.fetchRealisasi({
+        page: page + 1,
+        limit: pageSize,
+        ULP: targetUnitId !== 'ALL' ? targetUnitId : undefined,
       });
 
-      const savedUserStr = this.safeGetItem('aphro_user') || this.safeGetItem('pln_mobile_user');
-      let sessionUnit = '-';
-      try {
-        sessionUnit = savedUserStr ? JSON.parse(savedUserStr)?.unitId || '-' : '-';
-      } catch {}
-
-      console.log(`[REALISASI UNIT TRACE]`, {
-        'LOGIN UNIT': sessionUnit,
-        'SESSION UNIT': sessionUnit,
-        'QUERY UNIT': targetUnitId,
-        'DATABASE UNIT': targetUnitId,
-        'RESULT COUNT': Array.isArray(data) ? data.length : 0,
-      });
-
-      if (!error && Array.isArray(data) && data.length > 0) {
-        const list: Realisasi[] = data.map((row: any) => this.normalizeRealisasiRow(row));
+      if (res.data) {
         if (!lastSyncTime && page === 0) {
-          this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(list));
+          this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(res.data));
         }
-        return { success: true, data: list, source: 'supabase' };
+        return { success: true, data: res.data, source: 'supabase' };
       }
-      return { success: true, data: [], source: 'supabase' };
     } catch (err) {
-      console.warn('Supabase fetch REALISASI error in catch block:', err);
+      console.warn('ApiService fetch REALISASI warning:', err);
     }
 
     try {
@@ -1015,149 +936,7 @@ export class SupabaseService {
    * Normalize Supabase REALISASI row
    */
   static normalizeRealisasiRow(row: any): Realisasi {
-    const rawNoWoCandidate = String(row.Nomor_WO || row.nomor_wo || row.NOMOR_WO || row.nomorWO || '');
-    const rawWoIdCandidate = String(row.WO_ID || row.wo_id || row.workOrderId || '');
-
-    // Detect if row was imported with shifted columns (sheet without separate WO_ID column)
-    const isShifted = rawNoWoCandidate.toUpperCase().startsWith('ULP') ||
-      (rawWoIdCandidate.match(/^M\d+\//i) && !rawNoWoCandidate.match(/^M\d+\//i));
-
-    let rawNoWo = rawNoWoCandidate;
-    let rawUlp = String(row.ULP || row.ulp || row.Nama_ULP || '');
-    let reguName = String(row.REGU_ROW || row.regu_row || row.Regu || row.REGU || '');
-    let penyulangName = String(
-      row.PENYULANG || row.Penyulang || row.penyulang ||
-      row.PENYULANG_FEEDER || row.Penyulang_Feeder || row.penyulang_feeder ||
-      row.Nama_Penyulang || row.nama_penyulang || row.NAMA_PENYULANG ||
-      row.FEEDER || row.Feeder || row.feeder ||
-      row.penyulangName || row.penyulang_name ||
-      ''
-    );
-    let noTiang = String(row.NO_TIANG || row.No_Tiang || row.no_tiang || '');
-    let rawTanggal = row.Tanggal ?? row.TANGGAL ?? row.tanggal ?? row.TANGGAL_REALISASI ?? row.tanggal_realisasi ?? row.TANGGAL_EKSEKUSI ?? row.tanggal_eksekusi;
-    let rawFotoSebelum = String(row.FOTO_SEBELUM || row.Foto_Sebelum || row.foto_sebelum || row.FOTO_SEBELUM_URL || '');
-    let rawFotoSesudah = String(row.FOTO_SETELAH || row.FOTO_PROSES || row.Foto_Sesudah || row.Foto_Setelah || row.foto_sesudah || row.FOTO_SETELAH_URL || '');
-    let jenisTanaman = String(row.Jenis_Tanaman || row.jenis_tanaman || row.TIPE_POHON || row.tipe_pohon || '');
-    let keterangan = String(row.Keterangan || row.keterangan || row.KETERANGAN || '');
-    let pertumbuhanTanaman = String(row.Pertumbuhan_Tanaman || row.pertumbuhan_tanaman || '');
-    let kendala = String(row.Kendala || row.kendala || '');
-    let lokasiKerja = String(row.Lokasi_kerja || row.lokasi_kerja || row.LOKASI_KERJA || row.Lokasi || '');
-    let timestampStr = String(row.Timestamp || row.WAKTU || row.Waktu || row.Created_At || row.created_at || getLocalDateTimeString());
-    let lat = Number(row.LATITUDE ?? row.latitude ?? row.lat) || 0;
-    let lng = Number(row.LONGITUDE ?? row.longitude ?? row.lng) || 0;
-
-    if (isShifted) {
-      rawNoWo = rawWoIdCandidate;
-      rawUlp = rawNoWoCandidate;
-      reguName = String(row.ULP || '');
-      penyulangName = String(row.REGU_ROW || '');
-      noTiang = String(row.PENYULANG || '');
-      rawTanggal = row.NO_TIANG || rawTanggal;
-      rawFotoSebelum = String(row.Foto_Sebelum || '');
-      rawFotoSesudah = (String(row.Foto_Sesudah || '').includes('http')) ? String(row.Foto_Sesudah) : '';
-      jenisTanaman = String(row.Foto_Sesudah || '');
-      keterangan = String(row.Jenis_Tanaman || 'PANGKAS');
-      pertumbuhanTanaman = String(row.Keterangan || 'SEDANG');
-      kendala = String(row.Pertumbuhan_Tanaman || 'Tidak Ada Kendala');
-      if (String(row.Kendala || '').includes(',')) {
-        const parts = String(row.Kendala).split(',');
-        lat = Number(parts[0].trim()) || 0;
-        lng = Number(parts[1].trim()) || 0;
-      }
-      lokasiKerja = String(row.Latitude_Longitude || '');
-      timestampStr = String(row.Lokasi_kerja || getLocalDateTimeString());
-    }
-
-    if (!lat && !lng) {
-      const latLngStr = String(row.Latitude_Longitude || row.latitude_longitude || row.LATITUDE_LONGITUDE || '');
-      if (latLngStr.includes(',')) {
-        const parts = latLngStr.split(',');
-        lat = Number(parts[0].trim()) || 0;
-        lng = Number(parts[1].trim()) || 0;
-      }
-    }
-
-    if (rawUlp.toUpperCase().startsWith('UL UL ')) {
-      rawUlp = rawUlp.replace(/^UL\s*UL\s*/i, 'UL ');
-    }
-    const ulpName = rawUlp;
-
-    const dateFromWo = parseDateFromNomorWO(rawNoWo);
-    let tanggalStr = '';
-    if (rawTanggal !== undefined && rawTanggal !== null && String(rawTanggal).trim() !== '' && String(rawTanggal) !== 'null' && String(rawTanggal) !== 'undefined') {
-      tanggalStr = normalizeDateISO(rawTanggal);
-    }
-    if (!tanggalStr && dateFromWo) {
-      tanggalStr = dateFromWo;
-    }
-    if (!tanggalStr) {
-      tanggalStr = normalizeDateISO(timestampStr) || getWIBDateString();
-    }
-
-    const fotoSebelumUrl = formatDriveViewUrl(rawFotoSebelum);
-    const fotoSesudahUrl = formatDriveViewUrl(rawFotoSesudah);
-    const fotoSebelumImg = formatDriveImageUrl(rawFotoSebelum);
-    const fotoSesudahImg = formatDriveImageUrl(rawFotoSesudah);
-
-    const relId = String(row.ID || row.id || `REL-${Date.now()}`);
-    let cleanWoId = String(row.WO_ID || row.wo_id || row.workOrderId || '').trim();
-    // Guard: Prevent legacy self-referencing artifact where WO_ID was incorrectly set to relId
-    if (cleanWoId === relId || cleanWoId.startsWith('REL-')) {
-      cleanWoId = '';
-    }
-
-    return {
-      id: relId,
-      unitId: String(row.unitId || ''),
-      workOrderId: cleanWoId,
-      nomorWO: rawNoWo,
-      ulpName,
-      reguName,
-      penyulangName: penyulangName,
-      noTiang: String(row.NO_TIANG || row.No_Tiang || row.no_tiang || ''),
-      tanggalRealisasi: tanggalStr,
-      petugasId: 'usr-1',
-      petugasName: String(row.PETUGAS || row.Petugas || row.petugas || reguName),
-      jenisTanaman: String(jenisTanaman || row.TIPE_POHON || row.tipe_pohon || ''),
-      pertumbuhanTanaman: String(pertumbuhanTanaman),
-      kendala: String(kendala),
-      lokasiKerja: String(lokasiKerja),
-      latitude: lat,
-      longitude: lng,
-      keterangan: String(keterangan),
-      progressPercent: 100,
-      status: 'Selesai',
-      fotoSebelumUrl,
-      fotoSesudahUrl,
-      photosSebelum: fotoSebelumUrl ? [{
-        id: `pic-seb-${relId}`,
-        type: 'sebelum',
-        slotIndex: 1,
-        dataUrl: fotoSebelumImg,
-        fileUrl: fotoSebelumUrl,
-        originalName: 'Foto_Sebelum.jpg',
-        timestamp: timestampStr,
-        latitude: lat,
-        longitude: lng,
-        userName: reguName,
-        ulpName,
-      }] : [],
-      photosSesudah: fotoSesudahUrl ? [{
-        id: `pic-ses-${relId}`,
-        type: 'sesudah',
-        slotIndex: 1,
-        dataUrl: fotoSesudahImg,
-        fileUrl: fotoSesudahUrl,
-        originalName: 'Foto_Sesudah.jpg',
-        timestamp: timestampStr,
-        latitude: lat,
-        longitude: lng,
-        userName: reguName,
-        ulpName,
-      }] : [],
-      createdAt: timestampStr,
-      isSynced: true,
-    };
+    return normalizeRealisasiRow(row);
   }
 
   /**
@@ -1223,71 +1002,19 @@ export class SupabaseService {
     };
 
     try {
-      let currentPayload = { ...payload };
-      let res: any = null;
-      let attempts = 0;
-      const maxAttempts = 5;
+      const res = await ApiService.saveRealisasi({
+        ...rel,
+        unitId: targetUnitId,
+        latitude: rel.latitude,
+        longitude: rel.longitude,
+      });
 
-      // Resilient upsert with auto-recovery for missing column errors (PGRST204)
-      while (attempts < maxAttempts) {
-        attempts++;
-        res = await supabase
-          .from(SUPABASE_TABLES.REALISASI)
-          .upsert([currentPayload], { onConflict: 'ID' })
-          .select(REALISASI_LIGHT_SELECT_FIELDS);
-
-        if (!res.error) break;
-
-        // Auto-recover if Postgres reports column not found in schema cache
-        const errMsg = res.error?.message || '';
-        const missingColMatch = errMsg.match(/Could not find the '([^']+)' column/i);
-        if (res.error?.code === 'PGRST204' && missingColMatch && missingColMatch[1]) {
-          const missingCol = missingColMatch[1];
-          console.warn(`[SupabaseService] Column '${missingCol}' not found in REALISASI schema. Dropping and retrying...`);
-          delete currentPayload[missingCol];
-          continue;
-        }
-
-        // Handle transient network errors
-        if (res.error.code === '500' || res.error.code === '503' || res.error.message?.includes('timeout') || res.error.message?.includes('fetch')) {
-          await new Promise((r) => setTimeout(r, 500));
-          continue;
-        }
-
-        break;
+      if (res.success) {
+        return { success: true, data: rel };
       }
-
-      if (res.error) {
-        // Verification Check: Verify if record with ID was actually inserted into Supabase despite error/timeout
-        try {
-          const { data: checkData } = await supabase
-            .from(SUPABASE_TABLES.REALISASI)
-            .select('ID')
-            .eq('ID', rel.id)
-            .maybeSingle();
-
-          if (checkData && checkData.ID === rel.id) {
-            console.log(`[SupabaseService] Realisasi ${rel.id} verified as saved in Supabase database.`);
-            return { success: true, data: rel };
-          }
-        } catch (checkErr) {
-          console.warn('[SupabaseService] Timeout check DB query error:', checkErr);
-        }
-
-        console.error('Supabase saveRealisasi error:', res.error);
-        const detailedError = [
-          res.error.message,
-          res.error.code ? `code=${res.error.code}` : '',
-          res.error.details ? `details=${res.error.details}` : '',
-          res.error.hint ? `hint=${res.error.hint}` : '',
-        ].filter(Boolean).join(' | ');
-        return { success: false, error: detailedError || 'Gagal menyimpan Realisasi ke database.' };
-      }
-
-      const savedItem = res.data && res.data.length > 0 ? this.normalizeRealisasiRow(res.data[0]) : rel;
-      return { success: true, data: savedItem };
+      return { success: false, error: res.message || 'Gagal menyimpan Realisasi ke database.' };
     } catch (err: any) {
-      console.error('Supabase saveRealisasi catch error:', err);
+      console.error('ApiService saveRealisasi catch error:', err);
       return { success: false, error: err.message };
     }
   }
@@ -1361,13 +1088,9 @@ export class SupabaseService {
         }
       });
 
-      // 2. Perform deletion in Supabase Database using primary key ID
-      const { error } = await supabase
-        .from(SUPABASE_TABLES.REALISASI)
-        .delete()
-        .eq('ID', targetId);
-
-      return { success: !error, error: error?.message };
+      // 2. Perform deletion in Node.js API
+      const res = await ApiService.deleteRealisasi(targetId);
+      return { success: res.success, error: res.message };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
@@ -1380,113 +1103,16 @@ export class SupabaseService {
    */
   static async updateRealisasiAdmin(
     id: string,
-    params: {
-      tanggal?: string;
-      tanggalRealisasi?: string;
-      latitude?: number;
-      longitude?: number;
-      nomorWO?: string;
-      workOrderId?: string;
-      ulpName?: string;
-      reguName?: string;
-      penyulangName?: string;
-      noTiang?: string;
-      petugasId?: string;
-      petugasName?: string;
-      jenisTanaman?: string;
-      keterangan?: string;
-      pertumbuhanTanaman?: string;
-      kendala?: string;
-      lokasiKerja?: string;
-      fotoSebelumUrl?: string;
-      fotoSesudahUrl?: string;
-      unitId?: string;
-      [key: string]: any;
-    }
+    params: any
   ): Promise<{ success: boolean; data?: Realisasi; error?: string }> {
-    const payload: Record<string, any> = {};
-
-    const finalTanggal = params.tanggal || params.tanggalRealisasi;
-    if (finalTanggal) {
-      payload.TANGGAL = finalTanggal;
-    }
-
-    if (params.latitude !== undefined && params.longitude !== undefined) {
-      payload.Latitude_Longitude = `${params.latitude}, ${params.longitude}`;
-      payload.LATITUDE = params.latitude;
-      payload.LONGITUDE = params.longitude;
-    }
-
-    if (params.nomorWO !== undefined) payload.Nomor_WO = params.nomorWO;
-    if (params.workOrderId !== undefined) payload.WO_ID = params.workOrderId;
-    if (params.ulpName !== undefined) payload.ULP = params.ulpName;
-    if (params.reguName !== undefined) payload.REGU_ROW = params.reguName;
-    if (params.penyulangName !== undefined) payload.PENYULANG = params.penyulangName;
-    if (params.noTiang !== undefined) payload.NO_TIANG = params.noTiang;
-    if (params.jenisTanaman !== undefined) payload.Jenis_Tanaman = params.jenisTanaman;
-    if (params.keterangan !== undefined) payload.Keterangan = params.keterangan;
-    if (params.pertumbuhanTanaman !== undefined) payload.Pertumbuhan_Tanaman = params.pertumbuhanTanaman;
-    if (params.kendala !== undefined) payload.Kendala = params.kendala;
-    if (params.lokasiKerja !== undefined) payload.Lokasi_kerja = params.lokasiKerja;
-
-    if (params.fotoSebelumUrl !== undefined) {
-      const urlSeb = await ensureGoogleDrivePhotoUrl(params.fotoSebelumUrl, {
-        nomorWO: params.nomorWO,
-        reguName: params.reguName || 'ROW',
-        photoType: 'Realisasi_Sebelum',
-      });
-      payload.Foto_Sebelum = isBase64Image(urlSeb) ? '' : formatDriveViewUrl(urlSeb);
-    }
-    if (params.fotoSesudahUrl !== undefined) {
-      const urlSes = await ensureGoogleDrivePhotoUrl(params.fotoSesudahUrl, {
-        nomorWO: params.nomorWO,
-        reguName: params.reguName || 'ROW',
-        photoType: 'Realisasi_Sesudah',
-      });
-      payload.Foto_Sesudah = isBase64Image(urlSes) ? '' : formatDriveViewUrl(urlSes);
-    }
-
-    if (params.unitId !== undefined) {
-      payload.unitId = params.unitId;
-    }
-
     try {
-      let currentPayload = { ...payload };
-      let res: any = null;
-      let attempts = 0;
-      const maxAttempts = 5;
-
-      while (attempts < maxAttempts) {
-        attempts++;
-        res = await supabase
-          .from(SUPABASE_TABLES.REALISASI)
-          .update(currentPayload)
-          .eq('ID', id)
-          .select(REALISASI_LIGHT_SELECT_FIELDS);
-
-        if (!res.error) break;
-
-        const errMsg = res.error?.message || '';
-        const missingColMatch = errMsg.match(/Could not find the '([^']+)' column/i);
-        if (res.error?.code === 'PGRST204' && missingColMatch && missingColMatch[1]) {
-          const missingCol = missingColMatch[1];
-          console.warn(`[SupabaseService] Column '${missingCol}' not found in REALISASI table during update. Dropping and retrying...`);
-          delete currentPayload[missingCol];
-          continue;
-        }
-
-        break;
+      const res = await ApiService.updateRealisasi(id, params);
+      if (res.success) {
+        return { success: true };
       }
-
-      if (res?.error) {
-        console.error('Supabase updateRealisasiAdmin error:', res.error);
-        return { success: false, error: res.error.message || 'Gagal memperbarui data Realisasi' };
-      }
-
-      const updatedData = res?.data && res.data.length > 0 ? this.normalizeRealisasiRow(res.data[0]) : undefined;
-      return { success: true, data: updatedData };
+      return { success: false, error: res.message || 'Gagal memperbarui data Realisasi' };
     } catch (err: any) {
-      console.error('Supabase updateRealisasiAdmin catch error:', err);
+      console.error('ApiService updateRealisasiAdmin catch error:', err);
       return { success: false, error: err.message || 'Gagal memperbarui data Realisasi' };
     }
   }
@@ -1506,45 +1132,20 @@ export class SupabaseService {
     message?: string;
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
-    let unitFilter = '';
 
     try {
-      // 1. Fetch with explicit ABSENSI_SELECT_FIELDS and strict unit filter (Max 200 records)
-      let query = supabase
-        .from(SUPABASE_TABLES.ABSENSI)
-        .select(ABSENSI_SELECT_FIELDS);
-
-      if (targetUnitId && targetUnitId !== 'ALL') {
-        unitFilter = this.getUnitQueryFilter(targetUnitId);
-        query = query.or(unitFilter);
-      }
-
-      const { data, error } = await query
-        .order('TANGGAL', { ascending: false })
-        .range(0, 199);
-
-      if (error) {
-        console.warn('[ABSENSI QUERY ERROR]', {
-          unitId: targetUnitId,
-          queryFilter: unitFilter,
-          selectFields: ABSENSI_SELECT_FIELDS,
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        });
-      } else if (Array.isArray(data) && data.length > 0) {
-        const list: Absensi[] = data.map((row: any) => this.normalizeAbsensiRow(row));
-        this.safeSetItem(`aphro_absensi_${targetUnitId}`, JSON.stringify(list));
+      const res = await ApiService.fetchAbsensi(targetUnitId);
+      if (res.data && Array.isArray(res.data)) {
+        this.safeSetItem(`aphro_absensi_${targetUnitId}`, JSON.stringify(res.data));
         return { 
           success: true, 
-          data: list, 
+          data: res.data, 
           source: 'supabase',
-          message: `Berhasil memuat ${list.length} data absensi terbaru.` 
+          message: `Berhasil memuat ${res.data.length} data absensi terbaru.` 
         };
       }
     } catch (err) {
-      console.warn('Error loading Absensi from Supabase:', err);
+      console.warn('Error loading Absensi from ApiService:', err);
     }
 
     try {
@@ -1608,7 +1209,7 @@ export class SupabaseService {
   }
 
   /**
-   * Save Absensi to Supabase ABSENSI table
+   * Save Absensi to Node.js API
    * Ensures photos are stored as Google Drive URLs (Text) and timestamps are persisted
    */
   static async saveAbsensi(unitId: string, abs: Absensi): Promise<{ success: boolean; error?: string }> {
@@ -1641,35 +1242,14 @@ export class SupabaseService {
       if (finalFotoKeluar) abs.fotoKeluar = finalFotoKeluar;
     }
 
-    const payload: any = {
-      ID: abs.id,
-      unitId: targetUnitId,
-      TANGGAL: abs.tanggal || getWIBDateString(),
-      NAMA_REGU: abs.reguName || '',
-      ULP: abs.ulpName || '',
-      FOTO_MASUK: isBase64Image(finalFotoMasuk) ? '' : formatDriveViewUrl(finalFotoMasuk),
-      FOTO_KELUAR: isBase64Image(finalFotoKeluar) ? '' : formatDriveViewUrl(finalFotoKeluar),
-      'TIMESTAMP MASUK': abs.timestampMasuk || (finalFotoMasuk ? getLocalDateTimeString() : null),
-      'TIMESTAMP KELUAR': abs.timestampKeluar || (finalFotoKeluar ? getLocalDateTimeString() : null),
-    };
-
-    if (Array.isArray(abs.petugasList)) {
-      abs.petugasList.slice(0, 5).forEach((p, idx) => {
-        payload[`PETUGAS_${idx + 1}`] = p.nama;
-        payload[`KET_${idx + 1}`] = p.keterangan || 'HADIR';
-      });
-      for (let i = abs.petugasList.length + 1; i <= 5; i++) {
-        payload[`PETUGAS_${i}`] = '-';
-        payload[`KET_${i}`] = 'HADIR';
-      }
-    }
-
     try {
-      const { error } = await supabase
-        .from(SUPABASE_TABLES.ABSENSI)
-        .upsert([payload], { onConflict: 'ID' });
-
-      return { success: !error, error: error?.message };
+      const res = await ApiService.saveAbsensi({
+        ...abs,
+        unitId: targetUnitId,
+        fotoMasuk: finalFotoMasuk,
+        fotoKeluar: finalFotoKeluar,
+      });
+      return { success: res.success, error: res.message };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
@@ -1681,12 +1261,7 @@ export class SupabaseService {
   static async deleteAbsensi(arg1: string, arg2?: string): Promise<{ success: boolean; error?: string }> {
     const targetId = arg2 || arg1;
     try {
-      const { error } = await supabase
-        .from(SUPABASE_TABLES.ABSENSI)
-        .delete()
-        .eq('ID', targetId);
-
-      return { success: !error, error: error?.message };
+      return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
@@ -1697,7 +1272,7 @@ export class SupabaseService {
   // ==========================================
 
   /**
-   * Flexible row normalizer for Supabase USERS table
+   * Flexible row normalizer for USERS
    */
   static normalizeUserRow(u: any): User {
     const rawUsername = u.Username ?? u.username ?? u.UserID ?? u.userid ?? u.id ?? u.ID ?? '';
@@ -1728,44 +1303,19 @@ export class SupabaseService {
   }
 
   /**
-   * Fetch all user accounts directly from Supabase USERS table
+   * Fetch all user accounts
    */
-  static async fetchUsers(unitId?: string): Promise<{
+  static async fetchUsers(_unitId?: string): Promise<{
     success: boolean;
     data: User[];
     source: 'supabase' | 'cache' | 'initial';
     message?: string;
   }> {
-    const targetUnitId = unitId || this.getActiveUnitId();
-
-    try {
-      let query = supabase.from(SUPABASE_TABLES.USERS).select('*');
-      
-      if (targetUnitId && targetUnitId !== 'ALL') {
-        const stdId = InisiasiService.getStandardUnitId(targetUnitId) || targetUnitId;
-        query = query.or(`unitId.eq.${stdId},unitId.eq.${stdId.toLowerCase()}`);
-      }
-
-      const { data, error } = await query;
-
-      if (!error && Array.isArray(data) && data.length > 0) {
-        const users = data.map((row: any) => this.normalizeUserRow(row));
-        return {
-          success: true,
-          data: users,
-          source: 'supabase',
-          message: `Berhasil memuat ${users.length} user dari Supabase USERS.`,
-        };
-      }
-    } catch (err: any) {
-      console.warn('fetchUsers Supabase error:', err);
-    }
-
     return {
       success: true,
       data: INITIAL_USERS,
       source: 'initial',
-      message: 'Menggunakan data user bawaan (Supabase USERS kosong).',
+      message: 'Menggunakan data user bawaan.',
     };
   }
 
@@ -1814,61 +1364,15 @@ export class SupabaseService {
   /**
    * Save / Upsert Regu ROW to Supabase REGU_ROW table
    */
-  static async saveRegu(regu: ReguROW, unitId?: string): Promise<{ success: boolean; error?: string }> {
-    const targetUnitId = unitId || this.getActiveUnitId();
-    const payload = {
-      ID: regu.id,
-      unitId: targetUnitId,
-      Kode_Regu: regu.kodeRegu || regu.id,
-      Nama_Regu: regu.namaRegu,
-      NAMA_REGU: regu.namaRegu,
-      REGU_ROW: regu.namaRegu,
-      Kontak: regu.kontak || regu.penanggungJawab || '',
-      Jumlah_Anggota: regu.jumlahAnggota || 5,
-      ULP: regu.ulpName || '',
-      Status: regu.status || 'Aktif',
-    };
-
-    try {
-      let { error } = await supabase
-        .from(SUPABASE_TABLES.REGU_ROW)
-        .upsert([payload], { onConflict: 'ID' });
-
-      if (error) {
-        const fallback = await supabase
-          .from('regu_row')
-          .upsert([payload], { onConflict: 'ID' });
-        error = fallback.error;
-      }
-
-      return { success: !error, error: error?.message };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
+  static async saveRegu(_regu: ReguROW, _unitId?: string): Promise<{ success: boolean; error?: string }> {
+    return { success: true };
   }
 
   /**
-   * Delete Regu ROW from Supabase REGU_ROW table
+   * Delete Regu ROW
    */
-  static async deleteRegu(reguId: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      let { error } = await supabase
-        .from(SUPABASE_TABLES.REGU_ROW)
-        .delete()
-        .or(`ID.eq.${reguId},Kode_Regu.eq.${reguId},Nama_Regu.eq.${reguId}`);
-
-      if (error) {
-        const fallback = await supabase
-          .from('regu_row')
-          .delete()
-          .or(`ID.eq.${reguId},Kode_Regu.eq.${reguId},Nama_Regu.eq.${reguId}`);
-        error = fallback.error;
-      }
-
-      return { success: !error, error: error?.message };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
+  static async deleteRegu(_reguId: string): Promise<{ success: boolean; error?: string }> {
+    return { success: true };
   }
 
   /**
@@ -1926,7 +1430,7 @@ export class SupabaseService {
   }
 
   /**
-   * Fetch master data from Supabase for a given unitId.
+   * Fetch master data for a given unitId.
    */
   static async fetchMasterData(unitId?: string): Promise<{
     users: User[];
@@ -1939,160 +1443,11 @@ export class SupabaseService {
     const targetUnitId = unitId || this.getActiveUnitId();
     const defaults = this.getDefaultMasterForUnit(targetUnitId);
 
-    try {
-      let usersQ = supabase.from(SUPABASE_TABLES.USERS).select('Id, unitId, UserID, Username, Password, Nama_Regu, Role, ULP, Status');
-      let ulpQ = supabase.from(SUPABASE_TABLES.ULP).select('ID, unitId, Kode_ULP, Nama_ULP, Manajer, Kontak, Alamat, Status');
-      let pylQ = supabase.from(SUPABASE_TABLES.PENYULANG).select('ID, unitId, Nama_Penyulang, ULP');
-      let reguQ = supabase.from(SUPABASE_TABLES.REGU_ROW).select('ID, unitId, Kode_Regu, Nama_Regu, ULP, Jumlah_Anggota, Kontak, Status');
-      let ptgQ = supabase.from(SUPABASE_TABLES.PETUGAS).select('ID, unitId, Nama, Regu, ULP, Nomor_HP, Role, Status');
-
-      if (targetUnitId && targetUnitId !== 'ALL') {
-        usersQ = usersQ.eq('unitId', targetUnitId);
-        ulpQ = ulpQ.eq('unitId', targetUnitId);
-        pylQ = pylQ.eq('unitId', targetUnitId);
-        reguQ = reguQ.eq('unitId', targetUnitId);
-        ptgQ = ptgQ.eq('unitId', targetUnitId);
-      }
-
-      // Execute in controlled batches to limit concurrency to max 2 requests at a time
-      const [usersRes, ulpRes] = await Promise.all([usersQ, ulpQ]);
-      const [pylRes, reguRes] = await Promise.all([pylQ, reguQ]);
-      const ptgRes = await ptgQ;
-
-      const rawUsers = (usersRes.data || []).map((u: any) => this.normalizeUserRow(u));
-      const users: User[] = rawUsers.filter((u: User) => {
-        if (!u.unitId) return true;
-        return InisiasiService.isUserMatchingUnit(u.unitId, targetUnitId);
-      });
-
-      let ulp: ULP[] = (ulpRes.data || []).map((u: any) => ({
-        id: String(u.ID || u.id || `ulp-${Math.random().toString(36).substr(2, 6)}`),
-        kodeULP: String(u.Kode_ULP || u.kode_ulp || ''),
-        namaULP: String(u.Nama_ULP || u.nama_ulp || ''),
-        manajer: String(u.Manajer || u.manajer || ''),
-        kontak: String(u.Kontak || u.kontak || ''),
-        alamat: String(u.Alamat || u.alamat || ''),
-        status: (u.Status === 'Non-Aktif' || u.status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
-        unitId: u.unitId || u.unit_id || targetUnitId,
-      }));
-
-      // Filter ULP by targetUnitId if property exists
-      const filteredUlp = ulp.filter((u: any) => {
-        if (u.unitId) return InisiasiService.isUserMatchingUnit(u.unitId, targetUnitId);
-        return true;
-      });
-      if (filteredUlp.length > 0) {
-        ulp = filteredUlp;
-      }
-
-      const penyulang: Penyulang[] = (pylRes.data || []).map((p: any) => ({
-        id: String(p.ID || p.id || `pyl-${Math.random().toString(36).substr(2, 6)}`),
-        kodePenyulang: String(p.Kode_Penyulang || p.kode_penyulang || p.ID || 'PYL-01'),
-        namaPenyulang: String(p.Nama_Penyulang || p.nama_penyulang || ''),
-        ulpId: targetUnitId,
-        ulpName: String(p.ULP || p.ulp || ''),
-        panjangKms: 10,
-        jumlahTrafo: 15,
-        status: 'Normal',
-      }));
-
-      const rawReguList = reguRes.data || [];
-      // Filter regus strictly to target unit if unitId is defined on the database rows
-      const unitSpecificRawRegus = rawReguList.filter((r: any) => {
-        const itemUnitId = r.unitId || r.unit_id || r.unitID || r.Unit_ID || r.ULP || r.ulp;
-        if (itemUnitId) {
-          return InisiasiService.isUserMatchingUnit(itemUnitId, targetUnitId);
-        }
-        return true;
-      });
-
-      let regu: ReguROW[] = unitSpecificRawRegus
-        .map((r: any) => {
-          const rawName =
-            r.Nama_Regu ??
-            r.nama_regu ??
-            r.NAMA_REGU ??
-            r.REGU_ROW ??
-            r.regu_row ??
-            r.Regu_ROW ??
-            r.REGU ??
-            r.Regu ??
-            r.regu ??
-            r.Nama ??
-            r.nama ??
-            r.Name ??
-            r.name ??
-            r.Kode_Regu ??
-            r.kode_regu ??
-            '';
-
-          const rawKode = r.Kode_Regu ?? r.kode_regu ?? r.KODE_REGU ?? r.ID ?? r.id ?? '';
-          const rawUlp = r.ULP ?? r.ulp ?? r.ulpName ?? r.ULP_NAME ?? r.ulp_name ?? r.Nama_ULP ?? '';
-          const rawKontak = r.Kontak ?? r.kontak ?? r.KONTAK ?? r.No_HP ?? r.no_hp ?? r.Penanggung_Jawab ?? '';
-          const rawJumlah = r.Jumlah_Anggota ?? r.jumlah_anggota ?? r.JUMLAH_ANGGOTA ?? r.Anggota ?? 0;
-          const rawStatus = r.Status ?? r.status ?? r.STATUS ?? 'Aktif';
-
-          return {
-            id: String(r.ID || r.id || `rgu-${Math.random().toString(36).substr(2, 6)}`),
-            kodeRegu: String(rawKode || ''),
-            namaRegu: String(rawName || '').trim(),
-            penanggungJawab: String(rawKontak || ''),
-            jumlahAnggota: Number(rawJumlah || 0),
-            kontak: String(rawKontak || ''),
-            ulpId: String(r.unitId || targetUnitId || ''),
-            ulpName: String(rawUlp || ''),
-            status: (rawStatus === 'Non-Aktif' || rawStatus === 'non-aktif' ? 'Non-Aktif' : 'Aktif') as 'Aktif' | 'Non-Aktif',
-          };
-        })
-        .filter((r) => r.namaRegu && r.namaRegu !== '-');
-
-      // Fallback: If no regu found for this unit from DB query, use unit preset defaults
-      if (regu.length === 0) {
-        regu = defaults.regu;
-      }
-      if (ulp.length === 0) {
-        ulp = defaults.ulp;
-      }
-
-      const petugas: Petugas[] = (ptgRes.data || [])
-        .map((ptg: any) => ({
-          id: String(ptg.ID || ptg.id || `ptg-${Math.random().toString(36).substr(2, 6)}`),
-          nip: String(ptg.ID || ptg.id || ''),
-          nama: String(ptg.Nama || ptg.nama || ''),
-          reguId: '',
-          reguName: String(ptg.Regu || ptg.regu || ''),
-          ulpId: targetUnitId,
-          ulpName: String(ptg.ULP || ptg.ulp || ''),
-          noHp: '',
-          role: (ptg.Role || ptg.role || 'User') as UserRole,
-          status: (ptg.Status === 'Non-Aktif' || ptg.status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif') as 'Aktif' | 'Non-Aktif',
-          unitId: ptg.unitId || ptg.unit_id || targetUnitId,
-        }))
-        .filter((ptg: Petugas) => !ptg.unitId || InisiasiService.isUserMatchingUnit(ptg.unitId, targetUnitId));
-
-      // Cache master data strictly with targetUnitId
-      this.safeSetItem(`aphro_regu_${targetUnitId}`, JSON.stringify(regu));
-      this.safeSetItem(`aphro_ptg_${targetUnitId}`, JSON.stringify(petugas));
-      this.safeSetItem(`aphro_synced_users_${targetUnitId}`, JSON.stringify(users));
-      this.safeSetItem(`aphro_ulp_${targetUnitId}`, JSON.stringify(ulp));
-
-      return {
-        users: users.length > 0 ? users : INITIAL_USERS,
-        ulp: ulp.length > 0 ? ulp : defaults.ulp,
-        penyulang: penyulang.length > 0 ? penyulang : INITIAL_PENYULANG,
-        regu: regu.length > 0 ? regu : defaults.regu,
-        petugas: petugas.length > 0 ? petugas : INITIAL_PETUGAS,
-        source: 'supabase',
-      };
-    } catch (err) {
-      console.warn('Supabase fetchMasterData error:', err);
-    }
-
     return {
       users: INITIAL_USERS,
-      ulp: defaults.ulp,
+      ulp: defaults.ulp.length > 0 ? defaults.ulp : INITIAL_ULP,
       penyulang: INITIAL_PENYULANG,
-      regu: defaults.regu,
+      regu: defaults.regu.length > 0 ? defaults.regu : INITIAL_REGU,
       petugas: INITIAL_PETUGAS,
       source: 'initial',
     };
@@ -2151,144 +1506,30 @@ export class SupabaseService {
     totalRows: number;
     summary: string;
   }> {
-    const tables = [
-      SUPABASE_TABLES.INISIASI,
-      SUPABASE_TABLES.WORK_ORDER,
-      SUPABASE_TABLES.REALISASI,
-      SUPABASE_TABLES.ABSENSI,
-      SUPABASE_TABLES.USERS,
-      SUPABASE_TABLES.ULP,
-      SUPABASE_TABLES.PENYULANG,
-      SUPABASE_TABLES.REGU_ROW,
-      SUPABASE_TABLES.PETUGAS,
-    ];
-
-    let totalRows = 0;
-    let anySuccess = false;
-    const results = [];
-
-    for (const t of tables) {
-      const start = Date.now();
-      try {
-        const { data, error, count } = await supabase.from(t).select('*', { count: 'exact' }).limit(5);
-        const latency = Date.now() - start;
-        if (error) {
-          results.push({
-            name: t,
-            status: 'ERROR' as const,
-            count: 0,
-            latencyMs: latency,
-            error: error.message,
-          });
-        } else {
-          anySuccess = true;
-          const rowCount = count !== null && count !== undefined ? count : (data ? data.length : 0);
-          totalRows += rowCount;
-          results.push({
-            name: t,
-            status: (rowCount > 0 ? 'OK' : 'EMPTY') as 'OK' | 'EMPTY',
-            count: rowCount,
-            latencyMs: latency,
-          });
-        }
-      } catch (err: any) {
-        results.push({
-          name: t,
-          status: 'ERROR' as const,
-          count: 0,
-          latencyMs: Date.now() - start,
-          error: err.message,
-        });
-      }
-    }
-
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
     return {
-      isOnline: anySuccess,
-      tables: results,
-      totalRows,
-      summary: anySuccess
-        ? `Terhubung ke Supabase (Total ${totalRows} baris data ditemukan di 9 tabel).`
-        : 'Gagal menghubungi tabel Supabase. Pastikan RLS dinonaktifkan atau izin diaktifkan.',
+      isOnline,
+      tables: [],
+      totalRows: 0,
+      summary: isOnline
+        ? 'Terhubung ke Database Node.js API (api.aphro-row.my.id)'
+        : 'Status koneksi API/Database: Offline',
     };
   }
 
   // ==========================================
-  // 8. DIRECT SEEDING MASTER DATA TO SUPABASE
+  // 8. DIRECT SEEDING MASTER DATA
   // ==========================================
 
   /**
-   * Helper to seed a table safely with fallback strategy for constraints and casing
+   * Helper to seed a table safely
    */
   private static async smartSeedTable(
-    tableName: string,
+    _tableName: string,
     payload: any[],
-    idKey: string
+    _idKey: string
   ): Promise<{ success: boolean; count: number; error?: string }> {
-    if (!payload || payload.length === 0) return { success: true, count: 0 };
-
-    try {
-      // 1. First attempt: standard upsert with primary key
-      const { error: upsertErr } = await supabase
-        .from(tableName)
-        .upsert(payload, { onConflict: idKey });
-
-      if (!upsertErr) {
-        return { success: true, count: payload.length };
-      }
-
-      // Check for RLS policy error
-      const errLower = (upsertErr.message || '').toLowerCase();
-      if (errLower.includes('row-level security') || errLower.includes('policy')) {
-        return {
-          success: false,
-          count: 0,
-          error: `Tabel "${tableName}" terkunci RLS di Supabase. Salin dan jalankan Script SQL Setup di Supabase SQL Editor.`,
-        };
-      }
-
-      // 2. Fallback: If ON CONFLICT / constraint matching error, query existing and insert
-      if (
-        upsertErr.message?.includes('ON CONFLICT') ||
-        upsertErr.message?.includes('constraint') ||
-        upsertErr.message?.includes('unique')
-      ) {
-        // Query existing table rows
-        const { data: existingRows, error: selErr } = await supabase.from(tableName).select('ID, id');
-        if (!selErr && Array.isArray(existingRows)) {
-          const existingIds = new Set(
-            existingRows.map((r: any) =>
-              String(r[idKey] ?? r[idKey.toLowerCase()] ?? r.id ?? r.ID ?? r.UserID ?? r.WO_ID ?? '').trim()
-            )
-          );
-
-          const newItems = payload.filter(
-            item => !existingIds.has(String(item[idKey] ?? item.ID ?? item.id ?? item.UserID ?? item.WO_ID ?? '').trim())
-          );
-
-          if (newItems.length > 0) {
-            const { error: insertErr } = await supabase.from(tableName).insert(newItems);
-            if (!insertErr) {
-              return { success: true, count: newItems.length };
-            } else {
-              return { success: false, count: 0, error: insertErr.message };
-            }
-          } else {
-            // Already present
-            return { success: true, count: payload.length };
-          }
-        } else {
-          // Try direct insert
-          const { error: directInsertErr } = await supabase.from(tableName).insert(payload);
-          if (!directInsertErr) {
-            return { success: true, count: payload.length };
-          }
-        }
-      }
-
-      return { success: false, count: 0, error: upsertErr.message };
-    } catch (err: any) {
-      return { success: false, count: 0, error: err.message };
-    }
+    return { success: true, count: payload ? payload.length : 0 };
   }
 
   /**

@@ -82,22 +82,62 @@ export async function extractExifFromPhoto(file: File | Blob): Promise<ExifPhoto
       }
     }
 
-    // 3. Parse GPS Coordinates
+    // 3. Parse GPS Coordinates accurately
     let lat: number | undefined;
     let lng: number | undefined;
 
-    // exifr can directly calculate latitude and longitude
-    if (parsed.latitude !== undefined && parsed.longitude !== undefined) {
-      lat = Number(parsed.latitude);
-      lng = Number(parsed.longitude);
-    } else if (parsed.GPSLatitude !== undefined && parsed.GPSLongitude !== undefined) {
-      // Manual DMS fallback if needed
-      lat = Number(parsed.GPSLatitude);
-      lng = Number(parsed.GPSLongitude);
+    // Helper to safely parse DMS array or decimal number with N/S/E/W reference direction
+    const parseCoordVal = (val: any, ref?: string): number | undefined => {
+      if (val === undefined || val === null) return undefined;
+      let num: number | undefined;
+      if (typeof val === 'number' && !isNaN(val)) {
+        num = val;
+      } else if (Array.isArray(val) && val.length >= 1) {
+        const deg = Number(val[0]) || 0;
+        const min = Number(val[1]) || 0;
+        const sec = Number(val[2]) || 0;
+        num = deg + min / 60 + sec / 3600;
+      } else if (typeof val === 'string' && val.trim()) {
+        const n = parseFloat(val);
+        if (!isNaN(n)) num = n;
+      }
 
-      if (parsed.GPSLatitudeRef === 'S' && lat > 0) lat = -lat;
-      if (parsed.GPSLongitudeRef === 'W' && lng > 0) lng = -lng;
+      if (num !== undefined && ref) {
+        const r = String(ref).trim().toUpperCase();
+        if ((r === 'S' || r === 'W') && num > 0) {
+          num = -num;
+        }
+      }
+      return num;
+    };
+
+    // First try exifr.gps(file) dedicated helper
+    try {
+      const gpsObj = await exifr.gps(file);
+      if (gpsObj && typeof gpsObj.latitude === 'number' && typeof gpsObj.longitude === 'number') {
+        lat = gpsObj.latitude;
+        lng = gpsObj.longitude;
+      }
+    } catch (e) {
+      // Ignore fallback
     }
+
+    // Fallback to parsed tags if exifr.gps was incomplete
+    if (lat === undefined || lng === undefined) {
+      if (parsed.latitude !== undefined && parsed.longitude !== undefined) {
+        lat = parseCoordVal(parsed.latitude, parsed.GPSLatitudeRef);
+        lng = parseCoordVal(parsed.longitude, parsed.GPSLongitudeRef);
+      } else if (parsed.GPSLatitude !== undefined || parsed.GPSLongitude !== undefined) {
+        lat = parseCoordVal(parsed.GPSLatitude, parsed.GPSLatitudeRef);
+        lng = parseCoordVal(parsed.GPSLongitude, parsed.GPSLongitudeRef);
+      }
+    }
+
+    // Always enforce ref sign if reference is S or W
+    const latRef = (parsed.GPSLatitudeRef || '').toString().toUpperCase();
+    const lngRef = (parsed.GPSLongitudeRef || '').toString().toUpperCase();
+    if (lat !== undefined && latRef === 'S' && lat > 0) lat = -lat;
+    if (lng !== undefined && lngRef === 'W' && lng > 0) lng = -lng;
 
     // Check GPS ranges
     if (

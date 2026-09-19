@@ -147,6 +147,11 @@ export class AuthService {
       localStorage.setItem('aphro_user', JSON.stringify(user));
       localStorage.setItem('aphro_has_initiated', 'true');
 
+      const token = (user as any).token || (user as any).jwtToken || (user as any).accessToken;
+      if (token) {
+        localStorage.setItem('aphro_token', token);
+      }
+
       await dexieDb.users.put({
         ...user,
         syncStatus: 'SYNCED',
@@ -164,6 +169,9 @@ export class AuthService {
     try {
       localStorage.removeItem('aphro_user');
       localStorage.removeItem('pln_mobile_user');
+      localStorage.removeItem('aphro_token');
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('token');
     } catch (e) {
       // Ignore
     }

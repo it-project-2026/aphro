@@ -154,6 +154,35 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
     }
   });
 
+  // Proxy endpoint for HyperCloudHost API to prevent browser CORS and support all methods (GET, POST, PUT, DELETE)
+  app.all(["/api/realisasi*", "/api/work-orders*", "/api/absensi*", "/api/master-data*", "/api/users*", "/api/auth*", "/api/inisiasi*"], async (req, res) => {
+    try {
+      const targetUrl = `https://api.aphro-row.my.id${req.originalUrl}`;
+      const response = await axios({
+        method: req.method,
+        url: targetUrl,
+        data: req.body,
+        headers: {
+          Authorization: req.headers.authorization || "",
+          Accept: "application/json",
+          "Content-Type": "application/json"
+        },
+        timeout: 10000
+      });
+      return res.status(response.status).json(response.data);
+    } catch (error: any) {
+      if (error.response) {
+        return res.status(error.response.status).json(error.response.data);
+      }
+      console.warn(`Proxy ${req.originalUrl} network error:`, error.message);
+      return res.status(502).json({
+        status: "error",
+        message: "Proxy request to external HyperCloudHost API failed",
+        details: error.message
+      });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

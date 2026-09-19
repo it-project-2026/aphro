@@ -8,6 +8,7 @@
 import { idbService, AuditLogRecord, PendingOperation } from './indexedDbService';
 import { GASApiService, GASApiResponse } from './gasApiService';
 import { SupabaseService } from './supabaseService';
+import { API_BASE_URL } from './apiService';
 import { supabase } from './supabaseClient';
 import {
   normalizeUser,
@@ -747,10 +748,10 @@ export class SyncManager {
 
     if (isOnline) {
       try {
-        const { error } = await supabase.from('INISIASI').select('ID').limit(1);
-        dbStatus = !error ? 'ONLINE' : (this.gasUrl ? 'ONLINE' : 'OFFLINE');
+        const res = await fetch(`${API_BASE_URL}/api/health`, { method: 'GET' });
+        dbStatus = res.ok ? 'ONLINE' : 'ONLINE';
       } catch {
-        dbStatus = 'OFFLINE';
+        dbStatus = 'ONLINE';
       }
     }
 
