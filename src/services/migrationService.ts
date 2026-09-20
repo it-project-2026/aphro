@@ -89,6 +89,32 @@ export interface SyncStatusData {
   completedAt?: string;
 }
 
+export interface RealisasiPreviewItem {
+  ID: string;
+  WO_ID: string;
+  Nomor_WO: string;
+  ULP: string;
+  REGU_ROW: string;
+  PENYULANG: string;
+  NO_TIANG: string;
+  TANGGAL: string;
+  Timestamp: string;
+  unitId?: string;
+}
+
+export interface RealisasiPreviewResult {
+  tableName: "REALISASI";
+  totalSource: number;
+  totalTarget: number;
+  inBothCount: number;
+  sourceOnlyCount: number;
+  targetOnlyCount: number;
+  conflictCount: number;
+  isExact555: boolean;
+  validationMessage: string;
+  sourceOnlyRecords: RealisasiPreviewItem[];
+}
+
 const DEFAULT_HYPERCLOUD_URL = "postgresql://meysxysd:Aphro)51074Db@api.aphro-row.my.id:5432/meysxysd_aphro";
 
 const SUPPORTED_TABLES: Record<string, { primaryKey: string; order: number; columns: string[]; ddl: string }> = {
@@ -489,6 +515,19 @@ export const MigrationService = {
     }
 
     return result;
+  },
+
+  async previewRealisasi(customHypercloudUrl?: string): Promise<RealisasiPreviewResult> {
+    const targetUrl = customHypercloudUrl || localStorage.getItem("aphro_custom_hypercloud_url") || DEFAULT_HYPERCLOUD_URL;
+    const res = await safeFetchJson<RealisasiPreviewResult>("/api/admin/migration/preview-realisasi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customHypercloudUrl: targetUrl })
+    });
+    if (res.success && res.data) {
+      return res.data;
+    }
+    throw new Error(res.message || "Gagal melakukan preview REALISASI");
   },
 
   async startSync(options: {

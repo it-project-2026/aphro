@@ -8,6 +8,7 @@ import { getMessaging } from "firebase-admin/messaging";
 import {
   testConnection,
   performPreviewSync,
+  performRealisasiPreview,
   executeLiveSync,
   getActiveSyncStatus,
   getMigrationAuditLogs,
@@ -299,6 +300,23 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
       return res.json({
         status: "success",
         data: diffSummaries
+      });
+    } catch (err: any) {
+      return res.status(500).json({ status: "error", message: err.message });
+    }
+  });
+
+  // 2.1 Dedicated Preview Realisasi (ReadOnly Dry Run - No Mutations)
+  app.post("/api/admin/migration/preview-realisasi", async (req, res) => {
+    try {
+      const { customHypercloudUrl } = req.body || {};
+      if (customHypercloudUrl) {
+        setHypercloudDatabaseUrl(customHypercloudUrl);
+      }
+      const previewResult = await performRealisasiPreview(customHypercloudUrl);
+      return res.json({
+        status: "success",
+        data: previewResult
       });
     } catch (err: any) {
       return res.status(500).json({ status: "error", message: err.message });

@@ -887,3 +887,170 @@ export function getActiveSyncStatus(): SyncProgressState | null {
 export function getMigrationAuditLogs(): SyncLogEntry[] {
   return migrationAuditLogs;
 }
+
+export interface RealisasiPreviewItem {
+  ID: string;
+  WO_ID: string;
+  Nomor_WO: string;
+  ULP: string;
+  REGU_ROW: string;
+  PENYULANG: string;
+  NO_TIANG: string;
+  TANGGAL: string;
+  Timestamp: string;
+  unitId?: string;
+}
+
+export interface RealisasiPreviewResult {
+  tableName: "REALISASI";
+  totalSource: number;
+  totalTarget: number;
+  inBothCount: number;
+  sourceOnlyCount: number;
+  targetOnlyCount: number;
+  conflictCount: number;
+  isExact555: boolean;
+  validationMessage: string;
+  sourceOnlyRecords: RealisasiPreviewItem[];
+}
+
+/**
+ * Dedicated Preview / Dry Run for REALISASI table.
+ * Strictly READ-ONLY: No INSERT, UPDATE, DELETE, or ALTER operations.
+ * Fetches all 11,981+ records with pagination from Supabase and compares IDs with HyperCloudHost.
+ */
+export async function performRealisasiPreview(customHypercloudUrl?: string): Promise<RealisasiPreviewResult> {
+  const sb = getSupabaseClient();
+
+  // 1. Fetch ALL REALISASI records from Supabase with batching (no 1000 limit)
+  const sourceRows: Record<string, any>[] = [];
+  const BATCH_SIZE = 1000;
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await sb
+      .from("REALISASI")
+      .select("ID, WO_ID, Nomor_WO, ULP, REGU_ROW, PENYULANG, NO_TIANG, TANGGAL, Timestamp, unitId")
+      .range(from, from + BATCH_SIZE - 1);
+
+    if (error) {
+      throw new Error(`Gagal mengambil data REALISASI dari Supabase: ${error.message}`);
+    }
+
+    if (data && data.length > 0) {
+      sourceRows.push(...data);
+      from += BATCH_SIZE;
+      if (data.length < BATCH_SIZE) {
+        hasMore = false;
+      }
+    } else {
+      hasMore = false;
+    }
+  }
+
+  // 2. Fetch ALL REALISASI records / IDs from HyperCloudHost
+  const targetRows: Record<string, any>[] = [];
+  const pool = getHypercloudPool(customHypercloudUrl);
+
+  if (pool) {
+    try {
+      const client = await pool.connect();
+      try {
+        const res = await client.query('SELECT "ID", "WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG", "TANGGAL", "Timestamp" FROM "REALISASI"');
+        targetRows.push(...res.rows);
+      } finally {
+        client.release();
+      }
+    } catch (pgErr: any) {
+      console.warn(`[performRealisasiPreview] Direct PG query failed (${pgErr.message}), falling back to REST API...`);
+    }
+  }
+
+  if (targetRows.length === 0) {
+    // Fallback to REST API Gateway
+    const units = ["UL1", "UL2"];
+    for (const u of units) {
+      try {
+        const token = await getTargetAuthToken(u);
+        if (token) {
+          const fetchRes = await fetch("https://api.aphro-row.my.id/api/realisasi?limit=15000", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const resJson = await fetchRes.json();
+          if (Array.isArray(resJson.data)) {
+            targetRows.push(...resJson.data);
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[performRealisasiPreview] REST API fetch failed for ${u}:`, e.message);
+      }
+    }
+  }
+
+  // 3. Build lookup maps and calculate difference
+  const sourceMap = new Map<string, Record<string, any>>();
+  for (const row of sourceRows) {
+    const id = String(row.ID || row.id || "").trim();
+    if (id) {
+      sourceMap.set(id, row);
+    }
+  }
+
+  const targetSet = new Set<string>();
+  for (const row of targetRows) {
+    const id = String(row.ID || row.id || "").trim();
+    if (id) {
+      targetSet.add(id);
+    }
+  }
+
+  let inBothCount = 0;
+  let sourceOnlyCount = 0;
+  let targetOnlyCount = 0;
+  const sourceOnlyRecords: RealisasiPreviewItem[] = [];
+
+  for (const [id, row] of sourceMap.entries()) {
+    if (targetSet.has(id)) {
+      inBothCount++;
+    } else {
+      sourceOnlyCount++;
+      sourceOnlyRecords.push({
+        ID: id,
+        WO_ID: String(row.WO_ID ?? row.wo_id ?? "-"),
+        Nomor_WO: String(row.Nomor_WO ?? row.nomor_wo ?? "-"),
+        ULP: String(row.ULP ?? row.ulp ?? "-"),
+        REGU_ROW: String(row.REGU_ROW ?? row.Regu_ROW ?? row.Regu ?? row.Nama_Regu ?? "-"),
+        PENYULANG: String(row.PENYULANG ?? row.Penyulang ?? "-"),
+        NO_TIANG: String(row.NO_TIANG ?? row.Nomor_Tiang ?? row.No_Tiang ?? "-"),
+        TANGGAL: String(row.TANGGAL ?? row.Tanggal ?? "-"),
+        Timestamp: String(row.Timestamp ?? row.timestamp ?? "-"),
+        unitId: String(row.unitId ?? row.unit_id ?? "UL1")
+      });
+    }
+  }
+
+  for (const id of targetSet) {
+    if (!sourceMap.has(id)) {
+      targetOnlyCount++;
+    }
+  }
+
+  const isExact555 = sourceOnlyCount === 555;
+  const validationMessage = isExact555
+    ? "555 kandidat REALISASI belum tersalin ke HyperCloudHost"
+    : `Peringatan: Jumlah kandidat (${sourceOnlyCount}) berbeda dengan selisih COUNT(*) (11.981 - 11.426 = 555). Diperlukan pemeriksaan lebih lanjut.`;
+
+  return {
+    tableName: "REALISASI",
+    totalSource: sourceMap.size,
+    totalTarget: targetSet.size,
+    inBothCount,
+    sourceOnlyCount,
+    targetOnlyCount,
+    conflictCount: 0,
+    isExact555,
+    validationMessage,
+    sourceOnlyRecords
+  };
+}

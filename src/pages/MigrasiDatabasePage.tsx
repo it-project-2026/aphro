@@ -7,7 +7,8 @@ import {
   TableDiffResult,
   SyncStatusData,
   SyncLogItem,
-  ConflictItem
+  ConflictItem,
+  RealisasiPreviewResult
 } from "../services/migrationService";
 import {
   Database,
@@ -55,6 +56,8 @@ export const MigrasiDatabasePage: React.FC = () => {
   // Preview & Comparison states
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [diffSummaries, setDiffSummaries] = useState<Record<string, TableDiffResult> | null>(null);
+  const [realisasiPreview, setRealisasiPreview] = useState<RealisasiPreviewResult | null>(null);
+  const [isRealisasiPreviewing, setIsRealisasiPreviewing] = useState<boolean>(false);
 
   // Sync execution states
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
@@ -194,6 +197,24 @@ export const MigrasiDatabasePage: React.FC = () => {
       showToast(`Gagal membandingkan data: ${err.message}`, "error");
     } finally {
       setIsPreviewing(false);
+    }
+  };
+
+  const handlePreviewRealisasi = async () => {
+    setIsRealisasiPreviewing(true);
+    showToast("Membaca seluruh 11.981 ID REALISASI & membandingkan dengan HyperCloudHost...", "info");
+    try {
+      const res = await MigrationService.previewRealisasi(targetDbUrl);
+      setRealisasiPreview(res);
+      if (res.isExact555) {
+        showToast("Analisa Selesai: 555 kandidat REALISASI belum tersalin ke HyperCloudHost", "success");
+      } else {
+        showToast(`Analisa Selesai: Ditemukan ${res.sourceOnlyCount} record (selisih ${res.sourceOnlyCount})`, "info");
+      }
+    } catch (err: any) {
+      showToast(`Gagal preview REALISASI: ${err.message}`, "error");
+    } finally {
+      setIsRealisasiPreviewing(false);
     }
   };
 
@@ -615,6 +636,16 @@ export const MigrasiDatabasePage: React.FC = () => {
               <div className="flex items-center space-x-3">
                 <button
                   type="button"
+                  onClick={handlePreviewRealisasi}
+                  disabled={isRealisasiPreviewing}
+                  className="px-4 py-2.5 text-xs font-extrabold rounded-xl border border-cyan-500/30 bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 transition-all inline-flex items-center space-x-2 shadow-xs"
+                >
+                  <Eye className={`w-4 h-4 text-cyan-600 ${isRealisasiPreviewing ? "animate-pulse" : ""}`} />
+                  <span>{isRealisasiPreviewing ? "Memproses 11.981 Record..." : "PREVIEW REALISASI"}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handlePreviewDifferences}
                   disabled={isPreviewing}
                   className="px-4 py-2.5 text-xs font-extrabold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700/80 transition-all inline-flex items-center space-x-2 shadow-xs"
@@ -634,6 +665,167 @@ export const MigrasiDatabasePage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Section: Dedicated REALISASI Preview Report */}
+          {isRealisasiPreviewing && (
+            <div className="bg-white dark:bg-slate-900 border border-cyan-200 dark:border-cyan-800/60 rounded-3xl p-8 shadow-md space-y-4 animate-in fade-in duration-300">
+              <div className="flex flex-col items-center justify-center py-6 text-center space-y-3">
+                <div className="relative">
+                  <div className="w-14 h-14 rounded-2xl bg-cyan-50 dark:bg-cyan-950/80 flex items-center justify-center text-cyan-600 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-800 animate-pulse">
+                    <Eye className="w-7 h-7" />
+                  </div>
+                  <RefreshCw className="w-5 h-5 text-cyan-500 animate-spin absolute -top-1 -right-1" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    Membaca seluruh 11.981 ID REALISASI dari Supabase...
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Membandingkan ID dengan HyperCloudHost di server (Tanpa batas LIMIT 1000).
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {realisasiPreview && !isRealisasiPreviewing && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-lg space-y-6 animate-in fade-in duration-300">
+              {/* Banner Validation Status */}
+              <div className={`p-4 rounded-2xl border flex items-start space-x-3 ${
+                realisasiPreview.isExact555
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
+                  : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200"
+              }`}>
+                {realisasiPreview.isExact555 ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                )}
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold">Laporan Preview REALISASI</h4>
+                  <p className="text-xs font-semibold leading-relaxed">
+                    {realisasiPreview.validationMessage}
+                  </p>
+                  {!realisasiPreview.isExact555 && (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 font-medium">
+                      ⚠️ Sinkronisasi otomatis DITAHAN. Silakan periksa perbedaan data terlebih dahulu.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Table Comparison Metrics Card */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 flex items-center space-x-2">
+                    <Layers className="w-4 h-4 text-cyan-600" />
+                    <span>Perbandingan Table: REALISASI</span>
+                  </h3>
+                  <span className="text-xs font-mono text-slate-500">
+                    Primary Key: <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-teal-600 font-bold">ID</code>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase">Supabase Source</div>
+                    <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                      {realisasiPreview.totalSource.toLocaleString("id-ID")}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase">HyperCloud Target</div>
+                    <div className="text-lg font-black text-cyan-600 dark:text-cyan-400 mt-1">
+                      {realisasiPreview.totalTarget.toLocaleString("id-ID")}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase">Ada di Kedua DB</div>
+                    <div className="text-lg font-black text-blue-600 dark:text-blue-400 mt-1">
+                      {realisasiPreview.inBothCount.toLocaleString("id-ID")}
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-800 text-center">
+                    <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase">Hanya di Supabase</div>
+                    <div className="text-lg font-black text-emerald-700 dark:text-emerald-300 mt-1">
+                      {realisasiPreview.sourceOnlyCount.toLocaleString("id-ID")}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase">Hanya di HyperCloud</div>
+                    <div className="text-lg font-black text-slate-700 dark:text-slate-300 mt-1">
+                      {realisasiPreview.targetOnlyCount.toLocaleString("id-ID")}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase">Konflik ID</div>
+                    <div className="text-lg font-black text-slate-700 dark:text-slate-300 mt-1">
+                      {realisasiPreview.conflictCount}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detail Table of Source Only Records */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                    DAFTAR RECORD REALISASI HANYA ADA DI SUPABASE ({realisasiPreview.sourceOnlyRecords.length} Items)
+                  </h3>
+                  <span className="text-[11px] text-slate-500">
+                    Kandidat yang belum tersalin ke HyperCloudHost
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 max-h-96">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold sticky top-0 z-10">
+                      <tr>
+                        <th className="p-3">No</th>
+                        <th className="p-3">ID</th>
+                        <th className="p-3">WO_ID</th>
+                        <th className="p-3">Nomor_WO</th>
+                        <th className="p-3">ULP</th>
+                        <th className="p-3">REGU_ROW</th>
+                        <th className="p-3">PENYULANG</th>
+                        <th className="p-3">NO_TIANG</th>
+                        <th className="p-3">TANGGAL</th>
+                        <th className="p-3">Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
+                      {realisasiPreview.sourceOnlyRecords.map((item, idx) => (
+                        <tr key={item.ID || idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="p-3 font-sans text-slate-400">{idx + 1}</td>
+                          <td className="p-3 font-bold text-teal-600 dark:text-teal-400">{item.ID}</td>
+                          <td className="p-3">{item.WO_ID}</td>
+                          <td className="p-3 font-sans">{item.Nomor_WO}</td>
+                          <td className="p-3 font-sans">{item.ULP}</td>
+                          <td className="p-3 font-sans">{item.REGU_ROW}</td>
+                          <td className="p-3 font-sans">{item.PENYULANG}</td>
+                          <td className="p-3">{item.NO_TIANG}</td>
+                          <td className="p-3 font-sans">{item.TANGGAL}</td>
+                          <td className="p-3 font-sans text-slate-500">{item.Timestamp}</td>
+                        </tr>
+                      ))}
+                      {realisasiPreview.sourceOnlyRecords.length === 0 && (
+                        <tr>
+                          <td colSpan={10} className="p-6 text-center font-sans text-slate-500">
+                            Tidak ada record yang tertinggal di Supabase. Seluruh data REALISASI identik.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Section 3: Data Comparison Summary Table */}
           {isPreviewing && (
