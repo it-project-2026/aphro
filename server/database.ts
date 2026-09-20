@@ -5,11 +5,16 @@ import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
 
-// Derive __dirname for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Derive __dirname supporting both ES Modules and CommonJS
+let resolvedFilename = '';
+try {
+  resolvedFilename = fileURLToPath(import.meta.url);
+} catch (e) {
+  resolvedFilename = typeof __filename !== 'undefined' ? __filename : '';
+}
+const __dirname_resolved = resolvedFilename ? path.dirname(resolvedFilename) : (typeof __dirname !== 'undefined' ? __dirname : '');
 
-const MOCK_FILE_PATH = path.join(__dirname, 'mock_db.json');
+const MOCK_FILE_PATH = path.join(__dirname_resolved, 'mock_db.json');
 
 // Priority: HYPERCLOUD_DATABASE_URL || DATABASE_URL
 let dbUrl = process.env.HYPERCLOUD_DATABASE_URL || process.env.DATABASE_URL || '';
