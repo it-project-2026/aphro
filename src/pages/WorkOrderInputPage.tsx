@@ -85,20 +85,35 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
     }
   }, []);
 
-  // Filter Penyulang based on selected ULP
-  const matchedUlp = ulpList.find((u) => u.namaULP === ulpName);
+  // Helper to normalize ULP name string comparison
+  const normalizeUlp = (s: string) => String(s || '').replace(/^ULP[-_\s]*/i, '').trim().toUpperCase();
+
+  // Filter Penyulang based on selected ULP with flexible matching
+  const matchedUlp = ulpList.find((u) => normalizeUlp(u.namaULP) === normalizeUlp(ulpName));
   let filteredPenyulang = penyulangList.filter((p) => {
-    const isUlpNameMatch = p.ulpName && ulpName && (p.ulpName || '').trim().toLowerCase() === (ulpName || '').trim().toLowerCase();
-    const isUlpIdMatch = matchedUlp && p.ulpId === matchedUlp.id;
+    const target = normalizeUlp(ulpName);
+    const pUlp = normalizeUlp(p.ulpName || '');
+    const isUlpNameMatch = Boolean(pUlp && target && (pUlp === target || pUlp.includes(target) || target.includes(pUlp)));
+    const isUlpIdMatch = Boolean(matchedUlp && p.ulpId === matchedUlp.id);
     return isUlpNameMatch || isUlpIdMatch;
   });
 
+  // Fallback to all penyulangs if no specific mapping found for selected ULP
   if (filteredPenyulang.length === 0) {
     filteredPenyulang = penyulangList;
   }
 
+  // Extract unique penyulang options including any from workOrders & realisasi
+  const availablePenyulangNames = Array.from(
+    new Set([
+      ...filteredPenyulang.map(p => p.namaPenyulang),
+      ...penyulangList.map(p => p.namaPenyulang),
+      ...workOrders.filter(w => !ulpName || normalizeUlp(w.ulpName) === normalizeUlp(ulpName)).map(w => w.penyulangName)
+    ].filter(Boolean))
+  );
+
   const [penyulangName, setPenyulangName] = useState(
-    editMode && initialData ? initialData.penyulangName : (filteredPenyulang[0]?.namaPenyulang || penyulangList[0]?.namaPenyulang || '')
+    editMode && initialData ? initialData.penyulangName : (availablePenyulangNames[0] || 'AGAM')
   );
 
   const cleanStr = (s: any) => String(s || '').trim().toUpperCase();
@@ -119,13 +134,11 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
   useEffect(() => {
     if (editMode) return; // Skip auto-updates in edit mode to preserve manual changes
 
-    if (filteredPenyulang.length > 0) {
-      const isCurrentValid = filteredPenyulang.some((p) => p.namaPenyulang === penyulangName);
+    if (availablePenyulangNames.length > 0) {
+      const isCurrentValid = availablePenyulangNames.some((pName) => pName === penyulangName);
       if (!isCurrentValid) {
-        setPenyulangName(filteredPenyulang[0].namaPenyulang);
+        setPenyulangName(availablePenyulangNames[0]);
       }
-    } else {
-      setPenyulangName('');
     }
 
     if (availableRegu.length > 0) {
@@ -491,28 +504,30 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Penyulang <span className="text-rose-500">*</span>{' '}
-                <span className="text-slate-400 font-normal">(Sesuai ULP dipilih)</span>
+                <span className="text-slate-400 font-normal">(Pilih atau ketik)</span>
               </label>
-              <select
-                required
-                value={penyulangName || ''}
-                onChange={(e) => setPenyulangName(e.target.value)}
-                className={`w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border transition-colors ${
-                  existingDuplicateWO
-                    ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9]'
-                } focus:outline-none`}
-              >
-                {filteredPenyulang.length > 0 ? (
-                  filteredPenyulang.map((p, pIdx) => (
-                    <option key={`${p.id}-${pIdx}`} value={p.namaPenyulang}>
-                      {p.namaPenyulang}
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  list="input-wo-penyulang-list"
+                  placeholder="Pilih atau ketik Penyulang..."
+                  value={penyulangName || ''}
+                  onChange={(e) => setPenyulangName(e.target.value.toUpperCase())}
+                  className={`w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border transition-colors ${
+                    existingDuplicateWO
+                      ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9]'
+                  } focus:outline-none`}
+                />
+                <datalist id="input-wo-penyulang-list">
+                  {availablePenyulangNames.map((pName, pIdx) => (
+                    <option key={`pyl-opt-${pIdx}`} value={pName}>
+                      {pName}
                     </option>
-                  ))
-                ) : (
-                  <option value="">-- Tidak ada Penyulang di ULP ini --</option>
-                )}
-              </select>
+                  ))}
+                </datalist>
+              </div>
             </div>
           </div>
 

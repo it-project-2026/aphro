@@ -47,14 +47,24 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
     );
   }, [workOrders, workOrder.id, nomorWO, penyulangName]);
 
-  const matchedUlp = ulpList.find((u) => u.namaULP === ulpName);
+  const normalizeUlp = (s: string) => String(s || '').replace(/^ULP[-_\s]*/i, '').trim().toUpperCase();
+
+  const matchedUlp = ulpList.find((u) => normalizeUlp(u.namaULP) === normalizeUlp(ulpName));
   const filteredPenyulang = penyulangList.filter((p) => {
-    const isUlpNameMatch = p.ulpName && ulpName && (p.ulpName || '').trim().toLowerCase() === (ulpName || '').trim().toLowerCase();
-    const isUlpIdMatch = matchedUlp && p.ulpId === matchedUlp.id;
+    const target = normalizeUlp(ulpName);
+    const pUlp = normalizeUlp(p.ulpName || '');
+    const isUlpNameMatch = Boolean(pUlp && target && (pUlp === target || pUlp.includes(target) || target.includes(pUlp)));
+    const isUlpIdMatch = Boolean(matchedUlp && p.ulpId === matchedUlp.id);
     return isUlpNameMatch || isUlpIdMatch;
   });
 
   const availablePenyulang = filteredPenyulang.length > 0 ? filteredPenyulang : penyulangList;
+  const availablePenyulangNames = Array.from(
+    new Set([
+      ...availablePenyulang.map(p => p.namaPenyulang),
+      ...penyulangList.map(p => p.namaPenyulang)
+    ].filter(Boolean))
+  );
 
   const strictFilteredRegu = reguList.filter(
     (r) =>
@@ -218,20 +228,24 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Penyulang</label>
-              <select
+              <input
+                type="text"
                 required
+                list="edit-wo-penyulang-list"
+                placeholder="Pilih atau ketik Penyulang..."
                 value={penyulangName}
-                onChange={(e) => setPenyulangName(e.target.value)}
+                onChange={(e) => setPenyulangName(e.target.value.toUpperCase())}
                 className={`w-full px-3 py-2 text-sm rounded-xl border transition-colors ${
                   existingDuplicateWO
                     ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
                     : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9]'
                 } focus:outline-none`}
-              >
-                {availablePenyulang.map((p, i) => (
-                  <option key={i} value={p.namaPenyulang}>{p.namaPenyulang}</option>
+              />
+              <datalist id="edit-wo-penyulang-list">
+                {availablePenyulangNames.map((pName, i) => (
+                  <option key={i} value={pName}>{pName}</option>
                 ))}
-              </select>
+              </datalist>
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Regu ROW</label>

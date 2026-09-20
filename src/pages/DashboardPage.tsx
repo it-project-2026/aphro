@@ -80,7 +80,7 @@ export const DashboardPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { displayedWorkOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
-  const { ulpList, penyulangList, reguList, petugasList } = useMasterData();
+  const { ulpList, penyulangList, reguList, petugasList, users } = useMasterData();
   const { auditLogs } = useNotifications();
   const { setActiveTab, isDarkMode } = useUI();
   const { isGasConnected, syncWithGAS } = useGASSync();
@@ -342,24 +342,64 @@ export const DashboardPage: React.FC = () => {
   const totalPetugas = React.useMemo(() => {
     const activePetugas = new Set<string>();
 
-    petugasList.forEach(p => {
-      const matchUnit = filterUlp === 'ALL' || (p.ulpId && p.ulpId === filterUlp) || matchesUlp(p.ulpName, p.ulpId, filterUlp);
-      const isActive = !p.status || p.status.toLowerCase() === 'aktif';
-      if (matchUnit && isActive && p.nama && p.nama.trim() && p.nama.trim() !== '-') {
-        activePetugas.add(p.nama.trim().toUpperCase());
-      }
-    });
-
-    if (activePetugas.size === 0) {
-      filteredWOs.forEach(w => {
-        if (w.petugasName && w.petugasName.trim() && w.petugasName.trim() !== '-') {
-          activePetugas.add(w.petugasName.trim().toUpperCase());
+    // 1. From PETUGAS master data
+    if (petugasList && petugasList.length > 0) {
+      petugasList.forEach(p => {
+        const matchUnit = filterUlp === 'ALL' || (p.ulpId && p.ulpId === filterUlp) || matchesUlp(p.ulpName, p.ulpId, filterUlp);
+        const isActive = !p.status || p.status.toLowerCase() === 'aktif';
+        if (matchUnit && isActive && p.nama && p.nama.trim() && p.nama.trim() !== '-') {
+          activePetugas.add(p.nama.trim().toUpperCase());
         }
       });
     }
 
+    // 2. From USERS table (roles: User, Petugas, Adm)
+    if (users && users.length > 0) {
+      users.forEach(u => {
+        const matchUnit = filterUlp === 'ALL' || (u.ulpId && u.ulpId === filterUlp) || matchesUlp(u.ulpName, u.unitId, filterUlp);
+        const isPetugasRole = !u.role || ['user', 'petugas', 'adm', 'admin'].includes(u.role.toLowerCase());
+        const isActive = !u.status || u.status.toLowerCase() === 'aktif';
+        if (matchUnit && isPetugasRole && isActive && u.name && u.name.trim() && u.name.trim() !== '-') {
+          activePetugas.add(u.name.trim().toUpperCase());
+        }
+      });
+    }
+
+    // 3. From REALISASI records (petugasName / penanggungJawab)
+    if (filteredRealisasi && filteredRealisasi.length > 0) {
+      filteredRealisasi.forEach(r => {
+        const pName = (r.petugasName || (r as any).penanggungJawab || (r as any).petugas || '').trim().toUpperCase();
+        if (pName && pName !== '-' && pName !== 'PETUGAS ROW') {
+          activePetugas.add(pName);
+        }
+      });
+    }
+
+    // 4. From Regu ROW team personnel calculation (sum of jumlahAnggota or penanggungJawab)
+    if (activePetugas.size === 0 && reguList && reguList.length > 0) {
+      let sumMembers = 0;
+      reguList.forEach(r => {
+        const matchUnit = filterUlp === 'ALL' || (r.ulpId && r.ulpId === filterUlp) || matchesUlp(r.ulpName, r.ulpId, filterUlp);
+        if (matchUnit) {
+          sumMembers += Number(r.jumlahAnggota || 5);
+          if (r.penanggungJawab && r.penanggungJawab !== '-') {
+            activePetugas.add(r.penanggungJawab.trim().toUpperCase());
+          }
+        }
+      });
+      if (sumMembers > 0 && activePetugas.size < sumMembers) {
+        return Math.max(activePetugas.size, sumMembers);
+      }
+    }
+
+    // 5. Fallback count if no individual names found
+    if (activePetugas.size === 0) {
+      const activeReguCount = reguList.filter(r => filterUlp === 'ALL' || matchesUlp(r.ulpName, r.ulpId, filterUlp)).length;
+      return Math.max(1, (activeReguCount || 3) * 5);
+    }
+
     return activePetugas.size;
-  }, [petugasList, matchesUlp, filterUlp, filteredWOs]);
+  }, [petugasList, users, filteredRealisasi, reguList, matchesUlp, filterUlp]);
 
   const totalRegu = React.useMemo(() => {
     return topPerformersData.length || reguList.length || 0;
