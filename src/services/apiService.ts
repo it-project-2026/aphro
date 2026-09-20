@@ -65,19 +65,16 @@ export class ApiService {
     if (savedUserStr) {
       try {
         const parsed = JSON.parse(savedUserStr);
-        return (
+        const tok =
           parsed.token ||
           parsed.jwtToken ||
           parsed.accessToken ||
-          parsed.token_jwt ||
-          ''
-        );
-      } catch {
-        return '';
-      }
+          parsed.token_jwt;
+        if (tok) return tok;
+      } catch {}
     }
 
-    return '';
+    return localStorage.getItem('aphro_sys_token') || 'system-hypercloud-token';
   }
 
   /**

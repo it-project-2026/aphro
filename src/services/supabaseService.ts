@@ -257,7 +257,7 @@ export class SupabaseService {
     if (isOnline) {
       try {
         const apiRes = await ApiService.fetchWorkOrders(targetUnitId);
-        if (apiRes && apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
+        if (apiRes && apiRes.success && Array.isArray(apiRes.data)) {
           const workOrders: WorkOrder[] = apiRes.data.map((row: any) => this.normalizeWorkOrderRow(row));
           if (page === 0 && !lastSyncTime) {
             this.safeSetItem(`aphro_wo_${targetUnitId}`, JSON.stringify(workOrders));
@@ -628,7 +628,7 @@ export class SupabaseService {
           ULP: targetUnitId !== 'ALL' ? targetUnitId : undefined,
         });
 
-        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        if (res && res.data && Array.isArray(res.data)) {
           if (!lastSyncTime && page === 0) {
             this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(res.data));
           }
@@ -1457,7 +1457,7 @@ export class SupabaseService {
     if (isOnline) {
       try {
         const res = await ApiService.fetchAbsensi(targetUnitId);
-        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        if (res && res.success && Array.isArray(res.data)) {
           this.safeSetItem(`aphro_absensi_${targetUnitId}`, JSON.stringify(res.data));
           return { 
             success: true, 
@@ -1902,14 +1902,7 @@ export class SupabaseService {
     if (isOnline) {
       try {
         const apiMaster = await ApiService.fetchMasterData(targetUnitId);
-        const hasData =
-          (apiMaster.ulp && apiMaster.ulp.length > 0) ||
-          (apiMaster.penyulang && apiMaster.penyulang.length > 0) ||
-          (apiMaster.regu && apiMaster.regu.length > 0) ||
-          (apiMaster.petugas && apiMaster.petugas.length > 0) ||
-          (apiMaster.users && apiMaster.users.length > 0);
-
-        if (hasData) {
+        if (apiMaster) {
           const mappedUsers: User[] = (apiMaster.users || []).map((u: any) => this.normalizeUserRow(u));
           const mappedUlp: ULP[] = (apiMaster.ulp || []).map((u: any, idx: number) => ({
             id: String(u.id || u.Id || u.ID || `ulp-${idx + 1}`),
@@ -1963,14 +1956,16 @@ export class SupabaseService {
 
           const defaults = this.getDefaultMasterForUnit(targetUnitId);
 
-          return {
-            users: mappedUsers.length > 0 ? mappedUsers : INITIAL_USERS,
-            ulp: mappedUlp.length > 0 ? mappedUlp : (defaults.ulp.length > 0 ? defaults.ulp : INITIAL_ULP),
-            penyulang: mappedPenyulang.length > 0 ? mappedPenyulang : INITIAL_PENYULANG,
-            regu: mappedRegu.length > 0 ? mappedRegu : (defaults.regu.length > 0 ? defaults.regu : INITIAL_REGU),
-            petugas: mappedPetugas.length > 0 ? mappedPetugas : INITIAL_PETUGAS,
-            source: 'supabase',
-          };
+          if (mappedUsers.length > 0 || mappedUlp.length > 0 || mappedPenyulang.length > 0 || mappedRegu.length > 0 || mappedPetugas.length > 0) {
+            return {
+              users: mappedUsers.length > 0 ? mappedUsers : INITIAL_USERS,
+              ulp: mappedUlp.length > 0 ? mappedUlp : (defaults.ulp.length > 0 ? defaults.ulp : INITIAL_ULP),
+              penyulang: mappedPenyulang.length > 0 ? mappedPenyulang : INITIAL_PENYULANG,
+              regu: mappedRegu.length > 0 ? mappedRegu : (defaults.regu.length > 0 ? defaults.regu : INITIAL_REGU),
+              petugas: mappedPetugas.length > 0 ? mappedPetugas : INITIAL_PETUGAS,
+              source: 'supabase',
+            };
+          }
         }
       } catch (err) {
         console.warn('ApiService.fetchMasterData error, falling back:', err);

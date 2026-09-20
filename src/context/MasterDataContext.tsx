@@ -59,54 +59,91 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const [ulpList, setUlpList] = React.useState<ULP[]>(() => {
     try {
       const saved = localStorage.getItem(`aphro_ulp_${activeUnitId}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch {}
-    return INITIAL_ULP.filter(u => InisiasiService.isUserMatchingUnit(u.unitId || u.namaULP, activeUnitId));
+    const filtered = INITIAL_ULP.filter(u => InisiasiService.isUserMatchingUnit(u.unitId || u.namaULP, activeUnitId));
+    return filtered.length > 0 ? filtered : INITIAL_ULP;
   });
 
   const [penyulangList, setPenyulangList] = React.useState<Penyulang[]>(() => {
     try {
       const saved = localStorage.getItem(`aphro_penyulang_${activeUnitId}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch {}
-    return INITIAL_PENYULANG.filter(p => InisiasiService.isUserMatchingUnit(p.ulpId || p.ulpName, activeUnitId));
+    const filtered = INITIAL_PENYULANG.filter(p => InisiasiService.isUserMatchingUnit(p.ulpId || p.ulpName || p.unitId, activeUnitId));
+    return filtered.length > 0 ? filtered : INITIAL_PENYULANG;
   });
 
   const [reguList, setReguList] = React.useState<ReguROW[]>(() => {
     try {
       const saved = localStorage.getItem(`aphro_regu_${activeUnitId}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch {}
-    return INITIAL_REGU.filter(r => InisiasiService.isUserMatchingUnit(r.ulpId || r.unitId, activeUnitId));
+    const filtered = INITIAL_REGU.filter(r => InisiasiService.isUserMatchingUnit(r.ulpId || r.unitId, activeUnitId));
+    return filtered.length > 0 ? filtered : INITIAL_REGU;
   });
 
   const [petugasList, setPetugasList] = React.useState<Petugas[]>(() => {
     try {
       const saved = localStorage.getItem(`aphro_ptg_${activeUnitId}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch {}
-    return INITIAL_PETUGAS.filter(p => InisiasiService.isUserMatchingUnit(p.ulpId || p.unitId, activeUnitId));
+    const filtered = INITIAL_PETUGAS.filter(p => InisiasiService.isUserMatchingUnit(p.ulpId || p.unitId, activeUnitId));
+    return filtered.length > 0 ? filtered : INITIAL_PETUGAS;
   });
 
   const [users, setUsers] = React.useState<User[]>(() => {
     try {
       const saved = localStorage.getItem(`aphro_synced_users_${activeUnitId}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch {}
-    return INITIAL_USERS.filter(u => InisiasiService.isUserMatchingUnit(u.unitId, activeUnitId));
+    const filtered = INITIAL_USERS.filter(u => InisiasiService.isUserMatchingUnit(u.unitId, activeUnitId));
+    return filtered.length > 0 ? filtered : INITIAL_USERS;
   });
 
   // Reload cache when unit changes
   React.useEffect(() => {
     try {
       const cachedRegu = localStorage.getItem(`aphro_regu_${activeUnitId}`);
-      if (cachedRegu) setReguList(JSON.parse(cachedRegu));
+      if (cachedRegu) {
+        const p = JSON.parse(cachedRegu);
+        if (Array.isArray(p) && p.length > 0) setReguList(p);
+      }
       const cachedPtg = localStorage.getItem(`aphro_ptg_${activeUnitId}`);
-      if (cachedPtg) setPetugasList(JSON.parse(cachedPtg));
+      if (cachedPtg) {
+        const p = JSON.parse(cachedPtg);
+        if (Array.isArray(p) && p.length > 0) setPetugasList(p);
+      }
       const cachedUsers = localStorage.getItem(`aphro_synced_users_${activeUnitId}`);
-      if (cachedUsers) setUsers(JSON.parse(cachedUsers));
+      if (cachedUsers) {
+        const p = JSON.parse(cachedUsers);
+        if (Array.isArray(p) && p.length > 0) setUsers(p);
+      }
       const cachedUlp = localStorage.getItem(`aphro_ulp_${activeUnitId}`);
-      if (cachedUlp) setUlpList(JSON.parse(cachedUlp));
+      if (cachedUlp) {
+        const p = JSON.parse(cachedUlp);
+        if (Array.isArray(p) && p.length > 0) setUlpList(p);
+      }
+      const cachedPenyulang = localStorage.getItem(`aphro_penyulang_${activeUnitId}`);
+      if (cachedPenyulang) {
+        const p = JSON.parse(cachedPenyulang);
+        if (Array.isArray(p) && p.length > 0) setPenyulangList(p);
+      }
     } catch {}
   }, [activeUnitId]);
 
@@ -151,7 +188,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   }, [setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
 
   React.useEffect(() => {
-    refreshMasterData();
+    refreshMasterData(true);
   }, [refreshMasterData, settings.namaUnitLayanan, activeUnitId]);
 
   const setMasterData = React.useCallback((data: {
