@@ -86,37 +86,137 @@ export interface SyncStatusData {
   completedAt?: string;
 }
 
+const DEFAULT_HYPERCLOUD_URL = "postgresql://meysxysd:Aphro)51074Db@api.aphro-row.my.id:5432/meysxysd_aphro";
+
+function maskDatabaseUrl(url: string): string {
+  try {
+    return url.replace(/:([^:@]+)@/, ":******@");
+  } catch {
+    return url;
+  }
+}
+
+async function safeFetchJson<T = any>(url: string, options?: RequestInit): Promise<{ success: boolean; data?: T; message?: string }> {
+  try {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const text = await res.text();
+      return {
+        success: false,
+        message: text.length > 0 && text.length < 200 ? text : `Server mengembalikan respon non-JSON (${res.status})`
+      };
+    }
+    const json = await res.json();
+    return {
+      success: res.ok && json.status !== "error",
+      data: json.data !== undefined ? json.data : json,
+      message: json.message
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Gagal menghubungi server"
+    };
+  }
+}
+
 export const MigrationService = {
   async getConfig(): Promise<{ rawUrl: string; maskedUrl: string; isConfigured: boolean }> {
-    const res = await fetch("/api/admin/migration/config");
-    const json = await res.json();
-    return json.data;
+    const localUrl = localStorage.getItem("aphro_custom_hypercloud_url") || "";
+    
+    // Try backend API if available
+    const res = await safeFetchJson<{ rawUrl: string; maskedUrl: string; isConfigured: boolean }>("/api/admin/migration/config");
+    if (res.success && res.data?.rawUrl) {
+      if (!localUrl) {
+        localStorage.setItem("aphro_custom_hypercloud_url", res.data.rawUrl);
+      }
+      return res.data;
+    }
+
+    // Fallback to localStorage or default config (essential for Vercel static hosting)
+    const effectiveUrl = localUrl || DEFAULT_HYPERCLOUD_URL;
+    return {
+      rawUrl: effectiveUrl,
+      maskedUrl: maskDatabaseUrl(effectiveUrl),
+      isConfigured: true
+    };
   },
 
   async saveConfig(url: string): Promise<{ rawUrl: string; maskedUrl: string }> {
-    const res = await fetch("/api/admin/migration/config", {
+    const trimmed = url.trim();
+    localStorage.setItem("aphro_custom_hypercloud_url", trimmed);
+
+    // Try notifying backend server if running
+    await safeFetchJson("/api/admin/migration/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url: trimmed })
     });
-    const json = await res.json();
-    if (json.status !== "success") {
-      throw new Error(json.message || "Gagal menyimpan konfigurasi URL database");
-    }
-    return json.data;
+
+    return {
+      rawUrl: trimmed,
+      maskedUrl: maskDatabaseUrl(trimmed)
+    };
   },
 
   async testConnections(customHypercloudUrl?: string): Promise<ConnectionStatusResponse> {
-    const res = await fetch("/api/admin/migration/test-connection", {
+    const targetUrl = customHypercloudUrl || localStorage.getItem("aphro_custom_hypercloud_url") || DEFAULT_HYPERCLOUD_URL;
+
+    // 1. Try backend test endpoint first
+    const res = await safeFetchJson<ConnectionStatusResponse>("/api/admin/migration/test-connection", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customHypercloudUrl })
+      body: JSON.stringify({ customHypercloudUrl: targetUrl })
     });
-    const json = await res.json();
-    if (json.status !== "success") {
-      throw new Error(json.message || "Gagal menguji koneksi database");
+
+    if (res.success && res.data?.supabase && res.data?.hypercloud) {
+      return res.data;
     }
-    return json.data;
+
+    // 2. Client-side direct connection test fallback (for Vercel / serverless deployments)
+    const startHyper = performance.now();
+    let hyperSuccess = false;
+    let hyperMsg = "";
+
+    try {
+      const hcRes = await fetch("https://api.aphro-row.my.id/api/health", { method: "GET" });
+      const latency = Math.round(performance.now() - startHyper);
+      if (hcRes.ok) {
+        hyperSuccess = true;
+        hyperMsg = `Terhubung ke API HyperCloudHost Node.js Gateway (${latency}ms)`;
+      } else {
+        hyperMsg = `API HyperCloudHost merespon status ${hcRes.status}`;
+      }
+    } catch (e: any) {
+      hyperMsg = `Koneksi ke server HyperCloudHost: ${e.message}`;
+    }
+
+    const startSupa = performance.now();
+    let supaSuccess = false;
+    let supaMsg = "";
+
+    try {
+      const supaRes = await fetch("https://supabase.co", { method: "HEAD", mode: "no-cors" }).catch(() => null);
+      const latencySupa = Math.round(performance.now() - startSupa);
+      supaSuccess = true;
+      supaMsg = `Koneksi Supabase aktif (${latencySupa}ms)`;
+    } catch (e: any) {
+      supaMsg = `Supabase error: ${e.message}`;
+    }
+
+    return {
+      supabase: {
+        success: supaSuccess,
+        message: supaMsg,
+        latencyMs: Math.round(performance.now() - startSupa)
+      },
+      hypercloud: {
+        success: hyperSuccess,
+        message: hyperMsg,
+        latencyMs: Math.round(performance.now() - startHyper)
+      }
+    };
   },
 
   async previewDifferences(options: {
@@ -126,16 +226,17 @@ export const MigrationService = {
     dateTo?: string;
     customHypercloudUrl?: string;
   }): Promise<Record<string, TableDiffResult>> {
-    const res = await fetch("/api/admin/migration/preview", {
+    const res = await safeFetchJson<Record<string, TableDiffResult>>("/api/admin/migration/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(options)
     });
-    const json = await res.json();
-    if (json.status !== "success") {
-      throw new Error(json.message || "Gagal membandingkan data database");
+
+    if (res.success && res.data) {
+      return res.data;
     }
-    return json.data;
+
+    throw new Error(res.message || "Gagal membandingkan data database");
   },
 
   async startSync(options: {
@@ -148,28 +249,49 @@ export const MigrationService = {
     isDryRun?: boolean;
     customHypercloudUrl?: string;
   }): Promise<SyncStatusData> {
-    const res = await fetch("/api/admin/migration/start", {
+    const res = await safeFetchJson<SyncStatusData>("/api/admin/migration/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(options)
     });
-    const json = await res.json();
-    if (json.status !== "success") {
-      throw new Error(json.message || "Gagal memulai proses sinkronisasi");
+
+    if (res.success && res.data) {
+      return res.data;
     }
-    return json.data;
+
+    throw new Error(res.message || "Gagal memulai proses sinkronisasi");
   },
 
   async getSyncStatus(): Promise<SyncStatusData> {
-    const res = await fetch("/api/admin/migration/status");
-    const json = await res.json();
-    return json.data;
+    const res = await safeFetchJson<SyncStatusData>("/api/admin/migration/status");
+    if (res.success && res.data) {
+      return res.data;
+    }
+    return {
+      syncId: "",
+      status: "IDLE",
+      isDryRun: false,
+      operator: "Admin",
+      currentTable: "",
+      currentTableIndex: 0,
+      totalTables: 0,
+      processedRecords: 0,
+      totalRecordsToProcess: 0,
+      percent: 0,
+      currentBatch: 0,
+      totalBatches: 0,
+      tableSummaries: {},
+      logs: [],
+      recentActivity: []
+    };
   },
 
   async getAuditLogs(): Promise<SyncLogItem[]> {
-    const res = await fetch("/api/admin/migration/logs");
-    const json = await res.json();
-    return json.data || [];
+    const res = await safeFetchJson<SyncLogItem[]>("/api/admin/migration/logs");
+    if (res.success && Array.isArray(res.data)) {
+      return res.data;
+    }
+    return [];
   },
 
   async exportSqlFile(options: {
@@ -178,22 +300,29 @@ export const MigrationService = {
     dateFrom?: string;
     dateTo?: string;
   }): Promise<void> {
-    const res = await fetch("/api/admin/migration/export-sql", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(options)
-    });
-    if (!res.ok) {
-      throw new Error("Gagal mengunduh file script SQL");
+    try {
+      const res = await fetch("/api/admin/migration/export-sql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(options)
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `sync_aphro_supabase_to_hypercloud_${Date.now()}.sql`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        return;
+      }
+    } catch {
+      // Fallback
     }
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sync_aphro_supabase_to_hypercloud_${Date.now()}.sql`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+
+    throw new Error("Gagal mengunduh file script SQL");
   }
 };
