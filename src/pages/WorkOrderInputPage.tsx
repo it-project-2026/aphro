@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useMasterData } from '../context/MasterDataContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useSettings } from '../context/SettingsContext';
@@ -6,7 +6,7 @@ import { useUI } from '../context/UIContext';
 import { useToast } from '../hooks/useToast';
 import { useGASSync } from '../hooks/useGASSync';
 import { GASApiService } from '../services/gasApiService';
-import { Save, ArrowLeft, FilePlus, Database, CheckCircle2, Sparkles, Layers, AlertTriangle } from 'lucide-react';
+import { Save, ArrowLeft, FilePlus, Database, CheckCircle2, Sparkles, Layers, AlertTriangle, ChevronDown } from 'lucide-react';
 import { WOStatus } from '../types';
 import { getLocalDateTimeString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
 
@@ -115,6 +115,21 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
   const [penyulangName, setPenyulangName] = useState(
     editMode && initialData ? initialData.penyulangName : (availablePenyulangNames[0] || 'AGAM')
   );
+
+  const [isPylDropdownOpen, setIsPylDropdownOpen] = useState(false);
+  const pylDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (pylDropdownRef.current && !pylDropdownRef.current.contains(event.target as Node)) {
+        setIsPylDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const cleanStr = (s: any) => String(s || '').trim().toUpperCase();
 
@@ -501,7 +516,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
               </select>
             </div>
 
-            <div>
+            <div ref={pylDropdownRef}>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Penyulang <span className="text-rose-500">*</span>{' '}
                 <span className="text-slate-400 font-normal">(Pilih atau ketik)</span>
@@ -510,23 +525,54 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
                 <input
                   type="text"
                   required
-                  list="input-wo-penyulang-list"
                   placeholder="Pilih atau ketik Penyulang..."
                   value={penyulangName || ''}
-                  onChange={(e) => setPenyulangName(e.target.value.toUpperCase())}
-                  className={`w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl border transition-colors ${
+                  onChange={(e) => {
+                    setPenyulangName(e.target.value.toUpperCase());
+                    setIsPylDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsPylDropdownOpen(true)}
+                  className={`w-full px-3.5 py-2.5 pr-10 text-xs sm:text-sm font-semibold rounded-xl border transition-colors ${
                     existingDuplicateWO
                       ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
                       : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9]'
                   } focus:outline-none`}
                 />
-                <datalist id="input-wo-penyulang-list">
-                  {availablePenyulangNames.map((pName, pIdx) => (
-                    <option key={`pyl-opt-${pIdx}`} value={pName}>
-                      {pName}
-                    </option>
-                  ))}
-                </datalist>
+                <button
+                  type="button"
+                  onClick={() => setIsPylDropdownOpen(!isPylDropdownOpen)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                >
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isPylDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isPylDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {availablePenyulangNames.filter(pName => 
+                      !penyulangName || pName.toLowerCase().includes(penyulangName.toLowerCase())
+                    ).length > 0 ? (
+                      availablePenyulangNames
+                        .filter(pName => !penyulangName || pName.toLowerCase().includes(penyulangName.toLowerCase()))
+                        .map((pName, pIdx) => (
+                          <button
+                            key={`pyl-opt-${pIdx}`}
+                            type="button"
+                            onClick={() => {
+                              setPenyulangName(pName);
+                              setIsPylDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs sm:text-sm text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                          >
+                            {pName}
+                          </button>
+                        ))
+                    ) : (
+                      <div className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 italic">
+                        Ketik untuk menambahkan baru...
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

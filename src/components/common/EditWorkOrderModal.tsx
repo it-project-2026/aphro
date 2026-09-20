@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, WOStatus } from '../../types';
 import { useMasterData } from '../../context/MasterDataContext';
 import { useWorkOrders } from '../../context/WorkOrderContext';
 import { useToast } from '../../hooks/useToast';
-import { X, Save, AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
+import { X, Save, AlertTriangle, RefreshCw, Trash2, ChevronDown } from 'lucide-react';
 
 interface EditWorkOrderModalProps {
   workOrder: WorkOrder;
@@ -22,6 +22,21 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
   const [ulpName, setUlpName] = useState(workOrder.ulpName);
   const [penyulangName, setPenyulangName] = useState(workOrder.penyulangName);
   const [reguName, setReguName] = useState(workOrder.reguName);
+
+  const [isPylDropdownOpen, setIsPylDropdownOpen] = useState(false);
+  const pylDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (pylDropdownRef.current && !pylDropdownRef.current.contains(event.target as Node)) {
+        setIsPylDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
   
   const [volumePekerjaan, setVolumePekerjaan] = useState(workOrder.volumePekerjaan?.toString() || '');
   const [satuan, setSatuan] = useState(workOrder.satuan || 'KMS');
@@ -226,26 +241,61 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
                 ))}
               </select>
             </div>
-            <div>
+            <div ref={pylDropdownRef} className="relative">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Penyulang</label>
-              <input
-                type="text"
-                required
-                list="edit-wo-penyulang-list"
-                placeholder="Pilih atau ketik Penyulang..."
-                value={penyulangName}
-                onChange={(e) => setPenyulangName(e.target.value.toUpperCase())}
-                className={`w-full px-3 py-2 text-sm rounded-xl border transition-colors ${
-                  existingDuplicateWO
-                    ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9]'
-                } focus:outline-none`}
-              />
-              <datalist id="edit-wo-penyulang-list">
-                {availablePenyulangNames.map((pName, i) => (
-                  <option key={i} value={pName}>{pName}</option>
-                ))}
-              </datalist>
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  placeholder="Pilih atau ketik Penyulang..."
+                  value={penyulangName}
+                  onChange={(e) => {
+                    setPenyulangName(e.target.value.toUpperCase());
+                    setIsPylDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsPylDropdownOpen(true)}
+                  className={`w-full px-3 py-2 pr-10 text-sm rounded-xl border transition-colors ${
+                    existingDuplicateWO
+                      ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 focus:border-rose-500'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:border-[#00A2B9]'
+                  } focus:outline-none`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsPylDropdownOpen(!isPylDropdownOpen)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                >
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isPylDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isPylDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                    {availablePenyulangNames.filter(pName => 
+                      !penyulangName || pName.toLowerCase().includes(penyulangName.toLowerCase())
+                    ).length > 0 ? (
+                      availablePenyulangNames
+                        .filter(pName => !penyulangName || pName.toLowerCase().includes(penyulangName.toLowerCase()))
+                        .map((pName, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => {
+                              setPenyulangName(pName);
+                              setIsPylDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs sm:text-sm text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                          >
+                            {pName}
+                          </button>
+                        ))
+                    ) : (
+                      <div className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 italic">
+                        Ketik untuk menambahkan baru...
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Regu ROW</label>

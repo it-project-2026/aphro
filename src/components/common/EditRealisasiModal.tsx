@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   FileText,
   AlertTriangle,
+  ChevronDown,
 } from 'lucide-react';
 import { normalizeDateISO, getWIBDateString, getLocalDateTimeString } from '../../utils/dateUtils';
 import { useRealisasi } from '../../context/RealisasiContext';
@@ -83,6 +84,33 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
   const fileInputSesudahRef = useRef<HTMLInputElement>(null);
   const cameraInputSebelumRef = useRef<HTMLInputElement>(null);
   const cameraInputSesudahRef = useRef<HTMLInputElement>(null);
+
+  const [isUlpDropdownOpen, setIsUlpDropdownOpen] = useState(false);
+  const [isReguDropdownOpen, setIsReguDropdownOpen] = useState(false);
+  const [isPylDropdownOpen, setIsPylDropdownOpen] = useState(false);
+
+  const ulpDropdownRef = useRef<HTMLDivElement>(null);
+  const reguDropdownRef = useRef<HTMLDivElement>(null);
+  const pylDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (ulpDropdownRef.current && !ulpDropdownRef.current.contains(target)) {
+        setIsUlpDropdownOpen(false);
+      }
+      if (reguDropdownRef.current && !reguDropdownRef.current.contains(target)) {
+        setIsReguDropdownOpen(false);
+      }
+      if (pylDropdownRef.current && !pylDropdownRef.current.contains(target)) {
+        setIsPylDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Initialize form when realisasi prop changes or modal opens
   useEffect(() => {
@@ -387,68 +415,167 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
                 </div>
 
                 {/* ULP */}
-                <div>
+                <div ref={ulpDropdownRef} className="relative">
                   <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                     ULP
                   </label>
                   <div className="relative">
                     <input
                       type="text"
-                      list="edit-ulp-suggestions"
                       value={ulpName}
-                      onChange={(e) => setUlpName(e.target.value)}
+                      onChange={(e) => {
+                        setUlpName(e.target.value);
+                        setIsUlpDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsUlpDropdownOpen(true)}
                       placeholder="Pilih atau ketik ULP"
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-3 py-2 pr-10 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                     />
-                    <datalist id="edit-ulp-suggestions">
-                      {availableUlps.map((u) => (
-                        <option key={u} value={u} />
-                      ))}
-                    </datalist>
+                    <button
+                      type="button"
+                      onClick={() => setIsUlpDropdownOpen(!isUlpDropdownOpen)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isUlpDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isUlpDropdownOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        {availableUlps.filter(u => 
+                          !ulpName || u.toLowerCase().includes(ulpName.toLowerCase())
+                        ).length > 0 ? (
+                          availableUlps
+                            .filter(u => !ulpName || u.toLowerCase().includes(ulpName.toLowerCase()))
+                            .map((u) => (
+                              <button
+                                key={u}
+                                type="button"
+                                onClick={() => {
+                                  setUlpName(u);
+                                  setIsUlpDropdownOpen(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                              >
+                                {u}
+                              </button>
+                            ))
+                        ) : (
+                          <div className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 italic">
+                            Ketik untuk menambahkan baru...
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* REGU ROW */}
-                <div>
+                <div ref={reguDropdownRef} className="relative">
                   <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                     REGU ROW
                   </label>
                   <div className="relative">
                     <input
                       type="text"
-                      list="edit-regu-suggestions"
                       value={reguName}
-                      onChange={(e) => setReguName(e.target.value)}
+                      onChange={(e) => {
+                        setReguName(e.target.value);
+                        setIsReguDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsReguDropdownOpen(true)}
                       placeholder="Pilih atau ketik Regu"
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-3 py-2 pr-10 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                     />
-                    <datalist id="edit-regu-suggestions">
-                      {availableRegus.map((r) => (
-                        <option key={r} value={r} />
-                      ))}
-                    </datalist>
+                    <button
+                      type="button"
+                      onClick={() => setIsReguDropdownOpen(!isReguDropdownOpen)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isReguDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isReguDropdownOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        {availableRegus.filter(r => 
+                          !reguName || r.toLowerCase().includes(reguName.toLowerCase())
+                        ).length > 0 ? (
+                          availableRegus
+                            .filter(r => !reguName || r.toLowerCase().includes(reguName.toLowerCase()))
+                            .map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() => {
+                                  setReguName(r);
+                                  setIsReguDropdownOpen(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                              >
+                                {r}
+                              </button>
+                            ))
+                        ) : (
+                          <div className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 italic">
+                            Ketik untuk menambahkan baru...
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* PENYULANG */}
-                <div>
+                <div ref={pylDropdownRef} className="relative">
                   <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
                     PENYULANG
                   </label>
                   <div className="relative">
                     <input
                       type="text"
-                      list="edit-penyulang-suggestions"
                       value={penyulangName}
-                      onChange={(e) => setPenyulangName(e.target.value)}
+                      onChange={(e) => {
+                        setPenyulangName(e.target.value);
+                        setIsPylDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsPylDropdownOpen(true)}
                       placeholder="Pilih atau ketik Penyulang"
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
+                      className="w-full px-3 py-2 pr-10 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                     />
-                    <datalist id="edit-penyulang-suggestions">
-                      {availablePenyulangs.map((p) => (
-                        <option key={p} value={p} />
-                      ))}
-                    </datalist>
+                    <button
+                      type="button"
+                      onClick={() => setIsPylDropdownOpen(!isPylDropdownOpen)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isPylDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isPylDropdownOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        {availablePenyulangs.filter(p => 
+                          !penyulangName || p.toLowerCase().includes(penyulangName.toLowerCase())
+                        ).length > 0 ? (
+                          availablePenyulangs
+                            .filter(p => !penyulangName || p.toLowerCase().includes(penyulangName.toLowerCase()))
+                            .map((p) => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => {
+                                  setPenyulangName(p);
+                                  setIsPylDropdownOpen(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                              >
+                                {p}
+                              </button>
+                            ))
+                        ) : (
+                          <div className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 italic">
+                            Ketik untuk menambahkan baru...
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
