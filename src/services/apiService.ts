@@ -121,32 +121,60 @@ export class ApiService {
     const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
     const token = this.getAuthToken();
     
-    // Build headers
-    const headers = new Headers(options.headers || {});
-    if (!headers.has('Authorization') && token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    if (!headers.has('Accept')) {
-      headers.set('Accept', 'application/json');
-    }
-
-    const requestOptions = { ...options, headers };
-
-    // 1. Try relative endpoint on Express server first
-    const primaryUrl = cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`;
-    try {
-      const res = await fetch(primaryUrl, requestOptions);
-      if (res.ok || res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404 || res.status === 409) {
-        return res;
+    // Build plain headers object for maximum compatibility with all browsers/iframes
+    const headersObj: Record<string, string> = {};
+    
+    // Copy any input headers safely
+    if (options.headers) {
+      if (options.headers instanceof Headers) {
+        options.headers.forEach((val, key) => {
+          headersObj[key] = val;
+        });
+      } else if (Array.isArray(options.headers)) {
+        options.headers.forEach(([key, val]) => {
+          headersObj[key] = val;
+        });
+      } else {
+        Object.entries(options.headers).forEach(([key, val]) => {
+          headersObj[key] = String(val);
+        });
       }
-    } catch (localErr) {
-      console.warn(`[ApiService] Local Express API fetch to ${primaryUrl} failed:`, localErr);
     }
 
-    // 2. Fallback to external production API base URL
-    const externalBase = this.getCleanBaseUrl();
-    const externalUrl = `${externalBase}${cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`}`;
-    return await fetch(externalUrl, requestOptions);
+    if (!headersObj['Authorization'] && token) {
+      headersObj['Authorization'] = `Bearer ${token}`;
+    }
+    if (!headersObj['Accept']) {
+      headersObj['Accept'] = 'application/json';
+    }
+
+    const requestOptions = { ...options, headers: headersObj };
+
+    // Get current browser origin if in browser, to resolve absolute URLs and bypass sandbox base-URL restrictions
+    const host = typeof window !== 'undefined' && window.location ? window.location.origin : '';
+    const localUrl = `${host}${cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`}`;
+
+    try {
+      const res = await fetch(localUrl, requestOptions);
+      // Return the local response immediately if we got any HTTP status code from the local server
+      return res;
+    } catch (localErr) {
+      console.warn(`[ApiService] Local Express API fetch to ${localUrl} failed (network/CORS/sandbox):`, localErr);
+      
+      // Fallback only if local fetch literally throws a network error (not a 4xx/5xx status)
+      const externalBase = this.getCleanBaseUrl();
+      if (externalBase && !externalBase.includes('localhost') && !externalBase.includes('127.0.0.1') && !externalBase.includes(host)) {
+        const externalUrl = `${externalBase}${cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`}`;
+        console.log(`[ApiService] Falling back to external URL: ${externalUrl}`);
+        try {
+          return await fetch(externalUrl, requestOptions);
+        } catch (extErr) {
+          console.error(`[ApiService] External fallback to ${externalUrl} also failed:`, extErr);
+          throw extErr;
+        }
+      }
+      throw localErr;
+    }
   }
 
   /**
