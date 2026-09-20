@@ -151,6 +151,18 @@ export const SUPPORTED_TABLES: Record<string, TableConfig> = {
       "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala",
       "Latitude_Longitude", "Lokasi_kerja", "Timestamp"
     ]
+  },
+  PENYULANG: {
+    name: "PENYULANG",
+    primaryKey: "ID",
+    label: "Data Penyulang",
+    order: 4,
+    criticalFields: ["Nama_Penyulang", "ULP"],
+    dateField: undefined,
+    unitField: "unitId",
+    columns: [
+      "ID", "unitId", "Kode_Penyulang", "Nama_Penyulang", "ULP", "Panjang_Kms", "Jumlah_Trafo", "Status"
+    ]
   }
 };
 
@@ -322,7 +334,7 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
         const schemaName = metaRes.rows[0]?.schema || "public";
 
         const counts: Record<string, number> = {};
-        for (const tbl of ["WORK_ORDER", "ABSENSI", "REALISASI"]) {
+        for (const tbl of ["WORK_ORDER", "ABSENSI", "REALISASI", "PENYULANG"]) {
           try {
             const countRes = await client.query(`SELECT COUNT(*)::int as cnt FROM "${tbl}";`);
             counts[tbl] = parseInt(countRes.rows[0]?.cnt || "0", 10);
@@ -339,7 +351,7 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
         }
 
         console.log(`[PREVIEW TARGET VERIFICATION] Database: '${dbName}', Schema: '${schemaName}'`);
-        console.log(`[PREVIEW TARGET VERIFICATION] Counts: WORK_ORDER=${counts.WORK_ORDER}, ABSENSI=${counts.ABSENSI}, REALISASI=${counts.REALISASI}`);
+        console.log(`[PREVIEW TARGET VERIFICATION] Counts: WORK_ORDER=${counts.WORK_ORDER}, ABSENSI=${counts.ABSENSI}, REALISASI=${counts.REALISASI}, PENYULANG=${counts.PENYULANG}`);
 
         return {
           connected: true,
@@ -389,9 +401,11 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
     }
 
     const counts: Record<string, number> = {};
-    for (const tbl of ["WORK_ORDER", "ABSENSI", "REALISASI"]) {
+    for (const tbl of ["WORK_ORDER", "ABSENSI", "REALISASI", "PENYULANG"]) {
       const endpoint = tbl === "WORK_ORDER" ? "/api/work-orders" :
-                       tbl === "ABSENSI" ? "/api/absensi" : "/api/realisasi";
+                       tbl === "ABSENSI" ? "/api/absensi" :
+                       tbl === "REALISASI" ? "/api/realisasi" :
+                       tbl === "PENYULANG" ? "/api/penyulang" : `/api/${tbl.toLowerCase()}`;
       const fetchRes = await fetch(`https://api.aphro-row.my.id${endpoint}?limit=15000`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -704,7 +718,9 @@ export async function fetchTargetData(
   try {
     const endpoint = tableName === "WORK_ORDER" ? "/api/work-orders" :
                      tableName === "ABSENSI" ? "/api/absensi" :
-                     "/api/realisasi";
+                     tableName === "REALISASI" ? "/api/realisasi" :
+                     tableName === "PENYULANG" ? "/api/penyulang" :
+                     `/api/${tableName.toLowerCase()}`;
 
     let url = `https://api.aphro-row.my.id${endpoint}?limit=15000`;
     if (options.dateFrom) url += `&tanggalDari=${options.dateFrom}`;
@@ -1238,7 +1254,9 @@ export async function executeLiveSync(options: {
           activeSyncState!.recentActivity.unshift(`[${new Date().toLocaleTimeString()}] Mengirim data ${tbl} melalui HyperCloudHost REST API Gateway...`);
           const endpoint = tbl === "WORK_ORDER" ? "/api/work-orders" :
                            tbl === "ABSENSI" ? "/api/absensi" :
-                           "/api/realisasi";
+                           tbl === "REALISASI" ? "/api/realisasi" :
+                           tbl === "PENYULANG" ? "/api/penyulang" :
+                           `/api/${tbl.toLowerCase()}`;
 
           for (const row of rowsToProcess) {
             try {

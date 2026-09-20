@@ -322,6 +322,10 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
           realisasi: tableSummaries["REALISASI"] ? {
             source: tableSummaries["REALISASI"].totalSource,
             target: tableSummaries["REALISASI"].totalTarget
+          } : undefined,
+          penyulang: tableSummaries["PENYULANG"] ? {
+            source: tableSummaries["PENYULANG"].totalSource,
+            target: tableSummaries["PENYULANG"].totalTarget
           } : undefined
         }
       };
@@ -614,6 +618,24 @@ ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Kendala" TEXT;
 ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Latitude_Longitude" TEXT;
 ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Lokasi_kerja" TEXT;
 ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Timestamp" TEXT;
+
+CREATE TABLE IF NOT EXISTS public."PENYULANG" (
+  "ID" TEXT PRIMARY KEY,
+  "unitId" TEXT DEFAULT 'UL1',
+  "Kode_Penyulang" TEXT,
+  "Nama_Penyulang" TEXT,
+  "ULP" TEXT,
+  "Panjang_Kms" NUMERIC DEFAULT 0,
+  "Jumlah_Trafo" NUMERIC DEFAULT 0,
+  "Status" TEXT
+);
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "unitId" TEXT DEFAULT 'UL1';
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Kode_Penyulang" TEXT;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Nama_Penyulang" TEXT;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "ULP" TEXT;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Panjang_Kms" NUMERIC DEFAULT 0;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Jumlah_Trafo" NUMERIC DEFAULT 0;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
 \n`;
 
       function escapeSql(val: any) {

@@ -53,6 +53,10 @@ export interface FullPreviewResponseData {
     counts: Record<string, number>;
   };
   tableSummaries: Record<string, TableDiffResult>;
+  workOrder?: { source: number; target: number };
+  absensi?: { source: number; target: number };
+  realisasi?: { source: number; target: number };
+  penyulang?: { source: number; target: number };
   realisasiDetail?: {
     totalSource: number;
     totalTarget: number;
@@ -287,6 +291,32 @@ ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Latitude_Longitude" TEX
 ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Lokasi_kerja" TEXT;
 ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Timestamp" TEXT;
 `
+  },
+  PENYULANG: {
+    primaryKey: "ID",
+    order: 4,
+    columns: [
+      "ID", "unitId", "Kode_Penyulang", "Nama_Penyulang", "ULP", "Panjang_Kms", "Jumlah_Trafo", "Status"
+    ],
+    ddl: `
+CREATE TABLE IF NOT EXISTS public."PENYULANG" (
+  "ID" TEXT PRIMARY KEY,
+  "unitId" TEXT DEFAULT 'UL1',
+  "Kode_Penyulang" TEXT,
+  "Nama_Penyulang" TEXT,
+  "ULP" TEXT,
+  "Panjang_Kms" NUMERIC DEFAULT 0,
+  "Jumlah_Trafo" NUMERIC DEFAULT 0,
+  "Status" TEXT
+);
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "unitId" TEXT DEFAULT 'UL1';
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Kode_Penyulang" TEXT;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Nama_Penyulang" TEXT;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "ULP" TEXT;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Panjang_Kms" NUMERIC DEFAULT 0;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Jumlah_Trafo" NUMERIC DEFAULT 0;
+ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
+`
   }
 };
 
@@ -487,19 +517,22 @@ export const MigrationService = {
 
     // 3. Resilient Client-side Fallback for static deployments (Vercel) when backend returns 404/non-JSON
     try {
-      const [woSupa, absSupa, realSupa] = await Promise.all([
+      const [woSupa, absSupa, realSupa, pylSupa] = await Promise.all([
         supabase.from("WORK_ORDER").select("*", { count: "exact", head: true }),
         supabase.from("ABSENSI").select("*", { count: "exact", head: true }),
-        supabase.from("REALISASI").select("*", { count: "exact", head: true })
+        supabase.from("REALISASI").select("*", { count: "exact", head: true }),
+        supabase.from("PENYULANG").select("*", { count: "exact", head: true })
       ]);
 
       const sourceWO = woSupa.count ?? 0;
       const sourceAbs = absSupa.count ?? 0;
       const sourceReal = realSupa.count ?? 0;
+      const sourcePyl = pylSupa.count ?? 0;
 
       let targetWO = 0;
       let targetAbs = 0;
       let targetReal = 0;
+      let targetPyl = 0;
 
       try {
         const hcReal = await fetch("https://api.aphro-row.my.id/api/realisasi?limit=1", { headers: { Accept: "application/json" } });
@@ -531,7 +564,17 @@ export const MigrationService = {
         console.warn("Client fallback HyperCloud ABSENSI fetch error:", e);
       }
 
-      const selected = options.tables && options.tables.length > 0 ? options.tables : ["WORK_ORDER", "ABSENSI", "REALISASI"];
+      try {
+        const hcPyl = await fetch("https://api.aphro-row.my.id/api/penyulang?limit=1", { headers: { Accept: "application/json" } });
+        if (hcPyl.ok) {
+          const jsonPyl = await hcPyl.json();
+          targetPyl = jsonPyl.pagination?.total ?? jsonPyl.total ?? 0;
+        }
+      } catch (e) {
+        console.warn("Client fallback HyperCloud PENYULANG fetch error:", e);
+      }
+
+      const selected = options.tables && options.tables.length > 0 ? options.tables : ["WORK_ORDER", "ABSENSI", "REALISASI", "PENYULANG"];
       const tableSummaries: Record<string, TableDiffResult> = {};
 
       if (selected.includes("WORK_ORDER")) {
@@ -588,6 +631,24 @@ export const MigrationService = {
         };
       }
 
+      if (selected.includes("PENYULANG")) {
+        tableSummaries["PENYULANG"] = {
+          tableName: "PENYULANG",
+          totalSource: sourcePyl,
+          totalTarget: targetPyl,
+          insertCount: Math.max(0, sourcePyl - targetPyl),
+          updateCount: 0,
+          skipCount: Math.min(sourcePyl, targetPyl),
+          conflictCount: 0,
+          targetOnlyCount: 0,
+          errorCount: 0,
+          conflicts: [],
+          sampleInserts: [],
+          sampleUpdates: [],
+          status: sourcePyl === targetPyl ? "VERIFIED" : "DIFFERENT"
+        };
+      }
+
       return {
         targetInfo: {
           connected: true,
@@ -596,13 +657,15 @@ export const MigrationService = {
           counts: {
             WORK_ORDER: targetWO,
             ABSENSI: targetAbs,
-            REALISASI: targetReal
+            REALISASI: targetReal,
+            PENYULANG: targetPyl
           }
         },
         tableSummaries,
         workOrder: { source: sourceWO, target: targetWO },
         absensi: { source: sourceAbs, target: targetAbs },
         realisasi: { source: sourceReal, target: targetReal },
+        penyulang: { source: sourcePyl, target: targetPyl },
         isSyncAllowed: true
       };
     } catch (fallbackErr: any) {
@@ -667,11 +730,15 @@ export const MigrationService = {
       }
 
       return {
+        tableName: "REALISASI",
         totalSource: sourceCount,
         totalTarget: targetCount,
         sourceOnlyCount: Math.max(0, sourceCount - targetCount),
         targetOnlyCount: 0,
         inBothCount: Math.min(sourceCount, targetCount),
+        conflictCount: 0,
+        isExact555: sourceCount === 555 && targetCount === 555,
+        validationMessage: sourceCount === targetCount ? "Jumlah record REALISASI persis sama" : "Jumlah record REALISASI berbeda",
         sourceOnlyRecords: []
       };
     } catch (e: any) {

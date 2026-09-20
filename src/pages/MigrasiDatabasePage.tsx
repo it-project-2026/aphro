@@ -48,7 +48,7 @@ export const MigrasiDatabasePage: React.FC = () => {
   const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
 
   // Filter states
-  const [selectedTables, setSelectedTables] = useState<string[]>(["WORK_ORDER", "ABSENSI", "REALISASI"]);
+  const [selectedTables, setSelectedTables] = useState<string[]>(["WORK_ORDER", "ABSENSI", "REALISASI", "PENYULANG"]);
   const [unitFilter, setUnitFilter] = useState<string>("ALL");
   const [dateFilterType, setDateFilterType] = useState<"ALL" | "18_SEPT" | "CUSTOM">("18_SEPT");
   const [customDateFrom, setCustomDateFrom] = useState<string>("2026-09-18");
@@ -564,7 +564,7 @@ export const MigrasiDatabasePage: React.FC = () => {
                   1. Tabel Prioritas
                 </label>
                 <div className="space-y-2 bg-slate-50 dark:bg-slate-950/50 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
-                  {["WORK_ORDER", "ABSENSI", "REALISASI"].map((tbl) => (
+                  {["WORK_ORDER", "ABSENSI", "REALISASI", "PENYULANG"].map((tbl) => (
                     <label key={tbl} className="flex items-center space-x-2.5 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300 select-none">
                       <input
                         type="checkbox"
@@ -1031,8 +1031,16 @@ export const MigrasiDatabasePage: React.FC = () => {
                       <strong className="text-white text-xs">{fullPreview.targetInfo.counts.WORK_ORDER ?? 0}</strong>
                     </div>
                     <div className="bg-black/40 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block font-sans uppercase">ABSENSI DB Target</span>
+                      <strong className="text-white text-xs">{fullPreview.targetInfo.counts.ABSENSI ?? 0}</strong>
+                    </div>
+                    <div className="bg-black/40 p-2.5 rounded-xl border border-slate-800">
                       <span className="text-slate-400 text-[10px] block font-sans uppercase">REALISASI DB Target</span>
                       <strong className="text-white text-xs">{fullPreview.targetInfo.counts.REALISASI ?? 0}</strong>
+                    </div>
+                    <div className="bg-black/40 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block font-sans uppercase">PENYULANG DB Target</span>
+                      <strong className="text-white text-xs">{fullPreview.targetInfo.counts.PENYULANG ?? 0}</strong>
                     </div>
                   </div>
                 </div>
