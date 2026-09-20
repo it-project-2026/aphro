@@ -309,11 +309,12 @@ async function safeFetchJson<T = any>(url: string, options?: RequestInit): Promi
       };
     }
     const json = await res.json();
+    const isSuccess = res.ok && json.success !== false && json.status !== "error";
     return {
-      success: res.ok && json.status !== "error",
+      success: isSuccess,
       data: json.data !== undefined ? json.data : json,
-      message: json.message,
-      errorDetail: json.errorDetail
+      message: json.message || json.error?.message,
+      errorDetail: json.errorDetail || json.error
     };
   } catch (err: any) {
     return {

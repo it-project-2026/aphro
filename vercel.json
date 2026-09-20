@@ -39,8 +39,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://api.aphro-row.my.id/api/:match*"
+      "source": "/api/hypercloud-proxy/:match*",
+      "destination": "https://api.aphro-row.my.id/:match*"
     },
     {
       "source": "/((?!api/).*)",

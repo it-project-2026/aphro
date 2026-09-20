@@ -284,8 +284,14 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
     }
   });
 
-  // 2. Preview / Dry Run Sync (Cek Perbedaan)
-  app.post("/api/admin/migration/preview", async (req, res) => {
+  // 2. Preview / Dry Run Sync (Cek Perbedaan - READONLY, NO MUTATIONS)
+  const handlePreviewRequest = async (req: express.Request, res: express.Response) => {
+    const method = req.method;
+    const endpoint = req.originalUrl || req.url;
+    console.log(`[MIGRATION PREVIEW LOG] ${method} ${endpoint} | Stage: Inisiasi Preview`);
+
+    res.setHeader("Content-Type", "application/json");
+
     try {
       const { tables, unitFilter, dateFrom, dateTo, customHypercloudUrl } = req.body || {};
       if (customHypercloudUrl) {
@@ -298,12 +304,31 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
         dateTo,
         customHypercloudUrl
       });
-      return res.json({
+
+      const tableSummaries = diffSummaries.tableSummaries || {};
+      const responseBody = {
+        success: true,
         status: "success",
-        data: diffSummaries
-      });
+        data: {
+          ...diffSummaries,
+          workOrder: tableSummaries["WORK_ORDER"] ? {
+            source: tableSummaries["WORK_ORDER"].totalSource,
+            target: tableSummaries["WORK_ORDER"].totalTarget
+          } : undefined,
+          absensi: tableSummaries["ABSENSI"] ? {
+            source: tableSummaries["ABSENSI"].totalSource,
+            target: tableSummaries["ABSENSI"].totalTarget
+          } : undefined,
+          realisasi: tableSummaries["REALISASI"] ? {
+            source: tableSummaries["REALISASI"].totalSource,
+            target: tableSummaries["REALISASI"].totalTarget
+          } : undefined
+        }
+      };
+
+      console.log(`[MIGRATION PREVIEW LOG] ${method} ${endpoint} | Status: 200 OK | Content-Type: application/json | Stage: Preview Selesai`);
+      return res.status(200).json(responseBody);
     } catch (err: any) {
-      console.error("[PREVIEW ERROR STACK]:", err);
       const errorDetail = err.detail || {
         stage: "Perbandingan",
         database: "SUPABASE / HYPERCLOUD",
@@ -311,28 +336,43 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
         errorMessage: err.message || "Gagal membandingkan data database",
         errorCode: err.code || "PREVIEW_FAILED"
       };
+
+      console.error(`[MIGRATION PREVIEW ERROR LOG] ${method} ${endpoint} | Status: 400 | Stage: ${errorDetail.stage} | Error: ${errorDetail.errorMessage}`);
+
       return res.status(400).json({
+        success: false,
         status: "error",
-        message: errorDetail.errorMessage,
+        error: {
+          code: errorDetail.errorCode || "PREVIEW_FAILED",
+          message: errorDetail.errorMessage
+        },
         errorDetail
       });
     }
-  });
+  };
 
   // 2.1 Dedicated Preview Realisasi (ReadOnly Dry Run - No Mutations)
-  app.post("/api/admin/migration/preview-realisasi", async (req, res) => {
+  const handlePreviewRealisasiRequest = async (req: express.Request, res: express.Response) => {
+    const method = req.method;
+    const endpoint = req.originalUrl || req.url;
+    console.log(`[MIGRATION PREVIEW REALISASI LOG] ${method} ${endpoint} | Stage: Inisiasi Preview REALISASI`);
+
+    res.setHeader("Content-Type", "application/json");
+
     try {
       const { customHypercloudUrl } = req.body || {};
       if (customHypercloudUrl) {
         setHypercloudDatabaseUrl(customHypercloudUrl);
       }
       const previewResult = await performRealisasiPreview(customHypercloudUrl);
-      return res.json({
+
+      console.log(`[MIGRATION PREVIEW REALISASI LOG] ${method} ${endpoint} | Status: 200 OK | Content-Type: application/json | Stage: Preview REALISASI Selesai`);
+      return res.status(200).json({
+        success: true,
         status: "success",
         data: previewResult
       });
     } catch (err: any) {
-      console.error("[PREVIEW REALISASI ERROR STACK]:", err);
       const errorDetail = err.detail || {
         stage: "Perbandingan",
         database: "SUPABASE / HYPERCLOUD",
@@ -340,12 +380,44 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
         errorMessage: err.message || "Gagal melakukan preview REALISASI",
         errorCode: err.code || "PREVIEW_REALISASI_FAILED"
       };
+
+      console.error(`[MIGRATION PREVIEW REALISASI ERROR LOG] ${method} ${endpoint} | Status: 400 | Stage: ${errorDetail.stage} | Error: ${errorDetail.errorMessage}`);
+
       return res.status(400).json({
+        success: false,
         status: "error",
-        message: errorDetail.errorMessage,
+        error: {
+          code: errorDetail.errorCode || "PREVIEW_REALISASI_FAILED",
+          message: errorDetail.errorMessage
+        },
         errorDetail
       });
     }
+  };
+
+  // Register all Preview route aliases
+  const PREVIEW_ROUTES = [
+    "/api/admin/migration/preview",
+    "/api/migration/preview",
+    "/api/migrate/preview",
+    "/migration/preview"
+  ];
+
+  const PREVIEW_REALISASI_ROUTES = [
+    "/api/admin/migration/preview-realisasi",
+    "/api/migration/preview-realisasi",
+    "/api/migrate/preview-realisasi",
+    "/migration/preview-realisasi"
+  ];
+
+  PREVIEW_ROUTES.forEach(routePath => {
+    app.post(routePath, handlePreviewRequest);
+    app.get(routePath, handlePreviewRequest);
+  });
+
+  PREVIEW_REALISASI_ROUTES.forEach(routePath => {
+    app.post(routePath, handlePreviewRealisasiRequest);
+    app.get(routePath, handlePreviewRealisasiRequest);
   });
 
   // 3. Start Live Sync or Dry Run
