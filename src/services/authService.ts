@@ -65,74 +65,12 @@ export class AuthService {
 
           await this.saveLocalSession(normalized);
           return { success: true, user: normalized };
-        } else if (apiRes.status === 'error' && apiRes.message && (
-          apiRes.message.toLowerCase().includes('password') || 
-          apiRes.message.toLowerCase().includes('sandi') ||
-          apiRes.message.toLowerCase().includes('tidak terdaftar') ||
-          apiRes.message.toLowerCase().includes('non-aktif')
-        )) {
-          return { success: false, error: apiRes.message };
+        } else {
+          return { success: false, error: apiRes.message || 'Gagal login ke HyperCloudHost.' };
         }
-      } catch (apiErr) {
-        console.warn('HyperCloudHost API login error, trying fallbacks:', apiErr);
-      }
-    }
-
-    // 2. Secondary fallback: Supabase Authentication if online
-    if (typeof navigator !== 'undefined' && navigator.onLine && isSupabaseConfigured()) {
-      try {
-        const { data, error } = await supabase
-          .from('USERS')
-          .select('*')
-          .or(`Username.ilike.${cleanUsername},UserID.ilike.${cleanUsername}`);
-
-        if (!error && data && data.length > 0) {
-          // Search for user matching targetUnitId
-          const matchedRow = data.find(row => {
-            const rowUnit = row.unitId || row.unit_id || row.UnitID || row.Unit_ID || row.kodeUL || row.Kode_UL || '';
-            return !rowUnit || InisiasiService.isUserMatchingUnit(rowUnit, targetUnitId);
-          });
-
-          if (!matchedRow) {
-            // User exists in database but under a different unit
-            const firstUser = data[0];
-            const foundUnit = InisiasiService.getStandardUnitId(firstUser.unitId || firstUser.unit_id || firstUser.UnitID || firstUser.ULP || 'lain');
-            console.error('[APHRO LOGIN MISMATCH]', { selectedUnitId: targetUnitId, username: cleanUsername, foundUnit });
-            return {
-              success: false,
-              error: `User '${cleanUsername}' tidak terdaftar pada UL yang dipilih (${targetUnitId}). User terdaftar pada unit ${foundUnit}.`,
-            };
-          }
-
-          const serverPassword = String(matchedRow.Password || matchedRow.password || matchedRow.KataSandi || 'admin123').trim();
-
-          // Validate password if required or match default
-          if (!cleanPassword || cleanPassword === serverPassword || cleanPassword === 'admin123') {
-            const normalized = normalizeUser(matchedRow);
-            normalized.unitId = targetUnitId;
-            normalized.unitName = InisiasiService.getActiveInisiasiUnit().namaUL;
-            
-            console.log('[APHRO LOGIN]', {
-              selectedUnitId: targetUnitId,
-              username: cleanUsername,
-              authenticatedUserId: normalized.id,
-              authenticatedUserUnitId: normalized.unitId
-            });
-
-            // Cache user in Dexie for offline login
-            await dexieDb.users.put({
-              ...normalized,
-              syncStatus: 'SYNCED',
-              updatedAt: new Date().toISOString(),
-            });
-
-            return { success: true, user: normalized };
-          } else {
-            return { success: false, error: 'Kata sandi tidak sesuai.' };
-          }
-        }
-      } catch (err) {
-        console.warn('Supabase auth network error, trying local fallback:', err);
+      } catch (apiErr: any) {
+        console.error('HyperCloudHost API login error:', apiErr);
+        return { success: false, error: `Gagal terhubung ke server HyperCloudHost: ${apiErr.message}` };
       }
     }
 

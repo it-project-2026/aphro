@@ -5,6 +5,8 @@ import axios from "axios";
 import * as admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import hypercloudApi from "./server/hypercloudApi";
+import { setDatabaseUrl, getDatabaseUrl, testConnection as testDbConnection } from "./server/database";
 import {
   testConnection,
   performPreviewSync,
@@ -60,55 +62,8 @@ async function startServer() {
     next();
   });
 
-  // HyperCloudHost API Health Check Proxy
-  app.get("/api/hypercloud/health", async (req, res) => {
-    try {
-      const response = await axios.get("https://api.aphro-row.my.id/api/health", {
-        timeout: 10000,
-        headers: { Accept: "application/json" }
-      });
-      return res.json(response.data);
-    } catch (err: any) {
-      return res.status(err.response?.status || 502).json({
-        status: "error",
-        message: err.message,
-        details: err.response?.data || null
-      });
-    }
-  });
-
-  // Generic HyperCloudHost API Reverse Proxy
-  app.all("/api/hypercloud-proxy/*", async (req, res) => {
-    try {
-      const subPath = req.params[0] || "";
-      const targetUrl = `https://api.aphro-row.my.id/${subPath}`;
-      
-      const forwardHeaders: Record<string, string> = {
-        accept: "application/json",
-        "content-type": "application/json"
-      };
-      if (req.headers.authorization) {
-        forwardHeaders.authorization = req.headers.authorization as string;
-      }
-
-      const response = await axios({
-        method: req.method as any,
-        url: targetUrl,
-        params: req.query,
-        data: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
-        headers: forwardHeaders,
-        timeout: 20000,
-        validateStatus: () => true
-      });
-
-      return res.status(response.status).json(response.data);
-    } catch (err: any) {
-      return res.status(502).json({
-        status: "error",
-        message: `HyperCloudHost Proxy error: ${err.message}`
-      });
-    }
-  });
+  // Primary API router connected directly to HyperCloudHost PostgreSQL
+  app.use("/api", hypercloudApi);
 
   // Simple in-memory cache for Nominatim
   const geoCache = new Map();
@@ -701,44 +656,7 @@ ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
     }
   });
 
-  // Proxy endpoint for HyperCloudHost API to prevent browser CORS and support all methods (GET, POST, PUT, DELETE)
-  app.all([
-    "/api/login*",
-    "/api/health*",
-    "/api/realisasi*",
-    "/api/work-orders*",
-    "/api/absensi*",
-    "/api/master-data*",
-    "/api/users*",
-    "/api/auth*",
-    "/api/inisiasi*"
-  ], async (req, res) => {
-    try {
-      const targetUrl = `https://api.aphro-row.my.id${req.originalUrl}`;
-      const response = await axios({
-        method: req.method,
-        url: targetUrl,
-        data: req.body,
-        headers: {
-          Authorization: req.headers.authorization || "",
-          Accept: "application/json",
-          "Content-Type": "application/json"
-        },
-        timeout: 10000
-      });
-      return res.status(response.status).json(response.data);
-    } catch (error: any) {
-      if (error.response) {
-        return res.status(error.response.status).json(error.response.data);
-      }
-      console.warn(`Proxy ${req.originalUrl} network error:`, error.message);
-      return res.status(502).json({
-        status: "error",
-        message: "Proxy request to external HyperCloudHost API failed",
-        details: error.message
-      });
-    }
-  });
+
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

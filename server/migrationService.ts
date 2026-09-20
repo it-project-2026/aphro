@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
+import { setDatabaseUrl } from "./database";
 const { Pool } = pg;
 
 // Environment credentials for database connections
@@ -11,6 +12,7 @@ export let HYPERCLOUD_DATABASE_URL = process.env.HYPERCLOUD_DATABASE_URL || proc
 export function setHypercloudDatabaseUrl(url: string) {
   if (url && typeof url === "string") {
     HYPERCLOUD_DATABASE_URL = url.trim();
+    setDatabaseUrl(url);
     if (hypercloudPool) {
       hypercloudPool.end().catch(() => {});
       hypercloudPool = null;

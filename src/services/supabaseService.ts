@@ -164,7 +164,7 @@ export class SupabaseService {
   // ==========================================
 
   /**
-   * Fetch Unit Layanan list from INISIASI table
+   * Fetch Unit Layanan list from INISIASI table via HyperCloudHost API
    */
   static async fetchInisiasiUnits(): Promise<{
     success: boolean;
@@ -173,22 +173,19 @@ export class SupabaseService {
     message?: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from(SUPABASE_TABLES.INISIASI)
-        .select('ID, Kode_UL, Nama_UL, Folder_id_Foto, Folder_id_absensi');
-
-      if (!error && Array.isArray(data) && data.length > 0) {
-        const units: InisiasiUnit[] = data.map((row: any, idx: number) => ({
-          id: String(row.ID || `UL${idx + 1}`),
+      const apiRes = await ApiService.fetchInisiasiUnits();
+      if (apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
+        const units: InisiasiUnit[] = apiRes.data.map((row: any, idx: number) => ({
+          id: String(row.ID || row.id || `UL${idx + 1}`),
           no: idx + 1,
-          kodeUL: String(row.Kode_UL || `UL-${idx + 1}`),
-          namaUL: String(row.Nama_UL || '').toUpperCase(),
+          kodeUL: String(row.Kode_UL || row.kodeUL || `UL-${idx + 1}`),
+          namaUL: String(row.Nama_UL || row.namaUL || '').toUpperCase(),
           idSpreadsheet: DEFAULT_INISIASI_SPREADSHEET_ID,
           urlGas: '',
           folderIdSpreadsheet: '',
-          folderIdFoto: String(row.Folder_id_Foto || '1idu8U3COKEqdcCewdWntu9X06ZMnzskr'),
-          folderIdAbsensi: String(row.Folder_id_absensi || '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5'),
-          notes: `Unit Layanan ${row.Nama_UL || ''} (Supabase: APHRO-Database)`,
+          folderIdFoto: String(row.Folder_id_Foto || row.folderIdFoto || '1idu8U3COKEqdcCewdWntu9X06ZMnzskr'),
+          folderIdAbsensi: String(row.Folder_id_absensi || row.folderIdAbsensi || '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5'),
+          notes: `Unit Layanan ${row.Nama_UL || row.namaUL || ''} (HyperCloudHost PostgreSQL)`,
         })).filter(u => u.namaUL.length > 0);
 
         if (units.length > 0) {
@@ -197,12 +194,12 @@ export class SupabaseService {
             success: true,
             data: units,
             source: 'supabase',
-            message: `Berhasil memuat ${units.length} Unit Layanan dari Supabase Tabel "INISIASI".`,
+            message: `Berhasil memuat ${units.length} Unit Layanan dari HyperCloudHost API.`,
           };
         }
       }
     } catch (err) {
-      console.warn('Supabase fetch INISIASI error:', err);
+      console.warn('HyperCloudHost fetch INISIASI error:', err);
     }
 
     // Fallback to cache
@@ -237,7 +234,7 @@ export class SupabaseService {
   // ==========================================
 
   /**
-   * Fetch Work Orders from Node.js API (primary) with Supabase & Cache fallback.
+   * Fetch Work Orders from Node.js API connected to HyperCloudHost PostgreSQL.
    */
   static async fetchWorkOrders(
     unitId?: string, 
@@ -253,7 +250,7 @@ export class SupabaseService {
     const targetUnitId = unitId || this.getActiveUnitId();
     const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
 
-    // 1. Primary: HyperCloudHost Node.js API
+    // Primary: HyperCloudHost Node.js API
     if (isOnline) {
       try {
         const apiRes = await ApiService.fetchWorkOrders(targetUnitId);
@@ -268,47 +265,26 @@ export class SupabaseService {
             source: 'supabase',
             message: `Berhasil memuat ${workOrders.length} Work Order dari API HyperCloudHost.`,
           };
-        }
-      } catch (err: any) {
-        console.warn('Error loading Work Orders from API HyperCloudHost, falling back:', err);
-      }
-    }
-
-    // 2. Secondary fallback: Direct fetch from Supabase WORK_ORDER table
-    if (isOnline && isSupabaseConfigured()) {
-      try {
-        let query = supabase
-          .from(SUPABASE_TABLES.WORK_ORDER)
-          .select(WORK_ORDER_SELECT_FIELDS);
-
-        if (targetUnitId && targetUnitId !== 'ALL') {
-          query = query.or(this.getUnitQueryFilter(targetUnitId));
-        }
-
-        const { data, error } = await query
-          .order('Tanggal', { ascending: false })
-          .limit(pageSize);
-
-        if (!error && Array.isArray(data) && data.length > 0) {
-          const workOrders: WorkOrder[] = data.map((row: any) => this.normalizeWorkOrderRow(row));
-          if (page === 0 && !lastSyncTime) {
-            this.safeSetItem(`aphro_wo_${targetUnitId}`, JSON.stringify(workOrders));
-          }
+        } else if (apiRes && !apiRes.success && apiRes.message) {
           return {
-            success: true,
-            data: workOrders,
+            success: false,
+            data: [],
             source: 'supabase',
-            message: `Berhasil memuat ${workOrders.length} Work Order dari database Supabase.`,
+            message: apiRes.message,
           };
-        } else if (error) {
-          console.warn('Supabase fetchWorkOrders query warning:', error);
         }
       } catch (err: any) {
-        console.warn('Error loading Work Orders from Supabase:', err);
+        console.error('Error loading Work Orders from API HyperCloudHost:', err);
+        return {
+          success: false,
+          data: [],
+          source: 'supabase',
+          message: `Gagal memuat Work Order: ${err.message}`,
+        };
       }
     }
 
-    // 3. Fallback to cached data for this unit
+    // Fallback to cached data for this unit when offline
     try {
       const cached = this.safeGetItem(`aphro_wo_${targetUnitId}`);
       if (cached) {
@@ -326,16 +302,11 @@ export class SupabaseService {
       // Ignore
     }
 
-    // Initial fallback data
-    const initialForUnit = INITIAL_WORK_ORDERS.map(wo => ({
-      ...wo,
-      ulpId: targetUnitId,
-    }));
     return {
       success: true,
-      data: initialForUnit,
+      data: [],
       source: 'initial',
-      message: `Memuat ${initialForUnit.length} Work Order awal.`,
+      message: 'Tidak ada data Work Order offline.',
     };
   }
 
@@ -420,7 +391,7 @@ export class SupabaseService {
   }
 
   /**
-   * Save a new Work Order to Supabase WORK_ORDER table
+   * Save a new Work Order to HyperCloudHost PostgreSQL via ApiService
    */
   static async saveWorkOrder(unitId: string, wo: WorkOrder): Promise<{ success: boolean; error?: string }> {
     const targetUnitId = unitId || this.getActiveUnitId();
@@ -446,33 +417,21 @@ export class SupabaseService {
     };
 
     const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
-
-    if (isOnline && isSupabaseConfigured()) {
+    if (isOnline) {
       try {
-        const { error } = await supabase
-          .from(SUPABASE_TABLES.WORK_ORDER)
-          .upsert(payload);
-
-        if (!error) {
-          return { success: true };
-        }
-        console.warn('Supabase saveWorkOrder error:', error);
+        const res = await ApiService.saveWorkOrder(payload);
+        return { success: res.success, error: res.message };
       } catch (err: any) {
-        console.warn('Supabase saveWorkOrder exception:', err);
+        console.error('saveWorkOrder error:', err);
+        return { success: false, error: err.message };
       }
     }
 
-    try {
-      const res = await ApiService.saveWorkOrder(payload);
-      return { success: res.success, error: res.message };
-    } catch (err: any) {
-      console.warn('saveWorkOrder network exception:', err);
-      return { success: false, error: err.message };
-    }
+    return { success: false, error: 'Aplikasi sedang offline. Tidak dapat menyimpan ke server.' };
   }
 
   /**
-   * Update Work Order in Supabase WORK_ORDER table
+   * Update Work Order via ApiService
    */
   static async updateWorkOrder(
     unitId: string,
@@ -480,7 +439,10 @@ export class SupabaseService {
     updates: Partial<WorkOrder>
   ): Promise<{ success: boolean; error?: string }> {
     const targetUnitId = unitId || this.getActiveUnitId();
-    const dbUpdates: any = {};
+    const dbUpdates: any = {
+      WO_ID: id,
+      unitId: targetUnitId,
+    };
     if (updates.status) dbUpdates.STATUS = updates.status.toUpperCase();
     if (updates.totalRealisasi !== undefined) dbUpdates.TOTAL_REALISASI = String(updates.totalRealisasi);
     if (updates.satuanTotalRealisasi) dbUpdates.SATUAN_TOTAL_REALISASI = updates.satuanTotalRealisasi;
@@ -496,105 +458,66 @@ export class SupabaseService {
     if (updates.reguName) dbUpdates.Regu_ROW = updates.reguName;
     if (updates.lokasi) dbUpdates.LOKASI_START = updates.lokasi;
 
-    try {
-      const { error } = await supabase
-        .from(SUPABASE_TABLES.WORK_ORDER)
-        .update(dbUpdates)
-        .eq('unitId', targetUnitId)
-        .eq('WO_ID', id);
-
-      return { success: !error, error: error?.message };
-    } catch (err: any) {
-      return { success: false, error: err.message };
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    if (isOnline) {
+      try {
+        const res = await ApiService.saveWorkOrder(dbUpdates);
+        return { success: res.success, error: res.message };
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
     }
+
+    return { success: false, error: 'Aplikasi sedang offline.' };
   }
 
   /**
-   * Delete Work Order from Supabase WORK_ORDER table
+   * Delete Work Order via ApiService
    */
   static async deleteWorkOrder(unitId: string, id: string, nomorWO?: string): Promise<{ success: boolean; error?: string }> {
     const targetUnitId = unitId || this.getActiveUnitId();
     const cleanId = (id || '').trim();
     const cleanNomor = (nomorWO || '').trim();
+
+    // 1. Clear local storage caches so that refresh/offline won't bring the deleted item back
     try {
-      // 1. Delete from Supabase WORK_ORDER matching WO_ID or Nomor_WO
-      let error: any = null;
-
-      // Direct delete by WO_ID if cleanId provided
-      if (cleanId) {
-        const resId = await supabase
-          .from(SUPABASE_TABLES.WORK_ORDER)
-          .delete()
-          .eq('WO_ID', cleanId);
-        if (resId.error) error = resId.error;
-      }
-
-      // Also delete by Nomor_WO if cleanNomor provided or if cleanId might be Nomor_WO
-      if (cleanNomor && cleanNomor !== cleanId) {
-        const resNomor = await supabase
-          .from(SUPABASE_TABLES.WORK_ORDER)
-          .delete()
-          .eq('Nomor_WO', cleanNomor);
-        if (resNomor.error && !error) error = resNomor.error;
-      }
-
-      // If cleanId was used as Nomor_WO fallback
-      if (cleanId && !cleanNomor) {
-        await supabase
-          .from(SUPABASE_TABLES.WORK_ORDER)
-          .delete()
-          .eq('Nomor_WO', cleanId);
-      }
-
-      // 2. Clear local storage caches so that refresh/offline won't bring the deleted item back
-      try {
-        const keysToClean = [
-          `aphro_workorders_${targetUnitId}`,
-          'aphro_work_orders',
-          'aphro_workorders_all'
-        ];
-        keysToClean.forEach(key => {
-          const raw = this.safeGetItem(key);
-          if (raw) {
-            const list = JSON.parse(raw);
-            if (Array.isArray(list)) {
-              const filtered = list.filter((item: any) => 
-                item.id !== cleanId && 
-                item.WO_ID !== cleanId && 
-                item.nomorWO !== cleanId && 
-                item.Nomor_WO !== cleanId &&
-                (!cleanNomor || (item.nomorWO !== cleanNomor && item.Nomor_WO !== cleanNomor))
-              );
-              this.safeSetItem(key, JSON.stringify(filtered));
-            }
+      const keysToClean = [
+        `aphro_wo_${targetUnitId}`,
+        `aphro_workorders_${targetUnitId}`,
+        'aphro_work_orders',
+        'aphro_workorders_all'
+      ];
+      keysToClean.forEach(key => {
+        const raw = this.safeGetItem(key);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const filtered = list.filter((item: any) => 
+              item.id !== cleanId && 
+              item.WO_ID !== cleanId && 
+              item.nomorWO !== cleanId && 
+              item.Nomor_WO !== cleanId &&
+              (!cleanNomor || (item.nomorWO !== cleanNomor && item.Nomor_WO !== cleanNomor))
+            );
+            this.safeSetItem(key, JSON.stringify(filtered));
           }
-        });
-      } catch (cacheErr) {
-        console.warn('Cache purge error:', cacheErr);
-      }
-
-      // 3. Clear IndexedDB cache for WORK_ORDER
-      try {
-        const { idbService } = await import('./indexedDbService');
-        const cached = await idbService.getTable('WORK_ORDER');
-        if (Array.isArray(cached)) {
-          const filtered = cached.filter((item: any) =>
-            item.id !== cleanId &&
-            item.WO_ID !== cleanId &&
-            item.nomorWO !== cleanId &&
-            item.Nomor_WO !== cleanId &&
-            (!cleanNomor || (item.nomorWO !== cleanNomor && item.Nomor_WO !== cleanNomor))
-          );
-          await idbService.saveTable('WORK_ORDER', filtered);
         }
-      } catch (idbErr) {
-        console.warn('IndexedDB purge error:', idbErr);
-      }
-
-      return { success: !error, error: error?.message };
-    } catch (err: any) {
-      return { success: false, error: err.message };
+      });
+    } catch (cacheErr) {
+      console.warn('Cache purge error:', cacheErr);
     }
+
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    if (isOnline) {
+      try {
+        const res = await ApiService.deleteWorkOrder(cleanId || cleanNomor);
+        return { success: res.success, error: res.message };
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
+    }
+
+    return { success: true };
   }
 
   // ==========================================

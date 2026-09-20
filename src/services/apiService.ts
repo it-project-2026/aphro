@@ -112,26 +112,41 @@ export class ApiService {
   }
 
   /**
-   * Helper to perform HTTP request with automatic fallback to internal server proxy
+   * Helper to perform HTTP request with automatic priority to local Express API (/api/...)
    */
   public static async executeFetch(
     pathAndQuery: string,
     options: RequestInit = {}
   ): Promise<Response> {
     const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
-    const directUrl = `${this.getCleanBaseUrl()}${cleanPath}`;
-
-    // 1. Try direct URL first
-    try {
-      const res = await fetch(directUrl, options);
-      return res;
-    } catch (directErr) {
-      console.warn(`[ApiService] Direct fetch to ${directUrl} failed, falling back to server proxy...`);
+    const token = this.getAuthToken();
+    
+    // Build headers
+    const headers = new Headers(options.headers || {});
+    if (!headers.has('Authorization') && token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    if (!headers.has('Accept')) {
+      headers.set('Accept', 'application/json');
     }
 
-    // 2. Fallback to /api/hypercloud-proxy
-    const proxyUrl = `/api/hypercloud-proxy${cleanPath}`;
-    return await fetch(proxyUrl, options);
+    const requestOptions = { ...options, headers };
+
+    // 1. Try relative endpoint on Express server first
+    const primaryUrl = cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`;
+    try {
+      const res = await fetch(primaryUrl, requestOptions);
+      if (res.ok || res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404 || res.status === 409) {
+        return res;
+      }
+    } catch (localErr) {
+      console.warn(`[ApiService] Local Express API fetch to ${primaryUrl} failed:`, localErr);
+    }
+
+    // 2. Fallback to external production API base URL
+    const externalBase = this.getCleanBaseUrl();
+    const externalUrl = `${externalBase}${cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`}`;
+    return await fetch(externalUrl, requestOptions);
   }
 
   /**
@@ -806,6 +821,118 @@ export class ApiService {
       regu: Array.isArray(reguRes.data) ? reguRes.data : [],
       petugas: Array.isArray(petugasRes.data) ? petugasRes.data : [],
       users: Array.isArray(usersRes.data) ? usersRes.data : [],
+    };
+  }
+
+  /**
+   * Delete Work Order from HyperCloudHost API
+   */
+  static async deleteWorkOrder(
+    id: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await this.executeFetch(`/api/work-orders/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        return { success: false, message: this.formatErrorMessage(res.status) };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  }
+
+  /**
+   * Delete Absensi from HyperCloudHost API
+   */
+  static async deleteAbsensi(
+    id: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await this.executeFetch(`/api/absensi/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        return { success: false, message: this.formatErrorMessage(res.status) };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  }
+
+  /**
+   * Save User to HyperCloudHost API
+   */
+  static async saveUser(
+    userData: any
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await this.executeFetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+      if (!res.ok) {
+        return { success: false, message: this.formatErrorMessage(res.status) };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  }
+
+  /**
+   * Delete User from HyperCloudHost API
+   */
+  static async deleteUser(
+    id: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await this.executeFetch(`/api/users/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        return { success: false, message: this.formatErrorMessage(res.status) };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  }
+
+  /**
+   * Fetch Inisiasi Units from HyperCloudHost API
+   */
+  static async fetchInisiasiUnits(): Promise<{
+    success: boolean;
+    data: any[];
+    source: 'hypercloud' | 'cache' | 'default';
+    message?: string;
+  }> {
+    try {
+      const res = await this.executeFetch('/api/inisiasi', { method: 'GET' });
+      if (res.ok) {
+        const json = await res.json();
+        const list = Array.isArray(json.data) ? json.data : [];
+        if (list.length > 0) {
+          return {
+            success: true,
+            data: list,
+            source: 'hypercloud',
+            message: `Berhasil memuat ${list.length} Unit Layanan dari HyperCloudHost.`,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('[ApiService] fetchInisiasiUnits error:', e);
+    }
+    return {
+      success: false,
+      data: [],
+      source: 'default',
+      message: 'Gagal memuat Unit Layanan dari HyperCloudHost API',
     };
   }
 }
