@@ -44,6 +44,27 @@ export interface TableDiffResult {
   status: "VERIFIED" | "DIFFERENT" | "CONFLICT" | "ERROR" | "NOT_CHECKED";
 }
 
+export interface FullPreviewResponseData {
+  targetInfo: {
+    connected: boolean;
+    database: string;
+    schema: string;
+    error?: string;
+    counts: Record<string, number>;
+  };
+  tableSummaries: Record<string, TableDiffResult>;
+  realisasiDetail?: {
+    totalSource: number;
+    totalTarget: number;
+    sourceOnlyCount: number;
+    targetOnlyCount: number;
+    inBothCount: number;
+    sourceOnlyRecords: RealisasiPreviewItem[];
+  };
+  validationWarning?: string;
+  isSyncAllowed: boolean;
+}
+
 export interface SyncLogItem {
   sync_id: string;
   tanggal_mulai: string;
@@ -418,103 +439,19 @@ export const MigrationService = {
     dateFrom?: string;
     dateTo?: string;
     customHypercloudUrl?: string;
-  }): Promise<Record<string, TableDiffResult>> {
-    // 1. Try backend endpoint
-    const res = await safeFetchJson<Record<string, TableDiffResult>>("/api/admin/migration/preview", {
+  }): Promise<FullPreviewResponseData> {
+    const targetUrl = options.customHypercloudUrl || localStorage.getItem("aphro_custom_hypercloud_url") || DEFAULT_HYPERCLOUD_URL;
+    const res = await safeFetchJson<FullPreviewResponseData>("/api/admin/migration/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(options)
+      body: JSON.stringify({ ...options, customHypercloudUrl: targetUrl })
     });
 
     if (res.success && res.data) {
       return res.data;
     }
 
-    // 2. Client-side comparison fallback
-    const selectedTables = options.tables && options.tables.length > 0 ? options.tables : Object.keys(SUPPORTED_TABLES);
-    const result: Record<string, TableDiffResult> = {};
-
-    for (const tbl of selectedTables) {
-      try {
-        let sourceRows: any[] = [];
-        let targetRows: any[] = [];
-
-        // Fetch Supabase source data
-        const { data: supaData } = await supabase.from(tbl).select("*").limit(5000);
-        sourceRows = supaData || [];
-
-        // Fetch Target Hypercloud data
-        try {
-          const endpoint = tbl === "WORK_ORDER" ? "/api/work-orders" : tbl === "ABSENSI" ? "/api/absensi" : "/api/realisasi";
-          const resTarget = await fetch(`https://api.aphro-row.my.id${endpoint}?limit=5000`);
-          if (resTarget.ok) {
-            const json = await resTarget.json();
-            targetRows = Array.isArray(json.data) ? json.data : [];
-          }
-        } catch {
-          // targetRows remain empty
-        }
-
-        const pk = SUPPORTED_TABLES[tbl]?.primaryKey || "id";
-        const targetMap = new Map<string, any>();
-        targetRows.forEach(r => {
-          const id = String(r[pk] || "");
-          if (id) targetMap.set(id, r);
-        });
-
-        let insertCount = 0;
-        let updateCount = 0;
-        let skipCount = 0;
-        const sampleInserts: string[] = [];
-        const sampleUpdates: string[] = [];
-
-        for (const sRow of sourceRows) {
-          const id = String(sRow[pk] || "");
-          if (!id) continue;
-
-          if (!targetMap.has(id)) {
-            insertCount++;
-            if (sampleInserts.length < 10) sampleInserts.push(id);
-          } else {
-            skipCount++;
-          }
-        }
-
-        result[tbl] = {
-          tableName: tbl,
-          totalSource: sourceRows.length,
-          totalTarget: targetRows.length,
-          insertCount,
-          updateCount,
-          skipCount,
-          conflictCount: 0,
-          targetOnlyCount: Math.max(0, targetRows.length - skipCount),
-          errorCount: 0,
-          conflicts: [],
-          sampleInserts,
-          sampleUpdates,
-          status: (insertCount > 0 || updateCount > 0) ? "DIFFERENT" : "VERIFIED"
-        };
-      } catch (err: any) {
-        result[tbl] = {
-          tableName: tbl,
-          totalSource: 0,
-          totalTarget: 0,
-          insertCount: 0,
-          updateCount: 0,
-          skipCount: 0,
-          conflictCount: 0,
-          targetOnlyCount: 0,
-          errorCount: 1,
-          conflicts: [],
-          sampleInserts: [],
-          sampleUpdates: [],
-          status: "ERROR"
-        };
-      }
-    }
-
-    return result;
+    throw new Error(res.message || "Gagal melakukan preview perbedaan data database");
   },
 
   async previewRealisasi(customHypercloudUrl?: string): Promise<RealisasiPreviewResult> {

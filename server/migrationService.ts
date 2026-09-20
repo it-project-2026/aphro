@@ -234,6 +234,119 @@ export function getSupabaseClient() {
   });
 }
 
+export interface TargetDbVerification {
+  connected: boolean;
+  database: string;
+  schema: string;
+  error?: string;
+  counts: Record<string, number>;
+}
+
+export interface FullPreviewResponse {
+  targetInfo: TargetDbVerification;
+  tableSummaries: Record<string, TableDiffSummary>;
+  realisasiDetail?: {
+    totalSource: number;
+    totalTarget: number;
+    sourceOnlyCount: number;
+    targetOnlyCount: number;
+    inBothCount: number;
+    sourceOnlyRecords: RealisasiPreviewItem[];
+  };
+  validationWarning?: string;
+  isSyncAllowed: boolean;
+}
+
+export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDbVerification> {
+  const connStr = customUrl || HYPERCLOUD_DATABASE_URL;
+  const pool = getHypercloudPool(connStr);
+
+  if (pool) {
+    try {
+      const client = await pool.connect();
+      try {
+        const metaRes = await client.query(`
+          SELECT current_database() as db, current_schema() as schema;
+        `);
+        const dbName = metaRes.rows[0]?.db || "meysxysd_aphro";
+        const schemaName = metaRes.rows[0]?.schema || "public";
+
+        const counts: Record<string, number> = {};
+        for (const tbl of ["WORK_ORDER", "ABSENSI", "REALISASI"]) {
+          const countRes = await client.query(`SELECT COUNT(*)::int as cnt FROM "${tbl}";`);
+          counts[tbl] = parseInt(countRes.rows[0]?.cnt || "0", 10);
+        }
+
+        console.log(`[PREVIEW TARGET VERIFICATION] Database: '${dbName}', Schema: '${schemaName}'`);
+        console.log(`[PREVIEW TARGET VERIFICATION] Counts: WORK_ORDER=${counts.WORK_ORDER}, ABSENSI=${counts.ABSENSI}, REALISASI=${counts.REALISASI}`);
+
+        return {
+          connected: true,
+          database: dbName,
+          schema: schemaName,
+          counts
+        };
+      } finally {
+        client.release();
+      }
+    } catch (pgErr: any) {
+      console.warn(`[verifyTargetDatabase] Direct PG connection error:`, pgErr.message);
+    }
+  }
+
+  // Fallback to REST API Gateway
+  try {
+    const pingRes = await fetch("https://api.aphro-row.my.id/api/health");
+    const pingData = await pingRes.json().catch(() => ({}));
+
+    if (!pingRes.ok || pingData.database !== "connected") {
+      throw new Error("REST API HyperCloudHost tidak terhubung ke database");
+    }
+
+    const dbName = pingData.databaseName || "meysxysd_aphro";
+    const schemaName = "public";
+
+    const token = await getTargetAuthToken("UL1") || await getTargetAuthToken("UL2");
+    if (!token) {
+      throw new Error("Otentikasi token HyperCloudHost gagal");
+    }
+
+    const counts: Record<string, number> = {};
+    for (const tbl of ["WORK_ORDER", "ABSENSI", "REALISASI"]) {
+      const endpoint = tbl === "WORK_ORDER" ? "/api/work-orders" :
+                       tbl === "ABSENSI" ? "/api/absensi" : "/api/realisasi";
+      const fetchRes = await fetch(`https://api.aphro-row.my.id${endpoint}?limit=15000`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const resJson = await fetchRes.json();
+      if (Array.isArray(resJson.data)) {
+        counts[tbl] = resJson.data.length;
+      } else {
+        throw new Error(`Data REST API untuk '${tbl}' tidak valid`);
+      }
+    }
+
+    console.log(`[PREVIEW TARGET VERIFICATION API] Database: '${dbName}', Schema: '${schemaName}'`);
+    console.log(`[PREVIEW TARGET VERIFICATION API] Counts: WORK_ORDER=${counts.WORK_ORDER}, ABSENSI=${counts.ABSENSI}, REALISASI=${counts.REALISASI}`);
+
+    return {
+      connected: true,
+      database: dbName,
+      schema: schemaName,
+      counts
+    };
+  } catch (apiErr: any) {
+    console.error(`[verifyTargetDatabase ERROR]:`, apiErr.message);
+    return {
+      connected: false,
+      database: "Gagal Terhubung",
+      schema: "Gagal Terhubung",
+      error: `Koneksi ke database HyperCloudHost gagal: ${apiErr.message}`,
+      counts: {}
+    };
+  }
+}
+
 // Test Connection Helper
 export async function testConnection(type: "supabase" | "hypercloud", customUrl?: string): Promise<{
   success: boolean;
@@ -421,12 +534,15 @@ async function getTargetAuthToken(unitId: string): Promise<string | null> {
 // Fetch all rows from Target (PostgreSQL or API fallback)
 export async function fetchTargetData(
   tableName: string,
-  options: { unitFilter?: string; dateFrom?: string; dateTo?: string }
+  options: { unitFilter?: string; dateFrom?: string; dateTo?: string },
+  customHypercloudUrl?: string
 ): Promise<Record<string, any>[]> {
   const config = SUPPORTED_TABLES[tableName];
   if (!config) throw new Error(`Tabel tidak didukung: ${tableName}`);
 
-  const pool = getHypercloudPool();
+  const connStr = customHypercloudUrl || HYPERCLOUD_DATABASE_URL;
+  const pool = getHypercloudPool(connStr);
+
   if (pool) {
     try {
       const client = await pool.connect();
@@ -464,37 +580,35 @@ export async function fetchTargetData(
                      tableName === "ABSENSI" ? "/api/absensi" :
                      "/api/realisasi";
 
-    let url = `https://api.aphro-row.my.id${endpoint}?limit=5000`;
+    let url = `https://api.aphro-row.my.id${endpoint}?limit=15000`;
     if (options.dateFrom) url += `&tanggalDari=${options.dateFrom}`;
     if (options.dateTo) url += `&tanggalSampai=${options.dateTo}`;
 
-    // Admin tokens for both units to retrieve complete picture
     const units = options.unitFilter === "UL1" ? ["UL1"] :
                   options.unitFilter === "UL2" ? ["UL2"] : ["UL1", "UL2"];
 
     const allRecords: Record<string, any>[] = [];
 
     for (const u of units) {
-      try {
-        const token = await getTargetAuthToken(u);
-        if (token) {
-          const fetchRes = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const resJson = await fetchRes.json();
-          if (Array.isArray(resJson.data)) {
-            allRecords.push(...resJson.data);
-          }
-        }
-      } catch (e) {
-        console.warn(`Could not fetch target data for unit ${u} via REST:`, e);
+      const token = await getTargetAuthToken(u);
+      if (!token) {
+        throw new Error(`Token autentikasi tidak tersedia untuk unit ${u}`);
+      }
+      const fetchRes = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const resJson = await fetchRes.json();
+      if (Array.isArray(resJson.data)) {
+        allRecords.push(...resJson.data);
+      } else {
+        throw new Error(`Format data API ${endpoint} tidak valid`);
       }
     }
 
     return allRecords;
   } catch (err: any) {
-    console.warn("Target data fetch failed via API:", err.message);
-    return [];
+    console.error(`[fetchTargetData ERROR] ${tableName}:`, err.message);
+    throw new Error(`Gagal membaca data target '${tableName}': ${err.message}`);
   }
 }
 
@@ -635,7 +749,18 @@ export async function performPreviewSync(options: {
   unitFilter?: string;
   dateFrom?: string;
   dateTo?: string;
-}): Promise<Record<string, TableDiffSummary>> {
+  customHypercloudUrl?: string;
+}): Promise<FullPreviewResponse> {
+  const targetInfo = await verifyTargetDatabase(options.customHypercloudUrl);
+
+  let validationWarning: string | undefined = undefined;
+  let isSyncAllowed = true;
+
+  if (!targetInfo.connected) {
+    isSyncAllowed = false;
+    validationWarning = `COUNT DATABASE TARGET TIDAK SESUAI. SYNC DINONAKTIFKAN. (${targetInfo.error || "Gagal terhubung ke database target"})`;
+  }
+
   const selectedTables = options.tables && options.tables.length > 0
     ? options.tables
     : Object.keys(SUPPORTED_TABLES);
@@ -644,16 +769,119 @@ export async function performPreviewSync(options: {
   selectedTables.sort((a, b) => (SUPPORTED_TABLES[a]?.order || 99) - (SUPPORTED_TABLES[b]?.order || 99));
 
   const summaries: Record<string, TableDiffSummary> = {};
+  let realisasiDetail: FullPreviewResponse["realisasiDetail"] = undefined;
 
   for (const tbl of selectedTables) {
-    const [sourceRows, targetRows] = await Promise.all([
-      fetchSourceData(tbl, options),
-      fetchTargetData(tbl, options)
-    ]);
-    summaries[tbl] = compareTableRecords(tbl, sourceRows, targetRows);
+    try {
+      const sourceRows = await fetchSourceData(tbl, options);
+      let targetRows: Record<string, any>[] = [];
+
+      if (targetInfo.connected) {
+        targetRows = await fetchTargetData(tbl, options, options.customHypercloudUrl);
+      }
+
+      const diff = compareTableRecords(tbl, sourceRows, targetRows);
+
+      if (!targetInfo.connected) {
+        diff.status = "ERROR";
+        diff.errorCount = sourceRows.length;
+      }
+
+      summaries[tbl] = diff;
+
+      if (tbl === "REALISASI") {
+        const sourceMap = new Map<string, Record<string, any>>();
+        sourceRows.forEach(r => {
+          const id = String(r.ID || r.id || "").trim();
+          if (id) sourceMap.set(id, r);
+        });
+
+        const targetSet = new Set<string>();
+        targetRows.forEach(r => {
+          const id = String(r.ID || r.id || "").trim();
+          if (id) targetSet.add(id);
+        });
+
+        let inBothCount = 0;
+        let sourceOnlyCount = 0;
+        let targetOnlyCount = 0;
+        const sourceOnlyRecords: RealisasiPreviewItem[] = [];
+
+        for (const [id, row] of sourceMap.entries()) {
+          if (targetSet.has(id)) {
+            inBothCount++;
+          } else {
+            sourceOnlyCount++;
+            sourceOnlyRecords.push({
+              ID: id,
+              WO_ID: String(row.WO_ID ?? row.wo_id ?? "-"),
+              Nomor_WO: String(row.Nomor_WO ?? row.nomor_wo ?? "-"),
+              ULP: String(row.ULP ?? row.ulp ?? "-"),
+              REGU_ROW: String(row.REGU_ROW ?? row.Regu_ROW ?? row.Regu ?? row.Nama_Regu ?? "-"),
+              PENYULANG: String(row.PENYULANG ?? row.Penyulang ?? "-"),
+              NO_TIANG: String(row.NO_TIANG ?? row.Nomor_Tiang ?? row.No_Tiang ?? "-"),
+              TANGGAL: String(row.TANGGAL ?? row.Tanggal ?? "-"),
+              Timestamp: String(row.Timestamp ?? row.timestamp ?? "-"),
+              unitId: String(row.unitId ?? row.unit_id ?? "UL1")
+            });
+          }
+        }
+
+        for (const id of targetSet) {
+          if (!sourceMap.has(id)) {
+            targetOnlyCount++;
+          }
+        }
+
+        realisasiDetail = {
+          totalSource: sourceMap.size,
+          totalTarget: targetSet.size,
+          sourceOnlyCount,
+          targetOnlyCount,
+          inBothCount,
+          sourceOnlyRecords
+        };
+      }
+    } catch (err: any) {
+      isSyncAllowed = false;
+      validationWarning = `COUNT DATABASE TARGET TIDAK SESUAI. SYNC DINONAKTIFKAN. (Error pada '${tbl}': ${err.message})`;
+      summaries[tbl] = {
+        tableName: tbl,
+        totalSource: 0,
+        totalTarget: 0,
+        insertCount: 0,
+        updateCount: 0,
+        skipCount: 0,
+        conflictCount: 0,
+        targetOnlyCount: 0,
+        errorCount: 1,
+        conflicts: [],
+        sampleInserts: [],
+        sampleUpdates: [],
+        status: "ERROR"
+      };
+    }
   }
 
-  return summaries;
+  // Validate counts against target verification
+  if (targetInfo.connected) {
+    for (const tbl of selectedTables) {
+      const diff = summaries[tbl];
+      const verifiedCount = targetInfo.counts[tbl];
+      if (verifiedCount !== undefined && diff && diff.totalTarget !== verifiedCount) {
+        isSyncAllowed = false;
+        validationWarning = `COUNT DATABASE TARGET TIDAK SESUAI PADA TABEL '${tbl}' (Query DB: ${verifiedCount}, Data Fetched: ${diff.totalTarget}). SYNC DINONAKTIFKAN.`;
+      }
+    }
+  }
+
+  return {
+    targetInfo,
+    tableSummaries: summaries,
+    realisasiDetail,
+    validationWarning,
+    isSyncAllowed
+  };
 }
 
 // Execute Live Sync Batch into PostgreSQL

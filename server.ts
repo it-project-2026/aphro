@@ -295,7 +295,8 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
         tables,
         unitFilter,
         dateFrom,
-        dateTo
+        dateTo,
+        customHypercloudUrl
       });
       return res.json({
         status: "success",

@@ -5,6 +5,7 @@ import {
   MigrationService,
   ConnectionStatusResponse,
   TableDiffResult,
+  FullPreviewResponseData,
   SyncStatusData,
   SyncLogItem,
   ConflictItem,
@@ -55,6 +56,7 @@ export const MigrasiDatabasePage: React.FC = () => {
 
   // Preview & Comparison states
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [fullPreview, setFullPreview] = useState<FullPreviewResponseData | null>(null);
   const [diffSummaries, setDiffSummaries] = useState<Record<string, TableDiffResult> | null>(null);
   const [realisasiPreview, setRealisasiPreview] = useState<RealisasiPreviewResult | null>(null);
   const [isRealisasiPreviewing, setIsRealisasiPreviewing] = useState<boolean>(false);
@@ -191,8 +193,13 @@ export const MigrasiDatabasePage: React.FC = () => {
         dateTo: dates.dateTo,
         customHypercloudUrl: targetDbUrl
       });
-      setDiffSummaries(res);
-      showToast("Analisa perbandingan data selesai!", "success");
+      setFullPreview(res);
+      setDiffSummaries(res.tableSummaries);
+      if (res.isSyncAllowed) {
+        showToast("Analisa perbandingan data selesai & terverifikasi!", "success");
+      } else {
+        showToast(res.validationWarning || "Perhatian: Hasil preview menunjukkan selisih. Sync dinonaktifkan.", "error");
+      }
     } catch (err: any) {
       showToast(`Gagal membandingkan data: ${err.message}`, "error");
     } finally {
@@ -656,8 +663,13 @@ export const MigrasiDatabasePage: React.FC = () => {
 
                 <button
                   type="button"
+                  disabled={!!(fullPreview && (!fullPreview.isSyncAllowed || fullPreview.validationWarning))}
                   onClick={() => setIsSyncModalOpen(true)}
-                  className="px-5 py-2.5 text-xs font-extrabold rounded-xl bg-gradient-to-r from-teal-500 to-[#00A2B9] text-white hover:from-teal-600 hover:to-[#008f9f] transition-all inline-flex items-center space-x-2 shadow-lg shadow-teal-500/20"
+                  className={`px-5 py-2.5 text-xs font-extrabold rounded-xl transition-all inline-flex items-center space-x-2 shadow-lg ${
+                    fullPreview && (!fullPreview.isSyncAllowed || fullPreview.validationWarning)
+                      ? "bg-slate-300 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none"
+                      : "bg-gradient-to-r from-teal-500 to-[#00A2B9] text-white hover:from-teal-600 hover:to-[#008f9f] shadow-teal-500/20"
+                  }`}
                 >
                   <Play className="w-4 h-4" />
                   <span>SYNC DATA SEKARANG</span>
@@ -877,8 +889,85 @@ export const MigrasiDatabasePage: React.FC = () => {
           )}
 
           {!isPreviewing && diffSummaries && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-4 animate-in fade-in duration-300">
-              <div className="flex items-center justify-between">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-6 animate-in fade-in duration-300">
+              
+              {/* Target DB Verification Box */}
+              {fullPreview?.targetInfo && (
+                <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Database className="w-5 h-5 text-teal-400" />
+                      <span className="font-extrabold text-xs uppercase tracking-wider text-slate-200">
+                        DATABASE TARGET HYPERCLOUD
+                      </span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black ${
+                      fullPreview.targetInfo.connected
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                    }`}>
+                      {fullPreview.targetInfo.connected ? "TERHUBUNG (VERIFIED)" : "TERPUTUS"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1 font-mono">
+                    <div className="bg-black/40 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block font-sans uppercase">Database</span>
+                      <strong className="text-teal-300 text-xs">{fullPreview.targetInfo.database}</strong>
+                    </div>
+                    <div className="bg-black/40 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block font-sans uppercase">Schema</span>
+                      <strong className="text-teal-300 text-xs">{fullPreview.targetInfo.schema}</strong>
+                    </div>
+                    <div className="bg-black/40 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block font-sans uppercase">WORK_ORDER DB Target</span>
+                      <strong className="text-white text-xs">{fullPreview.targetInfo.counts.WORK_ORDER ?? 0}</strong>
+                    </div>
+                    <div className="bg-black/40 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block font-sans uppercase">REALISASI DB Target</span>
+                      <strong className="text-white text-xs">{fullPreview.targetInfo.counts.REALISASI ?? 0}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Validation Warning Banner */}
+              {fullPreview?.validationWarning && (
+                <div className="bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-500/80 rounded-2xl p-4 text-amber-900 dark:text-amber-200 flex items-start space-x-3 shadow-sm">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                      STATUS PREVIEW DATABASE
+                    </h4>
+                    <p className="text-xs font-bold leading-relaxed">
+                      {fullPreview.validationWarning}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* REALISASI ID Breakdown Card */}
+              {fullPreview?.realisasiDetail && (
+                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center space-x-2">
+                    <Layers className="w-4 h-4 text-cyan-600" />
+                    <span>REALISASI ID BREAKDOWN (SISTEM SERVER)</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-extrabold">
+                    <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      REALISASI ID hanya di Supabase = <span className="text-sm font-black ml-1">{fullPreview.realisasiDetail.sourceOnlyCount.toLocaleString("id-ID")}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-200 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700">
+                      REALISASI ID hanya di HyperCloud = <span className="text-sm font-black ml-1">{fullPreview.realisasiDetail.targetOnlyCount.toLocaleString("id-ID")}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-cyan-100 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                      REALISASI ID terdapat di kedua database = <span className="text-sm font-black ml-1">{fullPreview.realisasiDetail.inBothCount.toLocaleString("id-ID")}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-1">
                 <div>
                   <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
                     <Sparkles className="w-4 h-4 text-teal-500" />
