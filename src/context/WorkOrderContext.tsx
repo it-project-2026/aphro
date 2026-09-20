@@ -5,6 +5,7 @@ import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { SupabaseService } from '../services/supabaseService';
 import { dexieDb } from '../services/dexieDb';
+import { idbService } from '../services/indexedDbService';
 import { INITIAL_WORK_ORDERS } from '../data/initialData';
 import { syncManager } from '../services/syncManager';
 import { getLocalDateTimeString, parseDateFromNomorWO } from '../utils/dateUtils';
@@ -296,35 +297,91 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       updatedAt: nowStr,
     };
 
-    // Save to Dexie DB
-    await dexieDb.work_orders.put({
-      ...newWo,
-      syncStatus: 'PENDING',
-    });
-
-    setWorkOrders((prev) => [newWo, ...prev]);
-
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
     const unitId = SupabaseService.getActiveUnitId();
-    try {
-      const res = await syncManager.executeMutation({
-        type: 'CREATE',
-        tableName: 'WORK_ORDER',
-        payload: newWo,
-        apiCall: async () => {
-          const result = await SupabaseService.saveWorkOrder(unitId, newWo);
-          return { status: result.success ? 'success' : 'error', message: result.error };
-        },
+
+    let apiSuccess = false;
+    let apiErrorMsg = '';
+
+    if (isOnline) {
+      try {
+        const result = await SupabaseService.saveWorkOrder(unitId, newWo);
+        if (result.success) {
+          apiSuccess = true;
+        } else {
+          apiErrorMsg = result.error || 'Server error';
+        }
+      } catch (err: any) {
+        console.warn('[Direct API Call failed, falling back to offline]', err);
+        apiErrorMsg = err.message || String(err);
+      }
+    }
+
+    const isNetworkOrTimeoutError = (msg: string): boolean => {
+      const cleanMsg = msg.toLowerCase();
+      return (
+        cleanMsg.includes('tidak dapat terhubung') ||
+        cleanMsg.includes('internet') ||
+        cleanMsg.includes('koneksi') ||
+        cleanMsg.includes('offline') ||
+        cleanMsg.includes('network') ||
+        cleanMsg.includes('timeout') ||
+        cleanMsg.includes('failed to fetch') ||
+        cleanMsg.includes('coercion') ||
+        cleanMsg.includes('aborted')
+      );
+    };
+
+    if (apiSuccess) {
+      // Save directly to Dexie DB as SYNCED
+      await dexieDb.work_orders.put({
+        ...newWo,
+        syncStatus: 'SYNCED',
       });
 
-      if (!res.offline) {
-        showToast(`Work Order ${newWo.nomorWO} berhasil tersimpan ke Database!`, 'success');
-        await dexieDb.work_orders.update(newWo.id, { syncStatus: 'SYNCED' });
+      setWorkOrders((prev) => [newWo, ...prev]);
+      showToast(`Work Order ${newWo.nomorWO} berhasil tersimpan ke Database!`, 'success');
+    } else {
+      const isConnectionIssue = !isOnline || isNetworkOrTimeoutError(apiErrorMsg);
+
+      if (isConnectionIssue) {
+        // Save to Dexie DB as PENDING
+        await dexieDb.work_orders.put({
+          ...newWo,
+          syncStatus: 'PENDING',
+        });
+
+        setWorkOrders((prev) => [newWo, ...prev]);
+
+        // Put into sync_queue using idbService
+        const idempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        await idbService.addPendingOperation({
+          idempotencyKey,
+          type: 'CREATE',
+          tableName: 'WORK_ORDER',
+          payload: newWo,
+        });
+
+        // Add audit log to SyncManager
+        await syncManager.addAuditLog({
+          action: 'ERROR',
+          module: 'WORK_ORDER',
+          details: `Koneksi gagal/offline. Operasi CREATE disimpan ke antrean offline (Key: ${idempotencyKey})`,
+        });
+
+        // Notify listeners of the queue change
+        const pendingOps = await idbService.getPendingOperations();
+        syncManager.notifyListeners({
+          type: 'PENDING_QUEUE_CHANGED',
+          data: pendingOps,
+        });
+
+        showToast(`Tersimpan di antrean offline (Koneksi terganggu).`, 'info');
       } else {
-        showToast(`Work Order tersimpan (offline).`, 'info');
+        // Validation/Auth error: Do not queue, show error directly to user
+        showToast(`Gagal menyimpan Work Order: ${apiErrorMsg}`, 'error');
+        throw new Error(apiErrorMsg);
       }
-    } catch (err) {
-      console.warn('Save WO error:', err);
-      showToast(`Tersimpan di antrean offline.`, 'info');
     }
 
     return newWo;

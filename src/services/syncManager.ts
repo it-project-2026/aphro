@@ -138,7 +138,7 @@ export class SyncManager {
     };
   }
 
-  private notifyListeners(event: Parameters<SyncManagerListener>[0]) {
+  public notifyListeners(event: Parameters<SyncManagerListener>[0]) {
     this.listeners.forEach((listener) => {
       try {
         listener(event);
