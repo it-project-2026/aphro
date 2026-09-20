@@ -299,9 +299,20 @@ router.get('/ulp', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/regu
+ * GET /api/regu and /api/regu-row
  */
 router.get('/regu', async (req: Request, res: Response) => {
+  const { unitId, isAll } = parseUnitFilter(req);
+  try {
+    const sql = !isAll && unitId ? `SELECT * FROM public."REGU_ROW" WHERE "unitId" = $1` : `SELECT * FROM public."REGU_ROW"`;
+    const resDb = await query(sql, !isAll && unitId ? [unitId] : []);
+    return res.json({ status: 'success', data: resDb.rows });
+  } catch (err: any) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+router.get('/regu-row', async (req: Request, res: Response) => {
   const { unitId, isAll } = parseUnitFilter(req);
   try {
     const sql = !isAll && unitId ? `SELECT * FROM public."REGU_ROW" WHERE "unitId" = $1` : `SELECT * FROM public."REGU_ROW"`;
