@@ -67,8 +67,7 @@ export function getClient(): SupabaseClient {
 }
 
 export function isSupabaseConfigured(): boolean {
-  const cfg = getSupabaseConfig();
-  return Boolean(cfg.url && cfg.key && cfg.url.includes('supabase.co'));
+  return false;
 }
 
 export const SUPABASE_SETUP_SQL = `-- ========================================================
