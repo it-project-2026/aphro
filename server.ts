@@ -303,7 +303,19 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
         data: diffSummaries
       });
     } catch (err: any) {
-      return res.status(500).json({ status: "error", message: err.message });
+      console.error("[PREVIEW ERROR STACK]:", err);
+      const errorDetail = err.detail || {
+        stage: "Perbandingan",
+        database: "SUPABASE / HYPERCLOUD",
+        table: "N/A",
+        errorMessage: err.message || "Gagal membandingkan data database",
+        errorCode: err.code || "PREVIEW_FAILED"
+      };
+      return res.status(400).json({
+        status: "error",
+        message: errorDetail.errorMessage,
+        errorDetail
+      });
     }
   });
 
@@ -320,7 +332,19 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
         data: previewResult
       });
     } catch (err: any) {
-      return res.status(500).json({ status: "error", message: err.message });
+      console.error("[PREVIEW REALISASI ERROR STACK]:", err);
+      const errorDetail = err.detail || {
+        stage: "Perbandingan",
+        database: "SUPABASE / HYPERCLOUD",
+        table: "REALISASI",
+        errorMessage: err.message || "Gagal melakukan preview REALISASI",
+        errorCode: err.code || "PREVIEW_REALISASI_FAILED"
+      };
+      return res.status(400).json({
+        status: "error",
+        message: errorDetail.errorMessage,
+        errorDetail
+      });
     }
   });
 

@@ -23,6 +23,54 @@ export function getHypercloudDatabaseUrl(): string {
 }
 
 // Helper function to safely parse Postgres connection string including passwords with special characters
+export function sanitizeSecretInfo(str: string): string {
+  if (!str || typeof str !== "string") return str || "";
+
+  let sanitized = str;
+
+  // 1. Sanitize PostgreSQL / MySQL / Database Connection Strings e.g. postgresql://user:password@host:port/db
+  sanitized = sanitized.replace(/(postgres(?:ql)?:\/\/[^:]+:)([^@]+)(@)/gi, "$1******$3");
+  sanitized = sanitized.replace(/(mysql:\/\/[^:]+:)([^@]+)(@)/gi, "$1******$3");
+
+  // 2. Sanitize generic URI password parameters: e.g. mongodb://user:pass@... or ?password=...
+  sanitized = sanitized.replace(/(\/|\?|&)(password|passwd|pass|key|secret)=([^&]+)/gi, "$1$2=******");
+
+  // 3. Sanitize JSON or key-value passwords: e.g. "password": "...", password = "..."
+  sanitized = sanitized.replace(/(password|passwd|pass|secret|token|authorization|bearer)\s*[:=]\s*(["']?)([^"'\s&]+)\2/gi, "$1=$2******$2");
+
+  // 4. Sanitize Bearer tokens in headers
+  sanitized = sanitized.replace(/Bearer\s+[A-Za-z0-9\-\._~\+\/]+=*/gi, "Bearer [REDACTED]");
+
+  // 5. Sanitize Supabase / JWT keys
+  sanitized = sanitized.replace(/(eyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_=]*)/g, "[JWT_REDACTED]");
+
+  return sanitized;
+}
+
+export interface PreviewErrorDetail {
+  stage: "Koneksi" | "COUNT" | "Pengambilan ID" | "Perbandingan";
+  database: "SUPABASE" | "HYPERCLOUD" | "SUPABASE / HYPERCLOUD";
+  table: string;
+  errorMessage: string;
+  errorCode?: string;
+  queryOrOperation?: string;
+}
+
+export class PreviewException extends Error {
+  public detail: PreviewErrorDetail;
+
+  constructor(detail: PreviewErrorDetail) {
+    const cleanMsg = sanitizeSecretInfo(detail.errorMessage);
+    super(cleanMsg);
+    this.name = "PreviewException";
+    this.detail = {
+      ...detail,
+      errorMessage: cleanMsg,
+      queryOrOperation: detail.queryOrOperation ? sanitizeSecretInfo(detail.queryOrOperation) : undefined
+    };
+  }
+}
+
 export function parsePgConfig(connStr: string): pg.PoolConfig {
   if (!connStr) return {};
   try {
@@ -261,6 +309,8 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
   const connStr = customUrl || HYPERCLOUD_DATABASE_URL;
   const pool = getHypercloudPool(connStr);
 
+  let pgErr: any = null;
+
   if (pool) {
     try {
       const client = await pool.connect();
@@ -273,8 +323,19 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
 
         const counts: Record<string, number> = {};
         for (const tbl of ["WORK_ORDER", "ABSENSI", "REALISASI"]) {
-          const countRes = await client.query(`SELECT COUNT(*)::int as cnt FROM "${tbl}";`);
-          counts[tbl] = parseInt(countRes.rows[0]?.cnt || "0", 10);
+          try {
+            const countRes = await client.query(`SELECT COUNT(*)::int as cnt FROM "${tbl}";`);
+            counts[tbl] = parseInt(countRes.rows[0]?.cnt || "0", 10);
+          } catch (countErr: any) {
+            throw new PreviewException({
+              stage: "COUNT",
+              database: "HYPERCLOUD",
+              table: tbl,
+              errorMessage: sanitizeSecretInfo(`Gagal melakukan COUNT pada tabel '${tbl}': ${countErr.message}`),
+              errorCode: countErr.code || "COUNT_QUERY_FAILED",
+              queryOrOperation: `SELECT COUNT(*)::int as cnt FROM "${tbl}";`
+            });
+          }
         }
 
         console.log(`[PREVIEW TARGET VERIFICATION] Database: '${dbName}', Schema: '${schemaName}'`);
@@ -289,8 +350,10 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
       } finally {
         client.release();
       }
-    } catch (pgErr: any) {
-      console.warn(`[verifyTargetDatabase] Direct PG connection error:`, pgErr.message);
+    } catch (err: any) {
+      if (err instanceof PreviewException) throw err;
+      pgErr = err;
+      console.warn(`[verifyTargetDatabase] Direct PG connection failed: ${sanitizeSecretInfo(err.message)}, trying REST API health check...`);
     }
   }
 
@@ -300,7 +363,14 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
     const pingData = await pingRes.json().catch(() => ({}));
 
     if (!pingRes.ok || pingData.database !== "connected") {
-      throw new Error("REST API HyperCloudHost tidak terhubung ke database");
+      throw new PreviewException({
+        stage: "Koneksi",
+        database: "HYPERCLOUD",
+        table: "N/A",
+        errorMessage: sanitizeSecretInfo(`Database HyperCloudHost terputus: ${pgErr?.message || "REST API Gateway non-active"}`),
+        errorCode: pgErr?.code || String(pingRes.status),
+        queryOrOperation: "GET https://api.aphro-row.my.id/api/health"
+      });
     }
 
     const dbName = pingData.databaseName || "meysxysd_aphro";
@@ -308,7 +378,14 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
 
     const token = await getTargetAuthToken("UL1") || await getTargetAuthToken("UL2");
     if (!token) {
-      throw new Error("Otentikasi token HyperCloudHost gagal");
+      throw new PreviewException({
+        stage: "Koneksi",
+        database: "HYPERCLOUD",
+        table: "N/A",
+        errorMessage: "Gagal mendapatkan token autentikasi HyperCloudHost",
+        errorCode: "AUTH_FAILED",
+        queryOrOperation: "POST /api/login"
+      });
     }
 
     const counts: Record<string, number> = {};
@@ -318,11 +395,28 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
       const fetchRes = await fetch(`https://api.aphro-row.my.id${endpoint}?limit=15000`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!fetchRes.ok) {
+        throw new PreviewException({
+          stage: "COUNT",
+          database: "HYPERCLOUD",
+          table: tbl,
+          errorMessage: `REST API HyperCloudHost HTTP ${fetchRes.status} saat menghitung data '${tbl}'`,
+          errorCode: String(fetchRes.status),
+          queryOrOperation: `GET ${endpoint}`
+        });
+      }
       const resJson = await fetchRes.json();
       if (Array.isArray(resJson.data)) {
         counts[tbl] = resJson.data.length;
       } else {
-        throw new Error(`Data REST API untuk '${tbl}' tidak valid`);
+        throw new PreviewException({
+          stage: "COUNT",
+          database: "HYPERCLOUD",
+          table: tbl,
+          errorMessage: `Respon REST API untuk '${tbl}' tidak valid`,
+          errorCode: "INVALID_JSON_RESPONSE",
+          queryOrOperation: `GET ${endpoint}`
+        });
       }
     }
 
@@ -336,14 +430,16 @@ export async function verifyTargetDatabase(customUrl?: string): Promise<TargetDb
       counts
     };
   } catch (apiErr: any) {
-    console.error(`[verifyTargetDatabase ERROR]:`, apiErr.message);
-    return {
-      connected: false,
-      database: "Gagal Terhubung",
-      schema: "Gagal Terhubung",
-      error: `Koneksi ke database HyperCloudHost gagal: ${apiErr.message}`,
-      counts: {}
-    };
+    if (apiErr instanceof PreviewException) throw apiErr;
+    console.error(`[verifyTargetDatabase ERROR]:`, apiErr);
+    throw new PreviewException({
+      stage: "Koneksi",
+      database: "HYPERCLOUD",
+      table: "N/A",
+      errorMessage: sanitizeSecretInfo(`Koneksi ke database HyperCloudHost gagal: ${apiErr.message}`),
+      errorCode: apiErr.code || pgErr?.code || "CONN_FAILED",
+      queryOrOperation: "HyperCloudHost DB Connection Test"
+    });
   }
 }
 
@@ -461,7 +557,16 @@ export async function fetchSourceData(
 ): Promise<Record<string, any>[]> {
   const sb = getSupabaseClient();
   const config = SUPPORTED_TABLES[tableName];
-  if (!config) throw new Error(`Tabel tidak didukung: ${tableName}`);
+  if (!config) {
+    throw new PreviewException({
+      stage: "Pengambilan ID",
+      database: "SUPABASE",
+      table: tableName,
+      errorMessage: `Tabel '${tableName}' tidak didukung dalam sistem`,
+      errorCode: "UNSUPPORTED_TABLE",
+      queryOrOperation: `Table config lookup (${tableName})`
+    });
+  }
 
   const results: Record<string, any>[] = [];
   const BATCH_SIZE = 1000;
@@ -482,7 +587,16 @@ export async function fetchSourceData(
     }
 
     const { data, error } = await query;
-    if (error) throw new Error(`Supabase query error (${tableName}): ${error.message}`);
+    if (error) {
+      throw new PreviewException({
+        stage: "Pengambilan ID",
+        database: "SUPABASE",
+        table: tableName,
+        errorMessage: sanitizeSecretInfo(`Query Supabase gagal: ${error.message}`),
+        errorCode: error.code || "SUPABASE_QUERY_ERROR",
+        queryOrOperation: `SELECT * FROM "${tableName}" range(${from}, ${from + BATCH_SIZE - 1})`
+      });
+    }
 
     if (data && data.length > 0) {
       results.push(...data);
@@ -538,10 +652,21 @@ export async function fetchTargetData(
   customHypercloudUrl?: string
 ): Promise<Record<string, any>[]> {
   const config = SUPPORTED_TABLES[tableName];
-  if (!config) throw new Error(`Tabel tidak didukung: ${tableName}`);
+  if (!config) {
+    throw new PreviewException({
+      stage: "Pengambilan ID",
+      database: "HYPERCLOUD",
+      table: tableName,
+      errorMessage: `Tabel '${tableName}' tidak didukung dalam sistem`,
+      errorCode: "UNSUPPORTED_TABLE",
+      queryOrOperation: `Table config lookup (${tableName})`
+    });
+  }
 
   const connStr = customHypercloudUrl || HYPERCLOUD_DATABASE_URL;
   const pool = getHypercloudPool(connStr);
+
+  let pgErr: any = null;
 
   if (pool) {
     try {
@@ -570,7 +695,8 @@ export async function fetchTargetData(
         client.release();
       }
     } catch (directConnErr: any) {
-      console.warn(`Direct PG query to HyperCloudHost failed (${directConnErr.message}), falling back to REST API...`);
+      pgErr = directConnErr;
+      console.warn(`Direct PG query to HyperCloudHost failed (${tableName}): ${sanitizeSecretInfo(directConnErr.message)}, falling back to REST API...`);
     }
   }
 
@@ -592,23 +718,54 @@ export async function fetchTargetData(
     for (const u of units) {
       const token = await getTargetAuthToken(u);
       if (!token) {
-        throw new Error(`Token autentikasi tidak tersedia untuk unit ${u}`);
+        throw new PreviewException({
+          stage: "Koneksi",
+          database: "HYPERCLOUD",
+          table: tableName,
+          errorMessage: `Token autentikasi REST API HyperCloudHost tidak tersedia untuk unit ${u}`,
+          errorCode: "AUTH_TOKEN_MISSING",
+          queryOrOperation: `POST /api/login (unit ${u})`
+        });
       }
       const fetchRes = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (!fetchRes.ok) {
+        throw new PreviewException({
+          stage: "Pengambilan ID",
+          database: "HYPERCLOUD",
+          table: tableName,
+          errorMessage: `REST API HyperCloudHost HTTP ${fetchRes.status} saat membaca data '${tableName}'`,
+          errorCode: String(fetchRes.status),
+          queryOrOperation: `GET ${endpoint}`
+        });
+      }
       const resJson = await fetchRes.json();
       if (Array.isArray(resJson.data)) {
         allRecords.push(...resJson.data);
       } else {
-        throw new Error(`Format data API ${endpoint} tidak valid`);
+        throw new PreviewException({
+          stage: "Pengambilan ID",
+          database: "HYPERCLOUD",
+          table: tableName,
+          errorMessage: `Format respon REST API untuk '${tableName}' tidak valid`,
+          errorCode: "INVALID_JSON_RESPONSE",
+          queryOrOperation: `GET ${endpoint}`
+        });
       }
     }
 
     return allRecords;
   } catch (err: any) {
-    console.error(`[fetchTargetData ERROR] ${tableName}:`, err.message);
-    throw new Error(`Gagal membaca data target '${tableName}': ${err.message}`);
+    if (err instanceof PreviewException) throw err;
+    throw new PreviewException({
+      stage: "Pengambilan ID",
+      database: "HYPERCLOUD",
+      table: tableName,
+      errorMessage: sanitizeSecretInfo(`Gagal membaca data target '${tableName}': ${err.message}`),
+      errorCode: err.code || pgErr?.code || "HYPERCLOUD_FETCH_FAILED",
+      queryOrOperation: `SELECT * FROM "${tableName}"`
+    });
   }
 }
 
@@ -751,14 +908,33 @@ export async function performPreviewSync(options: {
   dateTo?: string;
   customHypercloudUrl?: string;
 }): Promise<FullPreviewResponse> {
+  // 1. Verify HyperCloudHost Target Database & Counts
   const targetInfo = await verifyTargetDatabase(options.customHypercloudUrl);
 
-  let validationWarning: string | undefined = undefined;
-  let isSyncAllowed = true;
-
-  if (!targetInfo.connected) {
-    isSyncAllowed = false;
-    validationWarning = `COUNT DATABASE TARGET TIDAK SESUAI. SYNC DINONAKTIFKAN. (${targetInfo.error || "Gagal terhubung ke database target"})`;
+  // 2. Verify Supabase Source Database
+  try {
+    const sb = getSupabaseClient();
+    const { error: supaErr } = await sb.from("WORK_ORDER").select("*", { count: "exact", head: true });
+    if (supaErr) {
+      throw new PreviewException({
+        stage: "Koneksi",
+        database: "SUPABASE",
+        table: "WORK_ORDER",
+        errorMessage: sanitizeSecretInfo(`Supabase error: ${supaErr.message}`),
+        errorCode: supaErr.code || "SUPABASE_CONN_FAILED",
+        queryOrOperation: "Supabase Work Order Head Query"
+      });
+    }
+  } catch (err: any) {
+    if (err instanceof PreviewException) throw err;
+    throw new PreviewException({
+      stage: "Koneksi",
+      database: "SUPABASE",
+      table: "N/A",
+      errorMessage: sanitizeSecretInfo(`Gagal terhubung ke database Supabase: ${err.message}`),
+      errorCode: err.code || "SUPABASE_CONN_FAILED",
+      queryOrOperation: "Supabase Connection Test"
+    });
   }
 
   const selectedTables = options.tables && options.tables.length > 0
@@ -772,24 +948,31 @@ export async function performPreviewSync(options: {
   let realisasiDetail: FullPreviewResponse["realisasiDetail"] = undefined;
 
   for (const tbl of selectedTables) {
+    // A. Fetch Source Data (Supabase)
+    const sourceRows = await fetchSourceData(tbl, options);
+
+    // B. Fetch Target Data (HyperCloudHost)
+    const targetRows = await fetchTargetData(tbl, options, options.customHypercloudUrl);
+
+    // C. Compare
+    let diff: TableDiffSummary;
     try {
-      const sourceRows = await fetchSourceData(tbl, options);
-      let targetRows: Record<string, any>[] = [];
-
-      if (targetInfo.connected) {
-        targetRows = await fetchTargetData(tbl, options, options.customHypercloudUrl);
-      }
-
-      const diff = compareTableRecords(tbl, sourceRows, targetRows);
-
-      if (!targetInfo.connected) {
-        diff.status = "ERROR";
-        diff.errorCount = sourceRows.length;
-      }
-
+      diff = compareTableRecords(tbl, sourceRows, targetRows);
       summaries[tbl] = diff;
+    } catch (err: any) {
+      throw new PreviewException({
+        stage: "Perbandingan",
+        database: "SUPABASE / HYPERCLOUD",
+        table: tbl,
+        errorMessage: sanitizeSecretInfo(`Gagal membandingkan data tabel ${tbl}: ${err.message}`),
+        errorCode: "COMPARE_ERROR",
+        queryOrOperation: `Record Difference Comparison (${tbl})`
+      });
+    }
 
-      if (tbl === "REALISASI") {
+    // D. REALISASI specific ID breakdown
+    if (tbl === "REALISASI") {
+      try {
         const sourceMap = new Map<string, Record<string, any>>();
         sourceRows.forEach(r => {
           const id = String(r.ID || r.id || "").trim();
@@ -841,37 +1024,29 @@ export async function performPreviewSync(options: {
           inBothCount,
           sourceOnlyRecords
         };
+      } catch (err: any) {
+        throw new PreviewException({
+          stage: "Perbandingan",
+          database: "SUPABASE / HYPERCLOUD",
+          table: "REALISASI",
+          errorMessage: sanitizeSecretInfo(`Gagal memproses detail breakdown REALISASI: ${err.message}`),
+          errorCode: "REALISASI_BREAKDOWN_ERROR",
+          queryOrOperation: "REALISASI ID Comparison"
+        });
       }
-    } catch (err: any) {
-      isSyncAllowed = false;
-      validationWarning = `COUNT DATABASE TARGET TIDAK SESUAI. SYNC DINONAKTIFKAN. (Error pada '${tbl}': ${err.message})`;
-      summaries[tbl] = {
-        tableName: tbl,
-        totalSource: 0,
-        totalTarget: 0,
-        insertCount: 0,
-        updateCount: 0,
-        skipCount: 0,
-        conflictCount: 0,
-        targetOnlyCount: 0,
-        errorCount: 1,
-        conflicts: [],
-        sampleInserts: [],
-        sampleUpdates: [],
-        status: "ERROR"
-      };
     }
   }
 
   // Validate counts against target verification
-  if (targetInfo.connected) {
-    for (const tbl of selectedTables) {
-      const diff = summaries[tbl];
-      const verifiedCount = targetInfo.counts[tbl];
-      if (verifiedCount !== undefined && diff && diff.totalTarget !== verifiedCount) {
-        isSyncAllowed = false;
-        validationWarning = `COUNT DATABASE TARGET TIDAK SESUAI PADA TABEL '${tbl}' (Query DB: ${verifiedCount}, Data Fetched: ${diff.totalTarget}). SYNC DINONAKTIFKAN.`;
-      }
+  let validationWarning: string | undefined = undefined;
+  let isSyncAllowed = true;
+
+  for (const tbl of selectedTables) {
+    const diff = summaries[tbl];
+    const verifiedCount = targetInfo.counts[tbl];
+    if (verifiedCount !== undefined && diff && diff.totalTarget !== verifiedCount) {
+      isSyncAllowed = false;
+      validationWarning = `COUNT DATABASE TARGET TIDAK SESUAI PADA TABEL '${tbl}' (Query DB: ${verifiedCount}, Data Fetched: ${diff.totalTarget}). SYNC DINONAKTIFKAN.`;
     }
   }
 
@@ -1163,7 +1338,14 @@ export async function performRealisasiPreview(customHypercloudUrl?: string): Pro
       .range(from, from + BATCH_SIZE - 1);
 
     if (error) {
-      throw new Error(`Gagal mengambil data REALISASI dari Supabase: ${error.message}`);
+      throw new PreviewException({
+        stage: "Pengambilan ID",
+        database: "SUPABASE",
+        table: "REALISASI",
+        errorMessage: sanitizeSecretInfo(`Gagal mengambil data REALISASI dari Supabase: ${error.message}`),
+        errorCode: error.code || "SUPABASE_FETCH_FAILED",
+        queryOrOperation: "SELECT ID, WO_ID, ... FROM REALISASI"
+      });
     }
 
     if (data && data.length > 0) {

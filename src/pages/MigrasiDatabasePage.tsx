@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  AlertOctagon,
   Play,
   Eye,
   RefreshCw,
@@ -60,6 +61,14 @@ export const MigrasiDatabasePage: React.FC = () => {
   const [diffSummaries, setDiffSummaries] = useState<Record<string, TableDiffResult> | null>(null);
   const [realisasiPreview, setRealisasiPreview] = useState<RealisasiPreviewResult | null>(null);
   const [isRealisasiPreviewing, setIsRealisasiPreviewing] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<{
+    stage: string;
+    database: string;
+    table: string;
+    errorMessage: string;
+    errorCode?: string;
+    queryOrOperation?: string;
+  } | null>(null);
 
   // Sync execution states
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
@@ -183,6 +192,9 @@ export const MigrasiDatabasePage: React.FC = () => {
       return;
     }
     setIsPreviewing(true);
+    setPreviewError(null);
+    setFullPreview(null);
+    setDiffSummaries(null);
     showToast("Membandingkan data Supabase vs HyperCloudHost...", "info");
     try {
       const dates = getEffectiveDates();
@@ -201,7 +213,16 @@ export const MigrasiDatabasePage: React.FC = () => {
         showToast(res.validationWarning || "Perhatian: Hasil preview menunjukkan selisih. Sync dinonaktifkan.", "error");
       }
     } catch (err: any) {
-      showToast(`Gagal membandingkan data: ${err.message}`, "error");
+      console.error("[Preview Differences Error]:", err);
+      const detail = err.errorDetail || {
+        stage: "Perbandingan",
+        database: "SUPABASE / HYPERCLOUD",
+        table: selectedTables.join(", "),
+        errorMessage: err.message || "Gagal membandingkan data database",
+        errorCode: err.code || "PREVIEW_FAILED"
+      };
+      setPreviewError(detail);
+      showToast(`Preview Gagal: ${detail.errorMessage}`, "error");
     } finally {
       setIsPreviewing(false);
     }
@@ -209,6 +230,7 @@ export const MigrasiDatabasePage: React.FC = () => {
 
   const handlePreviewRealisasi = async () => {
     setIsRealisasiPreviewing(true);
+    setPreviewError(null);
     showToast("Membaca seluruh 11.981 ID REALISASI & membandingkan dengan HyperCloudHost...", "info");
     try {
       const res = await MigrationService.previewRealisasi(targetDbUrl);
@@ -219,7 +241,16 @@ export const MigrasiDatabasePage: React.FC = () => {
         showToast(`Analisa Selesai: Ditemukan ${res.sourceOnlyCount} record (selisih ${res.sourceOnlyCount})`, "info");
       }
     } catch (err: any) {
-      showToast(`Gagal preview REALISASI: ${err.message}`, "error");
+      console.error("[Preview Realisasi Error]:", err);
+      const detail = err.errorDetail || {
+        stage: "Perbandingan",
+        database: "SUPABASE / HYPERCLOUD",
+        table: "REALISASI",
+        errorMessage: err.message || "Gagal preview REALISASI",
+        errorCode: err.code || "PREVIEW_REALISASI_FAILED"
+      };
+      setPreviewError(detail);
+      showToast(`Preview REALISASI Gagal: ${detail.errorMessage}`, "error");
     } finally {
       setIsRealisasiPreviewing(false);
     }
@@ -864,7 +895,83 @@ export const MigrasiDatabasePage: React.FC = () => {
             </div>
           )}
 
-          {!isPreviewing && !diffSummaries && (
+          {!isPreviewing && previewError && (
+            <div className="bg-rose-950/20 dark:bg-rose-950/40 border-2 border-rose-600/80 rounded-3xl p-6 text-slate-800 dark:text-slate-100 space-y-5 animate-in fade-in duration-300 shadow-lg">
+              <div className="flex items-center space-x-3 text-rose-600 dark:text-rose-400 border-b border-rose-500/20 pb-4">
+                <AlertOctagon className="w-7 h-7 flex-shrink-0 animate-bounce" />
+                <div>
+                  <h3 className="text-base font-black tracking-tight text-rose-700 dark:text-rose-300 uppercase">
+                    PREVIEW GAGAL
+                  </h3>
+                  <p className="text-xs font-semibold text-rose-600/80 dark:text-rose-400/80">
+                    Proses perbandingan data dihentikan karena ditemukannya kesalahan teknis.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans">
+                <div className="bg-white/80 dark:bg-slate-900/90 p-4 rounded-2xl border border-rose-200 dark:border-rose-900/50 shadow-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-extrabold uppercase text-[10px] block mb-1">
+                    Tahap
+                  </span>
+                  <strong className="text-rose-600 dark:text-rose-400 font-black text-sm">
+                    {previewError.stage}
+                  </strong>
+                </div>
+
+                <div className="bg-white/80 dark:bg-slate-900/90 p-4 rounded-2xl border border-rose-200 dark:border-rose-900/50 shadow-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-extrabold uppercase text-[10px] block mb-1">
+                    Database
+                  </span>
+                  <strong className="text-slate-900 dark:text-white font-black text-sm">
+                    {previewError.database}
+                  </strong>
+                </div>
+
+                <div className="bg-white/80 dark:bg-slate-900/90 p-4 rounded-2xl border border-rose-200 dark:border-rose-900/50 shadow-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-extrabold uppercase text-[10px] block mb-1">
+                    Tabel
+                  </span>
+                  <strong className="text-teal-600 dark:text-teal-400 font-black text-sm">
+                    {previewError.table}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 text-rose-200 p-4 rounded-2xl border border-slate-800 font-mono text-xs space-y-2">
+                <div className="flex items-center justify-between text-slate-400 text-[11px] font-sans border-b border-slate-800 pb-2">
+                  <span className="font-extrabold uppercase text-rose-400">Error Detail</span>
+                  {previewError.errorCode && (
+                    <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-mono text-[10px]">
+                      Kode: {previewError.errorCode}
+                    </span>
+                  )}
+                </div>
+                <p className="whitespace-pre-wrap break-words leading-relaxed text-slate-200 pt-1 font-semibold">
+                  {previewError.errorMessage}
+                </p>
+                {previewError.queryOrOperation && (
+                  <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
+                    <span className="font-sans font-bold text-slate-500 block text-[10px] uppercase">Operasi / Query:</span>
+                    <code className="text-amber-300 text-[11px]">{previewError.queryOrOperation}</code>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handlePreviewDifferences}
+                  className="px-4 py-2 text-xs font-extrabold rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-all inline-flex items-center space-x-2 shadow-sm"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>COBA PREVIEW LAGI</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isPreviewing && !diffSummaries && !previewError && (
             <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-3xl p-8 text-center space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 mx-auto">
                 <Layers className="w-6 h-6" />

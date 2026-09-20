@@ -298,7 +298,7 @@ function maskDatabaseUrl(url: string): string {
   }
 }
 
-async function safeFetchJson<T = any>(url: string, options?: RequestInit): Promise<{ success: boolean; data?: T; message?: string }> {
+async function safeFetchJson<T = any>(url: string, options?: RequestInit): Promise<{ success: boolean; data?: T; message?: string; errorDetail?: any }> {
   try {
     const res = await fetch(url, options);
     const contentType = res.headers.get("content-type") || "";
@@ -312,7 +312,8 @@ async function safeFetchJson<T = any>(url: string, options?: RequestInit): Promi
     return {
       success: res.ok && json.status !== "error",
       data: json.data !== undefined ? json.data : json,
-      message: json.message
+      message: json.message,
+      errorDetail: json.errorDetail
     };
   } catch (err: any) {
     return {
@@ -451,7 +452,11 @@ export const MigrationService = {
       return res.data;
     }
 
-    throw new Error(res.message || "Gagal melakukan preview perbedaan data database");
+    const err = new Error(res.message || "Gagal melakukan preview perbedaan data database") as any;
+    if (res.errorDetail) {
+      err.errorDetail = res.errorDetail;
+    }
+    throw err;
   },
 
   async previewRealisasi(customHypercloudUrl?: string): Promise<RealisasiPreviewResult> {
@@ -464,7 +469,11 @@ export const MigrationService = {
     if (res.success && res.data) {
       return res.data;
     }
-    throw new Error(res.message || "Gagal melakukan preview REALISASI");
+    const err = new Error(res.message || "Gagal melakukan preview REALISASI") as any;
+    if (res.errorDetail) {
+      err.errorDetail = res.errorDetail;
+    }
+    throw err;
   },
 
   async startSync(options: {
