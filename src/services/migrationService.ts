@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { ApiService } from "./apiService";
+import { ApiService, API_BASE_URL } from "./apiService";
 
 export interface ConnectionTestResult {
   success: boolean;
