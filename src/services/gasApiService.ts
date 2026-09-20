@@ -24,7 +24,7 @@ export class GASApiService {
   /**
    * Fetch with AbortController timeout and exponential backoff retry
    */
-  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 10000, retries = 1): Promise<Response> {
+  private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000, retries = 3): Promise<Response> {
     // Wrap in queue to prevent concurrent requests to GAS side
     return new Promise((resolve, reject) => {
       requestQueue = requestQueue.then(async () => {
@@ -35,7 +35,7 @@ export class GASApiService {
           reject(err);
         }
         // Brief gap between requests to GAS
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 200));
       });
     });
   }
@@ -50,7 +50,7 @@ export class GASApiService {
           signal: controller.signal,
         });
         
-        // If Rate Exceeded (429 or 503 from Google), trigger a retry
+        // If Rate Exceeded (429 or 503 from Google), trigger a retry with delay
         if (response.status === 429 || response.status === 503) {
           throw new Error('Rate Exceeded');
         }
@@ -62,13 +62,17 @@ export class GASApiService {
         const isLastAttempt = attempt === retries;
         if (isLastAttempt) {
           if (err.name === 'AbortError') {
-            throw new Error('Koneksi ke Google Spreadsheet Timeout (>10 detik).');
+            throw new Error('Koneksi ke Google Spreadsheet Timeout (>12 detik).');
+          }
+          if (err.message === 'Rate Exceeded') {
+            throw new Error('Server Google Spreadsheet sedang sibuk (Rate Limit). Harap tunggu beberapa detik lalu coba kembali.');
           }
           throw err;
         }
-        // Quick retry delay
-        const delay = 600 + Math.floor(Math.random() * 400);
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        // Exponential backoff with jitter (e.g. 800ms -> 1600ms -> 2400ms)
+        const baseDelay = 800 * Math.pow(1.5, attempt);
+        const jitter = Math.floor(Math.random() * 400);
+        await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter));
       }
     }
     throw new Error('Gagal terhubung ke server setelah beberapa kali percobaan.');

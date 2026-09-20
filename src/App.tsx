@@ -35,6 +35,7 @@ import { RekapPekerjaanHarianPage } from './pages/RekapPekerjaanHarianPage';
 import { RekapPenyulangHarianPage } from './pages/RekapPenyulangHarianPage';
 import { SettingAplikasiPage } from './pages/SettingAplikasiPage';
 import { SinkronisasiPage } from './pages/SinkronisasiPage';
+import { MigrasiDatabasePage } from './pages/MigrasiDatabasePage';
 
 import { useNotifications } from './hooks/useNotifications';
 
@@ -78,7 +79,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
-    if (isAdmRole && !['cetak_laporan', 'riwayat_realisasi', 'realisasi_main', 'input_realisasi', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'settings'].includes(activeTab)) {
+    if (isAdmRole && !['cetak_laporan', 'riwayat_realisasi', 'realisasi_main', 'input_realisasi', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'settings', 'migrasi_database'].includes(activeTab)) {
       setActiveTab('cetak_laporan');
     }
   }, [isAdmRole, activeTab, setActiveTab]);
@@ -96,6 +97,8 @@ const AppContent: React.FC = () => {
           return <RekapPenyulangHarianPage />;
         case 'monitoring_absensi':
           return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
+        case 'migrasi_database':
+          return <MigrasiDatabasePage />;
         case 'settings':
         case 'setting':
           return <SettingAplikasiPage />;
@@ -129,6 +132,7 @@ const AppContent: React.FC = () => {
         if ((user?.role || '').toUpperCase() === 'USER') return <DashboardPage />;
         return <RekapPenyulangHarianPage />;
       case 'master_data': return <MasterDataPage />;
+      case 'migrasi_database': return <MigrasiDatabasePage />;
       case 'settings':
       case 'setting':
         if (user?.role !== 'SuperAdmin') return <DashboardPage />;

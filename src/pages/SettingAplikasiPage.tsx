@@ -13,6 +13,7 @@ import { GASApiService } from '../services/gasApiService';
 import { AutoSpreadsheetWizardModal } from '../components/common/AutoSpreadsheetWizardModal';
 import { saveAndEmbedGasConfig } from '../config/gasConfig';
 import { SupabaseService } from '../services/supabaseService';
+import { ApiService, API_BASE_URL } from '../services/apiService';
 import { SUPABASE_SETUP_SQL, DEFAULT_SUPABASE_URL } from '../services/supabaseClient';
 import {
   Settings,
@@ -36,6 +37,7 @@ import {
   Server,
   UploadCloud,
   CheckCircle,
+  Download,
 } from 'lucide-react';
 
 export const SettingAplikasiPage: React.FC = () => {
@@ -48,12 +50,34 @@ export const SettingAplikasiPage: React.FC = () => {
   const { realisasiList } = useRealisasi();
   const { absensiList } = useAbsensi();
 
-  // Supabase State & Diagnostics
+  // HyperCloudHost API & Database State
+  const [isTestingApi, setIsTestingApi] = useState(false);
+  const [apiHealthResult, setApiHealthResult] = useState<any>(null);
+
+  // Supabase State & Diagnostics (Backup)
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
   const [supabaseTestResults, setSupabaseTestResults] = useState<any>(null);
   const [isSeedingSupabase, setIsSeedingSupabase] = useState(false);
   const [isCopiedSql, setIsCopiedSql] = useState(false);
   const [showSqlModal, setShowSqlModal] = useState(false);
+
+  const handleTestApi = async () => {
+    setIsTestingApi(true);
+    showToast('Memeriksa koneksi ke API Node.js HyperCloudHost...', 'info');
+    try {
+      const res = await ApiService.checkHealth();
+      setApiHealthResult(res);
+      if (res.status === 'ok' || res.status === 'success') {
+        showToast(`API Node.js & Database PostgreSQL Terhubung! Database: ${res.databaseName || res.database || 'PostgreSQL'}`, 'success');
+      } else {
+        showToast(`API merespons status: ${res.status}`, 'warning');
+      }
+    } catch (err: any) {
+      showToast(`Gagal terhubung ke API HyperCloudHost: ${err.message}`, 'error');
+    } finally {
+      setIsTestingApi(false);
+    }
+  };
 
   const handleTestSupabase = async () => {
     setIsTestingSupabase(true);
@@ -235,26 +259,111 @@ export const SettingAplikasiPage: React.FC = () => {
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Supabase APHRO-Database Integration Card */}
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border-2 border-emerald-500/30 dark:border-emerald-500/30 shadow-md space-y-5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+        {/* HyperCloudHost Node.js REST API & PostgreSQL Database Card */}
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border-2 border-cyan-500/30 dark:border-cyan-500/30 shadow-md space-y-5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none" />
           
           <div className="flex flex-wrap items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4 gap-3">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
+              <div className="w-10 h-10 rounded-2xl bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200 dark:border-cyan-800 flex items-center justify-center text-cyan-600 dark:text-cyan-400 font-bold">
                 <Server className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center space-x-2">
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Database Utama: Supabase (APHRO-Database)
+                    Database Utama: Node.js API + PostgreSQL (HyperCloudHost)
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
-                    Active Backend
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-100 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-400 border border-cyan-300 dark:border-cyan-800">
+                    Active Primary Backend
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Database Relasional PostgreSQL Tunggal terhubung melalui kolom <code className="font-mono font-bold text-emerald-600 dark:text-emerald-400">unitId</code> (relasi ke Tabel INISIASI Kolom ID).
+                  Backend REST API Node.js/Prisma terhubung ke PostgreSQL HyperCloudHost dengan isolasi multi-unit (<code className="font-mono font-bold text-cyan-600 dark:text-cyan-400">unitId</code>).
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={handleTestApi}
+                disabled={isTestingApi}
+                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-colors shadow-xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isTestingApi ? 'animate-spin' : ''}`} />
+                <span>Tes Koneksi API</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">API Endpoint</span>
+              <p className="font-mono font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
+                {API_BASE_URL}
+              </p>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Database Engine</span>
+              <p className="font-mono font-bold text-xs text-cyan-600 dark:text-cyan-400">
+                PostgreSQL (HyperCloudHost)
+              </p>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status Server</span>
+              <p className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                {apiHealthResult ? `Online (${apiHealthResult.database || 'Connected'})` : 'Ready / Active'}
+              </p>
+            </div>
+          </div>
+
+          {/* Health check results if available */}
+          {apiHealthResult && (
+            <div className="p-4 rounded-2xl bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800 space-y-2 text-xs">
+              <div className="flex items-center space-x-2 text-cyan-700 dark:text-cyan-300 font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <span>Hasil Diagnostik API Node.js HyperCloudHost:</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px]">
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-cyan-100 dark:border-cyan-900">
+                  <span className="text-slate-400 block text-[9px]">Status:</span>
+                  <span className="font-bold text-emerald-600">{apiHealthResult.status || 'ok'}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-cyan-100 dark:border-cyan-900">
+                  <span className="text-slate-400 block text-[9px]">Database:</span>
+                  <span className="font-bold text-cyan-600">{apiHealthResult.databaseName || apiHealthResult.database || 'PostgreSQL'}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-cyan-100 dark:border-cyan-900">
+                  <span className="text-slate-400 block text-[9px]">ORM:</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">Prisma Client</span>
+                </div>
+                <div className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-cyan-100 dark:border-cyan-900">
+                  <span className="text-slate-400 block text-[9px]">Waktu Respon:</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">{apiHealthResult.timestamp ? new Date(apiHealthResult.timestamp).toLocaleTimeString() : 'Aktif'}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Supabase Backup Database Card */}
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-5 relative overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4 gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Database Cadangan: Supabase (Backup Sementara)
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600">
+                    Backup / Fallback
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Database Supabase dipertahankan sebagai cadangan sementara (failover) sesuai kebijakan migrasi database.
                 </p>
               </div>
             </div>
@@ -264,7 +373,7 @@ export const SettingAplikasiPage: React.FC = () => {
                 type="button"
                 onClick={handleTestSupabase}
                 disabled={isTestingSupabase}
-                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-xs"
+                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl transition-colors shadow-xs"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isTestingSupabase ? 'animate-spin' : ''}`} />
                 <span>Tes 9 Tabel</span>
@@ -280,6 +389,16 @@ export const SettingAplikasiPage: React.FC = () => {
                 <span>Upload Data Master</span>
               </button>
 
+              <a
+                href="/sync_supabase_to_hypercloud_18sept.sql"
+                download="sync_supabase_to_hypercloud_18sept.sql"
+                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-950/60 dark:hover:bg-cyan-900/60 border border-cyan-300 dark:border-cyan-800 rounded-xl transition-colors shadow-xs"
+                title="Download SQL INSERT 18 Sept untuk PostgreSQL HyperCloudHost"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Unduh SQL Sync (18 Sept+)</span>
+              </a>
+
               <button
                 type="button"
                 onClick={handleCopySqlScript}
@@ -293,21 +412,21 @@ export const SettingAplikasiPage: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Project Endpoint</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Supabase Endpoint</span>
               <p className="font-mono font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
                 {DEFAULT_SUPABASE_URL}
               </p>
             </div>
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Database Name</span>
-              <p className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
-                APHRO-Database
+              <p className="font-mono font-bold text-xs text-slate-600 dark:text-slate-300">
+                APHRO-Database (Backup)
               </p>
             </div>
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Relasi Foreign Key</span>
-              <p className="font-mono font-bold text-xs text-teal-600 dark:text-teal-400">
-                INISIASI.ID ➜ [Semua Tabel].unitId
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</span>
+              <p className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400">
+                Backup Pasif
               </p>
             </div>
           </div>

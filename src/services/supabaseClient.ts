@@ -67,8 +67,8 @@ export function getClient(): SupabaseClient {
 }
 
 export function isSupabaseConfigured(): boolean {
-  // Supabase is deactivated. All online operations use PostgreSQL at HyperCloudHost.
-  return false;
+  const cfg = getSupabaseConfig();
+  return Boolean(cfg.url && cfg.key && cfg.url.includes('supabase.co'));
 }
 
 export const SUPABASE_SETUP_SQL = `-- ========================================================

@@ -30,6 +30,7 @@ import {
   Building2,
   CalendarRange,
   BarChart3,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 import { APP_VERSION } from '../../config/version';
@@ -155,6 +156,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin'],
     },
     {
+      id: 'migrasi_database',
+      label: 'Migrasi Database',
+      icon: ArrowRightLeft,
+      roles: ['SuperAdmin', 'Admin', 'Adm'],
+    },
+    {
       id: 'inisiasi',
       label: 'Inisiasi Unit Layanan',
       icon: Building2,
@@ -175,7 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   ];
 
   const allowedItems = isAdmRole
-    ? navItems.filter((item) => ['input_realisasi_manual', 'input_realisasi', 'cetak_laporan', 'riwayat_realisasi', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi'].includes(item.id))
+    ? navItems.filter((item) => ['input_realisasi_manual', 'input_realisasi', 'cetak_laporan', 'riwayat_realisasi', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'migrasi_database'].includes(item.id))
     : navItems.filter((item) => item.roles.some((r) => r.toLowerCase() === role.toLowerCase()));
 
   return (

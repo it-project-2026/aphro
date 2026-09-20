@@ -10,13 +10,14 @@ import { dexieDb, LocalUser } from './dexieDb';
 import { User, UserRole } from '../types';
 import { normalizeUser } from './syncService';
 import { InisiasiService } from './inisiasiService';
+import { ApiService } from './apiService';
 
 export class AuthService {
   /**
    * Authenticate user with Username, Password, and target UnitId.
-   * 1. If online: Authenticates against Supabase "USERS" table matching username & unitId.
-   * 2. If user exists in another unit: Returns clear error blocking cross-unit login.
-   * 3. If offline or Supabase fails: Falls back to Dexie local database for the unit.
+   * 1. Primary: Authenticates against HyperCloudHost Node.js API (/api/login).
+   * 2. Secondary fallback: Authenticates against Supabase "USERS" table if needed.
+   * 3. Offline fallback: Dexie local database for the unit.
    */
   static async loginWithCredentials(
     username: string, 
@@ -31,7 +32,53 @@ export class AuthService {
       return { success: false, error: 'Username atau NIP wajib diisi.' };
     }
 
-    // 1. Try Supabase Authentication if online
+    // 1. Primary: HyperCloudHost Node.js API
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const apiRes = await ApiService.login(cleanUsername, cleanPassword, targetUnitId);
+        if (apiRes.status === 'success' && apiRes.user) {
+          const rawUser = apiRes.user;
+          const userUnitId = InisiasiService.getStandardUnitId(rawUser.unitId || rawUser.UnitID || targetUnitId);
+
+          if (userUnitId && !InisiasiService.isUserMatchingUnit(userUnitId, targetUnitId)) {
+            return {
+              success: false,
+              error: `User '${cleanUsername}' terdaftar pada UL (${userUnitId}), bukan di Inisiasi terpilih (${targetUnitId}).`,
+            };
+          }
+
+          const normalized: User = {
+            id: String(rawUser.Id || rawUser.UserID || rawUser.id || `usr-${cleanUsername}`),
+            unitId: targetUnitId,
+            unitName: InisiasiService.getActiveInisiasiUnit().namaUL,
+            nip: String(rawUser.UserID || cleanUsername).toUpperCase(),
+            name: String(rawUser.Nama_Regu || rawUser.Username || cleanUsername),
+            userName: String(rawUser.Username || cleanUsername),
+            email: `${cleanUsername}@pln.co.id`,
+            role: (rawUser.Role || 'User') as UserRole,
+            reguName: String(rawUser.Nama_Regu || ''),
+            ulpName: String(rawUser.ULP || ''),
+            status: rawUser.Status || 'Aktif',
+          };
+
+          (normalized as any).token = apiRes.token;
+
+          await this.saveLocalSession(normalized);
+          return { success: true, user: normalized };
+        } else if (apiRes.status === 'error' && apiRes.message && (
+          apiRes.message.toLowerCase().includes('password') || 
+          apiRes.message.toLowerCase().includes('sandi') ||
+          apiRes.message.toLowerCase().includes('tidak terdaftar') ||
+          apiRes.message.toLowerCase().includes('non-aktif')
+        )) {
+          return { success: false, error: apiRes.message };
+        }
+      } catch (apiErr) {
+        console.warn('HyperCloudHost API login error, trying fallbacks:', apiErr);
+      }
+    }
+
+    // 2. Secondary fallback: Supabase Authentication if online
     if (typeof navigator !== 'undefined' && navigator.onLine && isSupabaseConfigured()) {
       try {
         const { data, error } = await supabase

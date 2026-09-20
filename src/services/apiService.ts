@@ -115,6 +115,29 @@ export class ApiService {
   }
 
   /**
+   * Helper to perform HTTP request with automatic fallback to internal server proxy
+   */
+  public static async executeFetch(
+    pathAndQuery: string,
+    options: RequestInit = {}
+  ): Promise<Response> {
+    const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+    const directUrl = `${this.getCleanBaseUrl()}${cleanPath}`;
+
+    // 1. Try direct URL first
+    try {
+      const res = await fetch(directUrl, options);
+      return res;
+    } catch (directErr) {
+      console.warn(`[ApiService] Direct fetch to ${directUrl} failed, falling back to server proxy...`);
+    }
+
+    // 2. Fallback to /api/hypercloud-proxy
+    const proxyUrl = `/api/hypercloud-proxy${cleanPath}`;
+    return await fetch(proxyUrl, options);
+  }
+
+  /**
    * Mengambil data REALISASI dari Node.js API
    * dengan server-side pagination dan filtering.
    *
@@ -162,7 +185,7 @@ export class ApiService {
 
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await this.executeFetch(`/api/realisasi?${queryParams.toString()}`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -244,10 +267,8 @@ export class ApiService {
       };
     }
 
-    const url = `${this.getCleanBaseUrl()}/api/realisasi`;
-
     try {
-      const res = await fetch(url, {
+      const res = await this.executeFetch('/api/realisasi', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -302,10 +323,8 @@ export class ApiService {
       };
     }
 
-    const url = `${this.getCleanBaseUrl()}/api/realisasi/${encodeURIComponent(id)}`;
-
     try {
-      const res = await fetch(url, {
+      const res = await this.executeFetch(`/api/realisasi/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -354,10 +373,8 @@ export class ApiService {
       };
     }
 
-    const url = `${this.getCleanBaseUrl()}/api/realisasi/${encodeURIComponent(id)}`;
-
     try {
-      const res = await fetch(url, {
+      const res = await this.executeFetch(`/api/realisasi/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: {
           Accept: 'application/json',
@@ -409,10 +426,9 @@ export class ApiService {
       unitId && unitId !== 'ALL'
         ? `?unitId=${encodeURIComponent(unitId)}`
         : '';
-    const url = `${this.getCleanBaseUrl()}/api/work-orders${query}`;
 
     try {
-      const res = await fetch(url, {
+      const res = await this.executeFetch(`/api/work-orders${query}`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -467,10 +483,8 @@ export class ApiService {
       };
     }
 
-    const url = `${this.getCleanBaseUrl()}/api/work-orders`;
-
     try {
-      const res = await fetch(url, {
+      const res = await this.executeFetch('/api/work-orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -524,10 +538,9 @@ export class ApiService {
       unitId && unitId !== 'ALL'
         ? `?unitId=${encodeURIComponent(unitId)}`
         : '';
-    const url = `${this.getCleanBaseUrl()}/api/absensi${query}`;
 
     try {
-      const res = await fetch(url, {
+      const res = await this.executeFetch(`/api/absensi${query}`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -582,10 +595,8 @@ export class ApiService {
       };
     }
 
-    const url = `${this.getCleanBaseUrl()}/api/absensi`;
-
     try {
-      const res = await fetch(url, {
+      const res = await this.executeFetch('/api/absensi', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -618,5 +629,186 @@ export class ApiService {
           'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
+  }
+
+  /**
+   * Check API Health
+   */
+  static async checkHealth(): Promise<{
+    status: string;
+    database: string;
+    databaseName?: string;
+    timestamp?: string;
+  }> {
+    const res = await this.executeFetch('/api/health', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) {
+      throw new Error(`Health check failed with status ${res.status}`);
+    }
+    return await res.json();
+  }
+
+  /**
+   * Login to HyperCloudHost Node.js API
+   */
+  static async login(
+    username: string,
+    password?: string,
+    unitId?: string
+  ): Promise<{
+    status: string;
+    message: string;
+    token?: string;
+    user?: any;
+  }> {
+    const cleanUsername = (username || '').trim();
+    const cleanPassword = (password || '').trim();
+    const cleanUnitId = (unitId || '').trim();
+
+    try {
+      const res = await this.executeFetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          Username: cleanUsername,
+          Password: cleanPassword,
+          unitId: cleanUnitId,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.status === 'error') {
+        return {
+          status: 'error',
+          message: json.message || this.formatErrorMessage(res.status),
+        };
+      }
+
+      if (json.token) {
+        try {
+          localStorage.setItem('aphro_token', json.token);
+          localStorage.setItem('jwt_token', json.token);
+        } catch {
+          // ignore
+        }
+      }
+
+      return {
+        status: 'success',
+        message: json.message || 'Login berhasil',
+        token: json.token,
+        user: json.user,
+      };
+    } catch (err: any) {
+      console.error('[ApiService.login Error]', err);
+      return {
+        status: 'error',
+        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+      };
+    }
+  }
+
+  /**
+   * Fetch all users from HyperCloudHost API
+   */
+  static async fetchUsers(
+    unitId?: string
+  ): Promise<{ success: boolean; data: any[]; message?: string }> {
+    const token = this.getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        data: [],
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
+      };
+    }
+
+    const query =
+      unitId && unitId !== 'ALL'
+        ? `?unitId=${encodeURIComponent(unitId)}`
+        : '';
+
+    try {
+      const res = await this.executeFetch(`/api/users${query}`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        let serverMsg: string | undefined;
+        try {
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
+        } catch {}
+        return {
+          success: false,
+          data: [],
+          message: this.formatErrorMessage(res.status, serverMsg),
+        };
+      }
+
+      const json = await res.json();
+      const list = Array.isArray(json.data)
+        ? json.data
+        : Array.isArray(json)
+        ? json
+        : [];
+      return { success: true, data: list };
+    } catch (err: any) {
+      console.error('[ApiService.fetchUsers Error]', err);
+      return {
+        success: false,
+        data: [],
+        message: 'Tidak dapat terhubung ke API HyperCloudHost.',
+      };
+    }
+  }
+
+  /**
+   * Fetch Master Data (ULP, Penyulang, Regu-ROW, Petugas) from HyperCloudHost API
+   */
+  static async fetchMasterData(
+    unitId?: string
+  ): Promise<{
+    ulp: any[];
+    penyulang: any[];
+    regu: any[];
+    petugas: any[];
+    users: any[];
+  }> {
+    const token = this.getAuthToken();
+    if (!token) {
+      return { ulp: [], penyulang: [], regu: [], petugas: [], users: [] };
+    }
+
+    const query = unitId && unitId !== 'ALL' ? `?unitId=${encodeURIComponent(unitId)}` : '';
+    const headers = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    const [ulpRes, penyulangRes, reguRes, petugasRes, usersRes] = await Promise.all([
+      this.executeFetch(`/api/ulp${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/penyulang${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/regu-row${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/petugas${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/users${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+    ]);
+
+    return {
+      ulp: Array.isArray(ulpRes.data) ? ulpRes.data : [],
+      penyulang: Array.isArray(penyulangRes.data) ? penyulangRes.data : [],
+      regu: Array.isArray(reguRes.data) ? reguRes.data : [],
+      petugas: Array.isArray(petugasRes.data) ? petugasRes.data : [],
+      users: Array.isArray(usersRes.data) ? usersRes.data : [],
+    };
   }
 }

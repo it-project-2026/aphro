@@ -5,6 +5,17 @@ import axios from "axios";
 import * as admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
+import {
+  testConnection,
+  performPreviewSync,
+  executeLiveSync,
+  getActiveSyncStatus,
+  getMigrationAuditLogs,
+  SUPPORTED_TABLES,
+  fetchSourceData,
+  setHypercloudDatabaseUrl,
+  getHypercloudDatabaseUrl
+} from "./server/migrationService";
 
 // Initialize Firebase Admin
 try {
@@ -36,6 +47,67 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // CORS middleware for internal preview
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
+  // HyperCloudHost API Health Check Proxy
+  app.get("/api/hypercloud/health", async (req, res) => {
+    try {
+      const response = await axios.get("https://api.aphro-row.my.id/api/health", {
+        timeout: 10000,
+        headers: { Accept: "application/json" }
+      });
+      return res.json(response.data);
+    } catch (err: any) {
+      return res.status(err.response?.status || 502).json({
+        status: "error",
+        message: err.message,
+        details: err.response?.data || null
+      });
+    }
+  });
+
+  // Generic HyperCloudHost API Reverse Proxy
+  app.all("/api/hypercloud-proxy/*", async (req, res) => {
+    try {
+      const subPath = req.params[0] || "";
+      const targetUrl = `https://api.aphro-row.my.id/${subPath}`;
+      
+      const forwardHeaders: Record<string, string> = {
+        accept: "application/json",
+        "content-type": "application/json"
+      };
+      if (req.headers.authorization) {
+        forwardHeaders.authorization = req.headers.authorization as string;
+      }
+
+      const response = await axios({
+        method: req.method as any,
+        url: targetUrl,
+        params: req.query,
+        data: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
+        headers: forwardHeaders,
+        timeout: 20000,
+        validateStatus: () => true
+      });
+
+      return res.status(response.status).json(response.data);
+    } catch (err: any) {
+      return res.status(502).json({
+        status: "error",
+        message: `HyperCloudHost Proxy error: ${err.message}`
+      });
+    }
+  });
 
   // Simple in-memory cache for Nominatim
   const geoCache = new Map();
@@ -154,8 +226,219 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
     }
   });
 
+  // ==========================================
+  // DATABASE MIGRATION ENGINE (SUPABASE -> HYPERCLOUDHOST)
+  // ==========================================
+
+  // 0. Get / Set Target Database Config
+  app.get("/api/admin/migration/config", (req, res) => {
+    const rawUrl = getHypercloudDatabaseUrl();
+    const maskedUrl = rawUrl ? rawUrl.replace(/:([^:@]+)@/, ":*****@") : "";
+    return res.json({
+      status: "success",
+      data: {
+        rawUrl: rawUrl || "",
+        maskedUrl: maskedUrl || "",
+        isConfigured: !!rawUrl
+      }
+    });
+  });
+
+  app.post("/api/admin/migration/config", (req, res) => {
+    const { url } = req.body || {};
+    if (url && typeof url === "string") {
+      setHypercloudDatabaseUrl(url);
+    }
+    const rawUrl = getHypercloudDatabaseUrl();
+    return res.json({
+      status: "success",
+      message: "Konfigurasi URL database HyperCloudHost diperbarui",
+      data: {
+        rawUrl: rawUrl,
+        maskedUrl: rawUrl.replace(/:([^:@]+)@/, ":*****@")
+      }
+    });
+  });
+
+  // 1. Test Connections
+  app.post("/api/admin/migration/test-connection", async (req, res) => {
+    try {
+      const { customHypercloudUrl } = req.body || {};
+      if (customHypercloudUrl) {
+        setHypercloudDatabaseUrl(customHypercloudUrl);
+      }
+      const [supabaseRes, hypercloudRes] = await Promise.all([
+        testConnection("supabase"),
+        testConnection("hypercloud", customHypercloudUrl)
+      ]);
+      return res.json({
+        status: "success",
+        data: {
+          supabase: supabaseRes,
+          hypercloud: hypercloudRes
+        }
+      });
+    } catch (err: any) {
+      return res.status(500).json({ status: "error", message: err.message });
+    }
+  });
+
+  // 2. Preview / Dry Run Sync (Cek Perbedaan)
+  app.post("/api/admin/migration/preview", async (req, res) => {
+    try {
+      const { tables, unitFilter, dateFrom, dateTo, customHypercloudUrl } = req.body || {};
+      if (customHypercloudUrl) {
+        setHypercloudDatabaseUrl(customHypercloudUrl);
+      }
+      const diffSummaries = await performPreviewSync({
+        tables,
+        unitFilter,
+        dateFrom,
+        dateTo
+      });
+      return res.json({
+        status: "success",
+        data: diffSummaries
+      });
+    } catch (err: any) {
+      return res.status(500).json({ status: "error", message: err.message });
+    }
+  });
+
+  // 3. Start Live Sync or Dry Run
+  app.post("/api/admin/migration/start", async (req, res) => {
+    try {
+      const { tables, unitFilter, dateFrom, dateTo, batchSize, operator, isDryRun, customHypercloudUrl } = req.body || {};
+      if (customHypercloudUrl) {
+        setHypercloudDatabaseUrl(customHypercloudUrl);
+      }
+      
+      const currentActive = getActiveSyncStatus();
+      if (currentActive && currentActive.status === "RUNNING") {
+        return res.status(409).json({
+          status: "conflict",
+          message: "Proses sinkronisasi sedang berjalan. Harap tunggu hingga selesai.",
+          data: currentActive
+        });
+      }
+
+      const syncState = await executeLiveSync({
+        tables,
+        unitFilter,
+        dateFrom,
+        dateTo,
+        batchSize,
+        operator: operator || "Admin",
+        isDryRun: !!isDryRun
+      });
+
+      return res.json({
+        status: "success",
+        message: isDryRun ? "Dry-run sinkronisasi dimulai" : "Sinkronisasi live dimulai",
+        data: syncState
+      });
+    } catch (err: any) {
+      return res.status(500).json({ status: "error", message: err.message });
+    }
+  });
+
+  // 4. Get Current Active Sync Status
+  app.get("/api/admin/migration/status", (req, res) => {
+    const status = getActiveSyncStatus();
+    return res.json({
+      status: "success",
+      data: status || {
+        status: "IDLE",
+        percent: 0,
+        recentActivity: [],
+        tableSummaries: {}
+      }
+    });
+  });
+
+  // 5. Get Migration Audit Logs
+  app.get("/api/admin/migration/logs", (req, res) => {
+    const logs = getMigrationAuditLogs();
+    return res.json({
+      status: "success",
+      data: logs
+    });
+  });
+
+  // 6. Generate Downloadable SQL Script On-Demand
+  app.post("/api/admin/migration/export-sql", async (req, res) => {
+    try {
+      const { tables, unitFilter, dateFrom, dateTo } = req.body || {};
+      const selectedTables = tables && tables.length > 0 ? tables : Object.keys(SUPPORTED_TABLES);
+      selectedTables.sort((a: string, b: string) => (SUPPORTED_TABLES[a]?.order || 99) - (SUPPORTED_TABLES[b]?.order || 99));
+
+      let sql = "-- ==========================================================================\n";
+      sql += "-- APHRO DATABASE MIGRATION SCRIPT (SUPABASE -> HYPERCLOUDHOST)\n";
+      sql += `-- Generated At: ${new Date().toISOString()}\n`;
+      sql += `-- Filter Unit: ${unitFilter || "ALL"} | Tanggal: ${dateFrom || "Semua"} s/d ${dateTo || "Semua"}\n`;
+      sql += "-- ==========================================================================\n\n";
+      sql += "BEGIN;\n\n";
+
+      function escapeSql(val: any) {
+        if (val === null || val === undefined) return "NULL";
+        if (typeof val === "number") return val.toString();
+        if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
+        return "'" + String(val).replace(/'/g, "''") + "'";
+      }
+
+      for (const tbl of selectedTables) {
+        const config = SUPPORTED_TABLES[tbl];
+        if (!config) continue;
+        const rows = await fetchSourceData(tbl, { unitFilter, dateFrom, dateTo });
+        
+        sql += `-- --------------------------------------------------------------------------\n`;
+        sql += `-- TABEL: ${tbl} (${rows.length} Records)\n`;
+        sql += `-- --------------------------------------------------------------------------\n`;
+
+        for (const row of rows) {
+          const colNames = config.columns.map(c => `"${c}"`).join(", ");
+          const colValues = config.columns.map(col => {
+            let val = row[col];
+            if (col === "TIMESTAMP_MASUK") val = row.TIMESTAMP_MASUK ?? row["TIMESTAMP MASUK"] ?? row.Timestamp_Masuk ?? null;
+            if (col === "TIMESTAMP_KELUAR") val = row.TIMESTAMP_KELUAR ?? row["TIMESTAMP KELUAR"] ?? row.Timestamp_Keluar ?? null;
+            return escapeSql(val);
+          }).join(", ");
+
+          const updateClauses = config.columns
+            .filter(c => c !== config.primaryKey)
+            .map(c => `"${c}" = EXCLUDED."${c}"`);
+
+          const onConflict = updateClauses.length > 0
+            ? `ON CONFLICT ("${config.primaryKey}") DO UPDATE SET ${updateClauses.join(", ")}`
+            : `ON CONFLICT ("${config.primaryKey}") DO NOTHING`;
+
+          sql += `INSERT INTO "${tbl}" (${colNames}) VALUES (${colValues}) ${onConflict};\n`;
+        }
+        sql += "\n";
+      }
+
+      sql += "COMMIT;\n";
+
+      res.setHeader("Content-Type", "application/sql");
+      res.setHeader("Content-Disposition", `attachment; filename="aphro_sync_${Date.now()}.sql"`);
+      return res.send(sql);
+    } catch (err: any) {
+      return res.status(500).json({ status: "error", message: err.message });
+    }
+  });
+
   // Proxy endpoint for HyperCloudHost API to prevent browser CORS and support all methods (GET, POST, PUT, DELETE)
-  app.all(["/api/realisasi*", "/api/work-orders*", "/api/absensi*", "/api/master-data*", "/api/users*", "/api/auth*", "/api/inisiasi*"], async (req, res) => {
+  app.all([
+    "/api/login*",
+    "/api/health*",
+    "/api/realisasi*",
+    "/api/work-orders*",
+    "/api/absensi*",
+    "/api/master-data*",
+    "/api/users*",
+    "/api/auth*",
+    "/api/inisiasi*"
+  ], async (req, res) => {
     try {
       const targetUrl = `https://api.aphro-row.my.id${req.originalUrl}`;
       const response = await axios({

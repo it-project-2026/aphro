@@ -5,7 +5,7 @@
  */
 
 import { supabase, SUPABASE_TABLES, SUPABASE_DATABASE_NAME, isSupabaseConfigured } from './supabaseClient';
-import { ApiService } from './apiService';
+import { ApiService, FetchRealisasiParams, PaginationMeta } from './apiService';
 import {
   InisiasiUnit,
   WorkOrder,
@@ -237,7 +237,7 @@ export class SupabaseService {
   // ==========================================
 
   /**
-   * Fetch Work Orders from Supabase WORK_ORDER table filtered by unitId with pagination and incremental sync.
+   * Fetch Work Orders from Node.js API (primary) with Supabase & Cache fallback.
    */
   static async fetchWorkOrders(
     unitId?: string, 
@@ -251,26 +251,64 @@ export class SupabaseService {
     message?: string;
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
 
-    try {
-      const apiRes = await ApiService.fetchWorkOrders(targetUnitId);
-      if (apiRes && apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
-        const workOrders: WorkOrder[] = apiRes.data.map((row: any) => this.normalizeWorkOrderRow(row));
-        if (page === 0 && !lastSyncTime) {
-          this.safeSetItem(`aphro_wo_${targetUnitId}`, JSON.stringify(workOrders));
+    // 1. Primary: HyperCloudHost Node.js API
+    if (isOnline) {
+      try {
+        const apiRes = await ApiService.fetchWorkOrders(targetUnitId);
+        if (apiRes && apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
+          const workOrders: WorkOrder[] = apiRes.data.map((row: any) => this.normalizeWorkOrderRow(row));
+          if (page === 0 && !lastSyncTime) {
+            this.safeSetItem(`aphro_wo_${targetUnitId}`, JSON.stringify(workOrders));
+          }
+          return {
+            success: true,
+            data: workOrders,
+            source: 'supabase',
+            message: `Berhasil memuat ${workOrders.length} Work Order dari API HyperCloudHost.`,
+          };
         }
-        return {
-          success: true,
-          data: workOrders,
-          source: 'supabase',
-          message: `Berhasil memuat ${workOrders.length} Work Order dari API HyperCloudHost.`,
-        };
+      } catch (err: any) {
+        console.warn('Error loading Work Orders from API HyperCloudHost, falling back:', err);
       }
-    } catch (err: any) {
-      console.warn('Error loading Work Orders from API:', err);
     }
 
-    // Check cached data for this unit
+    // 2. Secondary fallback: Direct fetch from Supabase WORK_ORDER table
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        let query = supabase
+          .from(SUPABASE_TABLES.WORK_ORDER)
+          .select(WORK_ORDER_SELECT_FIELDS);
+
+        if (targetUnitId && targetUnitId !== 'ALL') {
+          query = query.or(this.getUnitQueryFilter(targetUnitId));
+        }
+
+        const { data, error } = await query
+          .order('Tanggal', { ascending: false })
+          .limit(pageSize);
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const workOrders: WorkOrder[] = data.map((row: any) => this.normalizeWorkOrderRow(row));
+          if (page === 0 && !lastSyncTime) {
+            this.safeSetItem(`aphro_wo_${targetUnitId}`, JSON.stringify(workOrders));
+          }
+          return {
+            success: true,
+            data: workOrders,
+            source: 'supabase',
+            message: `Berhasil memuat ${workOrders.length} Work Order dari database Supabase.`,
+          };
+        } else if (error) {
+          console.warn('Supabase fetchWorkOrders query warning:', error);
+        }
+      } catch (err: any) {
+        console.warn('Error loading Work Orders from Supabase:', err);
+      }
+    }
+
+    // 3. Fallback to cached data for this unit
     try {
       const cached = this.safeGetItem(`aphro_wo_${targetUnitId}`);
       if (cached) {
@@ -406,6 +444,23 @@ export class SupabaseService {
       SATUAN_TOTAL_REALISASI: wo.satuanTotalRealisasi || 'KMS',
       Created_At: wo.createdAt || getLocalDateTimeString(),
     };
+
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from(SUPABASE_TABLES.WORK_ORDER)
+          .upsert(payload);
+
+        if (!error) {
+          return { success: true };
+        }
+        console.warn('Supabase saveWorkOrder error:', error);
+      } catch (err: any) {
+        console.warn('Supabase saveWorkOrder exception:', err);
+      }
+    }
 
     try {
       const res = await ApiService.saveWorkOrder(payload);
@@ -562,22 +617,58 @@ export class SupabaseService {
     source: 'supabase' | 'cache' | 'initial';
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
 
-    try {
-      const res = await ApiService.fetchRealisasi({
-        page: page + 1,
-        limit: pageSize,
-        ULP: targetUnitId !== 'ALL' ? targetUnitId : undefined,
-      });
+    // 1. Primary: HyperCloudHost Node.js API
+    if (isOnline) {
+      try {
+        const res = await ApiService.fetchRealisasi({
+          page: page + 1,
+          limit: pageSize,
+          ULP: targetUnitId !== 'ALL' ? targetUnitId : undefined,
+        });
 
-      if (res.data) {
-        if (!lastSyncTime && page === 0) {
-          this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(res.data));
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          if (!lastSyncTime && page === 0) {
+            this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(res.data));
+          }
+          return { success: true, data: res.data, source: 'supabase' };
         }
-        return { success: true, data: res.data, source: 'supabase' };
+      } catch (err) {
+        console.warn('ApiService fetch REALISASI warning, falling back to Supabase:', err);
       }
-    } catch (err) {
-      console.warn('ApiService fetch REALISASI warning:', err);
+    }
+
+    // 2. Secondary fallback: Direct fetch from Supabase REALISASI table
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        let query = supabase
+          .from(SUPABASE_TABLES.REALISASI)
+          .select(REALISASI_LIGHT_SELECT_FIELDS);
+
+        if (targetUnitId && targetUnitId !== 'ALL') {
+          query = query.or(this.getUnitQueryFilter(targetUnitId));
+        }
+
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error } = await query
+          .order('TANGGAL', { ascending: false, nullsFirst: false })
+          .range(from, to);
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const normalized: Realisasi[] = data.map((r: any) => this.normalizeRealisasiRow(r));
+          if (!lastSyncTime && page === 0) {
+            this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(normalized));
+          }
+          return { success: true, data: normalized, source: 'supabase' };
+        } else if (error) {
+          console.warn('Supabase fetchRealisasi query warning:', error);
+        }
+      } catch (err) {
+        console.warn('Supabase fetch REALISASI exception:', err);
+      }
     }
 
     try {
@@ -593,6 +684,160 @@ export class SupabaseService {
     }
 
     return { success: true, data: INITIAL_REALISASI, source: 'initial' };
+  }
+
+  /**
+   * Fetch Realisasi with server-side pagination, filters (Nomor_WO, ULP, date range)
+   * Directly from Supabase PostgreSQL REALISASI table.
+   */
+  static async fetchRealisasiPaged(params: FetchRealisasiParams = {}): Promise<{
+    status: 'success' | 'error';
+    data: Realisasi[];
+    pagination?: PaginationMeta;
+    message?: string;
+  }> {
+    const {
+      page = 1,
+      limit = 20,
+      tanggalDari,
+      tanggalSampai,
+      ULP,
+      Nomor_WO,
+    } = params;
+
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        let query = supabase
+          .from(SUPABASE_TABLES.REALISASI)
+          .select(REALISASI_LIGHT_SELECT_FIELDS, { count: 'exact' });
+
+        // Filter by Nomor WO (matches standard Nomor_WO or legacy shifted WO_ID)
+        if (Nomor_WO && Nomor_WO.trim()) {
+          const cleanWO = Nomor_WO.trim();
+          query = query.or(`Nomor_WO.ilike.%${cleanWO}%,WO_ID.ilike.%${cleanWO}%`);
+        }
+
+        // Filter by ULP if selected
+        if (ULP && ULP.trim() && ULP !== 'ALL') {
+          query = query.ilike('ULP', `%${ULP.trim()}%`);
+        }
+
+        // Filter by Date Range
+        if (tanggalDari && tanggalDari.trim()) {
+          query = query.gte('TANGGAL', tanggalDari.trim());
+        }
+        if (tanggalSampai && tanggalSampai.trim()) {
+          query = query.lte('TANGGAL', tanggalSampai.trim());
+        }
+
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+
+        const { data, count, error } = await query
+          .order('TANGGAL', { ascending: false, nullsFirst: false })
+          .range(from, to);
+
+        if (!error && Array.isArray(data)) {
+          const normalizedData: Realisasi[] = data.map((item: any) =>
+            this.normalizeRealisasiRow(item)
+          );
+
+          const total = count !== null && count !== undefined ? count : normalizedData.length;
+          const totalPages = Math.ceil(total / limit) || 1;
+
+          const paginationMeta: PaginationMeta = {
+            page,
+            limit,
+            total,
+            totalPages,
+            hasNextPage: page < totalPages,
+            hasPreviousPage: page > 1,
+          };
+
+          return {
+            status: 'success',
+            data: normalizedData,
+            pagination: paginationMeta,
+            message: `Berhasil memuat ${normalizedData.length} data riwayat realisasi dari database Supabase.`,
+          };
+        } else if (error) {
+          console.warn('Supabase fetchRealisasiPaged error:', error);
+        }
+      } catch (err: any) {
+        console.warn('Supabase fetchRealisasiPaged exception:', err);
+      }
+    }
+
+    // Fallback: try ApiService if available
+    try {
+      const apiRes = await ApiService.fetchRealisasi(params);
+      if (apiRes.data) {
+        return {
+          status: 'success',
+          data: apiRes.data,
+          pagination: apiRes.pagination,
+          message: apiRes.message,
+        };
+      }
+    } catch (apiErr) {
+      console.warn('ApiService fallback fetch failed:', apiErr);
+    }
+
+    // Fallback: Dexie local database
+    try {
+      const { dexieDb } = await import('./dexieDb');
+      const localRecords = await dexieDb.realisasi.toArray();
+      if (localRecords.length > 0) {
+        let filtered = localRecords;
+        if (Nomor_WO && Nomor_WO.trim()) {
+          const searchNorm = Nomor_WO.trim().toLowerCase();
+          filtered = filtered.filter((r) =>
+            (r.nomorWO || '').toLowerCase().includes(searchNorm) ||
+            (r.workOrderId || '').toLowerCase().includes(searchNorm)
+          );
+        }
+        if (ULP && ULP.trim() && ULP !== 'ALL') {
+          const ulpNorm = ULP.trim().toLowerCase();
+          filtered = filtered.filter((r) => (r.ulpName || '').toLowerCase().includes(ulpNorm));
+        }
+
+        const normalized = filtered.map((r) => this.normalizeRealisasiRow(r));
+        const total = normalized.length;
+        const totalPages = Math.ceil(total / limit) || 1;
+        const pageItems = normalized.slice((page - 1) * limit, page * limit);
+
+        return {
+          status: 'success',
+          data: pageItems,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages,
+            hasNextPage: page < totalPages,
+            hasPreviousPage: page > 1,
+          },
+          message: `Memuat ${pageItems.length} data dari penyimpanan lokal perangkat.`,
+        };
+      }
+    } catch (dexErr) {
+      console.warn('Dexie fallback exception:', dexErr);
+    }
+
+    return {
+      status: 'success',
+      data: [],
+      pagination: {
+        page,
+        limit,
+        total: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    };
   }
 
   /**
@@ -1001,6 +1246,23 @@ export class SupabaseService {
       Timestamp: rel.createdAt || getLocalDateTimeString(),
     };
 
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from(SUPABASE_TABLES.REALISASI)
+          .upsert(payload);
+
+        if (!error) {
+          return { success: true, data: rel };
+        }
+        console.warn('Supabase saveRealisasi error:', error);
+      } catch (err: any) {
+        console.warn('Supabase saveRealisasi exception:', err);
+      }
+    }
+
     try {
       const res = await ApiService.saveRealisasi({
         ...rel,
@@ -1088,7 +1350,25 @@ export class SupabaseService {
         }
       });
 
-      // 2. Perform deletion in Node.js API
+      // 2. Direct deletion in Supabase REALISASI table
+      const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+      if (isOnline && isSupabaseConfigured()) {
+        try {
+          const { error } = await supabase
+            .from(SUPABASE_TABLES.REALISASI)
+            .delete()
+            .eq('ID', targetId);
+
+          if (!error) {
+            return { success: true };
+          }
+          console.warn('Supabase deleteRealisasi error:', error);
+        } catch (supErr: any) {
+          console.warn('Supabase deleteRealisasi exception:', supErr);
+        }
+      }
+
+      // 3. Fallback deletion in Node.js API
       const res = await ApiService.deleteRealisasi(targetId);
       return { success: res.success, error: res.message };
     } catch (err: any) {
@@ -1105,6 +1385,45 @@ export class SupabaseService {
     id: string,
     params: any
   ): Promise<{ success: boolean; data?: Realisasi; error?: string }> {
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+
+    // 1. Direct update in Supabase REALISASI table
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        const dbUpdates: Record<string, any> = {};
+        if (params.tanggalRealisasi) dbUpdates.TANGGAL = params.tanggalRealisasi;
+        if (params.nomorWO) dbUpdates.Nomor_WO = params.nomorWO;
+        if (params.workOrderId) dbUpdates.WO_ID = params.workOrderId;
+        if (params.ulpName) dbUpdates.ULP = params.ulpName;
+        if (params.penyulangName) dbUpdates.PENYULANG = params.penyulangName;
+        if (params.reguName) dbUpdates.REGU_ROW = params.reguName;
+        if (params.noTiang) dbUpdates.NO_TIANG = params.noTiang;
+        if (params.jenisTanaman) dbUpdates.Jenis_Tanaman = params.jenisTanaman;
+        if (params.keterangan) dbUpdates.Keterangan = params.keterangan;
+        if (params.pertumbuhanTanaman) dbUpdates.Pertumbuhan_Tanaman = params.pertumbuhanTanaman;
+        if (params.kendala) dbUpdates.Kendala = params.kendala;
+        if (params.lokasiKerja) dbUpdates.Lokasi_kerja = params.lokasiKerja;
+        if (params.fotoSebelumUrl) dbUpdates.Foto_Sebelum = params.fotoSebelumUrl;
+        if (params.fotoSesudahUrl) dbUpdates.Foto_Sesudah = params.fotoSesudahUrl;
+        if (params.latitude && params.longitude) {
+          dbUpdates.Latitude_Longitude = `${params.latitude}, ${params.longitude}`;
+        }
+
+        const { error } = await supabase
+          .from(SUPABASE_TABLES.REALISASI)
+          .update(dbUpdates)
+          .eq('ID', id);
+
+        if (!error) {
+          return { success: true };
+        }
+        console.warn('Supabase updateRealisasiAdmin error:', error);
+      } catch (err: any) {
+        console.warn('Supabase updateRealisasiAdmin exception:', err);
+      }
+    }
+
+    // 2. Fallback to ApiService
     try {
       const res = await ApiService.updateRealisasi(id, params);
       if (res.success) {
@@ -1132,20 +1451,56 @@ export class SupabaseService {
     message?: string;
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
 
-    try {
-      const res = await ApiService.fetchAbsensi(targetUnitId);
-      if (res.data && Array.isArray(res.data)) {
-        this.safeSetItem(`aphro_absensi_${targetUnitId}`, JSON.stringify(res.data));
-        return { 
-          success: true, 
-          data: res.data, 
-          source: 'supabase',
-          message: `Berhasil memuat ${res.data.length} data absensi terbaru.` 
-        };
+    // 1. Primary: HyperCloudHost Node.js API
+    if (isOnline) {
+      try {
+        const res = await ApiService.fetchAbsensi(targetUnitId);
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          this.safeSetItem(`aphro_absensi_${targetUnitId}`, JSON.stringify(res.data));
+          return { 
+            success: true, 
+            data: res.data, 
+            source: 'supabase',
+            message: `Berhasil memuat ${res.data.length} data absensi dari API HyperCloudHost.` 
+          };
+        }
+      } catch (err) {
+        console.warn('Error loading Absensi from ApiService, falling back:', err);
       }
-    } catch (err) {
-      console.warn('Error loading Absensi from ApiService:', err);
+    }
+
+    // 2. Secondary fallback: Direct fetch from Supabase ABSENSI table
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        let query = supabase
+          .from(SUPABASE_TABLES.ABSENSI)
+          .select(ABSENSI_SELECT_FIELDS);
+
+        if (targetUnitId && targetUnitId !== 'ALL') {
+          query = query.or(this.getUnitQueryFilter(targetUnitId));
+        }
+
+        const { data, error } = await query
+          .order('TANGGAL', { ascending: false })
+          .limit(200);
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const absList: Absensi[] = data.map((row: any) => this.normalizeAbsensiRow(row));
+          this.safeSetItem(`aphro_absensi_${targetUnitId}`, JSON.stringify(absList));
+          return {
+            success: true,
+            data: absList,
+            source: 'supabase',
+            message: `Berhasil memuat ${absList.length} data absensi dari Supabase Database.`,
+          };
+        } else if (error) {
+          console.warn('Supabase fetchAbsensi error:', error);
+        }
+      } catch (err) {
+        console.warn('Supabase fetchAbsensi exception:', err);
+      }
     }
 
     try {
@@ -1209,7 +1564,7 @@ export class SupabaseService {
   }
 
   /**
-   * Save Absensi to Node.js API
+   * Save Absensi to Supabase ABSENSI table
    * Ensures photos are stored as Google Drive URLs (Text) and timestamps are persisted
    */
   static async saveAbsensi(unitId: string, abs: Absensi): Promise<{ success: boolean; error?: string }> {
@@ -1242,6 +1597,46 @@ export class SupabaseService {
       if (finalFotoKeluar) abs.fotoKeluar = finalFotoKeluar;
     }
 
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+
+    // 1. Direct save to Supabase ABSENSI table
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        const payload: Record<string, any> = {
+          ID: abs.id || `ABS-${Date.now()}`,
+          unitId: targetUnitId,
+          TANGGAL: abs.tanggal || getWIBDateString(),
+          NAMA_REGU: abs.reguName || '',
+          ULP: abs.ulpName || '',
+          PETUGAS_1: abs.petugasList?.[0]?.nama || (abs as any).PETUGAS_1 || null,
+          KET_1: abs.petugasList?.[0]?.keterangan || (abs as any).KET_1 || 'HADIR',
+          PETUGAS_2: abs.petugasList?.[1]?.nama || (abs as any).PETUGAS_2 || null,
+          KET_2: abs.petugasList?.[1]?.keterangan || (abs as any).KET_2 || 'HADIR',
+          PETUGAS_3: abs.petugasList?.[2]?.nama || (abs as any).PETUGAS_3 || null,
+          KET_3: abs.petugasList?.[2]?.keterangan || (abs as any).KET_3 || 'HADIR',
+          PETUGAS_4: abs.petugasList?.[3]?.nama || (abs as any).PETUGAS_4 || null,
+          KET_4: abs.petugasList?.[3]?.keterangan || (abs as any).KET_4 || 'HADIR',
+          PETUGAS_5: abs.petugasList?.[4]?.nama || (abs as any).PETUGAS_5 || null,
+          KET_5: abs.petugasList?.[4]?.keterangan || (abs as any).KET_5 || 'HADIR',
+          FOTO_MASUK: finalFotoMasuk ? formatDriveViewUrl(finalFotoMasuk) : null,
+          'TIMESTAMP MASUK': abs.timestampMasuk || abs.createdAt || getLocalDateTimeString(),
+          FOTO_KELUAR: finalFotoKeluar ? formatDriveViewUrl(finalFotoKeluar) : null,
+          'TIMESTAMP KELUAR': abs.timestampKeluar || abs.updatedAt || null,
+        };
+
+        const { error } = await supabase
+          .from(SUPABASE_TABLES.ABSENSI)
+          .upsert(payload);
+
+        if (!error) {
+          return { success: true };
+        }
+        console.warn('Supabase saveAbsensi error:', error);
+      } catch (err: any) {
+        console.warn('Supabase saveAbsensi exception:', err);
+      }
+    }
+
     try {
       const res = await ApiService.saveAbsensi({
         ...abs,
@@ -1260,6 +1655,24 @@ export class SupabaseService {
    */
   static async deleteAbsensi(arg1: string, arg2?: string): Promise<{ success: boolean; error?: string }> {
     const targetId = arg2 || arg1;
+    if (!targetId) return { success: false, error: 'Target ID kosong' };
+
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from(SUPABASE_TABLES.ABSENSI)
+          .delete()
+          .eq('ID', targetId);
+
+        if (!error) {
+          return { success: true };
+        }
+      } catch (err: any) {
+        console.warn('Supabase deleteAbsensi exception:', err);
+      }
+    }
+
     try {
       return { success: true };
     } catch (err: any) {
@@ -1303,14 +1716,56 @@ export class SupabaseService {
   }
 
   /**
-   * Fetch all user accounts
+   * Fetch all user accounts from HyperCloudHost API (primary), then Supabase, then initial
    */
-  static async fetchUsers(_unitId?: string): Promise<{
+  static async fetchUsers(unitId?: string): Promise<{
     success: boolean;
     data: User[];
     source: 'supabase' | 'cache' | 'initial';
     message?: string;
   }> {
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    const targetUnitId = unitId || this.getActiveUnitId();
+
+    // 1. Primary: HyperCloudHost Node.js API
+    if (isOnline) {
+      try {
+        const apiRes = await ApiService.fetchUsers(targetUnitId);
+        if (apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
+          const users: User[] = apiRes.data.map((u: any) => this.normalizeUserRow(u));
+          return {
+            success: true,
+            data: users,
+            source: 'supabase',
+            message: `Berhasil memuat ${users.length} user dari API HyperCloudHost.`,
+          };
+        }
+      } catch (apiErr) {
+        console.warn('ApiService fetchUsers error, falling back:', apiErr);
+      }
+    }
+
+    // 2. Secondary fallback: Supabase USERS table
+    if (isOnline && isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from(SUPABASE_TABLES.USERS)
+          .select('*');
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const users: User[] = data.map((u: any) => this.normalizeUserRow(u));
+          return {
+            success: true,
+            data: users,
+            source: 'supabase',
+            message: `Berhasil memuat ${users.length} user dari database Supabase.`,
+          };
+        }
+      } catch (err) {
+        console.warn('Supabase fetchUsers exception:', err);
+      }
+    }
+
     return {
       success: true,
       data: INITIAL_USERS,
@@ -1430,7 +1885,7 @@ export class SupabaseService {
   }
 
   /**
-   * Fetch master data for a given unitId.
+   * Fetch master data for a given unitId from HyperCloudHost API (primary) with local defaults fallback.
    */
   static async fetchMasterData(unitId?: string): Promise<{
     users: User[];
@@ -1441,8 +1896,89 @@ export class SupabaseService {
     source: 'supabase' | 'cache' | 'initial';
   }> {
     const targetUnitId = unitId || this.getActiveUnitId();
-    const defaults = this.getDefaultMasterForUnit(targetUnitId);
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
 
+    // 1. Primary: HyperCloudHost Node.js API
+    if (isOnline) {
+      try {
+        const apiMaster = await ApiService.fetchMasterData(targetUnitId);
+        const hasData =
+          (apiMaster.ulp && apiMaster.ulp.length > 0) ||
+          (apiMaster.penyulang && apiMaster.penyulang.length > 0) ||
+          (apiMaster.regu && apiMaster.regu.length > 0) ||
+          (apiMaster.petugas && apiMaster.petugas.length > 0) ||
+          (apiMaster.users && apiMaster.users.length > 0);
+
+        if (hasData) {
+          const mappedUsers: User[] = (apiMaster.users || []).map((u: any) => this.normalizeUserRow(u));
+          const mappedUlp: ULP[] = (apiMaster.ulp || []).map((u: any, idx: number) => ({
+            id: String(u.id || u.Id || u.ID || `ulp-${idx + 1}`),
+            kodeULP: String(u.kodeULP || u.Kode_ULP || u.kode || `ULP-${idx + 1}`),
+            namaULP: String(u.namaULP || u.Nama_ULP || u.nama || u.ULP || '').toUpperCase(),
+            manajer: String(u.manajer || u.Manajer || '-'),
+            kontak: String(u.kontak || u.Kontak || '-'),
+            alamat: String(u.alamat || u.Alamat || '-'),
+            unitId: String(u.unitId || targetUnitId),
+            status: (u.status || u.Status || 'Aktif') as 'Aktif' | 'Non-Aktif',
+          })).filter(u => u.namaULP.length > 0);
+
+          const mappedPenyulang: Penyulang[] = (apiMaster.penyulang || []).map((p: any, idx: number) => ({
+            id: String(p.id || p.Id || p.ID || `pyl-${idx + 1}`),
+            kodePenyulang: String(p.kodePenyulang || p.Kode_Penyulang || `PYL-${idx + 1}`),
+            namaPenyulang: String(p.namaPenyulang || p.Nama_Penyulang || p.penyulang || p.Penyulang || ''),
+            ulpId: String(p.ulpId || targetUnitId),
+            ulpName: String(p.ulpName || p.ULP || ''),
+            panjangKms: Number(p.panjangKms || p.panjangJaringan || p.Panjang_Jaringan || 0),
+            jumlahTrafo: Number(p.jumlahTrafo || p.Jumlah_Trafo || 0),
+            status: (p.status || 'Normal') as 'Normal' | 'Rawan Hazard' | 'Maintenance',
+            unitId: String(p.unitId || targetUnitId),
+          })).filter(p => p.namaPenyulang.length > 0);
+
+          const mappedRegu: ReguROW[] = (apiMaster.regu || []).map((r: any, idx: number) => ({
+            id: String(r.id || r.Id || r.ID || `regu-${idx + 1}`),
+            kodeRegu: String(r.kodeRegu || r.Kode_Regu || `REG-${idx + 1}`),
+            namaRegu: String(r.namaRegu || r.Nama_Regu || r.regu || r.Regu_ROW || ''),
+            penanggungJawab: String(r.penanggungJawab || r.Penanggung_Jawab || '-'),
+            jumlahAnggota: Number(r.jumlahAnggota || r.Jumlah_Anggota || 5),
+            kontak: String(r.kontak || r.Kontak || '-'),
+            ulpId: String(r.ulpId || targetUnitId),
+            ulpName: String(r.ulpName || r.ULP || ''),
+            status: (r.status || r.Status || 'Aktif') as 'Aktif' | 'Non-Aktif',
+            unitId: String(r.unitId || targetUnitId),
+          })).filter(r => r.namaRegu.length > 0);
+
+          const mappedPetugas: Petugas[] = (apiMaster.petugas || []).map((ptg: any, idx: number) => ({
+            id: String(ptg.id || ptg.Id || ptg.ID || `ptg-${idx + 1}`),
+            nip: String(ptg.nip || ptg.NIP || `NIP-${idx + 1}`),
+            nama: String(ptg.nama || ptg.Nama || ptg.Nama_Petugas || ''),
+            reguId: String(ptg.reguId || ptg.ReguID || ''),
+            reguName: String(ptg.reguName || ptg.Nama_Regu || ''),
+            ulpId: String(ptg.ulpId || targetUnitId),
+            ulpName: String(ptg.ulpName || ''),
+            noHp: String(ptg.noHp || ptg.No_HP || ptg.kontak || '-'),
+            role: (ptg.role || 'Petugas') as any,
+            status: (ptg.status || ptg.Status || 'Aktif') as 'Aktif' | 'Non-Aktif',
+            unitId: String(ptg.unitId || targetUnitId),
+          })).filter(ptg => ptg.nama.length > 0);
+
+          const defaults = this.getDefaultMasterForUnit(targetUnitId);
+
+          return {
+            users: mappedUsers.length > 0 ? mappedUsers : INITIAL_USERS,
+            ulp: mappedUlp.length > 0 ? mappedUlp : (defaults.ulp.length > 0 ? defaults.ulp : INITIAL_ULP),
+            penyulang: mappedPenyulang.length > 0 ? mappedPenyulang : INITIAL_PENYULANG,
+            regu: mappedRegu.length > 0 ? mappedRegu : (defaults.regu.length > 0 ? defaults.regu : INITIAL_REGU),
+            petugas: mappedPetugas.length > 0 ? mappedPetugas : INITIAL_PETUGAS,
+            source: 'supabase',
+          };
+        }
+      } catch (err) {
+        console.warn('ApiService.fetchMasterData error, falling back:', err);
+      }
+    }
+
+    // 2. Local fallback
+    const defaults = this.getDefaultMasterForUnit(targetUnitId);
     return {
       users: INITIAL_USERS,
       ulp: defaults.ulp.length > 0 ? defaults.ulp : INITIAL_ULP,
@@ -1507,13 +2043,68 @@ export class SupabaseService {
     summary: string;
   }> {
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    if (!isOnline || !isSupabaseConfigured()) {
+      return {
+        isOnline: !!isOnline,
+        tables: [],
+        totalRows: 0,
+        summary: !isOnline ? 'Koneksi offline' : 'Supabase belum terkonfigurasi',
+      };
+    }
+
+    const tableNames = Object.values(SUPABASE_TABLES);
+    const results: Array<{
+      name: string;
+      status: 'OK' | 'ERROR' | 'EMPTY';
+      count: number;
+      latencyMs: number;
+      error?: string;
+    }> = [];
+
+    let totalRows = 0;
+
+    for (const tbl of tableNames) {
+      const start = Date.now();
+      try {
+        const { count, error } = await supabase
+          .from(tbl)
+          .select('*', { count: 'exact', head: true });
+
+        const latencyMs = Date.now() - start;
+        if (error) {
+          results.push({
+            name: tbl,
+            status: 'ERROR',
+            count: 0,
+            latencyMs,
+            error: error.message,
+          });
+        } else {
+          const c = count || 0;
+          totalRows += c;
+          results.push({
+            name: tbl,
+            status: c > 0 ? 'OK' : 'EMPTY',
+            count: c,
+            latencyMs,
+          });
+        }
+      } catch (err: any) {
+        results.push({
+          name: tbl,
+          status: 'ERROR',
+          count: 0,
+          latencyMs: Date.now() - start,
+          error: err?.message || 'Exception',
+        });
+      }
+    }
+
     return {
-      isOnline,
-      tables: [],
-      totalRows: 0,
-      summary: isOnline
-        ? 'Terhubung ke Database Node.js API (api.aphro-row.my.id)'
-        : 'Status koneksi API/Database: Offline',
+      isOnline: true,
+      tables: results,
+      totalRows,
+      summary: `Berhasil terhubung ke Supabase Database. Total record: ${totalRows}.`,
     };
   }
 
@@ -1748,7 +2339,7 @@ export class SupabaseService {
   // ==========================================
 
   /**
-   * Authenticate user against Supabase USERS table using unitId + username + password
+   * Authenticate user against HyperCloudHost Node.js API (primary), with Supabase fallback
    */
   static async loginWithSupabase(username: string, passwordInput?: string, unitIdInput?: string): Promise<{
     success: boolean;
@@ -1763,6 +2354,32 @@ export class SupabaseService {
       return { success: false, message: 'Username tidak boleh kosong.' };
     }
 
+    // 1. Primary: HyperCloudHost Node.js API
+    try {
+      const apiRes = await ApiService.login(safeUsername, passwordInput, targetUnitId);
+      if (apiRes.status === 'success' && apiRes.user) {
+        const rawUser = apiRes.user;
+        const normalized = this.normalizeUserRow(rawUser);
+        normalized.unitId = targetUnitId;
+        (normalized as any).token = apiRes.token;
+        return {
+          success: true,
+          user: normalized,
+          message: apiRes.message || 'Login berhasil melalui API HyperCloudHost.',
+        };
+      } else if (apiRes.status === 'error' && apiRes.message && (
+        apiRes.message.toLowerCase().includes('password') ||
+        apiRes.message.toLowerCase().includes('sandi') ||
+        apiRes.message.toLowerCase().includes('tidak terdaftar') ||
+        apiRes.message.toLowerCase().includes('non-aktif')
+      )) {
+        return { success: false, message: apiRes.message };
+      }
+    } catch (apiErr) {
+      console.warn('HyperCloudHost ApiService.login error, trying fallback:', apiErr);
+    }
+
+    // 2. Secondary fallback: Supabase USERS table
     try {
       const userSelectFields = 'ID, id, UserID, userid, Username, username, Nama, nama, Name, name, Password, password, Role, role, Regu, regu, Regu_Name, reguName, ULP, ulp, Status, status, NIP, nip, Email, email, unitId, unit_id, UnitID, Unit_ID, kodeUnit, Kode_Unit';
       const { data, error } = await supabase

@@ -107,18 +107,18 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
       lastFetchParams.current = newParams;
 
       try {
-        const res = await ApiService.fetchRealisasi(newParams);
+        const res = await SupabaseService.fetchRealisasiPaged(newParams);
         if (res.status === 'success' || res.data) {
           setRealisasiList(res.data);
           if (res.pagination) {
             setPagination(res.pagination);
           }
         } else {
-          setError(res.message || 'Gagal mengambil data Realisasi dari API');
+          setError(res.message || 'Gagal mengambil data Realisasi dari database');
         }
       } catch (err: any) {
-        console.warn('[API REALISASI FETCH WARNING]', err?.message || err);
-        setError(err?.message || 'Gagal terhubung ke API Realisasi');
+        console.warn('[DATABASE REALISASI FETCH WARNING]', err?.message || err);
+        setError(err?.message || 'Gagal terhubung ke Database Realisasi');
         try {
           const localRecords = await dexieDb.realisasi.toArray();
           if (localRecords.length > 0) {
