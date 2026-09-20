@@ -261,13 +261,18 @@ router.get('/master-data', async (req: Request, res: Response) => {
     const unitClause = !isAll && unitId ? ` WHERE "unitId" = $1` : '';
     const params = !isAll && unitId ? [unitId] : [];
 
-    const [ulpRes, reguRes, ptgRes, penyRes, usrRes] = await Promise.all([
+    let [ulpRes, reguRes, ptgRes, penyRes, usrRes] = await Promise.all([
       query(`SELECT * FROM public."ULP"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
       query(`SELECT * FROM public."REGU_ROW"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
       query(`SELECT * FROM public."PETUGAS"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
       query(`SELECT * FROM public."PENYULANG"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
       query(`SELECT * FROM public."USERS"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
     ]);
+
+    if (penyRes.rows.length === 0 && !isAll) {
+      const allPeny = await query(`SELECT * FROM public."PENYULANG" ORDER BY "ID" ASC`).catch(() => ({ rows: [] }));
+      penyRes = allPeny;
+    }
 
     return res.json({
       status: 'success',
@@ -343,8 +348,17 @@ router.get('/petugas', async (req: Request, res: Response) => {
 router.get('/penyulang', async (req: Request, res: Response) => {
   const { unitId, isAll } = parseUnitFilter(req);
   try {
-    const sql = !isAll && unitId ? `SELECT * FROM public."PENYULANG" WHERE "unitId" = $1` : `SELECT * FROM public."PENYULANG"`;
-    const resDb = await query(sql, !isAll && unitId ? [unitId] : []);
+    let resDb;
+    if (!isAll && unitId) {
+      const sql = `SELECT * FROM public."PENYULANG" WHERE UPPER(COALESCE("unitId", '')) = UPPER($1)`;
+      resDb = await query(sql, [unitId]);
+      if (resDb.rows.length === 0) {
+        // Fallback to all if unitId query returned 0 rows
+        resDb = await query(`SELECT * FROM public."PENYULANG"`);
+      }
+    } else {
+      resDb = await query(`SELECT * FROM public."PENYULANG"`);
+    }
     return res.json({ status: 'success', data: resDb.rows });
   } catch (err: any) {
     return res.status(500).json({ status: 'error', message: err.message });
