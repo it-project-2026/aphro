@@ -1,6 +1,15 @@
 import pg from 'pg';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
+
+// Derive __dirname for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const MOCK_FILE_PATH = path.join(__dirname, 'mock_db.json');
 
 // Priority: HYPERCLOUD_DATABASE_URL || DATABASE_URL
 let dbUrl = process.env.HYPERCLOUD_DATABASE_URL || process.env.DATABASE_URL || '';
@@ -12,28 +21,48 @@ dbUrl = dbUrl.trim().replace(/^["']|["']$/g, '');
 let poolInstance: pg.Pool | null = null;
 
 // Mock in-memory stores for fallback when DB is unreachable
-const mockStore: Record<string, any[]> = {
-  'INISIASI': [
-    { ID: 'UL1', Kode_UL: 'ULP-01', Nama_UL: 'ULP KURANJI', unitId: 'UL1' },
-    { ID: 'UL2', Kode_UL: 'ULP-02', Nama_UL: 'UL BUKITTINGGI', unitId: 'UL2' },
-    { ID: 'UL3', Kode_UL: 'ULP-03', Nama_UL: 'UL PAYAKUMBUH', unitId: 'UL3' },
-  ],
-  'USERS': [
-    { id: 'usr-1', userName: 'superadmin', Password: 'admin123', name: 'SuperAdmin', role: 'SuperAdmin', unitId: 'UL2', Status: 'Aktif' },
-    { id: 'usr-2', userName: 'adminbkt', Password: 'bkt123', name: 'Admin BKT', role: 'Admin', unitId: 'UL2', Status: 'Aktif' },
-    { id: 'usr-5', userName: 'petugasrow', Password: 'row123', name: 'Budi Santoso', role: 'User', unitId: 'UL2', Status: 'Aktif' }
-  ],
-  'WORK_ORDER': [
-    { WO_ID: 'WO-2026-001', Nomor_WO: 'WO/2026/01', unitId: 'UL2', TANGGAL: new Date().toISOString(), STATUS: 'OPEN', URAIAN_PEKERJAAN: 'Pemeliharaan Right of Way (ROW) Penyulang Bukittinggi' },
-    { WO_ID: 'WO-2026-002', Nomor_WO: 'WO/2026/02', unitId: 'UL2', TANGGAL: new Date().toISOString(), STATUS: 'PROGRESS', URAIAN_PEKERJAAN: 'Perabasan Pohon Dekat Jaringan TM' }
-  ],
-  'ABSENSI': [],
-  'REALISASI': [],
-  'ULP': [{ id: 'UL2', namaUL: 'UL BUKITTINGGI', unitId: 'UL2' }],
-  'PENYULANG': [{ id: 'PNY-1', namaPenyulang: 'Penyulang Kota', unitId: 'UL2' }],
-  'PETUGAS': [{ id: 'PTG-1', namaPetugas: 'Budi Santoso', unitId: 'UL2' }],
-  'REGU_ROW': [{ id: 'RG-1', namaRegu: 'REGU ALPHA', unitId: 'UL2' }]
-};
+function loadMockStore(): Record<string, any[]> {
+  try {
+    if (fs.existsSync(MOCK_FILE_PATH)) {
+      const content = fs.readFileSync(MOCK_FILE_PATH, 'utf8');
+      return JSON.parse(content);
+    }
+  } catch (e: any) {
+    console.warn('[DB MOCK] Failed to load mock_db.json, using defaults:', e.message);
+  }
+  return {
+    'INISIASI': [
+      { ID: 'UL1', Kode_UL: 'ULP-01', Nama_UL: 'ULP KURANJI', unitId: 'UL1' },
+      { ID: 'UL2', Kode_UL: 'ULP-02', Nama_UL: 'UL BUKITTINGGI', unitId: 'UL2' },
+      { ID: 'UL3', Kode_UL: 'ULP-03', Nama_UL: 'UL PAYAKUMBUH', unitId: 'UL3' },
+    ],
+    'USERS': [
+      { id: 'usr-1', UserID: 'superadmin', Username: 'superadmin', Password: 'admin123', name: 'SuperAdmin', role: 'SuperAdmin', Role: 'SuperAdmin', unitId: 'UL2', Status: 'Aktif' },
+      { id: 'usr-2', UserID: 'adminbkt', Username: 'adminbkt', Password: 'bkt123', name: 'Admin BKT', role: 'Admin', Role: 'Admin', unitId: 'UL2', Status: 'Aktif' },
+      { id: 'usr-5', UserID: 'petugasrow', Username: 'petugasrow', Password: 'row123', name: 'Budi Santoso', role: 'User', Role: 'User', unitId: 'UL2', Status: 'Aktif' }
+    ],
+    'WORK_ORDER': [
+      { WO_ID: 'WO-2026-001', Nomor_WO: 'WO/2026/01', unitId: 'UL2', Tanggal: new Date().toISOString().split('T')[0], PEKERJAAN: 'NORMAL', STATUS: 'DRAFT', URAIAN_PEKERJAAN: 'Pemeliharaan Right of Way (ROW) Penyulang Bukittinggi' },
+      { WO_ID: 'WO-2026-002', Nomor_WO: 'WO/2026/02', unitId: 'UL2', Tanggal: new Date().toISOString().split('T')[0], PEKERJAAN: 'NORMAL', STATUS: 'DRAFT', URAIAN_PEKERJAAN: 'Perabasan Pohon Dekat Jaringan TM' }
+    ],
+    'ABSENSI': [],
+    'REALISASI': [],
+    'ULP': [{ id: 'UL2', namaUL: 'UL BUKITTINGGI', unitId: 'UL2' }],
+    'PENYULANG': [{ id: 'PNY-1', namaPenyulang: 'Penyulang Kota', unitId: 'UL2' }],
+    'PETUGAS': [{ id: 'PTG-1', namaPetugas: 'Budi Santoso', unitId: 'UL2' }],
+    'REGU_ROW': [{ id: 'RG-1', namaRegu: 'REGU ALPHA', unitId: 'UL2' }]
+  };
+}
+
+const mockStore = loadMockStore();
+
+function saveMockStore() {
+  try {
+    fs.writeFileSync(MOCK_FILE_PATH, JSON.stringify(mockStore, null, 2), 'utf8');
+  } catch (e: any) {
+    console.warn('[DB MOCK] Failed to save mock_db.json:', e.message);
+  }
+}
 
 function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
   const upper = text.toUpperCase();
@@ -47,15 +76,172 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
   else if (upper.includes('"PETUGAS"') || upper.includes(' PETUGAS ')) tableName = 'PETUGAS';
   else if (upper.includes('"REGU_ROW"') || upper.includes(' REGU_ROW ')) tableName = 'REGU_ROW';
 
-  const rows = mockStore[tableName] || [];
-  
+  let rows = mockStore[tableName] || [];
+
+  // Filter logic for SELECT query
+  if (upper.startsWith('SELECT')) {
+    // 1. Filter by unitId
+    const unitIdIndex = text.indexOf('"unitId" = $');
+    if (unitIdIndex !== -1) {
+      const match = text.slice(unitIdIndex).match(/"unitId"\s*=\s*\$(\d+)/);
+      if (match) {
+        const paramIdx = parseInt(match[1], 10) - 1;
+        const targetUnitId = params[paramIdx];
+        if (targetUnitId) {
+          rows = rows.filter(r => String(r.unitId || r.UnitId || r.unitid || '').toUpperCase() === String(targetUnitId).toUpperCase());
+        }
+      }
+    }
+    // 2. Filter by UserID
+    const userIdIndex = text.indexOf('"UserID" = $');
+    if (userIdIndex !== -1) {
+      const match = text.slice(userIdIndex).match(/"UserID"\s*=\s*\$(\d+)/);
+      if (match) {
+        const paramIdx = parseInt(match[1], 10) - 1;
+        const targetUserId = params[paramIdx];
+        if (targetUserId) {
+          rows = rows.filter(r => String(r.UserID || r.userId || r.id || '').toUpperCase() === String(targetUserId).toUpperCase());
+        }
+      }
+    }
+  }
+
+  let affectedRows: any[] = [];
+  let isMutation = false;
+
+  if (upper.startsWith('INSERT') && params && params.length > 0) {
+    isMutation = true;
+    if (tableName === 'WORK_ORDER') {
+      const obj = {
+        "WO_ID": params[0] || `WO-${Date.now()}`,
+        "unitId": params[1] || 'UL1',
+        "Nomor_WO": params[2] || params[0] || '',
+        "PEKERJAAN": params[3] || 'NORMAL',
+        "Tanggal": params[4] || new Date().toISOString().split('T')[0],
+        "ULP": params[5] || '',
+        "PENYULANG": params[6] || '',
+        "REGU_ROW": params[7] || '',
+        "VOLUME": params[8] || 0,
+        "SATUAN": params[9] || 'Pohon',
+        "TOTAL_REALISASI": params[10] || 0,
+        "SATUAN_TOTAL_REALISASI": params[11] || 'Pohon',
+        "WO_AWAL": params[12] || '',
+        "WO_AKHIR": params[13] || '',
+        "LOKASI_START": params[14] || '',
+        "LOKASI_FINISH": params[15] || '',
+        "STATUS": params[16] || 'DRAFT',
+        "Created_At": params[17] || new Date().toISOString()
+      };
+      
+      const idx = rows.findIndex(r => String(r.WO_ID || r.id || '').toUpperCase() === String(obj.WO_ID).toUpperCase());
+      if (idx !== -1) {
+        rows[idx] = { ...rows[idx], ...obj };
+      } else {
+        rows.push(obj);
+      }
+      affectedRows = [obj];
+    } else if (tableName === 'REALISASI') {
+      const obj = {
+        "ID": params[0] || `REL-${Date.now()}`,
+        "unitId": params[1] || 'UL1',
+        "WO_ID": params[2] || '',
+        "Nomor_WO": params[3] || '',
+        "ULP": params[4] || '',
+        "REGU_ROW": params[5] || '',
+        "PENYULANG": params[6] || '',
+        "NO_TIANG": params[7] || '',
+        "TANGGAL": params[8] || new Date().toISOString().split('T')[0],
+        "Foto_Sebelum": params[9] || '',
+        "Foto_Sesudah": params[10] || '',
+        "Jenis_Tanaman": params[11] || '',
+        "Keterangan": params[12] || '',
+        "Pertumbuhan_Tanaman": params[13] || '',
+        "Kendala": params[14] || '',
+        "Latitude_Longitude": params[15] || '',
+        "Lokasi_kerja": params[16] || '',
+        "Timestamp": params[17] || new Date().toISOString()
+      };
+
+      const idx = rows.findIndex(r => String(r.ID || r.id || '').toUpperCase() === String(obj.ID).toUpperCase());
+      if (idx !== -1) {
+        rows[idx] = { ...rows[idx], ...obj };
+      } else {
+        rows.push(obj);
+      }
+      affectedRows = [obj];
+    } else if (tableName === 'ABSENSI') {
+      const obj = {
+        "ID": params[0] || `ABS-${Date.now()}`,
+        "unitId": params[1] || 'UL1',
+        "TANGGAL": params[2] || new Date().toISOString().split('T')[0],
+        "NAMA_REGU": params[3] || '',
+        "ULP": params[4] || '',
+        "PETUGAS_1": params[5] || '',
+        "KET_1": params[6] || '',
+        "PETUGAS_2": params[7] || '',
+        "KET_2": params[8] || '',
+        "PETUGAS_3": params[9] || '',
+        "KET_3": params[10] || '',
+        "PETUGAS_4": params[11] || '',
+        "KET_4": params[12] || '',
+        "PETUGAS_5": params[13] || '',
+        "KET_5": params[14] || '',
+        "FOTO_MASUK": params[15] || '',
+        "TIMESTAMP MASUK": params[16] || '',
+        "FOTO_KELUAR": params[17] || '',
+        "TIMESTAMP KELUAR": params[18] || ''
+      };
+
+      const idx = rows.findIndex(r => String(r.ID || r.id || '').toUpperCase() === String(obj.ID).toUpperCase());
+      if (idx !== -1) {
+        rows[idx] = { ...rows[idx], ...obj };
+      } else {
+        rows.push(obj);
+      }
+      affectedRows = [obj];
+    }
+    
+    saveMockStore();
+  } else if (upper.startsWith('DELETE') && params && params.length > 0) {
+    isMutation = true;
+    const delVal = String(params[0]).toUpperCase();
+    if (tableName === 'WORK_ORDER') {
+      const beforeLength = rows.length;
+      mockStore[tableName] = rows.filter(r => String(r.WO_ID || r.id || '').toUpperCase() !== delVal && String(r.Nomor_WO || '').toUpperCase() !== delVal);
+      affectedRows = [{ deleted: beforeLength - mockStore[tableName].length }];
+    } else {
+      const beforeLength = rows.length;
+      mockStore[tableName] = rows.filter(r => String(r.ID || r.id || '').toUpperCase() !== delVal);
+      affectedRows = [{ deleted: beforeLength - mockStore[tableName].length }];
+    }
+    saveMockStore();
+  } else if (upper.startsWith('UPDATE') && params && params.length > 0) {
+    isMutation = true;
+    // Simple update mapping
+    if (tableName === 'WORK_ORDER') {
+      // Find matching item by ID or Nomor_WO in params or query text
+      const idParam = params.find(p => typeof p === 'string' && p.startsWith('WO-'));
+      if (idParam) {
+        const idx = rows.findIndex(r => String(r.WO_ID || r.id || '').toUpperCase() === String(idParam).toUpperCase());
+        if (idx !== -1) {
+          // Merge updates if any
+          rows[idx] = { ...rows[idx], STATUS: params[0] || rows[idx].STATUS };
+          affectedRows = [rows[idx]];
+        }
+      }
+    }
+    saveMockStore();
+  }
+
+  const resultRows = isMutation ? affectedRows : rows;
+
   if (upper.includes('COUNT(*)')) {
     return { rows: [{ count: rows.length }], rowCount: 1, command: 'SELECT', oid: 0, fields: [] } as any;
   }
 
   return {
-    rows,
-    rowCount: rows.length,
+    rows: resultRows,
+    rowCount: resultRows.length,
     command: upper.startsWith('SELECT') ? 'SELECT' : upper.startsWith('INSERT') ? 'INSERT' : 'UPDATE',
     oid: 0,
     fields: []
