@@ -91,21 +91,155 @@ export interface SyncStatusData {
 
 const DEFAULT_HYPERCLOUD_URL = "postgresql://meysxysd:Aphro)51074Db@api.aphro-row.my.id:5432/meysxysd_aphro";
 
-const SUPPORTED_TABLES: Record<string, { primaryKey: string; order: number; columns: string[] }> = {
+const SUPPORTED_TABLES: Record<string, { primaryKey: string; order: number; columns: string[]; ddl: string }> = {
   WORK_ORDER: {
     primaryKey: "WO_ID",
     order: 1,
-    columns: ["WO_ID", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu", "Target_Pohon", "Target_Span", "Pekerjaan", "Status", "Keterangan", "unitId", "created_at"]
+    columns: [
+      "WO_ID", "unitId", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP",
+      "PENYULANG", "REGU_ROW", "VOLUME", "SATUAN", "WO_AWAL", "WO_AKHIR",
+      "STATUS", "LOKASI_START", "LOKASI_FINISH", "TOTAL_REALISASI",
+      "SATUAN_TOTAL_REALISASI", "Created_At"
+    ],
+    ddl: `
+CREATE TABLE IF NOT EXISTS public."WORK_ORDER" (
+  "WO_ID" TEXT PRIMARY KEY,
+  "unitId" TEXT DEFAULT 'UL1',
+  "Nomor_WO" TEXT,
+  "PEKERJAAN" TEXT DEFAULT 'NORMAL',
+  "Tanggal" TEXT,
+  "ULP" TEXT,
+  "PENYULANG" TEXT,
+  "REGU_ROW" TEXT,
+  "VOLUME" NUMERIC DEFAULT 0,
+  "SATUAN" TEXT DEFAULT 'Pohon',
+  "TOTAL_REALISASI" NUMERIC DEFAULT 0,
+  "SATUAN_TOTAL_REALISASI" TEXT DEFAULT 'Pohon',
+  "WO_AWAL" TEXT,
+  "WO_AKHIR" TEXT,
+  "LOKASI_START" TEXT,
+  "LOKASI_FINISH" TEXT,
+  "STATUS" TEXT DEFAULT 'DRAFT',
+  "Created_At" TEXT
+);
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "unitId" TEXT DEFAULT 'UL1';
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "PEKERJAAN" TEXT DEFAULT 'NORMAL';
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "Nomor_WO" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "Tanggal" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "ULP" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "PENYULANG" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "REGU_ROW" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "VOLUME" NUMERIC DEFAULT 0;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "SATUAN" TEXT DEFAULT 'Pohon';
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "TOTAL_REALISASI" NUMERIC DEFAULT 0;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "SATUAN_TOTAL_REALISASI" TEXT DEFAULT 'Pohon';
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "WO_AWAL" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "WO_AKHIR" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "LOKASI_START" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "LOKASI_FINISH" TEXT;
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "STATUS" TEXT DEFAULT 'DRAFT';
+ALTER TABLE public."WORK_ORDER" ADD COLUMN IF NOT EXISTS "Created_At" TEXT;
+`
   },
   ABSENSI: {
-    primaryKey: "Id",
+    primaryKey: "ID",
     order: 2,
-    columns: ["Id", "Tanggal", "ULP", "Nama_Regu", "Jumlah_Personil", "Daftar_Personil", "Status_Kerja", "Keterangan", "Latitude", "Longitude", "Foto_Selfie_Masuk", "Foto_Selfie_Keluar", "TIMESTAMP_MASUK", "TIMESTAMP_KELUAR", "unitId", "created_at"]
+    columns: [
+      "ID", "unitId", "TANGGAL", "NAMA_REGU", "ULP",
+      "PETUGAS_1", "KET_1", "PETUGAS_2", "KET_2", "PETUGAS_3", "KET_3",
+      "PETUGAS_4", "KET_4", "PETUGAS_5", "KET_5",
+      "FOTO_MASUK", "TIMESTAMP MASUK", "FOTO_KELUAR", "TIMESTAMP KELUAR"
+    ],
+    ddl: `
+CREATE TABLE IF NOT EXISTS public."ABSENSI" (
+  "ID" TEXT PRIMARY KEY,
+  "unitId" TEXT DEFAULT 'UL1',
+  "TANGGAL" TEXT,
+  "NAMA_REGU" TEXT,
+  "ULP" TEXT,
+  "PETUGAS_1" TEXT,
+  "KET_1" TEXT,
+  "PETUGAS_2" TEXT,
+  "KET_2" TEXT,
+  "PETUGAS_3" TEXT,
+  "KET_3" TEXT,
+  "PETUGAS_4" TEXT,
+  "KET_4" TEXT,
+  "PETUGAS_5" TEXT,
+  "KET_5" TEXT,
+  "FOTO_MASUK" TEXT,
+  "TIMESTAMP MASUK" TEXT,
+  "FOTO_KELUAR" TEXT,
+  "TIMESTAMP KELUAR" TEXT
+);
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "unitId" TEXT DEFAULT 'UL1';
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "TANGGAL" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "NAMA_REGU" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "ULP" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "PETUGAS_1" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "KET_1" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "PETUGAS_2" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "KET_2" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "PETUGAS_3" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "KET_3" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "PETUGAS_4" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "KET_4" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "PETUGAS_5" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "KET_5" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "FOTO_MASUK" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "TIMESTAMP MASUK" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "FOTO_KELUAR" TEXT;
+ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "TIMESTAMP KELUAR" TEXT;
+`
   },
   REALISASI: {
-    primaryKey: "id",
+    primaryKey: "ID",
     order: 3,
-    columns: ["id", "WO_ID", "Nomor_WO", "Tanggal", "ULP", "Penyulang", "Regu", "Section", "Nomor_Tiang", "Latitude", "Longitude", "Nama_Pohon", "Jumlah_Pohon", "Tindakan", "Kondisi_Sebelum", "Kondisi_Sesudah", "Foto_Sebelum", "Foto_Sesudah", "Status", "Keterangan", "unitId", "created_at"]
+    columns: [
+      "ID", "unitId", "WO_ID", "Nomor_WO", "ULP", "REGU_ROW",
+      "PENYULANG", "NO_TIANG", "TANGGAL", "Foto_Sebelum", "Foto_Sesudah",
+      "Jenis_Tanaman", "Keterangan", "Pertumbuhan_Tanaman", "Kendala",
+      "Latitude_Longitude", "Lokasi_kerja", "Timestamp"
+    ],
+    ddl: `
+CREATE TABLE IF NOT EXISTS public."REALISASI" (
+  "ID" TEXT PRIMARY KEY,
+  "unitId" TEXT DEFAULT 'UL1',
+  "WO_ID" TEXT,
+  "Nomor_WO" TEXT,
+  "ULP" TEXT,
+  "REGU_ROW" TEXT,
+  "PENYULANG" TEXT,
+  "NO_TIANG" TEXT,
+  "TANGGAL" TEXT,
+  "Foto_Sebelum" TEXT,
+  "Foto_Sesudah" TEXT,
+  "Jenis_Tanaman" TEXT,
+  "Keterangan" TEXT,
+  "Pertumbuhan_Tanaman" TEXT,
+  "Kendala" TEXT,
+  "Latitude_Longitude" TEXT,
+  "Lokasi_kerja" TEXT,
+  "Timestamp" TEXT
+);
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "unitId" TEXT DEFAULT 'UL1';
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "WO_ID" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Nomor_WO" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "ULP" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "REGU_ROW" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "PENYULANG" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "NO_TIANG" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "TANGGAL" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Foto_Sebelum" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Foto_Sesudah" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Jenis_Tanaman" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Keterangan" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Pertumbuhan_Tanaman" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Kendala" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Latitude_Longitude" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Lokasi_kerja" TEXT;
+ALTER TABLE public."REALISASI" ADD COLUMN IF NOT EXISTS "Timestamp" TEXT;
+`
   }
 };
 
@@ -514,6 +648,17 @@ export const MigrationService = {
     sql += "-- ==========================================================================\n\n";
     sql += "BEGIN;\n\n";
 
+    // 0. Inject Schema DDL (Ensure tables and all columns exist before inserting)
+    sql += "-- ==========================================================================\n";
+    sql += "-- 0. SCHEMA INITIALIZATION & COLUMN ALIGNMENT\n";
+    sql += "-- ==========================================================================\n";
+    for (const tbl of selectedTables) {
+      const config = SUPPORTED_TABLES[tbl];
+      if (config?.ddl) {
+        sql += config.ddl.trim() + "\n\n";
+      }
+    }
+
     function escapeSql(val: any) {
       if (val === null || val === undefined) return "NULL";
       if (typeof val === "number") return val.toString();
@@ -536,8 +681,23 @@ export const MigrationService = {
         const colNames = config.columns.map(c => `"${c}"`).join(", ");
         const colValues = config.columns.map(col => {
           let val = row[col];
-          if (col === "TIMESTAMP_MASUK") val = row.TIMESTAMP_MASUK ?? row["TIMESTAMP MASUK"] ?? row.Timestamp_Masuk ?? null;
-          if (col === "TIMESTAMP_KELUAR") val = row.TIMESTAMP_KELUAR ?? row["TIMESTAMP KELUAR"] ?? row.Timestamp_Keluar ?? null;
+          if (val === undefined || val === null) {
+            if (col === "REGU_ROW") val = row.REGU_ROW ?? row.Regu_ROW ?? row.Regu ?? row.Nama_Regu ?? null;
+            else if (col === "PENYULANG") val = row.PENYULANG ?? row.Penyulang ?? null;
+            else if (col === "PEKERJAAN") val = row.PEKERJAAN ?? row.Pekerjaan ?? "NORMAL";
+            else if (col === "STATUS") val = row.STATUS ?? row.Status ?? "DRAFT";
+            else if (col === "WO_AWAL") val = row.WO_AWAL ?? row.WO_MULAI ?? row.woAwal ?? null;
+            else if (col === "Created_At") val = row.Created_At ?? row.created_at ?? null;
+            else if (col === "TANGGAL") val = row.TANGGAL ?? row.Tanggal ?? null;
+            else if (col === "NAMA_REGU") val = row.NAMA_REGU ?? row.Nama_Regu ?? row.Regu ?? null;
+            else if (col === "TIMESTAMP MASUK") val = row["TIMESTAMP MASUK"] ?? row.TIMESTAMP_MASUK ?? row.Timestamp_Masuk ?? null;
+            else if (col === "TIMESTAMP KELUAR") val = row["TIMESTAMP KELUAR"] ?? row.TIMESTAMP_KELUAR ?? row.Timestamp_Keluar ?? null;
+            else if (col === "NO_TIANG") val = row.NO_TIANG ?? row.Nomor_Tiang ?? row.No_Tiang ?? null;
+            else if (col === "Foto_Sebelum") val = row.Foto_Sebelum ?? row.FOTO_SEBELUM ?? null;
+            else if (col === "Foto_Sesudah") val = row.Foto_Sesudah ?? row.FOTO_SETELAH ?? row.FOTO_SESUDAH ?? null;
+            else if (col === "Jenis_Tanaman") val = row.Jenis_Tanaman ?? row.TIPE_POHON ?? row.Nama_Pohon ?? null;
+            else if (col === "Latitude_Longitude") val = row.Latitude_Longitude ?? (row.LATITUDE && row.LONGITUDE ? `${row.LATITUDE},${row.LONGITUDE}` : null);
+          }
           return escapeSql(val);
         }).join(", ");
 

@@ -69,7 +69,7 @@ export const SUPPORTED_TABLES: Record<string, TableConfig> = {
     unitField: "unitId",
     columns: [
       "WO_ID", "unitId", "PEKERJAAN", "Nomor_WO", "Tanggal", "ULP",
-      "Penyulang", "Regu_ROW", "VOLUME", "SATUAN", "WO_AWAL", "WO_AKHIR",
+      "PENYULANG", "REGU_ROW", "VOLUME", "SATUAN", "WO_AWAL", "WO_AKHIR",
       "STATUS", "LOKASI_START", "LOKASI_FINISH", "TOTAL_REALISASI",
       "SATUAN_TOTAL_REALISASI", "Created_At"
     ]
