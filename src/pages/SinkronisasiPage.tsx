@@ -14,6 +14,8 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
+import { syncManager } from '../services/syncManager';
+import { idbService } from '../services/indexedDbService';
 import { dexieDb } from '../services/dexieDb';
 import { useToast } from '../hooks/useToast';
 import { getLocalDateTimeString } from '../utils/dateUtils';
@@ -34,6 +36,7 @@ export const SinkronisasiPage: React.FC = () => {
     lastSyncAt: string | null;
     totalWoCount: number;
     totalPhotoCount: number;
+    absensiPending: number;
   }>({
     pendingCount: 0,
     syncingCount: 0,
@@ -42,6 +45,7 @@ export const SinkronisasiPage: React.FC = () => {
     lastSyncAt: null,
     totalWoCount: 0,
     totalPhotoCount: 0,
+    absensiPending: 0,
   });
 
   const loadStats = async () => {
@@ -49,11 +53,17 @@ export const SinkronisasiPage: React.FC = () => {
       const summary = await offlineSyncQueue.getQueueSummary();
       const totalWoCount = await dexieDb.work_orders.count();
       const totalPhotoCount = await dexieDb.photos.count();
+      
+      const pendingOps = await idbService.getPendingOperations();
+      const absensiPending = pendingOps.filter(op => op.tableName === 'ABSENSI').length;
+      const otherPending = pendingOps.filter(op => op.tableName !== 'ABSENSI').length;
 
       setStats({
         ...summary,
+        pendingCount: summary.pendingCount + otherPending + absensiPending,
         totalWoCount,
         totalPhotoCount,
+        absensiPending,
       });
     } catch (err) {
       console.warn('Error loading sync stats:', err);
@@ -99,14 +109,22 @@ export const SinkronisasiPage: React.FC = () => {
     }
 
     setIsSyncing(true);
-    showToast('Memulai sinkronisasi data ke server...', 'info');
+    showToast('Memulai sinkronisasi data ke server HyperCloud...', 'info');
 
     try {
-      const result = await offlineSyncQueue.processQueue();
-      if (result.success) {
-        showToast('Sinkronisasi selesai seluruhnya!', 'success');
+      // 1. Process Realisasi & WO Delete Queue
+      const relResult = await offlineSyncQueue.processQueue();
+      
+      // 2. Process General Operations (Absensi, WO Create, etc.)
+      const genResult = await syncManager.processPendingOperations();
+      
+      const totalSynced = relResult.synced + genResult.successCount;
+      const totalFailed = relResult.failed + genResult.failCount;
+
+      if (totalFailed === 0) {
+        showToast(`Sinkronisasi selesai! ${totalSynced} item berhasil terkirim.`, 'success');
       } else {
-        showToast(`Sinkronisasi selesai: ${result.synced} tersimpan, ${result.failed} gagal.`, 'info');
+        showToast(`Sinkronisasi selesai dengan beberapa kendala: ${totalSynced} berhasil, ${totalFailed} gagal.`, 'info');
       }
     } catch (err: any) {
       showToast(err?.message || 'Terjadi kesalahan saat sinkronisasi.', 'error');

@@ -246,6 +246,16 @@ export class InisiasiService {
     return null;
   }
 
+  static getSelectedUnitId(): string {
+    const unit = this.getSelectedUnit();
+    if (unit && unit.id) return unit.id;
+    
+    const storedId = localStorage.getItem('aphro_selected_unit_id') || localStorage.getItem('aphro_unit_id');
+    if (storedId) return this.getStandardUnitId(storedId);
+    
+    return 'UL2';
+  }
+
   static saveSelectedUnit(unit: InisiasiUnit): void {
     try {
       const cleanUnitId = this.getStandardUnitId(unit.id);

@@ -9,7 +9,8 @@
  */
 
 import { dexieDb, LocalSyncQueueItem, LocalRealisasi, LocalPhoto } from './dexieDb';
-import { SupabaseService } from './supabaseService';
+import { ApiService } from './apiService';
+import { InisiasiService } from './inisiasiService';
 import { getLocalDateTimeString } from '../utils/dateUtils';
 
 export type SyncListener = (event: {
@@ -173,8 +174,7 @@ class OfflineSyncQueueEngine {
 
       let completedCount = 0;
       let failedCount = 0;
-
-      // Process in batches with maxConcurrency limit
+      const activeUnitId = InisiasiService.getSelectedUnitId() || 'UL2';
       for (let i = 0; i < pendingItems.length; i += this.maxConcurrency) {
         const batch = pendingItems.slice(i, i + this.maxConcurrency);
 
@@ -255,8 +255,7 @@ class OfflineSyncQueueEngine {
         // Update Dexie status to SYNCING
         await dexieDb.realisasi.update(realisasi.localId, { syncStatus: 'SYNCING' });
 
-        const unitId = item.payload?.realisasi?.unitId || SupabaseService.getActiveUnitId();
-        const serverResult = await SupabaseService.saveRealisasiIdempotent(unitId, realisasi, photos);
+        const serverResult = await ApiService.saveRealisasi(realisasi);
 
         if (serverResult.success) {
           // Mark Realisasi as SYNCED in Dexie
@@ -278,11 +277,10 @@ class OfflineSyncQueueEngine {
           await dexieDb.sync_queue.delete(item.idempotencyKey);
           return true;
         } else {
-          throw new Error(serverResult.error || 'Server database menolak transaksi Realisasi.');
+          throw new Error(serverResult.message || 'Server database menolak transaksi Realisasi.');
         }
       } else if (item.tableName === 'WORK_ORDER') {
-        const unitId = SupabaseService.getActiveUnitId();
-        const serverResult = await SupabaseService.saveWorkOrder(unitId, item.payload);
+        const serverResult = await ApiService.saveWorkOrder(item.payload);
         if (serverResult.success) {
           if (item.payload.id) {
             await dexieDb.work_orders.update(item.payload.id, { syncStatus: 'SYNCED' });
@@ -290,7 +288,7 @@ class OfflineSyncQueueEngine {
           await dexieDb.sync_queue.delete(item.idempotencyKey);
           return true;
         } else {
-          throw new Error(serverResult.error || 'Server database menolak transaksi Work Order.');
+          throw new Error(serverResult.message || 'Server database menolak transaksi Work Order.');
         }
       } else {
         // Fallback for other tables

@@ -6,17 +6,14 @@ import { useSettings } from './SettingsContext';
 import { useAuth } from './AuthContext';
 import { useToast } from '../hooks/useToast';
 import { SupabaseService } from '../services/supabaseService';
+import { ApiService, FetchRealisasiParams, PaginationMeta } from '../services/apiService';
+import { InisiasiService } from '../services/inisiasiService';
 import { GASApiService } from '../services/gasApiService';
 import { dexieDb, LocalRealisasi, LocalPhoto } from '../services/dexieDb';
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
 import { ensureGoogleDrivePhotoUrl, isBase64Image } from '../utils/driveUtils';
 import { auditRealisasiMutation } from '../utils/integrityLogger';
-import {
-  ApiService,
-  PaginationMeta,
-  FetchRealisasiParams
-} from '../services/apiService';
 
 export interface RealisasiContextType {
   realisasiList: Realisasi[];
@@ -257,7 +254,7 @@ export function RealisasiProvider({
 
         try {
           const res =
-            await SupabaseService.fetchRealisasiPaged(
+            await ApiService.fetchRealisasi(
               newParams
             );
 
@@ -587,7 +584,7 @@ export function RealisasiProvider({
 
         const targetUnitId =
           relData.unitId ||
-          SupabaseService.getActiveUnitId();
+          InisiasiService.getSelectedUnitId() || 'UL2';
 
         const localRecord: LocalRealisasi =
           {
@@ -639,96 +636,24 @@ export function RealisasiProvider({
               false,
           };
 
-        setRealisasiList(
-          (prev) => [
-            newRelUI,
-            ...prev,
-          ]
-        );
-
+        // 1. ONLINE-FIRST logic
         if (
           typeof navigator !==
             'undefined' &&
           navigator.onLine
         ) {
           try {
-            await dexieDb.realisasi.put(
-              {
-                ...localRecord,
-                syncStatus:
-                  'SYNCING',
-              }
-            );
-
             const saveRes =
-              await SupabaseService.saveRealisasi(
-                targetUnitId,
-                {
-                  ...newRelUI,
-                  id: localId,
-                }
+              await ApiService.saveRealisasi(
+                newRelUI
               );
 
             if (
               saveRes &&
               saveRes.success
             ) {
-              const finalItem =
-                saveRes.data ||
-                newRelUI;
-
-              await dexieDb.realisasi.put(
-                {
-                  ...localRecord,
-
-                  id:
-                    finalItem.id ||
-                    localId,
-
-                  serverId:
-                    finalItem.id,
-
-                  syncStatus:
-                    'SYNCED',
-
-                  updatedAt:
-                    getLocalDateTimeString(),
-                }
-              );
-
-              for (
-                const photo of localPhotos
-              ) {
-                await dexieDb.photos.put(
-                  {
-                    ...photo,
-                    syncStatus:
-                      'SYNCED',
-                  }
-                );
-              }
-
-              setRealisasiList(
-                (prev) =>
-                  prev.map(
-                    (item) =>
-                      item.id ===
-                        localId ||
-                      item.syncId ===
-                        idempotencyKey
-                        ? {
-                            ...finalItem,
-                            isSynced:
-                              true,
-                            syncId:
-                              idempotencyKey,
-                          }
-                        : item
-                  )
-              );
-
               showToast(
-                'Data Realisasi berhasil tersimpan langsung ke Supabase.',
+                'Data Realisasi berhasil tersimpan langsung ke HyperCloud.',
                 'success'
               );
 
@@ -738,56 +663,33 @@ export function RealisasiProvider({
 
               await fetchDashboardRealisasi();
 
-              return {
-                ...finalItem,
-                isSynced:
-                  true,
-                syncId:
-                  idempotencyKey,
-              };
-            } else {
-              console.warn(
-                '[RealisasiContext] Direct Supabase save returned error, enqueuing to sync queue:',
-                saveRes?.error
-              );
-
-              await offlineSyncQueue.enqueueRealisasi(
-                localRecord,
-                localPhotos
-              );
-
-              showToast(
-                'Realisasi tersimpan lokal dan masuk antrean sinkronisasi.',
-                'info'
-              );
+              return newRelUI;
             }
           } catch (directErr) {
             console.warn(
               '[RealisasiContext] Direct save failed, falling back to sync queue:',
               directErr
             );
-
-            await offlineSyncQueue.enqueueRealisasi(
-              localRecord,
-              localPhotos
-            );
-
-            showToast(
-              'Realisasi tersimpan lokal dan masuk antrean sinkronisasi.',
-              'info'
-            );
           }
-        } else {
-          await offlineSyncQueue.enqueueRealisasi(
-            localRecord,
-            localPhotos
-          );
-
-          showToast(
-            'Realisasi tersimpan di perangkat (Mode Offline).',
-            'info'
-          );
         }
+
+        // 2. OFFLINE FALLBACK
+        setRealisasiList(
+          (prev) => [
+            newRelUI,
+            ...prev,
+          ]
+        );
+
+        await offlineSyncQueue.enqueueRealisasi(
+          localRecord,
+          localPhotos
+        );
+
+        showToast(
+          'Koneksi terganggu atau offline. Realisasi disimpan di antrean offline.',
+          'info'
+        );
 
         return newRelUI;
       },
@@ -829,7 +731,7 @@ export function RealisasiProvider({
 
         const targetUnitId =
           relData.unitId ||
-          SupabaseService.getActiveUnitId();
+          InisiasiService.getSelectedUnitId() || 'UL2';
 
         const fotoSebDrive =
           await ensureGoogleDrivePhotoUrl(
@@ -1022,28 +924,28 @@ export function RealisasiProvider({
           };
 
         const saveRes =
-          await SupabaseService.saveRealisasi(
-            targetUnitId,
+          await ApiService.saveRealisasi(
             fullRealisasi
           );
 
         if (!saveRes.success) {
           showToast(
-            saveRes.error ||
-              'Gagal menyimpan Realisasi Manual ke Database Supabase.',
+            saveRes.message ||
+              'Gagal menyimpan Realisasi Manual ke Database HyperCloud.',
             'error'
           );
 
           return {
             success: false,
             error:
-              saveRes.error,
+              saveRes.message,
           };
         }
 
-        const savedRecord =
-          saveRes.data ||
-          fullRealisasi;
+        const savedRecord = {
+          ...fullRealisasi,
+          ...(saveRes.serverId ? { id: saveRes.serverId, syncId: saveRes.serverId } : {}),
+        };
 
         setRealisasiList(
           (prev) => [
@@ -1293,22 +1195,22 @@ export function RealisasiProvider({
         }
 
         const res =
-          await SupabaseService.updateRealisasiAdmin(
+          await ApiService.updateRealisasi(
             id,
             updatePayload
           );
 
         if (!res.success) {
           showToast(
-            res.error ||
-              'Data Realisasi gagal diperbarui di Supabase.',
+            res.message ||
+              'Data Realisasi gagal diperbarui di HyperCloud.',
             'error'
           );
 
           return {
             success: false,
             error:
-              res.error,
+              res.message,
           };
         }
 
@@ -1444,32 +1346,10 @@ export function RealisasiProvider({
           navigator.onLine
         ) {
           try {
-            const unitId =
-              SupabaseService.getActiveUnitId();
-
             const res =
-              await SupabaseService.deleteRealisasi(
-                unitId,
+              await ApiService.deleteRealisasi(
                 id
               );
-
-            if (
-              settings.gasWebAppUrl &&
-              settings.spreadsheetId
-            ) {
-              GASApiService.deleteRealisasi(
-                settings.gasWebAppUrl,
-                settings.spreadsheetId,
-                id
-              ).catch(
-                (gasErr) => {
-                  console.warn(
-                    'GAS deleteRealisasi background sync error:',
-                    gasErr
-                  );
-                }
-              );
-            }
 
             if (res.success) {
               showToast(
@@ -1479,9 +1359,9 @@ export function RealisasiProvider({
             } else {
               showToast(
                 'Realisasi dihapus di perangkat (Server: ' +
-                  (res.error ||
+                  (res.message ||
                     'Pending') +
-                  ')',
+                ')',
                 'info'
               );
             }
@@ -1493,7 +1373,7 @@ export function RealisasiProvider({
             await fetchDashboardRealisasi();
           } catch (err) {
             console.warn(
-              'Delete Supabase Realisasi error:',
+              'Delete HyperCloud Realisasi error:',
               err
             );
 

@@ -4,12 +4,13 @@ import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { ApiService } from '../services/apiService';
+import { InisiasiService } from '../services/inisiasiService';
 import { SupabaseService } from '../services/supabaseService';
 import { dexieDb } from '../services/dexieDb';
 import { idbService } from '../services/indexedDbService';
 import { INITIAL_WORK_ORDERS } from '../data/initialData';
 import { syncManager } from '../services/syncManager';
-import { getLocalDateTimeString, parseDateFromNomorWO } from '../utils/dateUtils';
+import { getLocalDateTimeString, getWIBDateString, parseDateFromNomorWO } from '../utils/dateUtils';
 import { UL_PRESETS, RekapHarianService, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
 
 interface WorkOrderContextType {
@@ -55,7 +56,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
       // 2. BACKGROUND DELTA SYNC: Fetch remote Work Orders from ApiService if online
       if (typeof navigator !== 'undefined' && navigator.onLine) {
-        const unitId = SupabaseService.getActiveUnitId();
+        const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
         const res = await ApiService.fetchWorkOrders(unitId);
 
         if (res.success && Array.isArray(res.data)) {
@@ -306,7 +307,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     };
 
     const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
-    const unitId = SupabaseService.getActiveUnitId();
+    const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
 
     let apiSuccess = false;
     let apiErrorMsg = '';
@@ -428,7 +429,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       updatedAt: nowStr,
     });
 
-    const unitId = SupabaseService.getActiveUnitId();
+    const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
     try {
       const res = await syncManager.executeMutation({
         type: 'UPDATE',
@@ -483,7 +484,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       console.warn('Delete Dexie WO error:', e);
     }
 
-    const unitId = SupabaseService.getActiveUnitId();
+    const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
     try {
       await syncManager.executeMutation({
         type: 'DELETE',

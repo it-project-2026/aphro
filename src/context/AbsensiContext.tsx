@@ -56,13 +56,10 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
   const refreshAbsensi = React.useCallback(async () => {
     try {
-      const unitId = user?.unitId || 'UL2';
+      const unitId = user?.unitId || InisiasiService.getSelectedUnitId() || 'UL2';
       const res = await ApiService.fetchAbsensi(unitId);
-      if (res.success && res.data && res.data.length > 0) {
-        const filtered = res.data.filter(a => !a.unitId || InisiasiService.isUserMatchingUnit(a.unitId, unitId));
-        if (filtered.length > 0) {
-          setAbsensiList(filtered);
-        }
+      if (res.success && Array.isArray(res.data)) {
+        setAbsensiList(res.data);
       }
     } catch (err) {
       console.warn('Error loading Absensi from HyperCloud API:', err);
@@ -136,24 +133,43 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
     // 1. ONLINE-FIRST: Try to save directly to HyperCloud API
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    let apiSuccess = false;
-    let apiError = '';
-
+    
     if (isOnline) {
       try {
-        const result = await ApiService.saveAbsensi(finalAbs);
+        const result = existingIndex >= 0 
+          ? await ApiService.updateAbsensi(finalAbs.id, finalAbs)
+          : await ApiService.saveAbsensi(finalAbs);
+
         if (result.success) {
-          apiSuccess = true;
+          showToast('Absensi berhasil tersimpan ke Database HyperCloud!', 'success');
+          // Refresh from API to ensure state is in sync with server
+          await refreshAbsensi();
+          return finalAbs;
         } else {
-          apiError = result.message || 'Server error';
+          console.warn('API saveAbsensi error:', result.message);
+          // Fall through to offline queue if API returns error (e.g. server down)
         }
       } catch (err: any) {
-        apiError = err.message || 'Network error';
+        console.warn('Network error in addAbsensi:', err);
+        // Fall through to offline queue
       }
     }
 
-    if (apiSuccess) {
-      // Save to local state and notify user
+    // 2. OFFLINE FALLBACK: Use syncManager to queue the operation
+    try {
+      const res = await syncManager.executeMutation({
+        type: existingIndex >= 0 ? 'UPDATE' : 'CREATE',
+        tableName: 'ABSENSI',
+        payload: finalAbs,
+        apiCall: async () => {
+          const result = existingIndex >= 0 
+            ? await ApiService.updateAbsensi(finalAbs.id, finalAbs)
+            : await ApiService.saveAbsensi(finalAbs);
+          return { status: result.success ? 'success' : 'error', message: result.message };
+        }
+      });
+
+      // Optimistic update
       const newList = [...absensiList];
       if (existingIndex >= 0) {
         newList[existingIndex] = finalAbs;
@@ -161,43 +177,20 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         newList.unshift(finalAbs);
       }
       setAbsensiList(newList);
-      showToast('Absensi berhasil tersimpan ke Database HyperCloud!', 'success');
-    } else {
-      // 2. OFFLINE FALLBACK: Use syncManager to queue the operation
-      try {
-        const res = await syncManager.executeMutation({
-          type: existingIndex >= 0 ? 'UPDATE' : 'CREATE',
-          tableName: 'ABSENSI',
-          payload: finalAbs,
-          apiCall: async () => {
-            const result = existingIndex >= 0 
-              ? await ApiService.updateAbsensi(finalAbs.id, finalAbs)
-              : await ApiService.saveAbsensi(finalAbs);
-            return { status: result.success ? 'success' : 'error', message: result.message };
-          }
-        });
 
-        const newList = [...absensiList];
-        if (existingIndex >= 0) {
-          newList[existingIndex] = finalAbs;
-        } else {
-          newList.unshift(finalAbs);
-        }
-        setAbsensiList(newList);
-
-        if (!res.offline) {
-          showToast('Absensi berhasil disinkronkan ke HyperCloud!', 'success');
-        } else {
-          showToast('Absensi tersimpan di antrean offline.', 'info');
-        }
-      } catch (err) {
-        console.warn('Sync Absensi error:', err);
-        showToast('Gagal sinkronisasi, tersimpan lokal.', 'info');
+      if (!res.offline) {
+        showToast('Absensi berhasil disinkronkan ke HyperCloud!', 'success');
+        await refreshAbsensi();
+      } else {
+        showToast('Koneksi terganggu. Absensi masuk antrean offline.', 'info');
       }
+    } catch (err) {
+      console.warn('Sync Absensi error:', err);
+      showToast('Gagal sinkronisasi, tersimpan lokal.', 'info');
     }
 
     return finalAbs;
-  }, [absensiList, setAbsensiList, showToast]);
+  }, [absensiList, setAbsensiList, showToast, refreshAbsensi]);
 
   const updateAbsensi = React.useCallback(async (id: string, absData: Partial<Absensi>) => {
     const existingIndex = absensiList.findIndex(a => a.id === id);
