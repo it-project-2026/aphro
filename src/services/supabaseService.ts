@@ -1580,9 +1580,9 @@ export class SupabaseService {
 
     return {
       success: true,
-      data: INITIAL_USERS,
+      data: [],
       source: 'initial',
-      message: 'Menggunakan data user bawaan.',
+      message: 'Tabel USERS di database HyperCloud masih kosong.',
     };
   }
 
@@ -1770,7 +1770,7 @@ export class SupabaseService {
 
           if (mappedUsers.length > 0 || mappedUlp.length > 0 || mappedPenyulang.length > 0 || mappedRegu.length > 0 || mappedPetugas.length > 0) {
             return {
-              users: mappedUsers.length > 0 ? mappedUsers : INITIAL_USERS,
+              users: mappedUsers,
               ulp: mappedUlp.length > 0 ? mappedUlp : (defaults.ulp.length > 0 ? defaults.ulp : INITIAL_ULP),
               penyulang: mappedPenyulang.length > 0 ? mappedPenyulang : INITIAL_PENYULANG,
               regu: mappedRegu.length > 0 ? mappedRegu : (defaults.regu.length > 0 ? defaults.regu : INITIAL_REGU),
@@ -1787,7 +1787,7 @@ export class SupabaseService {
     // 2. Local fallback
     const defaults = this.getDefaultMasterForUnit(targetUnitId);
     return {
-      users: INITIAL_USERS,
+      users: [],
       ulp: defaults.ulp.length > 0 ? defaults.ulp : INITIAL_ULP,
       penyulang: INITIAL_PENYULANG,
       regu: defaults.regu.length > 0 ? defaults.regu : INITIAL_REGU,

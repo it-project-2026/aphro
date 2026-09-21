@@ -109,9 +109,13 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
       const saved = localStorage.getItem(`aphro_synced_users_${activeUnitId}`);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log(`[MASTER DATA] Initial state users from CACHE for unit ${activeUnitId}:`, parsed.length);
+          return parsed;
+        }
       }
     } catch {}
+    console.log(`[MASTER DATA] Initial state users for unit ${activeUnitId}: EMPTY`);
     return [];
   });
 
@@ -131,7 +135,16 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
       const cachedUsers = localStorage.getItem(`aphro_synced_users_${activeUnitId}`);
       if (cachedUsers) {
         const p = JSON.parse(cachedUsers);
-        if (Array.isArray(p) && p.length > 0) setUsers(p);
+        if (Array.isArray(p) && p.length > 0) {
+          console.log(`[MASTER DATA] Reloading users from CACHE for unit ${activeUnitId}:`, p.length);
+          setUsers(p);
+        } else {
+          console.log(`[MASTER DATA] Cache for users in unit ${activeUnitId} is empty.`);
+          setUsers([]);
+        }
+      } else {
+        console.log(`[MASTER DATA] No cache for users in unit ${activeUnitId}. Setting to empty.`);
+        setUsers([]);
       }
       const cachedUlp = localStorage.getItem(`aphro_ulp_${activeUnitId}`);
       if (cachedUlp) {
@@ -175,7 +188,13 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
         if (res.penyulang?.length > 0) setPenyulangList(res.penyulang);
         if (res.regu?.length > 0) setReguList(res.regu);
         if (res.petugas?.length > 0) setPetugasList(res.petugas);
-        if (res.users?.length > 0) setUsers(res.users);
+        if (res.users?.length > 0) {
+          console.log(`[MASTER DATA] refreshMasterData: setting users from HYPERCLOUD:`, res.users.length);
+          setUsers(res.users);
+        } else {
+          console.log(`[MASTER DATA] refreshMasterData: HYPERCLOUD returned no users for unit ${unitId}`);
+          setUsers([]);
+        }
 
         // Update sync timestamp and sync unit
         localStorage.setItem('aphro_master_data_sync_time', Date.now().toString());

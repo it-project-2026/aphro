@@ -48,6 +48,13 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const { login } = useAuth();
   const { settings, updateSettings } = useSettings();
   const { users, setMasterData, petugasList, reguList } = useMasterData();
+
+  useEffect(() => {
+    console.log('[USERS STATE] MASTER_DATA users updated:', users.length, 'users available.');
+    if (users.length > 0) {
+      console.log('[USERS STATE] First user in list:', users[0].userName, 'from unit:', users[0].unitId);
+    }
+  }, [users]);
   const { setActiveTab } = useUI();
   const { isGasConnected, isSyncing, syncWithGAS } = useGASSync();
   const { showToast } = useToast();
@@ -79,33 +86,34 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   // Fetch Users directly from HyperCloud Host PostgreSQL
   const loadHyperCloudUsers = useCallback(async (showNotification = false) => {
     if (!navigator.onLine) {
+      console.log('[USERS STATE] Skip HyperCloud load: Offline');
       if (showNotification) showToast('Sedang offline. Menggunakan data akun lokal.', 'info');
       return;
     }
     setIsFetchingSupabaseUsers(true);
-    console.log('[APHRO AUTH] fetchUsers started');
+    console.log('[USERS STATE] fetchUsers started for HyperCloud');
     try {
       const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-      console.log('[APHRO AUTH] API endpoint: /api/users for unit:', activeInisiasi.unitId);
+      console.log('[USERS STATE] Requesting users for unit:', activeInisiasi.unitId);
       const res = await ApiService.fetchUsers(activeInisiasi.unitId);
       
       if (res && res.success && res.data) {
-        console.log('[APHRO AUTH] raw users count:', res.data.length);
+        console.log('[USERS STATE] Received from HyperCloud:', res.data.length, 'users');
         const normalized = res.data.map((u: any) => SupabaseService.normalizeUserRow(u));
-        console.log('[APHRO AUTH] normalized users count:', normalized.length);
+        console.log('[USERS STATE] Setting USERS state from HYPERCLOUD source');
         
         setMasterData({ users: normalized });
         if (showNotification) {
           showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud Host (PostgreSQL).`, 'success');
         }
       } else {
-        console.log('[APHRO AUTH] API returned no success or data', res);
+        console.log('[USERS STATE] HyperCloud returned no users or success=false', res);
         if (showNotification) {
           showToast('Tabel USERS di HyperCloud Host masih kosong.', 'info');
         }
       }
     } catch (err: any) {
-      console.log('[APHRO AUTH] API error:', err.message);
+      console.error('[USERS STATE] HyperCloud fetch error:', err.message);
       if (showNotification) {
         showToast(`Tidak dapat mengambil data USER dari Database HyperCloud. Periksa koneksi server.`, 'error');
       }
