@@ -732,22 +732,29 @@ router.get('/regu-row', async (req: Request, res: Response) => {
  */
 router.get('/petugas', async (req: Request, res: Response) => {
   const { unitId, isAll } = parseUnitFilter(req);
+  const ulpFilter = (req.query.ulp || req.query.ULP || '').toString().trim();
+  const reguFilter = (req.query.regu || req.query.reguName || req.query.REGU || '').toString().trim();
 
   try {
-    const sql =
-      !isAll && unitId
-        ? `SELECT *
-           FROM public."PETUGAS"
-           WHERE "unitId" = $1`
-        : `SELECT *
-           FROM public."PETUGAS"`;
+    let sql = `SELECT * FROM public."PETUGAS" WHERE 1=1`;
+    const params: any[] = [];
 
-    const resDb = await query(
-      sql,
-      !isAll && unitId
-        ? [unitId]
-        : []
-    );
+    if (!isAll && unitId) {
+      params.push(unitId);
+      sql += ` AND "unitId" = $${params.length}`;
+    }
+
+    if (ulpFilter) {
+      params.push(`%${ulpFilter}%`);
+      sql += ` AND "ULP" ILIKE $${params.length}`;
+    }
+
+    if (reguFilter) {
+      params.push(`%${reguFilter}%`);
+      sql += ` AND ("Regu" ILIKE $${params.length} OR "Nama_Regu" ILIKE $${params.length})`;
+    }
+
+    const resDb = await query(sql, params);
 
     return res.json({
       status: 'success',

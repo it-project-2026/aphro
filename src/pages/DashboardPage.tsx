@@ -75,11 +75,12 @@ ChartJS.register(
 );
 
 export const DashboardPage: React.FC = () => {
+  const { showToast } = useToast();
   const draggable = useDraggableScroll();
   const { settings } = useSettings();
   const { user: currentUser } = useAuth();
   const { displayedWorkOrders } = useWorkOrders();
-  const { realisasiList } = useRealisasi();
+  const { realisasiList, dashboardRealisasiList, fetchDashboardRealisasi } = useRealisasi();
   const { ulpList, penyulangList, reguList, petugasList, users } = useMasterData();
   const { auditLogs } = useNotifications();
   const { setActiveTab, isDarkMode } = useUI();
@@ -89,8 +90,9 @@ export const DashboardPage: React.FC = () => {
 
   React.useEffect(() => {
     // Initial fetch for dashboard data
-    refreshWorkOrders(true);
+    refreshWorkOrders();
     refreshRealisasi(true);
+    fetchDashboardRealisasi();
   }, []);
 
   const [pendingIds, setPendingIds] = React.useState<string[]>([]);
@@ -183,7 +185,7 @@ export const DashboardPage: React.FC = () => {
 
   const { filteredWOs, filteredRealisasi, topPerformersData } = useDashboardMetrics(
     displayedWorkOrders,
-    realisasiList,
+    dashboardRealisasiList.length > 0 ? dashboardRealisasiList : realisasiList,
     ulpList,
     reguList,
     petugasList,

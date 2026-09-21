@@ -812,10 +812,65 @@ export class ApiService {
   }
 
   /**
+   * Mengambil seluruh data REALISASI dari HyperCloudHost API
+   * khusus untuk kebutuhan Dashboard (non-paginated).
+   */
+  static async fetchRealisasiDashboard(): Promise<{
+    status: string;
+    data: Realisasi[];
+    message?: string;
+  }> {
+    const token = this.getAuthToken();
+    if (!token) {
+      return {
+        status: 'error',
+        data: [],
+        message: 'Token login tidak ditemukan.',
+      };
+    }
+
+    try {
+      const res = await this.executeFetch('/api/realisasi/dashboard', {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        return {
+          status: 'error',
+          data: [],
+          message: this.formatErrorMessage(res.status),
+        };
+      }
+
+      const json = await res.json();
+      const rawData = Array.isArray(json.data) ? json.data : [];
+      const normalizedData = rawData.map((item: any) => normalizeRealisasiRow(item));
+
+      return {
+        status: json.status || 'success',
+        data: normalizedData,
+        message: json.message,
+      };
+    } catch (err: any) {
+      console.error('[ApiService.fetchRealisasiDashboard Error]', err);
+      return {
+        status: 'error',
+        data: [],
+        message: 'Tidak dapat terhubung ke API Dashboard.',
+      };
+    }
+  }
+
+  /**
    * Fetch Master Data (ULP, Penyulang, Regu-ROW, Petugas) from HyperCloudHost API
    */
   static async fetchMasterData(
-    unitId?: string
+    unitId?: string,
+    filters: { ulp?: string; regu?: string } = {}
   ): Promise<{
     ulp: any[];
     penyulang: any[];
@@ -832,13 +887,19 @@ export class ApiService {
     }
 
     const query = unitId && unitId !== 'ALL' ? `?unitId=${encodeURIComponent(unitId)}` : '';
+    const masterQuery = query || '?unitId=ALL';
+    
+    // For petugas, we add specific filters if provided
+    let petugasQuery = masterQuery;
+    if (filters.ulp) petugasQuery += `&ulp=${encodeURIComponent(filters.ulp)}`;
+    if (filters.regu) petugasQuery += `&regu=${encodeURIComponent(filters.regu)}`;
 
     const [ulpRes, penyulangRes, reguRes, petugasRes, usersRes] = await Promise.all([
-      this.executeFetch(`/api/ulp${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-      this.executeFetch(`/api/penyulang${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-      this.executeFetch(`/api/regu-row${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-      this.executeFetch(`/api/petugas${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-      this.executeFetch(`/api/users${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/ulp${masterQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/penyulang${masterQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/regu-row${masterQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/petugas${petugasQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      this.executeFetch(`/api/users${masterQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
     ]);
 
     return {

@@ -1699,7 +1699,10 @@ export class SupabaseService {
   /**
    * Fetch master data for a given unitId from HyperCloudHost API (primary) with local defaults fallback.
    */
-  static async fetchMasterData(unitId?: string): Promise<{
+  static async fetchMasterData(
+    unitId?: string,
+    filters: { ulp?: string; regu?: string } = {}
+  ): Promise<{
     users: User[];
     ulp: ULP[];
     penyulang: Penyulang[];
@@ -1713,7 +1716,7 @@ export class SupabaseService {
     // 1. Primary: HyperCloudHost Node.js API
     if (isOnline) {
       try {
-        const apiMaster = await ApiService.fetchMasterData(targetUnitId);
+        const apiMaster = await ApiService.fetchMasterData(targetUnitId, filters);
         if (apiMaster) {
           const mappedUsers: User[] = (apiMaster.users || []).map((u: any) => this.normalizeUserRow(u));
           const mappedUlp: ULP[] = (apiMaster.ulp || []).map((u: any, idx: number) => ({
@@ -1757,11 +1760,11 @@ export class SupabaseService {
             nip: String(ptg.nip || ptg.NIP || `NIP-${idx + 1}`),
             nama: String(ptg.nama || ptg.Nama || ptg.Nama_Petugas || ''),
             reguId: String(ptg.reguId || ptg.ReguID || ''),
-            reguName: String(ptg.reguName || ptg.Nama_Regu || ''),
-            ulpId: String(ptg.ulpId || targetUnitId),
-            ulpName: String(ptg.ulpName || ''),
-            noHp: String(ptg.noHp || ptg.No_HP || ptg.kontak || '-'),
-            role: (ptg.role || 'Petugas') as any,
+            reguName: String(ptg.reguName || ptg.Nama_Regu || ptg.Regu || ''),
+            ulpId: String(ptg.ulpId || ptg.ULP || targetUnitId),
+            ulpName: String(ptg.ulpName || ptg.ULP || ''),
+            noHp: String(ptg.noHp || ptg.No_HP || ptg.kontak || ptg.Nomor_HP || '-'),
+            role: (ptg.role || ptg.Role || 'Petugas') as any,
             status: (ptg.status || ptg.Status || 'Aktif') as 'Aktif' | 'Non-Aktif',
             unitId: String(ptg.unitId || targetUnitId),
           })).filter(ptg => ptg.nama.length > 0);

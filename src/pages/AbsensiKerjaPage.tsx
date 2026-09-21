@@ -37,7 +37,7 @@ interface AbsensiKerjaPageProps {
 export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess }) => {
   const draggable = useDraggableScroll();
   const { user: currentUser, logout } = useAuth();
-  const { petugasList, users, reguList, ulpList } = useMasterData();
+  const { petugasList, users, reguList, ulpList, refreshMasterData } = useMasterData();
   const { absensiList, addAbsensi } = useAbsensi();
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
@@ -94,6 +94,16 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   const userReguClean = cleanStr(reguName);
   const userRowNumber = extractRowNumber(reguName) ?? extractRowNumber(currentUser?.userName);
   const userUlpClean = cleanStr(ulpName);
+
+  // 3. EFFECT: Strictly fetch only necessary Petugas for Regu accounts (Requirement #7)
+  // This ensures we don't fetch all petugas from the API, only those belonging to the user's Regu/ULP.
+  React.useEffect(() => {
+    const isReguUser = currentUser && (currentUser.role === 'User' || !['Admin', 'Super Admin'].includes(currentUser.role));
+    if (isReguUser && (ulpName || reguName)) {
+      console.log(`[ABSENSI] Fetching strictly filtered petugas for ULP: ${ulpName}, REGU: ${reguName}`);
+      refreshMasterData(true, { ulp: ulpName, regu: reguName });
+    }
+  }, [currentUser?.userName, ulpName, reguName, refreshMasterData]);
 
   // Find today's existing Absensi record for this Regu
   const todayISO = getWIBDateString();

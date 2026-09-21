@@ -27,7 +27,7 @@ interface MasterDataContextType {
     users?: User[];
   }) => void;
 
-  refreshMasterData: (forceRefresh?: boolean) => Promise<void>;
+  refreshMasterData: (forceRefresh?: boolean, filters?: { ulp?: string; regu?: string }) => Promise<void>;
 
   addULP: (ulp: Omit<ULP, 'id'>) => void;
   updateULP: (id: string, ulp: Partial<ULP>) => void;
@@ -170,19 +170,21 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     } catch {}
   }, [reguList, petugasList, users, ulpList, penyulangList, activeUnitId]);
 
-  const refreshMasterData = React.useCallback(async (forceRefresh = false) => {
+  const refreshMasterData = React.useCallback(async (forceRefresh = false, filters: { ulp?: string; regu?: string } = {}) => {
     const unitId = SupabaseService.getActiveUnitId();
     const lastSyncUnit = localStorage.getItem('aphro_master_data_sync_unit');
     const unitChanged = lastSyncUnit !== unitId;
     const lastSync = localStorage.getItem('aphro_master_data_sync_time');
 
     // Check if we need to refresh based on timestamp (1 hour cache) or unit change
-    if (!forceRefresh && !unitChanged && lastSync && (Date.now() - parseInt(lastSync, 10) < 3600000)) {
+    // If filters are provided, we always refresh to respect the "don't fetch all" rule
+    const hasFilters = Object.keys(filters).length > 0;
+    if (!forceRefresh && !unitChanged && !hasFilters && lastSync && (Date.now() - parseInt(lastSync, 10) < 3600000)) {
       return; // Data is still fresh
     }
 
     try {
-      const res = await SupabaseService.fetchMasterData(unitId);
+      const res = await SupabaseService.fetchMasterData(unitId, filters);
       if (res) {
         console.log(`[MASTER DATA] refreshMasterData result for unit ${unitId}:`, {
           ulp: res.ulp?.length,
