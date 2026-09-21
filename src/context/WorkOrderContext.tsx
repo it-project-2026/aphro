@@ -221,6 +221,9 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       cleanStr(user.name),
       cleanStr(user.nip),
       cleanStr(user.id),
+      // Add numeric extraction from reguName for broader matching
+      (user.reguName || '').match(/\d+/)?.[0],
+      (userTimInfo.reguName || '').match(/\d+/)?.[0]
     ].filter(Boolean);
 
     return inisiasiWorkOrders.filter((wo) => {
@@ -245,7 +248,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         for (const uCand of userCandidates) {
           if (
             woPetugasClean === uCand ||
-            (woPetugasClean.length >= 3 && uCand.length >= 3 && (woPetugasClean.includes(uCand) || uCand.includes(woPetugasClean)))
+            (woPetugasClean.length >= 2 && uCand.length >= 2 && (woPetugasClean.includes(uCand) || uCand.includes(woPetugasClean)))
           ) {
             return true;
           }
@@ -254,11 +257,14 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
       // Match reguName against user candidates
       const woReguClean = cleanStr(wo.reguName);
+      const woReguNum = (wo.reguName || '').match(/\d+/)?.[0];
+
       if (woReguClean) {
         for (const uCand of userCandidates) {
           if (
             woReguClean === uCand ||
-            (woReguClean.length >= 3 && uCand.length >= 3 && (woReguClean.includes(uCand) || uCand.includes(woReguClean)))
+            (woReguNum && uCand === woReguNum) ||
+            (woReguClean.length >= 2 && uCand.length >= 2 && (woReguClean.includes(uCand) || uCand.includes(woReguClean)))
           ) {
             return true;
           }

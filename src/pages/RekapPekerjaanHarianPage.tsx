@@ -703,7 +703,19 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                   rowSpan={3}
                   className="px-3 py-2 bg-slate-300 dark:bg-slate-800 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase font-black min-w-[70px]"
                 >
-                  TOTAL
+                  TOT TEBANG
+                </th>
+                <th
+                  rowSpan={3}
+                  className="px-3 py-2 bg-slate-300 dark:bg-slate-800 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase font-black min-w-[70px]"
+                >
+                  TOT PANGKAS
+                </th>
+                <th
+                  rowSpan={3}
+                  className="px-3 py-2 bg-slate-300 dark:bg-slate-800 border-r border-b border-slate-400 dark:border-slate-700 text-center uppercase font-black min-w-[70px]"
+                >
+                  TOTAL (KMS)
                 </th>
                 <th
                   rowSpan={3}
@@ -928,6 +940,14 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                     })}
 
                     {/* Summary Columns */}
+                    <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-850">
+                      {daysInMonth.reduce((acc, d) => acc + (row.dailyValues[d.dayFormatted]?.tebang1 || 0), 0)}
+                    </td>
+
+                    <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-850">
+                      {daysInMonth.reduce((acc, d) => acc + (row.dailyValues[d.dayFormatted]?.pangkas || 0), 0)}
+                    </td>
+
                     <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-850">
                       {rowVolumeSum.toFixed(2)}
                     </td>
@@ -995,6 +1015,12 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 })}
 
                 {/* Grand Summary Columns */}
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-slate-900 dark:text-white">
+                  {filteredRows.reduce((acc, row) => acc + daysInMonth.reduce((a, d) => a + (row.dailyValues[d.dayFormatted]?.tebang1 || 0), 0), 0)}
+                </td>
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-slate-900 dark:text-white">
+                  {filteredRows.reduce((acc, row) => acc + daysInMonth.reduce((a, d) => a + (row.dailyValues[d.dayFormatted]?.pangkas || 0), 0), 0)}
+                </td>
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-teal-700 dark:text-teal-300">
                   <div className="flex flex-col">
                     <span>{grandTotalsSummary.volume.toFixed(2)} KMS</span>

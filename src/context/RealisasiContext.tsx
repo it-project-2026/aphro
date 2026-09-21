@@ -48,7 +48,8 @@ export function RealisasiProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const [realisasiList, setRealisasiList] = usePersistState<Realisasi[]>('aphro_realisasi', INITIAL_REALISASI);
+  const activeUnitId = SupabaseService.getActiveUnitId();
+  const [realisasiList, setRealisasiList] = usePersistState<Realisasi[]>(`aphro_realisasi_${activeUnitId}`, INITIAL_REALISASI);
   const [pagination, setPagination] = React.useState<PaginationMeta>({
     page: 1,
     limit: 20,
