@@ -760,12 +760,11 @@ export class ApiService {
     unitId?: string
   ): Promise<{ success: boolean; data: any[]; message?: string }> {
     const token = this.getAuthToken();
-    if (!token) {
-      return {
-        success: false,
-        data: [],
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
-      };
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     const query =
@@ -776,10 +775,7 @@ export class ApiService {
     try {
       const res = await this.executeFetch(`/api/users${query}`, {
         method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
       });
 
       if (!res.ok) {
@@ -825,15 +821,14 @@ export class ApiService {
     users: any[];
   }> {
     const token = this.getAuthToken();
-    if (!token) {
-      return { ulp: [], penyulang: [], regu: [], petugas: [], users: [] };
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     const query = unitId && unitId !== 'ALL' ? `?unitId=${encodeURIComponent(unitId)}` : '';
-    const headers = {
-      Accept: 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
 
     const [ulpRes, penyulangRes, reguRes, petugasRes, usersRes] = await Promise.all([
       this.executeFetch(`/api/ulp${query}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),

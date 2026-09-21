@@ -87,7 +87,8 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
       const res = await ApiService.fetchUsers(activeInisiasi.unitId);
       if (res.data && res.data.length > 0) {
-        setMasterData({ users: res.data });
+        const normalized = res.data.map((u: any) => SupabaseService.normalizeUserRow(u));
+        setMasterData({ users: normalized });
         if (showNotification) {
           showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud Host (PostgreSQL).`, 'success');
         }
@@ -555,7 +556,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <span className="text-[11px] font-black text-slate-900 uppercase tracking-tighter">Database: Supabase</span>
+                  <span className="text-[11px] font-black text-slate-900 uppercase tracking-tighter">Database: HyperCloud</span>
                   <span
                     className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black ${
                       isFetchingSupabaseUsers || isSyncing
@@ -579,8 +580,8 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                 </div>
                 <p className="text-[10px] text-slate-600 mt-0.5 truncate">
                   {isFetchingSupabaseUsers
-                    ? 'Memuat data akun dari Supabase tabel USERS...'
-                    : `${users.length} Akun Terdaftar • Tabel USERS Supabase`}
+                    ? 'Memuat data akun dari HyperCloud Host tabel USERS...'
+                    : `${users.length} Akun Terdaftar • Tabel USERS HyperCloud`}
                 </p>
               </div>
             </div>
@@ -591,7 +592,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                 onClick={() => loadSupabaseUsers(true)}
                 disabled={isFetchingSupabaseUsers}
                 className="p-2.5 rounded-xl bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-700 transition-all border border-emerald-200 shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
-                title="Refresh Akun dari Supabase Tabel USERS"
+                title="Refresh Akun dari HyperCloud Host"
               >
                 <RefreshCw className={`w-4 h-4 ${isFetchingSupabaseUsers ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
               </button>
@@ -604,7 +605,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
                   <UserIcon className="w-3.5 h-3.5 text-black" />
-                  <span>USERNAME (Supabase USERS) <span className="text-rose-500">*</span></span>
+                  <span>USERNAME (HyperCloud USERS) <span className="text-rose-500">*</span></span>
                 </label>
                 <span className="text-[9px] text-black font-bold bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded">Kolom: Username / UserID</span>
               </div>
@@ -628,7 +629,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
                   <Lock className="w-3.5 h-3.5 text-rose-600" />
-                  <span>PASSWORD (Supabase USERS) <span className="text-rose-500">*</span></span>
+                  <span>PASSWORD (HyperCloud USERS) <span className="text-rose-500">*</span></span>
                 </label>
                 <span className="text-[9px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded">Kolom: Password</span>
               </div>
@@ -665,12 +666,12 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             </button>
           </form>
 
-          {/* Synced Users Quick Select List from Supabase */}
+          {/* Synced Users Quick Select List from HyperCloud */}
           <div className="pt-4 border-t border-slate-100 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
               <div className="flex items-center space-x-2 text-[10px] font-black text-black uppercase tracking-widest">
                 <Users className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Daftar Akun Supabase (Tabel USERS)</span>
+                <span>Daftar Akun HyperCloud (Tabel USERS)</span>
                 <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
                   {selectableUsers.length} Akun
                 </span>
@@ -682,7 +683,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   onClick={() => loadSupabaseUsers(true)}
                   disabled={isFetchingSupabaseUsers}
                   className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                  title="Refresh Akun dari Supabase USERS"
+                  title="Refresh Akun dari HyperCloud USERS"
                 >
                   <RefreshCw className={`w-3 h-3 ${isFetchingSupabaseUsers ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
                   <span>{isFetchingSupabaseUsers ? 'Memuat...' : 'Refresh USERS'}</span>
