@@ -95,13 +95,9 @@ export function RealisasiProvider({
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const activeUnitId =
-    SupabaseService.getActiveUnitId();
+  const activeUnitId = user?.unitId || 'UL2';
 
-  const [
-    realisasiList,
-    setRealisasiList,
-  ] = usePersistState<Realisasi[]>(
+  const [realisasiList, setRealisasiList] = usePersistState<Realisasi[]>(
     `aphro_realisasi_${activeUnitId}`,
     INITIAL_REALISASI
   );
@@ -109,12 +105,7 @@ export function RealisasiProvider({
   // ============================================================
   // DATA KHUSUS DASHBOARD
   // ============================================================
-  // Tidak menggunakan pagination 20 data seperti History.
-  // Data diambil dari /api/realisasi/dashboard.
-  const [
-    dashboardRealisasiList,
-    setDashboardRealisasiList,
-  ] = React.useState<Realisasi[]>([]);
+  const [dashboardRealisasiList, setDashboardRealisasiList] = React.useState<Realisasi[]>([]);
 
   const [
     pagination,

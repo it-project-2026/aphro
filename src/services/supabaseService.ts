@@ -1757,16 +1757,16 @@ export class SupabaseService {
 
           const mappedPetugas: Petugas[] = (apiMaster.petugas || []).map((ptg: any, idx: number) => ({
             id: String(ptg.id || ptg.Id || ptg.ID || `ptg-${idx + 1}`),
-            nip: String(ptg.nip || ptg.NIP || `NIP-${idx + 1}`),
-            nama: String(ptg.nama || ptg.Nama || ptg.Nama_Petugas || ''),
+            nip: String(ptg.nip || ptg.NIP || ptg.id || ptg.ID || `NIP-${idx + 1}`),
+            nama: String(ptg.nama || ptg.Nama || ptg.Nama_Petugas || ptg.namaPetugas || ptg.NAMA_PETUGAS || ''),
             reguId: String(ptg.reguId || ptg.ReguID || ''),
-            reguName: String(ptg.reguName || ptg.Nama_Regu || ptg.Regu || ''),
+            reguName: String(ptg.reguName || ptg.Regu || ptg.Nama_Regu || ptg.regu || ptg.NamaRegu || ptg.NAMA_REGU || ''),
             ulpId: String(ptg.ulpId || ptg.ULP || targetUnitId),
-            ulpName: String(ptg.ulpName || ptg.ULP || ''),
+            ulpName: String(ptg.ulpName || ptg.ULP || ptg.ULPName || ptg.namaULP || ''),
             noHp: String(ptg.noHp || ptg.No_HP || ptg.kontak || ptg.Nomor_HP || '-'),
             role: (ptg.role || ptg.Role || 'Petugas') as any,
             status: (ptg.status || ptg.Status || 'Aktif') as 'Aktif' | 'Non-Aktif',
-            unitId: String(ptg.unitId || targetUnitId),
+            unitId: String(ptg.unitId || ptg.UnitID || targetUnitId),
           })).filter(ptg => ptg.nama.length > 0);
 
           const defaults = this.getDefaultMasterForUnit(targetUnitId);

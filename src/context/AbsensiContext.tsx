@@ -5,7 +5,7 @@ import { INITIAL_ABSENSI } from '../data/initialData';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
-import { SupabaseService } from '../services/supabaseService';
+import { ApiService } from '../services/apiService';
 import { InisiasiService } from '../services/inisiasiService';
 import { syncManager } from '../services/syncManager';
 import { getLocalDateTimeString, getWIBDateString, normalizeDateISO } from '../utils/dateUtils';
@@ -27,7 +27,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { showToast } = useToast();
   
-  const activeUnitId = user?.unitId || SupabaseService.getActiveUnitId();
+  const activeUnitId = user?.unitId || ApiService.getAuthToken() ? 'UL2' : 'UL2'; // Fallback to UL2 if no unitId found
 
   const [absensiList, setAbsensiList] = React.useState<Absensi[]>(() => {
     try {
@@ -56,8 +56,8 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
   const refreshAbsensi = React.useCallback(async () => {
     try {
-      const unitId = user?.unitId || SupabaseService.getActiveUnitId();
-      const res = await SupabaseService.fetchAbsensi(unitId);
+      const unitId = user?.unitId || 'UL2';
+      const res = await ApiService.fetchAbsensi(unitId);
       if (res.success && res.data && res.data.length > 0) {
         const filtered = res.data.filter(a => !a.unitId || InisiasiService.isUserMatchingUnit(a.unitId, unitId));
         if (filtered.length > 0) {
@@ -65,7 +65,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (err) {
-      console.warn('Error loading Absensi from Supabase:', err);
+      console.warn('Error loading Absensi from HyperCloud API:', err);
     }
   }, [user?.unitId]);
 
@@ -134,35 +134,66 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    // Update local state optimistically
-    const newList = [...absensiList];
-    if (existingIndex >= 0) {
-      newList[existingIndex] = finalAbs;
-    } else {
-      newList.unshift(finalAbs);
-    }
-    setAbsensiList(newList);
+    // 1. ONLINE-FIRST: Try to save directly to HyperCloud API
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    let apiSuccess = false;
+    let apiError = '';
 
-    const unitId = SupabaseService.getActiveUnitId();
-    try {
-      const res = await syncManager.executeMutation({
-        type: existingIndex >= 0 ? 'UPDATE' : 'CREATE',
-        tableName: 'ABSENSI',
-        payload: finalAbs,
-        apiCall: async () => {
-          const result = await SupabaseService.saveAbsensi(unitId, finalAbs);
-          return { status: result.success ? 'success' : 'error', message: result.error };
+    if (isOnline) {
+      try {
+        const result = await ApiService.saveAbsensi(finalAbs);
+        if (result.success) {
+          apiSuccess = true;
+        } else {
+          apiError = result.message || 'Server error';
         }
-      });
-
-      if (!res.offline) {
-        showToast('Absensi berhasil disinkronkan ke Supabase!', 'success');
-      } else {
-        showToast('Absensi tersimpan (offline).', 'info');
+      } catch (err: any) {
+        apiError = err.message || 'Network error';
       }
-    } catch (err) {
-      console.warn('Sync Absensi error:', err);
-      showToast('Absensi tersimpan di perangkat.', 'info');
+    }
+
+    if (apiSuccess) {
+      // Save to local state and notify user
+      const newList = [...absensiList];
+      if (existingIndex >= 0) {
+        newList[existingIndex] = finalAbs;
+      } else {
+        newList.unshift(finalAbs);
+      }
+      setAbsensiList(newList);
+      showToast('Absensi berhasil tersimpan ke Database HyperCloud!', 'success');
+    } else {
+      // 2. OFFLINE FALLBACK: Use syncManager to queue the operation
+      try {
+        const res = await syncManager.executeMutation({
+          type: existingIndex >= 0 ? 'UPDATE' : 'CREATE',
+          tableName: 'ABSENSI',
+          payload: finalAbs,
+          apiCall: async () => {
+            const result = existingIndex >= 0 
+              ? await ApiService.updateAbsensi(finalAbs.id, finalAbs)
+              : await ApiService.saveAbsensi(finalAbs);
+            return { status: result.success ? 'success' : 'error', message: result.message };
+          }
+        });
+
+        const newList = [...absensiList];
+        if (existingIndex >= 0) {
+          newList[existingIndex] = finalAbs;
+        } else {
+          newList.unshift(finalAbs);
+        }
+        setAbsensiList(newList);
+
+        if (!res.offline) {
+          showToast('Absensi berhasil disinkronkan ke HyperCloud!', 'success');
+        } else {
+          showToast('Absensi tersimpan di antrean offline.', 'info');
+        }
+      } catch (err) {
+        console.warn('Sync Absensi error:', err);
+        showToast('Gagal sinkronisasi, tersimpan lokal.', 'info');
+      }
     }
 
     return finalAbs;
@@ -182,20 +213,33 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     newList[existingIndex] = updatedAbs;
     setAbsensiList(newList);
 
-    const unitId = SupabaseService.getActiveUnitId();
-    try {
-      await syncManager.executeMutation({
-        type: 'UPDATE',
-        tableName: 'ABSENSI',
-        payload: updatedAbs,
-        apiCall: async () => {
-          const result = await SupabaseService.saveAbsensi(unitId, updatedAbs);
-          return { status: result.success ? 'success' : 'error', message: result.error };
-        }
-      });
-      showToast('Perubahan absensi tersimpan', 'success');
-    } catch {
-      showToast('Perubahan tersimpan lokal.', 'info');
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    let apiSuccess = false;
+
+    if (isOnline) {
+      try {
+        const result = await ApiService.updateAbsensi(id, updatedAbs);
+        if (result.success) apiSuccess = true;
+      } catch {}
+    }
+
+    if (apiSuccess) {
+      showToast('Perubahan absensi tersimpan ke Database', 'success');
+    } else {
+      try {
+        await syncManager.executeMutation({
+          type: 'UPDATE',
+          tableName: 'ABSENSI',
+          payload: updatedAbs,
+          apiCall: async () => {
+            const result = await ApiService.updateAbsensi(id, updatedAbs);
+            return { status: result.success ? 'success' : 'error', message: result.message };
+          }
+        });
+        showToast('Perubahan tersimpan (offline).', 'info');
+      } catch {
+        showToast('Perubahan tersimpan lokal.', 'info');
+      }
     }
     return true;
   }, [absensiList, setAbsensiList, showToast]);
@@ -206,23 +250,37 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     setAbsensiList(newList);
 
     if (existing) {
-      const unitId = SupabaseService.getActiveUnitId();
-      try {
-        await syncManager.executeMutation({
-          type: 'DELETE',
-          tableName: 'ABSENSI',
-          payload: { id },
-          apiCall: async () => {
-            const result = await SupabaseService.deleteAbsensi(unitId, id);
-            return { status: result.success ? 'success' : 'error', message: result.error };
-          }
-        });
-      } catch (e) {
-        console.warn('Delete Absensi offline error:', e);
+      const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+      let apiSuccess = false;
+
+      if (isOnline) {
+        try {
+          const result = await ApiService.deleteAbsensi(id);
+          if (result.success) apiSuccess = true;
+        } catch {}
+      }
+
+      if (apiSuccess) {
+        showToast('Absensi dihapus dari Database', 'info');
+      } else {
+        try {
+          await syncManager.executeMutation({
+            type: 'DELETE',
+            tableName: 'ABSENSI',
+            payload: { id },
+            apiCall: async () => {
+              const result = await ApiService.deleteAbsensi(id);
+              return { status: result.success ? 'success' : 'error', message: result.message };
+            }
+          });
+          showToast('Hapus tersimpan (offline).', 'info');
+        } catch (e) {
+          console.warn('Delete Absensi offline error:', e);
+          showToast('Hapus tersimpan lokal.', 'info');
+        }
       }
     }
 
-    showToast('Absensi dihapus', 'info');
     return true;
   }, [absensiList, setAbsensiList, showToast]);
 

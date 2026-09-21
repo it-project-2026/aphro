@@ -139,11 +139,28 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     const strictMatches = petugasList.filter((p) => {
       if (!p || p.status === 'Non-Aktif') return false;
       const pUnitId = p.unitId || '';
-      const isUnitMatch = Boolean(targetUnitId && pUnitId && (pUnitId.toUpperCase() === targetUnitId.toUpperCase() || pUnitId === targetUnitId));
+      
+      // Flexible unit check
+      const isUnitMatch = Boolean(
+        !targetUnitId || 
+        !pUnitId || 
+        pUnitId.toUpperCase() === targetUnitId.toUpperCase() || 
+        pUnitId.includes(targetUnitId) || 
+        targetUnitId.includes(pUnitId)
+      );
+
       const pUlpClean = cleanStr(p.ulpName);
-      const isUlpMatch = Boolean(targetUlpClean && pUlpClean && pUlpClean === targetUlpClean);
+      const isUlpMatch = Boolean(
+        !targetUlpClean || 
+        !pUlpClean || 
+        pUlpClean === targetUlpClean || 
+        pUlpClean.includes(targetUlpClean) || 
+        targetUlpClean.includes(pUlpClean)
+      );
+
       const pRowNum = extractRowNumber(p.reguName);
       const isRowMatch = Boolean(targetRowNumber !== null && pRowNum !== null && pRowNum === targetRowNumber);
+      
       return isUnitMatch && isUlpMatch && isRowMatch;
     });
 

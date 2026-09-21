@@ -560,6 +560,57 @@ export class ApiService {
   }
 
   /**
+   * Update Work Order in HyperCloudHost PostgreSQL
+   */
+  static async updateWorkOrder(
+    id: string,
+    data: any
+  ): Promise<{ success: boolean; message?: string }> {
+    const token = this.getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
+      };
+    }
+
+    try {
+      const res = await this.executeFetch(`/api/work-orders/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        let serverMsg: string | undefined;
+        try {
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
+        } catch {
+          // ignore
+        }
+        return {
+          success: false,
+          message: this.formatErrorMessage(res.status, serverMsg),
+        };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('[ApiService.updateWorkOrder Error]', err);
+      return {
+        success: false,
+        message:
+          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+      };
+    }
+  }
+
+  /**
    * Fetch Absensi from HyperCloudHost PostgreSQL
    */
   static async fetchAbsensi(
@@ -663,6 +714,57 @@ export class ApiService {
       return { success: true };
     } catch (err: any) {
       console.error('[ApiService.saveAbsensi Error]', err);
+      return {
+        success: false,
+        message:
+          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+      };
+    }
+  }
+
+  /**
+   * Update Absensi in HyperCloudHost PostgreSQL
+   */
+  static async updateAbsensi(
+    id: string,
+    data: any
+  ): Promise<{ success: boolean; message?: string }> {
+    const token = this.getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
+      };
+    }
+
+    try {
+      const res = await this.executeFetch(`/api/absensi/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        let serverMsg: string | undefined;
+        try {
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
+        } catch {
+          // ignore
+        }
+        return {
+          success: false,
+          message: this.formatErrorMessage(res.status, serverMsg),
+        };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('[ApiService.updateAbsensi Error]', err);
       return {
         success: false,
         message:

@@ -3,6 +3,7 @@ import { WorkOrder } from '../types';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
+import { ApiService } from '../services/apiService';
 import { SupabaseService } from '../services/supabaseService';
 import { dexieDb } from '../services/dexieDb';
 import { idbService } from '../services/indexedDbService';
@@ -52,13 +53,14 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(true);
       }
 
-      // 2. BACKGROUND DELTA SYNC: Fetch remote Work Orders from Supabase if online
+      // 2. BACKGROUND DELTA SYNC: Fetch remote Work Orders from ApiService if online
       if (typeof navigator !== 'undefined' && navigator.onLine) {
         const unitId = SupabaseService.getActiveUnitId();
-        const res = await SupabaseService.fetchWorkOrders(unitId, page, 200, page === 0 ? undefined : lastSyncRef.current);
+        const res = await ApiService.fetchWorkOrders(unitId);
 
-        if (res.success && res.data) {
-          const corrected = res.data.map((wo) => {
+        if (res.success && Array.isArray(res.data)) {
+          const corrected = res.data.map((row: any) => {
+            const wo = SupabaseService.normalizeWorkOrderRow(row);
             const isNullOrEmpty = !wo.tanggal || 
                                   wo.tanggal === 'null' || 
                                   wo.tanggal === 'undefined' || 
@@ -311,11 +313,29 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
     if (isOnline) {
       try {
-        const result = await SupabaseService.saveWorkOrder(unitId, newWo);
+        const payload = {
+          WO_ID: newWo.id,
+          unitId: unitId,
+          PEKERJAAN: newWo.pekerjaan || 'NORMAL',
+          Nomor_WO: newWo.nomorWO || '',
+          Tanggal: newWo.tanggal || getWIBDateString(),
+          ULP: newWo.ulpName || '',
+          Penyulang: newWo.penyulangName || '',
+          Regu_ROW: newWo.reguName || '',
+          VOLUME: String(newWo.volumePekerjaan || 0),
+          SATUAN: newWo.satuan || 'KMS',
+          WO_AWAL: newWo.woMulai || null,
+          WO_AKHIR: newWo.woAkhir || null,
+          STATUS: (newWo.status || 'Belum Dikerjakan').toUpperCase(),
+          TOTAL_REALISASI: String(newWo.totalRealisasi || 0),
+          SATUAN_TOTAL_REALISASI: newWo.satuanTotalRealisasi || 'KMS',
+          Created_At: newWo.createdAt || getLocalDateTimeString(),
+        };
+        const result = await ApiService.saveWorkOrder(payload);
         if (result.success) {
           apiSuccess = true;
         } else {
-          apiErrorMsg = result.error || 'Server error';
+          apiErrorMsg = result.message || 'Server error';
         }
       } catch (err: any) {
         console.warn('[Direct API Call failed, falling back to offline]', err);
@@ -415,8 +435,27 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         tableName: 'WORK_ORDER',
         payload: updatedWo,
         apiCall: async () => {
-          const result = await SupabaseService.updateWorkOrder(unitId, id, updatedWo);
-          return { status: result.success ? 'success' : 'error', message: result.error };
+          const dbUpdates: any = {
+            WO_ID: id,
+            unitId: unitId,
+          };
+          if (updates.status) dbUpdates.STATUS = updates.status.toUpperCase();
+          if (updates.totalRealisasi !== undefined) dbUpdates.TOTAL_REALISASI = String(updates.totalRealisasi);
+          if (updates.satuanTotalRealisasi) dbUpdates.SATUAN_TOTAL_REALISASI = updates.satuanTotalRealisasi;
+          if (updates.pekerjaan) dbUpdates.PEKERJAAN = updates.pekerjaan;
+          if (updates.nomorWO) dbUpdates.Nomor_WO = updates.nomorWO;
+          if (updates.volumePekerjaan !== undefined) dbUpdates.VOLUME = String(updates.volumePekerjaan);
+          if (updates.satuan) dbUpdates.SATUAN = updates.satuan;
+          if (updates.woMulai !== undefined) dbUpdates.WO_AWAL = updates.woMulai;
+          if (updates.woAkhir !== undefined) dbUpdates.WO_AKHIR = updates.woAkhir;
+          if (updates.tanggal) dbUpdates.Tanggal = updates.tanggal;
+          if (updates.ulpName) dbUpdates.ULP = updates.ulpName;
+          if (updates.penyulangName) dbUpdates.Penyulang = updates.penyulangName;
+          if (updates.reguName) dbUpdates.Regu_ROW = updates.reguName;
+          if (updates.lokasi) dbUpdates.LOKASI_START = updates.lokasi;
+
+          const result = await ApiService.saveWorkOrder(dbUpdates);
+          return { status: result.success ? 'success' : 'error', message: result.message };
         },
       });
 
@@ -451,8 +490,8 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         tableName: 'WORK_ORDER',
         payload: { id: cleanId, nomorWO: cleanNomor },
         apiCall: async () => {
-          const result = await SupabaseService.deleteWorkOrder(unitId, cleanId, cleanNomor);
-          return { status: result.success ? 'success' : 'error', message: result.error };
+          const result = await ApiService.deleteWorkOrder(cleanId || cleanNomor);
+          return { status: result.success ? 'success' : 'error', message: result.message };
         },
       });
 

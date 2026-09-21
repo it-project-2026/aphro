@@ -670,10 +670,11 @@ export class RekapHarianService {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
-              const ket = normalize(rel.keterangan || (rel as any).Keterangan || (rel as any).KETERANGAN || rel.jenisTanaman || '');
-              if (ket.includes('TEBANG') || ket.includes('TBG') || ket === 'T') {
+              const ketRaw = rel.keterangan || (rel as any).Keterangan || (rel as any).KETERANGAN || rel.jenisTanaman || '';
+              const ket = normalize(ketRaw);
+              if (ket.includes('TEBANG') || ket.includes('TEB') || ket.includes('TBG') || ket === 'T' || ket === 'TEBANGAN') {
                 updatedDaily[dayKey].tebang1++;
-              } else if (ket.includes('PANGKAS') || ket.includes('POTONG') || ket.includes('PNG') || ket.includes('PK') || ket === 'P') {
+              } else if (ket.includes('PANGKAS') || ket.includes('PNG') || ket.includes('PKS') || ket.includes('PK') || ket === 'P' || ket === 'PANGKASAN' || ket.includes('POTONG')) {
                 updatedDaily[dayKey].pangkas++;
               } else {
                 // Default fallback for any realization record
@@ -867,10 +868,10 @@ export class RekapHarianService {
     realisasiList: Realisasi[],
     workOrders: WorkOrder[]
   ): RekapItemData[] {
-    const normalize = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    const normalize = (s: string) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
     const stripPrefix = (s: string) => normalize(s)
-      .replace(/^(TIM|REGU|TEAM|KELOMPOK|ULP|UP3|UP4|ROW|REGU_ROW)\s*/gi, '')
-      .replace(/^(TIM|REGU|TEAM|KELOMPOK|ULP|UP3|UP4|ROW|REGU_ROW)\s*/gi, '') // Double pass
+      .replace(/^(TIM|REGU|TEAM|KELOMPOK|ULP|UP3|UP4|ROW|REGU_ROW|TIM_ROW)\s*/gi, '')
+      .replace(/^(TIM|REGU|TEAM|KELOMPOK|ULP|UP3|UP4|ROW|REGU_ROW|TIM_ROW)\s*/gi, '') // Double pass
       .trim();
     const normalizeNumbers = (s: string) => s.replace(/(\d+)/g, (m) => parseInt(m, 10).toString());
 
@@ -950,10 +951,11 @@ export class RekapHarianService {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
-              const ket = normalize(rel.keterangan || (rel as any).Keterangan || (rel as any).KETERANGAN || rel.jenisTanaman || '');
-              if (ket.includes('TEBANG') || ket.includes('TBG') || ket === 'T') {
+              const ketRaw = rel.keterangan || (rel as any).Keterangan || (rel as any).KETERANGAN || rel.jenisTanaman || '';
+              const ket = normalize(ketRaw);
+              if (ket.includes('TEBANG') || ket.includes('TEB') || ket.includes('TBG') || ket === 'T' || ket === 'TEBANGAN') {
                 updatedDaily[dayKey].tebang1++;
-              } else if (ket.includes('PANGKAS') || ket.includes('POTONG') || ket.includes('PNG') || ket.includes('PK') || ket === 'P') {
+              } else if (ket.includes('PANGKAS') || ket.includes('PNG') || ket.includes('PKS') || ket.includes('PK') || ket === 'P' || ket === 'PANGKASAN' || ket.includes('POTONG')) {
                 updatedDaily[dayKey].pangkas++;
               } else {
                 // Default fallback for any realization record
