@@ -77,27 +77,37 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [tempGasUrl, setTempGasUrl] = useState('');
 
   // Fetch Users directly from HyperCloud Host PostgreSQL
-  const loadSupabaseUsers = useCallback(async (showNotification = false) => {
+  const loadHyperCloudUsers = useCallback(async (showNotification = false) => {
     if (!navigator.onLine) {
       if (showNotification) showToast('Sedang offline. Menggunakan data akun lokal.', 'info');
       return;
     }
     setIsFetchingSupabaseUsers(true);
+    console.log('[APHRO AUTH] fetchUsers started');
     try {
       const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+      console.log('[APHRO AUTH] API endpoint: /api/users for unit:', activeInisiasi.unitId);
       const res = await ApiService.fetchUsers(activeInisiasi.unitId);
-      if (res.data && res.data.length > 0) {
+      
+      if (res && res.success && res.data) {
+        console.log('[APHRO AUTH] raw users count:', res.data.length);
         const normalized = res.data.map((u: any) => SupabaseService.normalizeUserRow(u));
+        console.log('[APHRO AUTH] normalized users count:', normalized.length);
+        
         setMasterData({ users: normalized });
         if (showNotification) {
           showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud Host (PostgreSQL).`, 'success');
         }
-      } else if (showNotification) {
-        showToast('Tabel USERS di HyperCloud Host masih kosong.', 'info');
+      } else {
+        console.log('[APHRO AUTH] API returned no success or data', res);
+        if (showNotification) {
+          showToast('Tabel USERS di HyperCloud Host masih kosong.', 'info');
+        }
       }
     } catch (err: any) {
+      console.log('[APHRO AUTH] API error:', err.message);
       if (showNotification) {
-        showToast(`Gagal memuat akun HyperCloud Host: ${err.message}`, 'error');
+        showToast(`Tidak dapat mengambil data USER dari Database HyperCloud. Periksa koneksi server.`, 'error');
       }
     } finally {
       setIsFetchingSupabaseUsers(false);
@@ -106,32 +116,14 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
 
   const hasFetchedUsersRef = useRef(false);
 
-  // Auto-fetch Users from Supabase on component mount
+  // Auto-fetch Users from HyperCloud on component mount
   useEffect(() => {
     if (!hasFetchedUsersRef.current && navigator.onLine) {
       hasFetchedUsersRef.current = true;
-      loadSupabaseUsers(false);
+      loadHyperCloudUsers(false);
     }
-  }, [loadSupabaseUsers]);
+  }, [loadHyperCloudUsers]);
 
-  // Seed default master accounts to Supabase USERS table if empty
-  const handleSeedSupabaseUsers = async () => {
-    setIsSeedingUsers(true);
-    showToast('Mengunggah akun master pengguna ke Supabase tabel USERS...', 'info');
-    try {
-      const res = await SupabaseService.seedDatabaseToSupabase();
-      if (res.success || res.inserted['USERS']) {
-        showToast('Akun master pengguna berhasil diunggah ke Supabase USERS!', 'success');
-        await loadSupabaseUsers(true);
-      } else {
-        showToast('Gagal mengunggah akun: Periksa konfigurasi tabel USERS.', 'warning');
-      }
-    } catch (err: any) {
-      showToast(`Error seeding users: ${err.message}`, 'error');
-    } finally {
-      setIsSeedingUsers(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -589,7 +581,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             <div className="flex items-center space-x-1.5 shrink-0">
               <button
                 type="button"
-                onClick={() => loadSupabaseUsers(true)}
+                onClick={() => loadHyperCloudUsers(true)}
                 disabled={isFetchingSupabaseUsers}
                 className="p-2.5 rounded-xl bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-700 transition-all border border-emerald-200 shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
                 title="Refresh Akun dari HyperCloud Host"
@@ -680,7 +672,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <div className="flex items-center space-x-1.5">
                 <button
                   type="button"
-                  onClick={() => loadSupabaseUsers(true)}
+                  onClick={() => loadHyperCloudUsers(true)}
                   disabled={isFetchingSupabaseUsers}
                   className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
                   title="Refresh Akun dari HyperCloud USERS"
@@ -789,24 +781,15 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   <Database className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs font-bold text-amber-900">Belum ada akun di tabel USERS Supabase</p>
+                  <p className="text-xs font-bold text-amber-900">Belum ada akun di database HyperCloud</p>
                   <p className="text-[11px] text-amber-700">
-                    Klik tombol di bawah untuk mengunggah akun default ke database Supabase APHRO.
+                    Pastikan server API HyperCloud sedang berjalan.
                   </p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={handleSeedSupabaseUsers}
-                    disabled={isSeedingUsers}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all inline-flex items-center space-x-1.5 shadow-xs cursor-pointer"
-                  >
-                    <UploadCloud className={`w-3.5 h-3.5 ${isSeedingUsers ? 'animate-bounce' : ''}`} />
-                    <span>{isSeedingUsers ? 'Mengunggah...' : 'Upload Akun ke Supabase'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => loadSupabaseUsers(true)}
+                    onClick={() => loadHyperCloudUsers(true)}
                     disabled={isFetchingSupabaseUsers}
                     className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold transition-all inline-flex items-center space-x-1 cursor-pointer"
                   >

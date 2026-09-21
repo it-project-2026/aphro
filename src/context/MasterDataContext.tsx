@@ -112,8 +112,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {}
-    const filtered = INITIAL_USERS.filter(u => InisiasiService.isUserMatchingUnit(u.unitId, activeUnitId));
-    return filtered.length > 0 ? filtered : INITIAL_USERS;
+    return [];
   });
 
   // Reload cache when unit changes

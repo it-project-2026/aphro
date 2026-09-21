@@ -74,54 +74,7 @@ export class AuthService {
       }
     }
 
-    // 2. Offline / Local fallback via Dexie
-    try {
-      const localUsers = await dexieDb.users.toArray();
-      const matchedLocal = localUsers.find(
-        (u) =>
-          ((u.userName && u.userName.toLowerCase() === cleanUsername) ||
-           (u.nip && u.nip.toLowerCase() === cleanUsername) ||
-           (u.id && u.id.toLowerCase() === cleanUsername)) &&
-          (!u.unitId || InisiasiService.isUserMatchingUnit(u.unitId, targetUnitId))
-      );
-
-      if (matchedLocal) {
-        console.log('[APHRO LOGIN LOCAL]', {
-          selectedUnitId: targetUnitId,
-          username: cleanUsername,
-          authenticatedUserId: matchedLocal.id,
-          authenticatedUserUnitId: targetUnitId
-        });
-        return { success: true, user: { ...matchedLocal, unitId: targetUnitId } };
-      }
-    } catch (localErr) {
-      console.warn('Dexie local user lookup error:', localErr);
-    }
-
-    // 3. Fallback for demo / standard accounts scoped to targetUnitId
-    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-    const demoUser: User = {
-      id: `usr-${cleanUsername}-${targetUnitId.toLowerCase()}`,
-      unitId: targetUnitId,
-      unitName: activeInisiasi.namaUL,
-      nip: cleanUsername.toUpperCase(),
-      name: cleanUsername.toUpperCase(),
-      userName: cleanUsername,
-      email: `${cleanUsername}@pln.co.id`,
-      role: (cleanUsername.includes('admin') || cleanUsername.includes('adm') ? 'Admin' : 'User') as UserRole,
-    };
-
-    console.log('[APHRO LOGIN DEMO]', {
-      selectedUnitId: targetUnitId,
-      username: cleanUsername,
-      authenticatedUserId: demoUser.id,
-      authenticatedUserUnitId: targetUnitId
-    });
-
-    return {
-      success: true,
-      user: demoUser,
-    };
+    return { success: false, error: 'Mode offline tidak tersedia untuk login awal. Pastikan Anda online dan terhubung ke HyperCloudHost.' };
   }
 
   /**

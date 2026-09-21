@@ -108,25 +108,29 @@ router.post('/login', async (req: Request, res: Response) => {
   const { username, userName, password, Password, unitId } = req.body || {};
   const cleanUsername = String(username || userName || '').trim();
   const cleanPassword = String(password || Password || '').trim();
+  const cleanUnitId = String(unitId || '').trim();
 
-  logApiCall('POST', '/api/login', { username: cleanUsername, unitId });
+  console.log(`[AUTH] Login attempt: username='${cleanUsername}', unitId='${cleanUnitId}'`);
 
-  if (!cleanUsername) {
-    return res.status(400).json({ status: 'error', message: 'Username / NIP wajib diisi.' });
+  if (!cleanUsername || !cleanUnitId) {
+    return res.status(400).json({ status: 'error', message: 'Username dan UnitID wajib diisi.' });
   }
 
   try {
+    // Validate both Username and unitId
     const sql = `
       SELECT * FROM public."USERS" 
-      WHERE (LOWER("userName") = LOWER($1) OR LOWER("nip") = LOWER($1) OR LOWER("UserID") = LOWER($1) OR LOWER("Username") = LOWER($1))
-      LIMIT 5
+      WHERE (LOWER("Username") = LOWER($1))
+      AND "unitId" = $2
+      LIMIT 1
     `;
-    const userRes = await query(sql, [cleanUsername]);
+    const userRes = await query(sql, [cleanUsername, cleanUnitId]);
 
     if (userRes.rows.length === 0) {
+      console.log(`[AUTH] Login failed: User '${cleanUsername}' not found in unit '${cleanUnitId}'`);
       return res.status(401).json({
         status: 'error',
-        message: `User '${cleanUsername}' tidak terdaftar pada database HyperCloudHost.`,
+        message: "Username tidak terdaftar pada Unit/Inisiasi yang dipilih.",
       });
     }
 
@@ -139,10 +143,11 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     if (cleanPassword && cleanPassword !== serverPass && cleanPassword !== 'admin123') {
+      console.log(`[AUTH] Login failed: Password mismatch for user '${cleanUsername}'`);
       return res.status(401).json({ status: 'error', message: 'Kata sandi tidak sesuai.' });
     }
 
-    const userUnit = matchedUser.unitId || matchedUser.UnitID || matchedUser.unit_id || 'UL1';
+    console.log(`[AUTH] Login successful: User '${cleanUsername}' resolved to '${matchedUser.Nama_Regu || matchedUser.Username}'`);
 
     // Simulated secure JWT token for HyperCloudHost session
     const token = `hc-jwt-${Date.now()}-${Buffer.from(cleanUsername).toString('hex')}`;
@@ -153,7 +158,7 @@ router.post('/login', async (req: Request, res: Response) => {
       token,
       user: {
         id: matchedUser.ID || matchedUser.id || `usr-${matchedUser.id}`,
-        unitId: userUnit,
+        unitId: matchedUser.unitId || cleanUnitId,
         nip: matchedUser.UserID || matchedUser.nip || cleanUsername.toUpperCase(),
         name: matchedUser.Nama_Regu || matchedUser.Username || matchedUser.userName || cleanUsername,
         userName: matchedUser.Username || matchedUser.userName || cleanUsername,
@@ -165,7 +170,8 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ status: 'error', message: `Database error saat login: ${err.message}` });
+    console.error(`[AUTH] Database error during login: ${err.message}`);
+    return res.status(500).json({ status: 'error', message: `Database error saat login.` });
   }
 });
 
@@ -176,11 +182,13 @@ router.get('/users', async (req: Request, res: Response) => {
   logApiCall('GET', '/api/users', req.query);
   const { unitId, isAll } = parseUnitFilter(req);
   try {
-    let sql = `SELECT * FROM public."USERS"`;
+    let sql = `
+      SELECT "UserID", "Username", "Nama_Regu", "ULP", "unitId", "ID", "Role", "Status" 
+      FROM public."USERS"`;
     const params: any[] = [];
     if (!isAll && unitId) {
-      sql += ` WHERE "unitId" = $1 OR "ULP" ILIKE $2`;
-      params.push(unitId, `%${unitId}%`);
+      sql += ` WHERE "unitId" = $1`;
+      params.push(unitId);
     }
     sql += ` ORDER BY "ID" ASC LIMIT 500`;
 
