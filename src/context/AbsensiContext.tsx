@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { usePersistState } from '../hooks/usePersistState';
 import { Absensi } from '../types';
 import { INITIAL_ABSENSI } from '../data/initialData';
 import { useAuth } from './AuthContext';
@@ -18,6 +17,7 @@ interface AbsensiContextType {
   deleteAbsensi: (id: string) => Promise<boolean>;
   refreshAbsensi: () => Promise<void>;
   hasCheckedInToday: boolean;
+  isLoading: boolean;
 }
 
 const AbsensiContext = React.createContext<AbsensiContextType | undefined>(undefined);
@@ -27,50 +27,43 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { showToast } = useToast();
   
-  const activeUnitId = user?.unitId || ApiService.getAuthToken() ? 'UL2' : 'UL2'; // Fallback to UL2 if no unitId found
+  const activeUnitId = user?.unitId || InisiasiService.getSelectedUnitId() || 'UL2';
 
-  const [absensiList, setAbsensiList] = React.useState<Absensi[]>(() => {
-    try {
-      const saved = localStorage.getItem(`aphro_absensi_${activeUnitId}`);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return INITIAL_ABSENSI.filter(a => !a.unitId || InisiasiService.isUserMatchingUnit(a.unitId, activeUnitId));
-  });
-
-  // Reload cache when unit changes
-  React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`aphro_absensi_${activeUnitId}`);
-      if (saved) {
-        setAbsensiList(JSON.parse(saved));
-      }
-    } catch {}
-  }, [activeUnitId]);
-
-  // Persist to unit-partitioned key
-  React.useEffect(() => {
-    try {
-      localStorage.setItem(`aphro_absensi_${activeUnitId}`, JSON.stringify(absensiList));
-    } catch {}
-  }, [absensiList, activeUnitId]);
+  const [absensiList, setAbsensiList] = React.useState<Absensi[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
 
   const refreshAbsensi = React.useCallback(async () => {
+    const unitId = user?.unitId || InisiasiService.getSelectedUnitId() || 'UL2';
+    console.log(`[ABSENSI TRACE] refreshAbsensi triggered. UnitId: ${unitId}`);
     try {
-      const unitId = user?.unitId || InisiasiService.getSelectedUnitId() || 'UL2';
+      setIsLoading(true);
       const res = await ApiService.fetchAbsensi(unitId);
       if (res.success && Array.isArray(res.data)) {
-        setAbsensiList(res.data);
+        console.log(`[ABSENSI TRACE] fetchAbsensi success. Received ${res.data.length} records.`);
+        // Sort server data by date DESC
+        const sortedData = [...res.data].sort((a, b) => {
+          const dateA = new Date(a.TANGGAL || a.tanggal || 0).getTime();
+          const dateB = new Date(b.TANGGAL || b.tanggal || 0).getTime();
+          return dateB - dateA;
+        });
+        setAbsensiList(sortedData);
+      } else {
+        console.warn(`[ABSENSI TRACE] fetchAbsensi FAILED: ${res.message}`);
       }
     } catch (err) {
-      console.warn('Error loading Absensi from HyperCloud API:', err);
+      console.warn('[ABSENSI TRACE] refreshAbsensi Exception:', err);
+    } finally {
+      setIsLoading(false);
     }
   }, [user?.unitId]);
 
+  // Initial load and unit change refresh
   React.useEffect(() => {
     refreshAbsensi();
-  }, [refreshAbsensi, settings.namaUnitLayanan, user, activeUnitId]);
+  }, [refreshAbsensi, activeUnitId]);
 
   const addAbsensi = React.useCallback(async (absData: Omit<Absensi, 'id' | 'createdAt'>) => {
+    console.log(`[ABSENSI TRACE 4] addAbsensi called. Regu: ${absData.reguName}`);
     const todayStr = absData.tanggal || getWIBDateString();
     const nowStr = getLocalDateTimeString();
 
@@ -135,29 +128,39 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
     
     if (isOnline) {
+      console.log(`[ABSENSI TRACE 4] Online Mode. Sending to ApiService...`);
       try {
         const result = existingIndex >= 0 
           ? await ApiService.updateAbsensi(finalAbs.id, finalAbs)
           : await ApiService.saveAbsensi(finalAbs);
 
         if (result.success) {
+          console.log(`[ABSENSI TRACE 4] API SUCCESS. ID: ${finalAbs.id}. Result:`, result);
           showToast('Absensi berhasil tersimpan ke Database HyperCloud!', 'success');
-          // Refresh from API to ensure state is in sync with server
+          // Update local state IMMEDIATELY
+          const newList = [...absensiList];
+          if (existingIndex >= 0) {
+            newList[existingIndex] = finalAbs;
+          } else {
+            newList.unshift(finalAbs);
+          }
+          setAbsensiList(newList);
+          
+          console.log(`[ABSENSI TRACE 4] Triggering refreshAbsensi() to sync server state...`);
           await refreshAbsensi();
           return finalAbs;
         } else {
-          console.warn('API saveAbsensi error:', result.message);
-          // Fall through to offline queue if API returns error (e.g. server down)
+          console.error(`[ABSENSI TRACE 4] API FAILED: ${result.message}`);
+          showToast(`Gagal menyimpan ke server: ${result.message}`, 'error');
         }
       } catch (err: any) {
-        console.warn('Network error in addAbsensi:', err);
-        // Fall through to offline queue
+        console.error('[ABSENSI TRACE 4] addAbsensi Exception:', err);
       }
     }
 
     // 2. OFFLINE FALLBACK: Use syncManager to queue the operation
     try {
-      const res = await syncManager.executeMutation({
+      await syncManager.executeMutation({
         type: existingIndex >= 0 ? 'UPDATE' : 'CREATE',
         tableName: 'ABSENSI',
         payload: finalAbs,
@@ -169,7 +172,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      // Optimistic update
+      // Optimistic update for offline
       const newList = [...absensiList];
       if (existingIndex >= 0) {
         newList[existingIndex] = finalAbs;
@@ -177,13 +180,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         newList.unshift(finalAbs);
       }
       setAbsensiList(newList);
-
-      if (!res.offline) {
-        showToast('Absensi berhasil disinkronkan ke HyperCloud!', 'success');
-        await refreshAbsensi();
-      } else {
-        showToast('Koneksi terganggu. Absensi masuk antrean offline.', 'info');
-      }
+      showToast('Koneksi terganggu. Absensi disimpan di antrean offline.', 'info');
     } catch (err) {
       console.warn('Sync Absensi error:', err);
       showToast('Gagal sinkronisasi, tersimpan lokal.', 'info');
@@ -202,80 +199,89 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       updatedAt: getLocalDateTimeString(),
     };
 
-    const newList = [...absensiList];
-    newList[existingIndex] = updatedAbs;
-    setAbsensiList(newList);
-
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    let apiSuccess = false;
 
     if (isOnline) {
       try {
         const result = await ApiService.updateAbsensi(id, updatedAbs);
-        if (result.success) apiSuccess = true;
+        if (result.success) {
+          showToast('Perubahan absensi tersimpan ke Database', 'success');
+          const newList = [...absensiList];
+          newList[existingIndex] = updatedAbs;
+          setAbsensiList(newList);
+          await refreshAbsensi();
+          return true;
+        }
       } catch {}
     }
 
-    if (apiSuccess) {
-      showToast('Perubahan absensi tersimpan ke Database', 'success');
-    } else {
-      try {
-        await syncManager.executeMutation({
-          type: 'UPDATE',
-          tableName: 'ABSENSI',
-          payload: updatedAbs,
-          apiCall: async () => {
-            const result = await ApiService.updateAbsensi(id, updatedAbs);
-            return { status: result.success ? 'success' : 'error', message: result.message };
-          }
-        });
-        showToast('Perubahan tersimpan (offline).', 'info');
-      } catch {
-        showToast('Perubahan tersimpan lokal.', 'info');
-      }
+    try {
+      await syncManager.executeMutation({
+        type: 'UPDATE',
+        tableName: 'ABSENSI',
+        payload: updatedAbs,
+        apiCall: async () => {
+          const result = await ApiService.updateAbsensi(id, updatedAbs);
+          return { status: result.success ? 'success' : 'error', message: result.message };
+        }
+      });
+      
+      const newList = [...absensiList];
+      newList[existingIndex] = updatedAbs;
+      setAbsensiList(newList);
+      showToast('Perubahan tersimpan (offline).', 'info');
+      return true;
+    } catch {
+      showToast('Perubahan gagal disimpan.', 'error');
+      return false;
     }
-    return true;
-  }, [absensiList, setAbsensiList, showToast]);
+  }, [absensiList, setAbsensiList, showToast, refreshAbsensi]);
 
   const deleteAbsensi = React.useCallback(async (id: string) => {
-    const existing = absensiList.find(a => a.id === id);
-    const newList = absensiList.filter(a => a.id !== id);
-    setAbsensiList(newList);
+    console.log(`[ABSENSI TRACE 5] deleteAbsensi called. ID: ${id}`);
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
 
-    if (existing) {
-      const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-      let apiSuccess = false;
-
-      if (isOnline) {
-        try {
-          const result = await ApiService.deleteAbsensi(id);
-          if (result.success) apiSuccess = true;
-        } catch {}
-      }
-
-      if (apiSuccess) {
-        showToast('Absensi dihapus dari Database', 'info');
-      } else {
-        try {
-          await syncManager.executeMutation({
-            type: 'DELETE',
-            tableName: 'ABSENSI',
-            payload: { id },
-            apiCall: async () => {
-              const result = await ApiService.deleteAbsensi(id);
-              return { status: result.success ? 'success' : 'error', message: result.message };
-            }
-          });
-          showToast('Hapus tersimpan (offline).', 'info');
-        } catch (e) {
-          console.warn('Delete Absensi offline error:', e);
-          showToast('Hapus tersimpan lokal.', 'info');
+    if (isOnline) {
+      console.log(`[ABSENSI TRACE 5] Online Mode. Sending DELETE to API...`);
+      try {
+        const result = await ApiService.deleteAbsensi(id);
+        if (result.success) {
+          console.log(`[ABSENSI TRACE 5] DELETE SUCCESS. ID: ${id}`);
+          showToast('Absensi berhasil dihapus dari Database', 'success');
+          // Update state
+          setAbsensiList(prev => prev.filter(a => a.id !== id));
+          console.log(`[ABSENSI TRACE 5] Triggering refreshAbsensi() to sync...`);
+          await refreshAbsensi();
+          return true;
+        } else {
+          console.error(`[ABSENSI TRACE 5] DELETE FAILED: ${result.message}`);
+          showToast(`Gagal menghapus: ${result.message}`, 'error');
         }
+      } catch (err: any) {
+        console.error('[ABSENSI TRACE 5] deleteAbsensi Exception:', err);
       }
     }
 
-    return true;
-  }, [absensiList, setAbsensiList, showToast]);
+    // Offline fallback
+    try {
+      await syncManager.executeMutation({
+        type: 'DELETE',
+        tableName: 'ABSENSI',
+        payload: { id },
+        apiCall: async () => {
+          const result = await ApiService.deleteAbsensi(id);
+          return { status: result.success ? 'success' : 'error', message: result.message };
+        }
+      });
+      setAbsensiList(prev => prev.filter(a => a.id !== id));
+      showToast('Penghapusan disimpan di antrean offline.', 'info');
+      return true;
+    } catch (e) {
+      console.warn('Delete Absensi offline error:', e);
+      showToast('Gagal menghapus absensi.', 'error');
+      return false;
+    }
+  }, [setAbsensiList, showToast, refreshAbsensi]);
 
   const hasCheckedInToday = React.useMemo(() => {
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
@@ -383,7 +389,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
   }, [absensiList, user]);
 
   return (
-    <AbsensiContext.Provider value={{ absensiList, setAbsensiList, addAbsensi, updateAbsensi, deleteAbsensi, refreshAbsensi, hasCheckedInToday }}>
+    <AbsensiContext.Provider value={{ absensiList, setAbsensiList, addAbsensi, updateAbsensi, deleteAbsensi, refreshAbsensi, hasCheckedInToday, isLoading }}>
       {children}
     </AbsensiContext.Provider>
   );

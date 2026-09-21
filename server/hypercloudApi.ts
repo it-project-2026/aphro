@@ -45,6 +45,68 @@ function parseUnitFilter(req: Request): {
   };
 }
 
+/**
+ * Helper to handle Work Order upserts
+ */
+async function handleUpsertWorkOrder(w: any) {
+  const woId = w.WO_ID || w.id || `WO-${Date.now()}`;
+  
+  const sql = `
+    INSERT INTO public."WORK_ORDER" (
+      "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "PENYULANG",
+      "REGU_ROW", "VOLUME", "SATUAN", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI",
+      "WO_AWAL", "WO_AKHIR", "LOKASI_START", "LOKASI_FINISH", "STATUS", "Created_At"
+    )
+    VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,
+      $10,$11,$12,$13,$14,$15,$16,$17,$18
+    )
+    ON CONFLICT ("WO_ID")
+    DO UPDATE SET
+      "unitId" = EXCLUDED."unitId",
+      "Nomor_WO" = EXCLUDED."Nomor_WO",
+      "PEKERJAAN" = EXCLUDED."PEKERJAAN",
+      "Tanggal" = EXCLUDED."Tanggal",
+      "ULP" = EXCLUDED."ULP",
+      "PENYULANG" = EXCLUDED."PENYULANG",
+      "REGU_ROW" = EXCLUDED."REGU_ROW",
+      "VOLUME" = EXCLUDED."VOLUME",
+      "SATUAN" = EXCLUDED."SATUAN",
+      "TOTAL_REALISASI" = EXCLUDED."TOTAL_REALISASI",
+      "SATUAN_TOTAL_REALISASI" = EXCLUDED."SATUAN_TOTAL_REALISASI",
+      "WO_AWAL" = EXCLUDED."WO_AWAL",
+      "WO_AKHIR" = EXCLUDED."WO_AKHIR",
+      "LOKASI_START" = EXCLUDED."LOKASI_START",
+      "LOKASI_FINISH" = EXCLUDED."LOKASI_FINISH",
+      "STATUS" = EXCLUDED."STATUS",
+      "Created_At" = EXCLUDED."Created_At"
+    RETURNING *;
+  `;
+
+  const params = [
+    woId,
+    w.unitId || 'UL1',
+    w.Nomor_WO || w.nomorWO || woId,
+    w.PEKERJAAN || w.pekerjaan || 'NORMAL',
+    w.Tanggal || w.tanggal || new Date().toISOString().split('T')[0],
+    w.ULP || w.ulpName || '',
+    w.PENYULANG || w.penyulangName || '',
+    w.REGU_ROW || w.reguName || '',
+    w.VOLUME || w.volumePekerjaan || 0,
+    w.SATUAN || w.satuan || 'Pohon',
+    w.TOTAL_REALISASI || w.totalRealisasi || 0,
+    w.SATUAN_TOTAL_REALISASI || 'Pohon',
+    w.WO_AWAL || w.woAwal || '',
+    w.WO_AKHIR || w.woAkhir || '',
+    w.LOKASI_START || w.lokasiStart || '',
+    w.LOKASI_FINISH || w.lokasiFinish || '',
+    w.STATUS || w.status || 'DRAFT',
+    w.Created_At || w.createdAt || new Date().toISOString(),
+  ];
+
+  return await query(sql, params);
+}
+
 // ==========================================
 // 1. HEALTH CHECK & DIAGNOSTICS
 // ==========================================
@@ -884,106 +946,60 @@ router.get('/work-orders', async (req: Request, res: Response) => {
  */
 router.post('/work-orders', async (req: Request, res: Response) => {
   logApiCall('POST', '/api/work-orders', req.body);
-
   const w = req.body || {};
-
-  const woId =
-    w.WO_ID ||
-    w.id ||
-    `WO-${Date.now()}`;
-
+  const woId = w.WO_ID || w.id || `WO-${Date.now()}`;
+  
   try {
-    const sql = `
-      INSERT INTO public."WORK_ORDER" (
-        "WO_ID",
-        "unitId",
-        "Nomor_WO",
-        "PEKERJAAN",
-        "Tanggal",
-        "ULP",
-        "PENYULANG",
-        "REGU_ROW",
-        "VOLUME",
-        "SATUAN",
-        "TOTAL_REALISASI",
-        "SATUAN_TOTAL_REALISASI",
-        "WO_AWAL",
-        "WO_AKHIR",
-        "LOKASI_START",
-        "LOKASI_FINISH",
-        "STATUS",
-        "Created_At"
-      )
-      VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,
-        $10,$11,$12,$13,$14,$15,$16,$17,$18
-      )
-      ON CONFLICT ("WO_ID")
-      DO UPDATE SET
-        "unitId" = EXCLUDED."unitId",
-        "Nomor_WO" = EXCLUDED."Nomor_WO",
-        "PEKERJAAN" = EXCLUDED."PEKERJAAN",
-        "Tanggal" = EXCLUDED."Tanggal",
-        "ULP" = EXCLUDED."ULP",
-        "PENYULANG" = EXCLUDED."PENYULANG",
-        "REGU_ROW" = EXCLUDED."REGU_ROW",
-        "VOLUME" = EXCLUDED."VOLUME",
-        "SATUAN" = EXCLUDED."SATUAN",
-        "TOTAL_REALISASI" = EXCLUDED."TOTAL_REALISASI",
-        "SATUAN_TOTAL_REALISASI" =
-          EXCLUDED."SATUAN_TOTAL_REALISASI",
-        "WO_AWAL" = EXCLUDED."WO_AWAL",
-        "WO_AKHIR" = EXCLUDED."WO_AKHIR",
-        "LOKASI_START" = EXCLUDED."LOKASI_START",
-        "LOKASI_FINISH" = EXCLUDED."LOKASI_FINISH",
-        "STATUS" = EXCLUDED."STATUS",
-        "Created_At" = EXCLUDED."Created_At"
-      RETURNING *;
-    `;
-
-    const params = [
-      woId,
-      w.unitId || 'UL1',
-      w.Nomor_WO || w.nomorWO || woId,
-      w.PEKERJAAN || w.pekerjaan || 'NORMAL',
-      w.Tanggal ||
-        w.tanggal ||
-        new Date().toISOString().split('T')[0],
-      w.ULP || w.ulpName || '',
-      w.PENYULANG || w.penyulangName || '',
-      w.REGU_ROW || w.reguName || '',
-      w.VOLUME || w.volumePekerjaan || 0,
-      w.SATUAN || w.satuan || 'Pohon',
-      w.TOTAL_REALISASI ||
-        w.totalRealisasi ||
-        0,
-      w.SATUAN_TOTAL_REALISASI ||
-        'Pohon',
-      w.WO_AWAL || w.woAwal || '',
-      w.WO_AKHIR || w.woAkhir || '',
-      w.LOKASI_START ||
-        w.lokasiStart ||
-        '',
-      w.LOKASI_FINISH ||
-        w.lokasiFinish ||
-        '',
-      w.STATUS ||
-        w.status ||
-        'DRAFT',
-      w.Created_At ||
-        w.createdAt ||
-        new Date().toISOString(),
-    ];
-
-    const resDb = await query(sql, params);
+    const resDb = await handleUpsertWorkOrder(w);
+    
+    // VERIFIKASI: Pastikan data benar-benar tersimpan
+    const check = await query('SELECT "WO_ID" FROM public."WORK_ORDER" WHERE "WO_ID" = $1', [woId]);
+    if (check.rowCount === 0) {
+      throw new Error('Verifikasi gagal: Work Order tidak ditemukan setelah INSERT');
+    }
 
     return res.json({
       status: 'success',
+      success: true,
       data: resDb.rows[0],
     });
   } catch (err: any) {
+    console.error('[BACKEND ERROR] POST /api/work-orders:', err.message);
     return res.status(500).json({
       status: 'error',
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/work-orders/:id
+ */
+router.put('/work-orders/:id', async (req: Request, res: Response) => {
+  const id = req.params.id;
+  logApiCall('PUT', `/api/work-orders/${id}`, req.body);
+  
+  try {
+    const w = { ...req.body, WO_ID: id };
+    const resDb = await handleUpsertWorkOrder(w);
+
+    // VERIFIKASI
+    const check = await query('SELECT "WO_ID" FROM public."WORK_ORDER" WHERE "WO_ID" = $1', [id]);
+    if (check.rowCount === 0) {
+      throw new Error('Verifikasi gagal: Work Order tidak ditemukan setelah UPDATE');
+    }
+
+    return res.json({
+      status: 'success',
+      success: true,
+      data: resDb.rows[0],
+    });
+  } catch (err: any) {
+    console.error('[BACKEND ERROR] PUT /api/work-orders:', err.message);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
       message: err.message,
     });
   }
@@ -1008,18 +1024,27 @@ router.delete(
         DELETE FROM public."WORK_ORDER"
         WHERE "WO_ID" = $1
            OR "Nomor_WO" = $1
-        RETURNING *
+        RETURNING "WO_ID"
         `,
         [woId]
       );
 
+      // VERIFIKASI
+      const check = await query('SELECT "WO_ID" FROM public."WORK_ORDER" WHERE "WO_ID" = $1', [woId]);
+      if (check.rowCount > 0) {
+        throw new Error('Verifikasi gagal: Work Order masih ada setelah DELETE');
+      }
+
       return res.json({
         status: 'success',
+        success: true,
         deletedCount: resDb.rowCount,
       });
     } catch (err: any) {
+      console.error('[BACKEND ERROR] DELETE /api/work-orders:', err.message);
       return res.status(500).json({
         status: 'error',
+        success: false,
         message: err.message,
       });
     }
@@ -1365,21 +1390,12 @@ router.get(
 );
 
 /**
- * POST /api/realisasi
+ * Helper for POST/PUT Realisasi (Upsert)
  */
-router.post('/realisasi', async (req: Request, res: Response) => {
-  logApiCall(
-    'POST',
-    '/api/realisasi',
-    req.body
-  );
-
+const handleUpsertRealisasi = async (req: Request, res: Response) => {
+  logApiCall(req.method, req.path, req.body);
   const r = req.body || {};
-
-  const id =
-    r.ID ||
-    r.id ||
-    `REL-${Date.now()}`;
+  const id = req.params.id || r.ID || r.id || `REL-${Date.now()}`;
 
   try {
     const sql = `
@@ -1409,40 +1425,23 @@ router.post('/realisasi', async (req: Request, res: Response) => {
       )
       ON CONFLICT ("ID")
       DO UPDATE SET
-        "unitId" =
-          EXCLUDED."unitId",
-        "WO_ID" =
-          EXCLUDED."WO_ID",
-        "Nomor_WO" =
-          EXCLUDED."Nomor_WO",
-        "ULP" =
-          EXCLUDED."ULP",
-        "REGU_ROW" =
-          EXCLUDED."REGU_ROW",
-        "PENYULANG" =
-          EXCLUDED."PENYULANG",
-        "NO_TIANG" =
-          EXCLUDED."NO_TIANG",
-        "TANGGAL" =
-          EXCLUDED."TANGGAL",
-        "Foto_Sebelum" =
-          EXCLUDED."Foto_Sebelum",
-        "Foto_Sesudah" =
-          EXCLUDED."Foto_Sesudah",
-        "Jenis_Tanaman" =
-          EXCLUDED."Jenis_Tanaman",
-        "Keterangan" =
-          EXCLUDED."Keterangan",
-        "Pertumbuhan_Tanaman" =
-          EXCLUDED."Pertumbuhan_Tanaman",
-        "Kendala" =
-          EXCLUDED."Kendala",
-        "Latitude_Longitude" =
-          EXCLUDED."Latitude_Longitude",
-        "Lokasi_kerja" =
-          EXCLUDED."Lokasi_kerja",
-        "Timestamp" =
-          EXCLUDED."Timestamp"
+        "unitId" = EXCLUDED."unitId",
+        "WO_ID" = EXCLUDED."WO_ID",
+        "Nomor_WO" = EXCLUDED."Nomor_WO",
+        "ULP" = EXCLUDED."ULP",
+        "REGU_ROW" = EXCLUDED."REGU_ROW",
+        "PENYULANG" = EXCLUDED."PENYULANG",
+        "NO_TIANG" = EXCLUDED."NO_TIANG",
+        "TANGGAL" = EXCLUDED."TANGGAL",
+        "Foto_Sebelum" = EXCLUDED."Foto_Sebelum",
+        "Foto_Sesudah" = EXCLUDED."Foto_Sesudah",
+        "Jenis_Tanaman" = EXCLUDED."Jenis_Tanaman",
+        "Keterangan" = EXCLUDED."Keterangan",
+        "Pertumbuhan_Tanaman" = EXCLUDED."Pertumbuhan_Tanaman",
+        "Kendala" = EXCLUDED."Kendala",
+        "Latitude_Longitude" = EXCLUDED."Latitude_Longitude",
+        "Lokasi_kerja" = EXCLUDED."Lokasi_kerja",
+        "Timestamp" = EXCLUDED."Timestamp"
       RETURNING *;
     `;
 
@@ -1450,71 +1449,56 @@ router.post('/realisasi', async (req: Request, res: Response) => {
       id,
       r.unitId || 'UL1',
       r.WO_ID || r.woId || '',
-      r.Nomor_WO ||
-        r.nomorWO ||
-        '',
-      r.ULP ||
-        r.ulpName ||
-        '',
-      r.REGU_ROW ||
-        r.reguName ||
-        '',
-      r.PENYULANG ||
-        r.penyulangName ||
-        '',
-      r.NO_TIANG ||
-        r.noTiang ||
-        '',
-      r.TANGGAL ||
-        r.tanggal ||
-        new Date()
-          .toISOString()
-          .split('T')[0],
-      r.Foto_Sebelum ||
-        r.fotoSebelum ||
-        '',
-      r.Foto_Sesudah ||
-        r.fotoSesudah ||
-        '',
-      r.Jenis_Tanaman ||
-        r.jenisTanaman ||
-        '',
-      r.Keterangan ||
-        r.keterangan ||
-        '',
-      r.Pertumbuhan_Tanaman ||
-        r.pertumbuhanTanaman ||
-        '',
-      r.Kendala ||
-        r.kendala ||
-        '',
-      r.Latitude_Longitude ||
-        r.latitudeLongitude ||
-        '',
-      r.Lokasi_kerja ||
-        r.lokasiKerja ||
-        '',
-      r.Timestamp ||
-        r.timestamp ||
-        new Date().toISOString(),
+      r.Nomor_WO || r.nomorWO || '',
+      r.ULP || r.ulpName || '',
+      r.REGU_ROW || r.reguName || '',
+      r.PENYULANG || r.penyulangName || '',
+      r.NO_TIANG || r.noTiang || '',
+      r.TANGGAL || r.tanggal || new Date().toISOString().split('T')[0],
+      r.Foto_Sebelum || r.fotoSebelum || '',
+      r.Foto_Sesudah || r.fotoSesudah || '',
+      r.Jenis_Tanaman || r.jenisTanaman || '',
+      r.Keterangan || r.keterangan || '',
+      r.Pertumbuhan_Tanaman || r.pertumbuhanTanaman || '',
+      r.Kendala || r.kendala || '',
+      r.Latitude_Longitude || r.latitudeLongitude || '',
+      r.Lokasi_kerja || r.lokasiKerja || '',
+      r.Timestamp || r.timestamp || new Date().toISOString(),
     ];
 
-    const resDb = await query(
-      sql,
-      params
-    );
+    const resDb = await query(sql, params);
+
+    if (resDb.rowCount === 0) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Gagal menyimpan realisasi ke database.',
+      });
+    }
+
+    const verifyRes = await query(`SELECT * FROM public."REALISASI" WHERE "ID" = $1`, [id]);
 
     return res.json({
       status: 'success',
-      data: resDb.rows[0],
+      data: verifyRes.rows[0] || resDb.rows[0],
     });
   } catch (err: any) {
+    console.error('[REALISASI UPSERT] Error:', err.message);
     return res.status(500).json({
       status: 'error',
       message: err.message,
     });
   }
-});
+};
+
+/**
+ * POST /api/realisasi
+ */
+router.post('/realisasi', handleUpsertRealisasi);
+
+/**
+ * PUT /api/realisasi/:id
+ */
+router.put('/realisasi/:id', handleUpsertRealisasi);
 
 /**
  * DELETE /api/realisasi/:id
@@ -1539,11 +1523,20 @@ router.delete(
         [relId]
       );
 
+      if (resDb.rowCount === 0) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Realisasi tidak ditemukan atau sudah terhapus.',
+        });
+      }
+
       return res.json({
         status: 'success',
         deletedCount: resDb.rowCount,
+        data: resDb.rows[0]
       });
     } catch (err: any) {
+      console.error('[REALISASI DELETE] Error:', err.message);
       return res.status(500).json({
         status: 'error',
         message: err.message,
@@ -1570,6 +1563,7 @@ router.get('/absensi', async (req: Request, res: Response) => {
     parseUnitFilter(req);
 
   try {
+    console.log(`[ABSENSI TRACE 1] Fetching absensi list. UnitId: ${unitId}, isAll: ${isAll}`);
     let sql = `
       SELECT *
       FROM public."ABSENSI"
@@ -1598,6 +1592,8 @@ router.get('/absensi', async (req: Request, res: Response) => {
       params
     );
 
+    console.log(`[ABSENSI TRACE 1] Fetch success. Found ${resDb.rowCount} records.`);
+
     return res.json({
       status: 'success',
       data: resDb.rows,
@@ -1611,21 +1607,28 @@ router.get('/absensi', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/absensi
+ * Helper for POST/PUT Absensi (Upsert)
  */
-router.post('/absensi', async (req: Request, res: Response) => {
-  logApiCall(
-    'POST',
-    '/api/absensi',
-    req.body
-  );
-
+const handleUpsertAbsensi = async (req: Request, res: Response) => {
+  const method = req.method;
+  console.log(`[ABSENSI TRACE 2] Starting ${method} upsert. Payload ID: ${req.body?.id || req.body?.ID || 'new'}`);
+  logApiCall(req.method, req.path, req.body);
   const a = req.body || {};
+  const id = req.params.id || a.ID || a.id || `ABS-${Date.now()}`;
 
-  const id =
-    a.ID ||
-    a.id ||
-    `ABS-${Date.now()}`;
+  // Extract from petugasList if present
+  if (Array.isArray(a.petugasList)) {
+    a.petugas1 = a.petugasList[0]?.nama || '';
+    a.ket1 = a.petugasList[0]?.keterangan || 'HADIR';
+    a.petugas2 = a.petugasList[1]?.nama || '';
+    a.ket2 = a.petugasList[1]?.keterangan || 'HADIR';
+    a.petugas3 = a.petugasList[2]?.nama || '';
+    a.ket3 = a.petugasList[2]?.keterangan || 'HADIR';
+    a.petugas4 = a.petugasList[3]?.nama || '';
+    a.ket4 = a.petugasList[3]?.keterangan || 'HADIR';
+    a.petugas5 = a.petugasList[4]?.nama || '';
+    a.ket5 = a.petugasList[4]?.keterangan || 'HADIR';
+  }
 
   try {
     const sql = `
@@ -1656,119 +1659,91 @@ router.post('/absensi', async (req: Request, res: Response) => {
       )
       ON CONFLICT ("ID")
       DO UPDATE SET
-        "unitId" =
-          EXCLUDED."unitId",
-        "TANGGAL" =
-          EXCLUDED."TANGGAL",
-        "NAMA_REGU" =
-          EXCLUDED."NAMA_REGU",
-        "ULP" =
-          EXCLUDED."ULP",
-        "PETUGAS_1" =
-          EXCLUDED."PETUGAS_1",
-        "KET_1" =
-          EXCLUDED."KET_1",
-        "PETUGAS_2" =
-          EXCLUDED."PETUGAS_2",
-        "KET_2" =
-          EXCLUDED."KET_2",
-        "PETUGAS_3" =
-          EXCLUDED."PETUGAS_3",
-        "KET_3" =
-          EXCLUDED."KET_3",
-        "PETUGAS_4" =
-          EXCLUDED."PETUGAS_4",
-        "KET_4" =
-          EXCLUDED."KET_4",
-        "PETUGAS_5" =
-          EXCLUDED."PETUGAS_5",
-        "KET_5" =
-          EXCLUDED."KET_5",
-        "FOTO_MASUK" =
-          EXCLUDED."FOTO_MASUK",
-        "TIMESTAMP MASUK" =
-          EXCLUDED."TIMESTAMP MASUK",
-        "FOTO_KELUAR" =
-          EXCLUDED."FOTO_KELUAR",
-        "TIMESTAMP KELUAR" =
-          EXCLUDED."TIMESTAMP KELUAR"
+        "unitId" = EXCLUDED."unitId",
+        "TANGGAL" = EXCLUDED."TANGGAL",
+        "NAMA_REGU" = EXCLUDED."NAMA_REGU",
+        "ULP" = EXCLUDED."ULP",
+        "PETUGAS_1" = EXCLUDED."PETUGAS_1",
+        "KET_1" = EXCLUDED."KET_1",
+        "PETUGAS_2" = EXCLUDED."PETUGAS_2",
+        "KET_2" = EXCLUDED."KET_2",
+        "PETUGAS_3" = EXCLUDED."PETUGAS_3",
+        "KET_3" = EXCLUDED."KET_3",
+        "PETUGAS_4" = EXCLUDED."PETUGAS_4",
+        "KET_4" = EXCLUDED."KET_4",
+        "PETUGAS_5" = EXCLUDED."PETUGAS_5",
+        "KET_5" = EXCLUDED."KET_5",
+        "FOTO_MASUK" = EXCLUDED."FOTO_MASUK",
+        "TIMESTAMP MASUK" = EXCLUDED."TIMESTAMP MASUK",
+        "FOTO_KELUAR" = EXCLUDED."FOTO_KELUAR",
+        "TIMESTAMP KELUAR" = EXCLUDED."TIMESTAMP KELUAR"
       RETURNING *;
     `;
 
     const params = [
       id,
       a.unitId || 'UL1',
-      a.TANGGAL ||
-        a.tanggal ||
-        new Date()
-          .toISOString()
-          .split('T')[0],
-      a.NAMA_REGU ||
-        a.namaRegu ||
-        '',
-      a.ULP ||
-        a.ulpName ||
-        '',
-      a.PETUGAS_1 ||
-        a.petugas1 ||
-        '',
-      a.KET_1 ||
-        a.ket1 ||
-        '',
-      a.PETUGAS_2 ||
-        a.petugas2 ||
-        '',
-      a.KET_2 ||
-        a.ket2 ||
-        '',
-      a.PETUGAS_3 ||
-        a.petugas3 ||
-        '',
-      a.KET_3 ||
-        a.ket3 ||
-        '',
-      a.PETUGAS_4 ||
-        a.petugas4 ||
-        '',
-      a.KET_4 ||
-        a.ket4 ||
-        '',
-      a.PETUGAS_5 ||
-        a.petugas5 ||
-        '',
-      a.KET_5 ||
-        a.ket5 ||
-        '',
-      a.FOTO_MASUK ||
-        a.fotoMasuk ||
-        '',
-      a['TIMESTAMP MASUK'] ||
-        a.timestampMasuk ||
-        '',
-      a.FOTO_KELUAR ||
-        a.fotoKeluar ||
-        '',
-      a['TIMESTAMP KELUAR'] ||
-        a.timestampKeluar ||
-        '',
+      a.TANGGAL || a.tanggal || new Date().toISOString().split('T')[0],
+      a.NAMA_REGU || a.namaRegu || '',
+      a.ULP || a.ulpName || '',
+      a.PETUGAS_1 || a.petugas1 || '',
+      a.KET_1 || a.ket1 || 'HADIR',
+      a.PETUGAS_2 || a.petugas2 || '',
+      a.KET_2 || a.ket2 || 'HADIR',
+      a.PETUGAS_3 || a.petugas3 || '',
+      a.KET_3 || a.ket3 || 'HADIR',
+      a.PETUGAS_4 || a.petugas4 || '',
+      a.KET_4 || a.ket4 || 'HADIR',
+      a.PETUGAS_5 || a.petugas5 || '',
+      a.KET_5 || a.ket5 || 'HADIR',
+      a.FOTO_MASUK || a.fotoMasuk || '',
+      a['TIMESTAMP MASUK'] || a.timestampMasuk || '',
+      a.FOTO_KELUAR || a.fotoKeluar || '',
+      a['TIMESTAMP KELUAR'] || a.timestampKeluar || '',
     ];
 
-    const resDb = await query(
-      sql,
-      params
-    );
+    console.log(`[ABSENSI TRACE 2] Executing SQL: INSERT ON CONFLICT. ID: ${id}`);
+    const resDb = await query(sql, params);
+
+    if (resDb.rowCount === 0) {
+      console.error(`[ABSENSI TRACE 2] UPSERT FAILED. rowCount is 0.`);
+      return res.status(500).json({
+        status: 'error',
+        message: 'Gagal menyimpan absensi ke database.',
+      });
+    }
+
+    console.log(`[ABSENSI TRACE 2] UPSERT Success. rowCount: ${resDb.rowCount}. Verifying write...`);
+    const verifyRes = await query(`SELECT * FROM public."ABSENSI" WHERE "ID" = $1`, [id]);
+
+    if (verifyRes.rowCount === 0) {
+       console.error(`[ABSENSI TRACE 2] VERIFICATION FAILED. Record with ID ${id} not found after write!`);
+    } else {
+       console.log(`[ABSENSI TRACE 2] VERIFICATION Success. Record confirmed in DB.`);
+    }
 
     return res.json({
       status: 'success',
-      data: resDb.rows[0],
+      data: verifyRes.rows[0] || resDb.rows[0],
     });
   } catch (err: any) {
+    console.error('[ABSENSI UPSERT] Error:', err.message);
     return res.status(500).json({
       status: 'error',
       message: err.message,
     });
   }
-});
+};
+
+/**
+ * POST /api/absensi
+ */
+router.post('/absensi', handleUpsertAbsensi);
+
+/**
+ * PUT /api/absensi/:id
+ */
+router.put('/absensi/:id', handleUpsertAbsensi);
 
 /**
  * DELETE /api/absensi/:id
@@ -1784,6 +1759,7 @@ router.delete(
     );
 
     try {
+      console.log(`[ABSENSI TRACE 3] Starting DELETE for ID: ${absId}`);
       const resDb = await query(
         `
         DELETE FROM public."ABSENSI"
@@ -1793,11 +1769,31 @@ router.delete(
         [absId]
       );
 
+      if (resDb.rowCount === 0) {
+        console.warn(`[ABSENSI TRACE 3] DELETE target not found or already deleted. ID: ${absId}`);
+        return res.status(404).json({
+          status: 'error',
+          message: 'Absensi tidak ditemukan atau sudah terhapus.',
+        });
+      }
+
+      console.log(`[ABSENSI TRACE 3] DELETE Success. Verifying deletion...`);
+      const verifyRes = await query(`SELECT COUNT(*) FROM public."ABSENSI" WHERE "ID" = $1`, [absId]);
+      const count = parseInt(verifyRes.rows[0].count, 10);
+      
+      if (count > 0) {
+        console.error(`[ABSENSI TRACE 3] VERIFICATION FAILED. Record with ID ${absId} still exists after DELETE!`);
+      } else {
+        console.log(`[ABSENSI TRACE 3] VERIFICATION Success. Record confirmed GONE from DB.`);
+      }
+
       return res.json({
         status: 'success',
         deletedCount: resDb.rowCount,
+        data: resDb.rows[0]
       });
     } catch (err: any) {
+      console.error('[ABSENSI DELETE] Error:', err.message);
       return res.status(500).json({
         status: 'error',
         message: err.message,

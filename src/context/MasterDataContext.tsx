@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { usePersistState } from '../hooks/usePersistState';
 import { ULP, Penyulang, ReguROW, Petugas, User } from '../types';
 import { 
   INITIAL_ULP, 
@@ -56,162 +55,28 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const { settings } = useSettings();
   const activeUnitId = SupabaseService.getActiveUnitId();
 
-  const [ulpList, setUlpList] = React.useState<ULP[]>(() => {
-    try {
-      const saved = localStorage.getItem(`aphro_ulp_${activeUnitId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    const filtered = INITIAL_ULP.filter(u => InisiasiService.isUserMatchingUnit(u.unitId || u.namaULP, activeUnitId));
-    return filtered.length > 0 ? filtered : INITIAL_ULP;
-  });
-
-  const [penyulangList, setPenyulangList] = React.useState<Penyulang[]>(() => {
-    try {
-      const saved = localStorage.getItem(`aphro_penyulang_${activeUnitId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    const filtered = INITIAL_PENYULANG.filter(p => InisiasiService.isUserMatchingUnit(p.ulpId || p.ulpName || p.unitId, activeUnitId));
-    return filtered.length > 0 ? filtered : INITIAL_PENYULANG;
-  });
-
-  const [reguList, setReguList] = React.useState<ReguROW[]>(() => {
-    try {
-      const saved = localStorage.getItem(`aphro_regu_${activeUnitId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    const filtered = INITIAL_REGU.filter(r => InisiasiService.isUserMatchingUnit(r.ulpId || r.unitId, activeUnitId));
-    return filtered.length > 0 ? filtered : INITIAL_REGU;
-  });
-
-  const [petugasList, setPetugasList] = React.useState<Petugas[]>(() => {
-    try {
-      const saved = localStorage.getItem(`aphro_ptg_${activeUnitId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    const filtered = INITIAL_PETUGAS.filter(p => InisiasiService.isUserMatchingUnit(p.ulpId || p.unitId, activeUnitId));
-    return filtered.length > 0 ? filtered : INITIAL_PETUGAS;
-  });
-
-  const [users, setUsers] = React.useState<User[]>(() => {
-    try {
-      const saved = localStorage.getItem(`aphro_synced_users_${activeUnitId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          console.log(`[MASTER DATA] Initial state users from CACHE for unit ${activeUnitId}:`, parsed.length);
-          return parsed;
-        }
-      }
-    } catch {}
-    console.log(`[MASTER DATA] Initial state users for unit ${activeUnitId}: EMPTY`);
-    return [];
-  });
-
-  // Reload cache when unit changes
-  React.useEffect(() => {
-    try {
-      const cachedRegu = localStorage.getItem(`aphro_regu_${activeUnitId}`);
-      if (cachedRegu) {
-        const p = JSON.parse(cachedRegu);
-        if (Array.isArray(p) && p.length > 0) setReguList(p);
-      }
-      const cachedPtg = localStorage.getItem(`aphro_ptg_${activeUnitId}`);
-      if (cachedPtg) {
-        const p = JSON.parse(cachedPtg);
-        if (Array.isArray(p) && p.length > 0) setPetugasList(p);
-      }
-      const cachedUsers = localStorage.getItem(`aphro_synced_users_${activeUnitId}`);
-      if (cachedUsers) {
-        const p = JSON.parse(cachedUsers);
-        if (Array.isArray(p) && p.length > 0) {
-          console.log(`[MASTER DATA] Reloading users from CACHE for unit ${activeUnitId}:`, p.length);
-          setUsers(p);
-        } else {
-          console.log(`[MASTER DATA] Cache for users in unit ${activeUnitId} is empty.`);
-          setUsers([]);
-        }
-      } else {
-        console.log(`[MASTER DATA] No cache for users in unit ${activeUnitId}. Setting to empty.`);
-        setUsers([]);
-      }
-      const cachedUlp = localStorage.getItem(`aphro_ulp_${activeUnitId}`);
-      if (cachedUlp) {
-        const p = JSON.parse(cachedUlp);
-        if (Array.isArray(p) && p.length > 0) setUlpList(p);
-      }
-      const cachedPenyulang = localStorage.getItem(`aphro_penyulang_${activeUnitId}`);
-      if (cachedPenyulang) {
-        const p = JSON.parse(cachedPenyulang);
-        if (Array.isArray(p) && p.length > 0) setPenyulangList(p);
-      }
-    } catch {}
-  }, [activeUnitId]);
-
-  // Persist to unit-partitioned cache
-  React.useEffect(() => {
-    try {
-      localStorage.setItem(`aphro_regu_${activeUnitId}`, JSON.stringify(reguList));
-      localStorage.setItem(`aphro_ptg_${activeUnitId}`, JSON.stringify(petugasList));
-      localStorage.setItem(`aphro_synced_users_${activeUnitId}`, JSON.stringify(users));
-      localStorage.setItem(`aphro_ulp_${activeUnitId}`, JSON.stringify(ulpList));
-      localStorage.setItem(`aphro_penyulang_${activeUnitId}`, JSON.stringify(penyulangList));
-    } catch {}
-  }, [reguList, petugasList, users, ulpList, penyulangList, activeUnitId]);
+  const [ulpList, setUlpList] = React.useState<ULP[]>([]);
+  const [penyulangList, setPenyulangList] = React.useState<Penyulang[]>([]);
+  const [reguList, setReguList] = React.useState<ReguROW[]>([]);
+  const [petugasList, setPetugasList] = React.useState<Petugas[]>([]);
+  const [users, setUsers] = React.useState<User[]>([]);
 
   const refreshMasterData = React.useCallback(async (forceRefresh = false, filters: { ulp?: string; regu?: string } = {}) => {
     const unitId = SupabaseService.getActiveUnitId();
-    const lastSyncUnit = localStorage.getItem('aphro_master_data_sync_unit');
-    const unitChanged = lastSyncUnit !== unitId;
-    const lastSync = localStorage.getItem('aphro_master_data_sync_time');
-
-    // Check if we need to refresh based on timestamp (1 hour cache) or unit change
-    // If filters are provided, we always refresh to respect the "don't fetch all" rule
-    const hasFilters = Object.keys(filters).length > 0;
-    if (!forceRefresh && !unitChanged && !hasFilters && lastSync && (Date.now() - parseInt(lastSync, 10) < 3600000)) {
-      return; // Data is still fresh
-    }
-
+    
     try {
       const res = await SupabaseService.fetchMasterData(unitId, filters);
       if (res) {
-        console.log(`[MASTER DATA] refreshMasterData result for unit ${unitId}:`, {
-          ulp: res.ulp?.length,
-          penyulang: res.penyulang?.length,
-          regu: res.regu?.length,
-          petugas: res.petugas?.length,
-          users: res.users?.length,
-          source: res.source
-        });
-
         if (res.ulp?.length > 0) setUlpList(res.ulp);
         if (res.penyulang?.length > 0) setPenyulangList(res.penyulang);
         if (res.regu?.length > 0) setReguList(res.regu);
         if (res.petugas?.length > 0) setPetugasList(res.petugas);
         if (res.users && Array.isArray(res.users) && res.users.length > 0) {
           setUsers(res.users);
-        } else if (users.length === 0 && INITIAL_USERS.length > 0) {
-          // Final fallback to initial users ONLY if no users at all
-          setUsers(INITIAL_USERS.filter(u => InisiasiService.isUserMatchingUnit(u.unitId || u.ulpName, unitId)));
         }
-
-        // Update sync timestamp and sync unit
-        localStorage.setItem('aphro_master_data_sync_time', Date.now().toString());
-        localStorage.setItem('aphro_master_data_sync_unit', unitId);
       }
     } catch (err) {
-      console.warn('Error loading Master Data from Supabase:', err);
+      console.warn('Error loading Master Data:', err);
     }
   }, [setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
 

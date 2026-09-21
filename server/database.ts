@@ -310,6 +310,8 @@ export function getDatabaseUrl(): string {
 export async function query<T = any>(text: string, params: any[] = []): Promise<pg.QueryResult<T>> {
   const pool = getPool();
   const start = Date.now();
+  const isMutation = /^\s*(INSERT|UPDATE|DELETE|UPSERT)/i.test(text);
+
   try {
     const res = await pool.query<T>(text, params);
     const duration = Date.now() - start;
@@ -318,8 +320,19 @@ export async function query<T = any>(text: string, params: any[] = []): Promise<
     }
     return res;
   } catch (err: any) {
-    // Gracefully handle unreachable database, logging a friendly informational notice
-    console.log(`[DB INFO] Database connection offline or default config active. Using local in-memory fallback.`);
+    // CRITICAL: Log the actual error so we know WHY it failed
+    console.error(`[DB ERROR] Query failed: ${err.message}`);
+    console.error(`[DB ERROR] SQL: ${text}`);
+    console.error(`[DB ERROR] Params:`, params);
+
+    // If it's a mutation, we MUST NOT fall back to mock because it creates an illusion of success
+    if (isMutation) {
+      console.error(`[DB FATAL] Mutation failed. Propagating error to prevent data loss.`);
+      throw err;
+    }
+
+    // For SELECT, we can still fall back if intended, but let's log it clearly
+    console.log(`[DB INFO] Database query failed. Using local in-memory fallback for SELECT.`);
     return getMockQueryResult(text, params) as pg.QueryResult<T>;
   }
 }

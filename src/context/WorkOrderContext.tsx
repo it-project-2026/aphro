@@ -39,23 +39,17 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = React.useState(false);
   const isFetchingRef = React.useRef(false);
 
-  // Auto-fetch Work Orders from Dexie DB & Supabase
+  // Auto-fetch Work Orders from HyperCloud / Dexie
   const refreshWorkOrders = React.useCallback(async (page: number = 0) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
 
     try {
-      // 1. INSTANT LOCAL-FIRST: Load local offline Work Orders from Dexie DB (< 50-100ms)
-      const cachedLocals = await dexieDb.work_orders.toArray();
-      if (cachedLocals.length > 0 && page === 0) {
-        setWorkOrders(cachedLocals);
-        setIsLoading(false); // Instantly unblock UI
-      } else if (page === 0) {
-        setIsLoading(true);
-      }
+      if (page === 0) setIsLoading(true);
 
-      // 2. BACKGROUND DELTA SYNC: Fetch remote Work Orders from ApiService if online
-      if (typeof navigator !== 'undefined' && navigator.onLine) {
+      // 1. ONLINE-FIRST: Fetch from HyperCloud API
+      const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+      if (isOnline) {
         const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
         const res = await ApiService.fetchWorkOrders(unitId);
 
@@ -75,29 +69,32 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
             return wo;
           });
 
-          if (corrected.length > 0) {
-            // Save into Dexie DB
-            await dexieDb.work_orders.bulkPut(
-              corrected.map((wo) => ({
-                ...wo,
-                syncStatus: 'SYNCED',
-                updatedAt: wo.updatedAt || getLocalDateTimeString(),
-              }))
-            );
+          // Update Dexie cache in background
+          dexieDb.work_orders.bulkPut(
+            corrected.map((wo) => ({
+              ...wo,
+              syncStatus: 'SYNCED',
+              updatedAt: wo.updatedAt || getLocalDateTimeString(),
+            }))
+          ).catch(e => console.warn('Dexie cache update failed:', e));
 
-            setWorkOrders((prev) => (page === 0 ? corrected : [...prev, ...corrected]));
-          } else if (page === 0 && cachedLocals.length === 0) {
-            // Only set INITIAL_WORK_ORDERS if BOTH remote and local Dexie are empty
-            setWorkOrders(INITIAL_WORK_ORDERS);
-          }
-
-          if (page === 0) {
-            lastSyncRef.current = getLocalDateTimeString();
-          }
+          setWorkOrders((prev) => (page === 0 ? corrected : [...prev, ...corrected]));
+          lastSyncRef.current = getLocalDateTimeString();
+          setIsLoading(false);
+          isFetchingRef.current = false;
+          return;
         }
       }
+
+      // 2. OFFLINE FALLBACK: Load from Dexie DB
+      const cachedLocals = await dexieDb.work_orders.toArray();
+      if (cachedLocals.length > 0) {
+        setWorkOrders(cachedLocals);
+      } else if (page === 0) {
+        setWorkOrders(INITIAL_WORK_ORDERS);
+      }
     } catch (err) {
-      console.warn('Error loading Work Orders from Dexie/Supabase:', err);
+      console.warn('Error loading Work Orders:', err);
     } finally {
       setIsLoading(false);
       isFetchingRef.current = false;
@@ -306,12 +303,23 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       updatedAt: nowStr,
     };
 
-    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
     const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
 
-    let apiSuccess = false;
-    let apiErrorMsg = '';
+    const isNetworkOrTimeoutError = (msg: string): boolean => {
+      const cleanMsg = msg.toLowerCase();
+      return (
+        cleanMsg.includes('tidak dapat terhubung') ||
+        cleanMsg.includes('internet') ||
+        cleanMsg.includes('koneksi') ||
+        cleanMsg.includes('offline') ||
+        cleanMsg.includes('network') ||
+        cleanMsg.includes('timeout') ||
+        cleanMsg.includes('failed to fetch')
+      );
+    };
 
+    // 1. ONLINE-FIRST: Try direct save to HyperCloud
     if (isOnline) {
       try {
         const payload = {
@@ -332,87 +340,45 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           SATUAN_TOTAL_REALISASI: newWo.satuanTotalRealisasi || 'KMS',
           Created_At: newWo.createdAt || getLocalDateTimeString(),
         };
+
         const result = await ApiService.saveWorkOrder(payload);
         if (result.success) {
-          apiSuccess = true;
+          showToast(`Work Order ${newWo.nomorWO} berhasil tersimpan ke HyperCloud!`, 'success');
+          setWorkOrders((prev) => [newWo, ...prev]);
+          // Sync Dexie in background
+          dexieDb.work_orders.put({ ...newWo, syncStatus: 'SYNCED' }).catch(() => {});
+          return newWo;
         } else {
-          apiErrorMsg = result.message || 'Server error';
+          const serverMsg = result.message || 'Server error';
+          if (!isNetworkOrTimeoutError(serverMsg)) {
+            showToast(`Gagal menyimpan: ${serverMsg}`, 'error');
+            throw new Error(serverMsg);
+          }
         }
       } catch (err: any) {
-        console.warn('[Direct API Call failed, falling back to offline]', err);
-        apiErrorMsg = err.message || String(err);
+        console.warn('Network error in addWorkOrder:', err);
       }
     }
 
-    const isNetworkOrTimeoutError = (msg: string): boolean => {
-      const cleanMsg = msg.toLowerCase();
-      return (
-        cleanMsg.includes('tidak dapat terhubung') ||
-        cleanMsg.includes('internet') ||
-        cleanMsg.includes('koneksi') ||
-        cleanMsg.includes('offline') ||
-        cleanMsg.includes('network') ||
-        cleanMsg.includes('timeout') ||
-        cleanMsg.includes('failed to fetch') ||
-        cleanMsg.includes('coercion') ||
-        cleanMsg.includes('aborted')
-      );
-    };
+    // 2. OFFLINE FALLBACK: Save to Dexie and Sync Queue
+    await dexieDb.work_orders.put({
+      ...newWo,
+      syncStatus: 'PENDING',
+    });
 
-    if (apiSuccess) {
-      // Save directly to Dexie DB as SYNCED
-      await dexieDb.work_orders.put({
-        ...newWo,
-        syncStatus: 'SYNCED',
-      });
+    setWorkOrders((prev) => [newWo, ...prev]);
 
-      setWorkOrders((prev) => [newWo, ...prev]);
-      showToast(`Work Order ${newWo.nomorWO} berhasil tersimpan ke Database!`, 'success');
-    } else {
-      const isConnectionIssue = !isOnline || isNetworkOrTimeoutError(apiErrorMsg);
+    const idempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    await idbService.addPendingOperation({
+      idempotencyKey,
+      type: 'CREATE',
+      tableName: 'WORK_ORDER',
+      payload: newWo,
+    });
 
-      if (isConnectionIssue) {
-        // Save to Dexie DB as PENDING
-        await dexieDb.work_orders.put({
-          ...newWo,
-          syncStatus: 'PENDING',
-        });
-
-        setWorkOrders((prev) => [newWo, ...prev]);
-
-        // Put into sync_queue using idbService
-        const idempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        await idbService.addPendingOperation({
-          idempotencyKey,
-          type: 'CREATE',
-          tableName: 'WORK_ORDER',
-          payload: newWo,
-        });
-
-        // Add audit log to SyncManager
-        await syncManager.addAuditLog({
-          action: 'ERROR',
-          module: 'WORK_ORDER',
-          details: `Koneksi gagal/offline. Operasi CREATE disimpan ke antrean offline (Key: ${idempotencyKey})`,
-        });
-
-        // Notify listeners of the queue change
-        const pendingOps = await idbService.getPendingOperations();
-        syncManager.notifyListeners({
-          type: 'PENDING_QUEUE_CHANGED',
-          data: pendingOps,
-        });
-
-        showToast(`Tersimpan di antrean offline (Koneksi terganggu).`, 'info');
-      } else {
-        // Validation/Auth error: Do not queue, show error directly to user
-        showToast(`Gagal menyimpan Work Order: ${apiErrorMsg}`, 'error');
-        throw new Error(apiErrorMsg);
-      }
-    }
-
+    showToast(`Koneksi terganggu. Tersimpan di antrean offline.`, 'info');
     return newWo;
-  }, [correctedWorkOrders, showToast]);
+  }, [correctedWorkOrders, showToast, refreshWorkOrders]);
 
   const updateWorkOrder = React.useCallback(async (id: string, updates: Partial<WorkOrder>) => {
     const nowStr = getLocalDateTimeString();

@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { usePersistState } from '../hooks/usePersistState';
 import { Realisasi } from '../types';
 import { INITIAL_REALISASI } from '../data/initialData';
 import { useSettings } from './SettingsContext';
@@ -92,12 +91,9 @@ export function RealisasiProvider({
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const activeUnitId = user?.unitId || 'UL2';
+  const activeUnitId = user?.unitId || InisiasiService.getSelectedUnitId() || 'UL2';
 
-  const [realisasiList, setRealisasiList] = usePersistState<Realisasi[]>(
-    `aphro_realisasi_${activeUnitId}`,
-    INITIAL_REALISASI
-  );
+  const [realisasiList, setRealisasiList] = React.useState<Realisasi[]>([]);
 
   // ============================================================
   // DATA KHUSUS DASHBOARD
@@ -252,30 +248,20 @@ export function RealisasiProvider({
         lastFetchParams.current =
           newParams;
 
-        try {
-          const res =
-            await ApiService.fetchRealisasi(
-              newParams
-            );
+          try {
+            const res = await ApiService.fetchRealisasi(newParams);
 
-          if (
-            res.status === 'success' ||
-            res.data
-          ) {
-            setRealisasiList(res.data);
+            if (res.status === 'success' || res.data) {
+              const list = Array.isArray(res.data) ? res.data : [];
+              setRealisasiList(list);
 
-            if (res.pagination) {
-              setPagination(
-                res.pagination
-              );
+              if (res.pagination) {
+                setPagination(res.pagination);
+              }
+            } else {
+              setError(res.message || 'Gagal mengambil data Realisasi');
             }
-          } else {
-            setError(
-              res.message ||
-                'Gagal mengambil data Realisasi dari database'
-            );
-          }
-        } catch (err: any) {
+          } catch (err: any) {
           console.warn(
             '[DATABASE REALISASI FETCH WARNING]',
             err?.message || err
@@ -637,60 +623,29 @@ export function RealisasiProvider({
           };
 
         // 1. ONLINE-FIRST logic
-        if (
-          typeof navigator !==
-            'undefined' &&
-          navigator.onLine
-        ) {
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
           try {
-            const saveRes =
-              await ApiService.saveRealisasi(
-                newRelUI
-              );
+            const saveRes = await ApiService.saveRealisasi(newRelUI);
 
-            if (
-              saveRes &&
-              saveRes.success
-            ) {
-              showToast(
-                'Data Realisasi berhasil tersimpan langsung ke HyperCloud.',
-                'success'
-              );
+            if (saveRes && saveRes.success) {
+              showToast('Data Realisasi berhasil tersimpan ke HyperCloud.', 'success');
+              
+              // Immediate UI update
+              setRealisasiList(prev => [newRelUI, ...prev]);
 
-              await fetchRealisasiFromApi(
-                lastFetchParams.current
-              );
-
+              await refreshRealisasi(true);
               await fetchDashboardRealisasi();
-
               return newRelUI;
             }
           } catch (directErr) {
-            console.warn(
-              '[RealisasiContext] Direct save failed, falling back to sync queue:',
-              directErr
-            );
+            console.warn('[RealisasiContext] Direct save failed:', directErr);
           }
         }
 
         // 2. OFFLINE FALLBACK
-        setRealisasiList(
-          (prev) => [
-            newRelUI,
-            ...prev,
-          ]
-        );
-
-        await offlineSyncQueue.enqueueRealisasi(
-          localRecord,
-          localPhotos
-        );
-
-        showToast(
-          'Koneksi terganggu atau offline. Realisasi disimpan di antrean offline.',
-          'info'
-        );
-
+        setRealisasiList(prev => [newRelUI, ...prev]);
+        await offlineSyncQueue.enqueueRealisasi(localRecord, localPhotos);
+        showToast('Koneksi terganggu. Realisasi disimpan di antrean offline.', 'info');
         return newRelUI;
       },
       [
