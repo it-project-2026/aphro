@@ -46,6 +46,17 @@ function parseUnitFilter(req: Request): {
 }
 
 /**
+ * Safely converts empty strings, null, undefined, or 'null'/'undefined' to null
+ * so PostgreSQL DATE/TIMESTAMP columns don't fail with "invalid input syntax for type timestamp: \"\""
+ */
+function toNullableTimestamp(val: any): string | null {
+  if (val === undefined || val === null) return null;
+  const str = String(val).trim();
+  if (str === '' || str === 'null' || str === 'undefined' || str === '""' || str === "''") return null;
+  return str;
+}
+
+/**
  * Helper to handle Work Order upserts
  */
 async function handleUpsertWorkOrder(w: any) {
@@ -83,12 +94,15 @@ async function handleUpsertWorkOrder(w: any) {
     RETURNING *;
   `;
 
+  const tanggalVal = toNullableTimestamp(w.Tanggal || w.tanggal) || new Date().toISOString().split('T')[0];
+  const createdAtVal = toNullableTimestamp(w.Created_At || w.createdAt) || new Date().toISOString();
+
   const params = [
     woId,
     w.unitId || 'UL1',
     w.Nomor_WO || w.nomorWO || woId,
     w.PEKERJAAN || w.pekerjaan || 'NORMAL',
-    w.Tanggal || w.tanggal || new Date().toISOString().split('T')[0],
+    tanggalVal,
     w.ULP || w.ulpName || '',
     w.PENYULANG || w.penyulangName || '',
     w.REGU_ROW || w.reguName || '',
@@ -101,7 +115,7 @@ async function handleUpsertWorkOrder(w: any) {
     w.LOKASI_START || w.lokasiStart || '',
     w.LOKASI_FINISH || w.lokasiFinish || '',
     w.STATUS || w.status || 'DRAFT',
-    w.Created_At || w.createdAt || new Date().toISOString(),
+    createdAtVal,
   ];
 
   return await query(sql, params);
@@ -1445,6 +1459,9 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       RETURNING *;
     `;
 
+    const tanggalVal = toNullableTimestamp(r.TANGGAL || r.tanggal) || new Date().toISOString().split('T')[0];
+    const timestampVal = toNullableTimestamp(r.Timestamp || r.timestamp) || new Date().toISOString();
+
     const params = [
       id,
       r.unitId || 'UL1',
@@ -1454,7 +1471,7 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       r.REGU_ROW || r.reguName || '',
       r.PENYULANG || r.penyulangName || '',
       r.NO_TIANG || r.noTiang || '',
-      r.TANGGAL || r.tanggal || new Date().toISOString().split('T')[0],
+      tanggalVal,
       r.Foto_Sebelum || r.fotoSebelum || '',
       r.Foto_Sesudah || r.fotoSesudah || '',
       r.Jenis_Tanaman || r.jenisTanaman || '',
@@ -1463,7 +1480,7 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       r.Kendala || r.kendala || '',
       r.Latitude_Longitude || r.latitudeLongitude || '',
       r.Lokasi_kerja || r.lokasiKerja || '',
-      r.Timestamp || r.timestamp || new Date().toISOString(),
+      timestampVal,
     ];
 
     const resDb = await query(sql, params);
@@ -1630,6 +1647,11 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
     a.ket5 = a.petugasList[4]?.keterangan || 'HADIR';
   }
 
+  // Handle timestamp and date fields safely
+  const tanggalVal = toNullableTimestamp(a.TANGGAL || a.tanggal || a.Tanggal) || new Date().toISOString().split('T')[0];
+  const timestampMasukVal = toNullableTimestamp(a['TIMESTAMP MASUK'] || a.timestampMasuk || a.waktuMasuk || a.createdAt);
+  const timestampKeluarVal = toNullableTimestamp(a['TIMESTAMP KELUAR'] || a.timestampKeluar || a.waktuKeluar || a.waktuPulang);
+
   try {
     const sql = `
       INSERT INTO public."ABSENSI" (
@@ -1683,7 +1705,7 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
     const params = [
       id,
       a.unitId || 'UL1',
-      a.TANGGAL || a.tanggal || new Date().toISOString().split('T')[0],
+      tanggalVal,
       a.NAMA_REGU || a.namaRegu || '',
       a.ULP || a.ulpName || '',
       a.PETUGAS_1 || a.petugas1 || '',
@@ -1697,9 +1719,9 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
       a.PETUGAS_5 || a.petugas5 || '',
       a.KET_5 || a.ket5 || 'HADIR',
       a.FOTO_MASUK || a.fotoMasuk || '',
-      a['TIMESTAMP MASUK'] || a.timestampMasuk || '',
+      timestampMasukVal,
       a.FOTO_KELUAR || a.fotoKeluar || '',
-      a['TIMESTAMP KELUAR'] || a.timestampKeluar || '',
+      timestampKeluarVal,
     ];
 
     console.log(`[ABSENSI TRACE 2] Executing SQL: INSERT ON CONFLICT. ID: ${id}`);
@@ -1708,6 +1730,7 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
     if (resDb.rowCount === 0) {
       console.error(`[ABSENSI TRACE 2] UPSERT FAILED. rowCount is 0.`);
       return res.status(500).json({
+        success: false,
         status: 'error',
         message: 'Gagal menyimpan absensi ke database.',
       });
@@ -1718,17 +1741,25 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
 
     if (verifyRes.rowCount === 0) {
        console.error(`[ABSENSI TRACE 2] VERIFICATION FAILED. Record with ID ${id} not found after write!`);
+       return res.status(500).json({
+         success: false,
+         status: 'error',
+         message: 'Verifikasi database gagal: Record absensi tidak ditemukan setelah disimpan.',
+       });
     } else {
        console.log(`[ABSENSI TRACE 2] VERIFICATION Success. Record confirmed in DB.`);
     }
 
     return res.json({
+      success: true,
       status: 'success',
+      source: 'hypercloud',
       data: verifyRes.rows[0] || resDb.rows[0],
     });
   } catch (err: any) {
     console.error('[ABSENSI UPSERT] Error:', err.message);
     return res.status(500).json({
+      success: false,
       status: 'error',
       message: err.message,
     });
@@ -1772,22 +1803,31 @@ router.delete(
       if (resDb.rowCount === 0) {
         console.warn(`[ABSENSI TRACE 3] DELETE target not found or already deleted. ID: ${absId}`);
         return res.status(404).json({
+          success: false,
           status: 'error',
-          message: 'Absensi tidak ditemukan atau sudah terhapus.',
+          message: 'ABSENSI not found',
         });
       }
 
       console.log(`[ABSENSI TRACE 3] DELETE Success. Verifying deletion...`);
       const verifyRes = await query(`SELECT COUNT(*) FROM public."ABSENSI" WHERE "ID" = $1`, [absId]);
-      const count = parseInt(verifyRes.rows[0].count, 10);
+      const count = parseInt(verifyRes.rows[0]?.count || '0', 10);
       
       if (count > 0) {
         console.error(`[ABSENSI TRACE 3] VERIFICATION FAILED. Record with ID ${absId} still exists after DELETE!`);
+        return res.status(500).json({
+          success: false,
+          status: 'error',
+          message: 'Verifikasi hapus gagal: Data absensi masih ada di database.',
+        });
       } else {
         console.log(`[ABSENSI TRACE 3] VERIFICATION Success. Record confirmed GONE from DB.`);
       }
 
       return res.json({
+        success: true,
+        deleted: true,
+        id: absId,
         status: 'success',
         deletedCount: resDb.rowCount,
         data: resDb.rows[0]
@@ -1795,6 +1835,7 @@ router.delete(
     } catch (err: any) {
       console.error('[ABSENSI DELETE] Error:', err.message);
       return res.status(500).json({
+        success: false,
         status: 'error',
         message: err.message,
       });

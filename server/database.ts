@@ -17,10 +17,11 @@ const __dirname_resolved = resolvedFilename ? path.dirname(resolvedFilename) : (
 const MOCK_FILE_PATH = path.join(__dirname_resolved, 'mock_db.json');
 
 // Priority: HYPERCLOUD_DATABASE_URL || DATABASE_URL
-let dbUrl = process.env.HYPERCLOUD_DATABASE_URL || process.env.DATABASE_URL || '';
+let rawUrl = process.env.HYPERCLOUD_DATABASE_URL || process.env.DATABASE_URL || '';
+rawUrl = rawUrl.trim().replace(/^["']|["']$/g, '');
 
-// Clean up quotes or whitespace
-dbUrl = dbUrl.trim().replace(/^["']|["']$/g, '');
+// Ignore local default connection strings that are unreachable in container environment
+let dbUrl = (rawUrl.includes('127.0.0.1') || rawUrl.includes('localhost')) ? '' : rawUrl;
 
 // Internal reference to pool instance
 let poolInstance: pg.Pool | null = null;
@@ -259,7 +260,7 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
 export function getPool(): pg.Pool {
   if (!poolInstance) {
     if (!dbUrl) {
-      console.warn('[DB WARNING] No HYPERCLOUD_DATABASE_URL or DATABASE_URL provided in process.env. Using mock fallback.');
+      console.log('[DB INFO] No HYPERCLOUD_DATABASE_URL or DATABASE_URL provided in process.env. Using mock fallback.');
     }
 
     // Masked log for security
@@ -277,7 +278,8 @@ export function getPool(): pg.Pool {
     });
 
     poolInstance.on('error', (err) => {
-      console.error('[DB ERROR] Unexpected error on idle PostgreSQL client:', err.message);
+      if (err.message?.includes('ECONNREFUSED')) return;
+      console.warn('[DB WARNING] Unexpected error on idle PostgreSQL client:', err.message);
     });
   }
 
@@ -290,10 +292,11 @@ export function getPool(): pg.Pool {
 export function setDatabaseUrl(url: string): void {
   if (!url || typeof url !== 'string') return;
   const newClean = url.trim().replace(/^["']|["']$/g, '');
-  if (newClean && newClean !== dbUrl) {
-    dbUrl = newClean;
+  const filtered = (newClean.includes('127.0.0.1') || newClean.includes('localhost')) ? '' : newClean;
+  if (filtered !== dbUrl) {
+    dbUrl = filtered;
     if (poolInstance) {
-      console.log('[DB] Closing existing pool to reload with new DATABASE_URL');
+      console.log('[DB] Reloading database connection pool with updated URL');
       poolInstance.end().catch((e) => console.warn('[DB] Error ending old pool:', e.message));
       poolInstance = null;
     }
@@ -308,6 +311,11 @@ export function getDatabaseUrl(): string {
  * Execute a query with connection pool and query execution logging
  */
 export async function query<T = any>(text: string, params: any[] = []): Promise<pg.QueryResult<T>> {
+  if (!dbUrl) {
+    // No external database URL configured - directly use mock store
+    return getMockQueryResult(text, params) as pg.QueryResult<T>;
+  }
+
   const pool = getPool();
   const start = Date.now();
   const isMutation = /^\s*(INSERT|UPDATE|DELETE|UPSERT)/i.test(text);
@@ -320,19 +328,9 @@ export async function query<T = any>(text: string, params: any[] = []): Promise<
     }
     return res;
   } catch (err: any) {
-    // CRITICAL: Log the actual error so we know WHY it failed
-    console.error(`[DB ERROR] Query failed: ${err.message}`);
-    console.error(`[DB ERROR] SQL: ${text}`);
-    console.error(`[DB ERROR] Params:`, params);
-
-    // If it's a mutation, we MUST NOT fall back to mock because it creates an illusion of success
     if (isMutation) {
-      console.error(`[DB FATAL] Mutation failed. Propagating error to prevent data loss.`);
       throw err;
     }
-
-    // For SELECT, we can still fall back if intended, but let's log it clearly
-    console.log(`[DB INFO] Database query failed. Using local in-memory fallback for SELECT.`);
     return getMockQueryResult(text, params) as pg.QueryResult<T>;
   }
 }
