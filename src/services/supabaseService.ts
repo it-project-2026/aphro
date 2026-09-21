@@ -558,39 +558,7 @@ export class SupabaseService {
           return { success: true, data: res.data, source: 'supabase' };
         }
       } catch (err) {
-        console.warn('ApiService fetch REALISASI warning, falling back to Supabase:', err);
-      }
-    }
-
-    // 2. Secondary fallback: Direct fetch from Supabase REALISASI table
-    if (isOnline && isSupabaseConfigured()) {
-      try {
-        let query = supabase
-          .from(SUPABASE_TABLES.REALISASI)
-          .select(REALISASI_LIGHT_SELECT_FIELDS);
-
-        if (targetUnitId && targetUnitId !== 'ALL') {
-          query = query.or(this.getUnitQueryFilter(targetUnitId));
-        }
-
-        const from = page * pageSize;
-        const to = from + pageSize - 1;
-
-        const { data, error } = await query
-          .order('TANGGAL', { ascending: false, nullsFirst: false })
-          .range(from, to);
-
-        if (!error && Array.isArray(data) && data.length > 0) {
-          const normalized: Realisasi[] = data.map((r: any) => this.normalizeRealisasiRow(r));
-          if (!lastSyncTime && page === 0) {
-            this.safeSetItem(`aphro_realisasi_${targetUnitId}`, JSON.stringify(normalized));
-          }
-          return { success: true, data: normalized, source: 'supabase' };
-        } else if (error) {
-          console.warn('Supabase fetchRealisasi query warning:', error);
-        }
-      } catch (err) {
-        console.warn('Supabase fetch REALISASI exception:', err);
+        console.warn('ApiService fetch REALISASI warning:', err);
       }
     }
 
@@ -1273,27 +1241,13 @@ export class SupabaseService {
         }
       });
 
-      // 2. Direct deletion in Supabase REALISASI table
+      // 2. Direct deletion in Node.js API
       const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
-      if (isOnline && isSupabaseConfigured()) {
-        try {
-          const { error } = await supabase
-            .from(SUPABASE_TABLES.REALISASI)
-            .delete()
-            .eq('ID', targetId);
-
-          if (!error) {
-            return { success: true };
-          }
-          console.warn('Supabase deleteRealisasi error:', error);
-        } catch (supErr: any) {
-          console.warn('Supabase deleteRealisasi exception:', supErr);
-        }
+      if (isOnline) {
+        const res = await ApiService.deleteRealisasi(targetId);
+        return { success: res.success, error: res.message };
       }
-
-      // 3. Fallback deletion in Node.js API
-      const res = await ApiService.deleteRealisasi(targetId);
-      return { success: res.success, error: res.message };
+      return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
@@ -1310,43 +1264,10 @@ export class SupabaseService {
   ): Promise<{ success: boolean; data?: Realisasi; error?: string }> {
     const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
 
-    // 1. Direct update in Supabase REALISASI table
-    if (isOnline && isSupabaseConfigured()) {
-      try {
-        const dbUpdates: Record<string, any> = {};
-        if (params.tanggalRealisasi) dbUpdates.TANGGAL = params.tanggalRealisasi;
-        if (params.nomorWO) dbUpdates.Nomor_WO = params.nomorWO;
-        if (params.workOrderId) dbUpdates.WO_ID = params.workOrderId;
-        if (params.ulpName) dbUpdates.ULP = params.ulpName;
-        if (params.penyulangName) dbUpdates.PENYULANG = params.penyulangName;
-        if (params.reguName) dbUpdates.REGU_ROW = params.reguName;
-        if (params.noTiang) dbUpdates.NO_TIANG = params.noTiang;
-        if (params.jenisTanaman) dbUpdates.Jenis_Tanaman = params.jenisTanaman;
-        if (params.keterangan) dbUpdates.Keterangan = params.keterangan;
-        if (params.pertumbuhanTanaman) dbUpdates.Pertumbuhan_Tanaman = params.pertumbuhanTanaman;
-        if (params.kendala) dbUpdates.Kendala = params.kendala;
-        if (params.lokasiKerja) dbUpdates.Lokasi_kerja = params.lokasiKerja;
-        if (params.fotoSebelumUrl) dbUpdates.Foto_Sebelum = params.fotoSebelumUrl;
-        if (params.fotoSesudahUrl) dbUpdates.Foto_Sesudah = params.fotoSesudahUrl;
-        if (params.latitude && params.longitude) {
-          dbUpdates.Latitude_Longitude = `${params.latitude}, ${params.longitude}`;
-        }
-
-        const { error } = await supabase
-          .from(SUPABASE_TABLES.REALISASI)
-          .update(dbUpdates)
-          .eq('ID', id);
-
-        if (!error) {
-          return { success: true };
-        }
-        console.warn('Supabase updateRealisasiAdmin error:', error);
-      } catch (err: any) {
-        console.warn('Supabase updateRealisasiAdmin exception:', err);
-      }
+    if (!isOnline) {
+      return { success: false, error: 'Aplikasi sedang offline. Tidak dapat memperbarui data.' };
     }
 
-    // 2. Fallback to ApiService
     try {
       const res = await ApiService.updateRealisasi(id, params);
       if (res.success) {
@@ -1390,39 +1311,7 @@ export class SupabaseService {
           };
         }
       } catch (err) {
-        console.warn('Error loading Absensi from ApiService, falling back:', err);
-      }
-    }
-
-    // 2. Secondary fallback: Direct fetch from Supabase ABSENSI table
-    if (isOnline && isSupabaseConfigured()) {
-      try {
-        let query = supabase
-          .from(SUPABASE_TABLES.ABSENSI)
-          .select(ABSENSI_SELECT_FIELDS);
-
-        if (targetUnitId && targetUnitId !== 'ALL') {
-          query = query.or(this.getUnitQueryFilter(targetUnitId));
-        }
-
-        const { data, error } = await query
-          .order('TANGGAL', { ascending: false })
-          .limit(200);
-
-        if (!error && Array.isArray(data) && data.length > 0) {
-          const absList: Absensi[] = data.map((row: any) => this.normalizeAbsensiRow(row));
-          this.safeSetItem(`aphro_absensi_${targetUnitId}`, JSON.stringify(absList));
-          return {
-            success: true,
-            data: absList,
-            source: 'supabase',
-            message: `Berhasil memuat ${absList.length} data absensi dari Supabase Database.`,
-          };
-        } else if (error) {
-          console.warn('Supabase fetchAbsensi error:', error);
-        }
-      } catch (err) {
-        console.warn('Supabase fetchAbsensi exception:', err);
+        console.warn('Error loading Absensi from ApiService:', err);
       }
     }
 

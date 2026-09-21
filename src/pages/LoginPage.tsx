@@ -12,6 +12,8 @@ import { normalizeUser } from '../services/syncService';
 import { SupabaseService } from '../services/supabaseService';
 import { User } from '../types';
 import { InisiasiService } from '../services/inisiasiService';
+import { AuthService } from '../services/authService';
+import { ApiService } from '../services/apiService';
 import {
   Zap,
   ShieldCheck,
@@ -74,7 +76,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [showGasModal, setShowGasModal] = useState(false);
   const [tempGasUrl, setTempGasUrl] = useState('');
 
-  // Fetch Users directly from Supabase USERS table
+  // Fetch Users directly from HyperCloud Host PostgreSQL
   const loadSupabaseUsers = useCallback(async (showNotification = false) => {
     if (!navigator.onLine) {
       if (showNotification) showToast('Sedang offline. Menggunakan data akun lokal.', 'info');
@@ -82,18 +84,19 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     }
     setIsFetchingSupabaseUsers(true);
     try {
-      const res = await SupabaseService.fetchUsers();
+      const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+      const res = await ApiService.fetchUsers(activeInisiasi.unitId);
       if (res.data && res.data.length > 0) {
         setMasterData({ users: res.data });
         if (showNotification) {
-          showToast(`Berhasil memuat ${res.data.length} akun pengguna dari Supabase (Tabel USERS).`, 'success');
+          showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud Host (PostgreSQL).`, 'success');
         }
       } else if (showNotification) {
-        showToast('Tabel USERS di Supabase masih kosong.', 'info');
+        showToast('Tabel USERS di HyperCloud Host masih kosong.', 'info');
       }
     } catch (err: any) {
       if (showNotification) {
-        showToast(`Gagal memuat akun Supabase: ${err.message}`, 'error');
+        showToast(`Gagal memuat akun HyperCloud Host: ${err.message}`, 'error');
       }
     } finally {
       setIsFetchingSupabaseUsers(false);
@@ -141,12 +144,12 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
     const activeUnitId = activeInisiasi.unitId;
 
-    // 1. Try Direct Supabase Login against USERS table
+    // 1. Try Direct HyperCloud PostgreSQL Login via AuthService
     if (navigator.onLine) {
       try {
-        const supaRes = await SupabaseService.loginWithSupabase(username, password, activeUnitId);
-        if (supaRes.success && supaRes.user) {
-          const authenticatedUser = supaRes.user;
+        const hcRes = await AuthService.loginWithCredentials(username, password, activeUnitId);
+        if (hcRes.success && hcRes.user) {
+          const authenticatedUser = hcRes.user;
           if (!authenticatedUser.unitId) {
             authenticatedUser.unitId = activeUnitId;
           }
@@ -166,8 +169,8 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId}) - Role: ${authenticatedUser.role}]`, 'success');
           setIsSubmitting(false);
           return;
-        } else if (supaRes.message && (supaRes.message.includes('Password') || supaRes.message.includes('Non-Aktif') || supaRes.message.includes('terdaftar untuk unit'))) {
-          showToast(supaRes.message, 'error');
+        } else if (hcRes.error && (hcRes.error.includes('Password') || hcRes.error.includes('Non-Aktif') || hcRes.error.includes('terdaftar'))) {
+          showToast(hcRes.error, 'error');
           setIsSubmitting(false);
           return;
         }
