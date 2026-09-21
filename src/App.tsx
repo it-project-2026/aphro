@@ -20,6 +20,7 @@ import { Database, Loader2 } from 'lucide-react';
 
 // Direct Eager Imports for Pages (Prevents dynamic module chunk fetch errors offline & on deployment updates)
 import { LoginPage } from './pages/LoginPage';
+import MaintenancePage from './pages/MaintenancePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { WorkOrderMainPage } from './pages/WorkOrderMainPage';
 import { RealisasiMainPage } from './pages/RealisasiMainPage';
@@ -245,6 +246,10 @@ const AppContent: React.FC = () => {
   }
 
   // 4. Halaman Login (Belum login & sudah inisiasi)
+  if (window.location.href === 'https://aphro-plum.vercel.app/') {
+    return <MaintenancePage />;
+  }
+
   return (
     <React.Suspense fallback={<LoadingFallback />}>
       <LoginPage />
