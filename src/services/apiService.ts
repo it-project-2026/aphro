@@ -773,6 +773,7 @@ export class ApiService {
         : '';
 
     try {
+      console.log(`[ApiService] fetchUsers starting for unit: ${unitId || 'ALL'}`);
       const res = await this.executeFetch(`/api/users${query}`, {
         method: 'GET',
         headers,
@@ -784,6 +785,7 @@ export class ApiService {
           const errJson = await res.json();
           serverMsg = errJson?.message;
         } catch {}
+        console.warn(`[ApiService] fetchUsers failed with status ${res.status}:`, serverMsg);
         return {
           success: false,
           data: [],
@@ -797,6 +799,7 @@ export class ApiService {
         : Array.isArray(json)
         ? json
         : [];
+      console.log(`[ApiService] fetchUsers success: found ${list.length} users`);
       return { success: true, data: list };
     } catch (err: any) {
       console.error('[ApiService.fetchUsers Error]', err);

@@ -184,18 +184,24 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     try {
       const res = await SupabaseService.fetchMasterData(unitId);
       if (res) {
+        console.log(`[MASTER DATA] refreshMasterData result for unit ${unitId}:`, {
+          ulp: res.ulp?.length,
+          penyulang: res.penyulang?.length,
+          regu: res.regu?.length,
+          petugas: res.petugas?.length,
+          users: res.users?.length,
+          source: res.source
+        });
+
         if (res.ulp?.length > 0) setUlpList(res.ulp);
         if (res.penyulang?.length > 0) setPenyulangList(res.penyulang);
         if (res.regu?.length > 0) setReguList(res.regu);
         if (res.petugas?.length > 0) setPetugasList(res.petugas);
         if (res.users && Array.isArray(res.users) && res.users.length > 0) {
-          console.log(`[MASTER DATA] refreshMasterData: setting users from HYPERCLOUD:`, res.users.length);
           setUsers(res.users);
-        } else if (res.users && Array.isArray(res.users) && res.users.length === 0) {
-          console.log(`[MASTER DATA] refreshMasterData: HYPERCLOUD returned empty user list for unit ${unitId}`);
-          // Don't clear local users if remote is empty unless explicitly required
-          // or if we are certain the unit should have no users.
-          // For now, we keep the existing users to avoid the "briefly appearing then disappearing" bug.
+        } else if (users.length === 0 && INITIAL_USERS.length > 0) {
+          // Final fallback to initial users ONLY if no users at all
+          setUsers(INITIAL_USERS.filter(u => InisiasiService.isUserMatchingUnit(u.unitId || u.ulpName, unitId)));
         }
 
         // Update sync timestamp and sync unit

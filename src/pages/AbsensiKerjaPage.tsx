@@ -57,7 +57,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
   const extractRowNumber = (s?: string | null): number | null => {
     if (!s) return null;
-    const m = String(s).match(/row\s*0?(\d+)/i);
+    const str = String(s).trim();
+    const m = str.match(/(?:row|users|user|usr|tim)[-_\s]*0?(\d+)/i) || str.match(/\b0?(\d+)\b/);
     return m ? parseInt(m[1], 10) : null;
   };
 
@@ -118,22 +119,38 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     todayAbsensi && Boolean(todayAbsensi.fotoKeluar)
   );
 
-  // Helper to get all Petugas members matching the active Regu
-  const getReguMembersFromMaster = useCallback((): AbsensiPetugas[] => {
-    // 1. Match from Petugas Master Data
-    const matchedPetugas = petugasList.filter((p) => {
+  // Strictly filtered petugas list based on user requirements (unitId, ULP, ROW number)
+  const availablePetugas = useMemo(() => {
+    const targetUnitId = currentUser?.unitId || localStorage.getItem('aphro_selected_unit_id') || '';
+    const targetUlpClean = cleanStr(ulpName);
+    const targetRowNumber = extractRowNumber(currentUser?.userName) ?? extractRowNumber(reguName);
+
+    // 1. Strict Match: unitId && ulp && row number
+    const strictMatches = petugasList.filter((p) => {
+      if (!p || p.status === 'Non-Aktif') return false;
+      const pUnitId = p.unitId || '';
+      const isUnitMatch = Boolean(targetUnitId && pUnitId && (pUnitId.toUpperCase() === targetUnitId.toUpperCase() || pUnitId === targetUnitId));
+      const pUlpClean = cleanStr(p.ulpName);
+      const isUlpMatch = Boolean(targetUlpClean && pUlpClean && pUlpClean === targetUlpClean);
+      const pRowNum = extractRowNumber(p.reguName);
+      const isRowMatch = Boolean(targetRowNumber !== null && pRowNum !== null && pRowNum === targetRowNumber);
+      return isUnitMatch && isUlpMatch && isRowMatch;
+    });
+
+    if (strictMatches.length > 0) return strictMatches;
+
+    // 2. Broad Match: name/clean matching (fallback)
+    return petugasList.filter((p) => {
       if (!p || p.status === 'Non-Aktif') return false;
       const cleanPRegu = cleanStr(p.reguName);
       const isExactRegu = (p.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
       const isCleanMatch = Boolean(userReguClean && cleanPRegu && cleanPRegu === userReguClean);
       const isIdMatch = Boolean(currentUser?.reguId && p.reguId && p.reguId === currentUser.reguId);
-
-      // Match by ROW number (e.g. ROW 08 or ROW 8)
+      
       let isNumberMatch = false;
       if (userRowNumber !== null) {
         const pNum = extractRowNumber(p.reguName);
         if (pNum !== null && pNum === userRowNumber) {
-          // If ULP information is available for both, ensure they match to avoid picking the other unit's ROW 08
           if (userUlpClean && cleanStr(p.ulpName)) {
             isNumberMatch = cleanStr(p.ulpName) === userUlpClean;
           } else {
@@ -141,18 +158,20 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
           }
         }
       }
-
       return isExactRegu || isCleanMatch || isIdMatch || isNumberMatch;
     });
+  }, [petugasList, currentUser, reguName, ulpName, userReguClean, userRowNumber, userUlpClean]);
 
-    if (matchedPetugas.length > 0) {
-      return matchedPetugas.map((p) => ({
+  // Helper to get all Petugas members matching the active Regu
+  const getReguMembersFromMaster = useCallback((): AbsensiPetugas[] => {
+    if (availablePetugas.length > 0) {
+      return availablePetugas.map((p) => ({
         nama: p.nama,
         keterangan: 'HADIR' as const,
       }));
     }
 
-    // 2. Fallback: match from Users list
+    // 3. Last Fallback: match from Users list
     const matchedUsers = users.filter((u) => {
       if (!u || u.status === 'Non-Aktif') return false;
       const cleanURegu = cleanStr(u.reguName);
@@ -169,13 +188,13 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       }));
     }
 
-    // 3. Fallback: current logged-in user
+    // 4. Ultimate Fallback: current logged-in user
     if (currentUser?.name && currentUser.name !== 'User') {
       return [{ nama: currentUser.name, keterangan: 'HADIR' as const }];
     }
 
     return [{ nama: '', keterangan: 'HADIR' as const }];
-  }, [petugasList, users, reguName, userReguClean, userRowNumber, userUlpClean, currentUser]);
+  }, [availablePetugas, users, reguName, userReguClean, currentUser]);
 
   const [petugasRows, setPetugasRows] = useState<AbsensiPetugas[]>(() => {
     if (todayAbsensi && todayAbsensi.petugasList && todayAbsensi.petugasList.length > 0) {
@@ -619,12 +638,18 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                       <input
                         type="text"
                         required
+                        list={`petugas-suggestions-${idx}`}
                         value={petugas.nama}
                         disabled={hasDoneAbsensiMasuk}
                         onChange={(e) => handlePetugasNameChange(idx, e.target.value)}
                         placeholder={`Nama Petugas #${idx + 1}`}
                         className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:border-[#00A2B9] focus:outline-none disabled:bg-transparent disabled:border-transparent disabled:font-bold"
                       />
+                      <datalist id={`petugas-suggestions-${idx}`}>
+                        {availablePetugas.map((ap) => (
+                          <option key={ap.id} value={ap.nama} />
+                        ))}
+                      </datalist>
                     </div>
                     
                     <div className="flex-1">

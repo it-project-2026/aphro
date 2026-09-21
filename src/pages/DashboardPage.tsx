@@ -84,8 +84,15 @@ export const DashboardPage: React.FC = () => {
   const { auditLogs } = useNotifications();
   const { setActiveTab, isDarkMode } = useUI();
   const { isGasConnected, syncWithGAS } = useGASSync();
-  const { showToast } = useToast();
-  // Get pending items from sync queue to identify unsynced WOs
+  const { refreshWorkOrders } = useWorkOrders();
+  const { refreshRealisasi } = useRealisasi();
+
+  React.useEffect(() => {
+    // Initial fetch for dashboard data
+    refreshWorkOrders(true);
+    refreshRealisasi(true);
+  }, []);
+
   const [pendingIds, setPendingIds] = React.useState<string[]>([]);
 
   React.useEffect(() => {

@@ -1015,10 +1015,10 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 })}
 
                 {/* Grand Summary Columns */}
-                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-slate-900 dark:text-white">
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-[10px] text-slate-900 dark:text-white bg-slate-300 dark:bg-slate-800">
                   {filteredRows.reduce((acc, row) => acc + daysInMonth.reduce((a, d) => a + (row.dailyValues[d.dayFormatted]?.tebang1 || 0), 0), 0)}
                 </td>
-                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-slate-900 dark:text-white">
+                <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-[10px] text-slate-900 dark:text-white bg-slate-300 dark:bg-slate-800">
                   {filteredRows.reduce((acc, row) => acc + daysInMonth.reduce((a, d) => a + (row.dailyValues[d.dayFormatted]?.pangkas || 0), 0), 0)}
                 </td>
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-teal-700 dark:text-teal-300">
