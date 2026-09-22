@@ -1,22 +1,24 @@
 /**
- * Inisiasi Service - Supabase "INISIASI" Table
- * Bertanggung jawab untuk mengambil data inisiasi Unit Layanan (UL) dari Supabase Tabel "INISIASI":
- * Database: APHRO-Database
- * Tabel: "INISIASI"
- * Kolom: ID, Kode_UL, Nama_UL, Folder_id_Foto, Folder_id_absensi
- * 
- * Menghubungkan ID Unit Layanan ke setiap tabel (WORK_ORDER, REALISASI, ABSENSI, dll) melalui kolom "unitId".
+ * Inisiasi Service
+ *
+ * Sumber data INISIASI:
+ * HyperCloudHost PostgreSQL melalui /api/inisiasi
+ *
+ * Tidak lagi menggunakan:
+ * - Supabase INISIASI
+ * - Spreadsheet INISIASI
+ * - GAS untuk membaca INISIASI
  */
 
 import { InisiasiUnit } from '../types';
-import { SupabaseService } from './supabaseService';
-
-export const DEFAULT_INISIASI_SPREADSHEET_ID = '1ETeUidNrx1JqbBPkZLemJodXVTi23gHTZ2UC2SIQwss';
-export const DEFAULT_INISIASI_SPREADSHEET_URL = 'https://npeeobcpffmlyiknszhh.supabase.co';
-export const DEFAULT_INISIASI_SHEET_NAME = 'INISIASI';
+import { ApiService } from './apiService';
 
 /**
- * Master Pilihan UL Bawaan sesuai data real pada Master Database Inisiasi
+ * Daftar default Unit Layanan.
+ *
+ * Data utama tetap berasal dari tabel INISIASI HyperCloudHost.
+ * DEFAULT_UL_OPTIONS hanya digunakan sebagai fallback untuk
+ * informasi tambahan yang belum disimpan di tabel INISIASI.
  */
 export const DEFAULT_UL_OPTIONS: InisiasiUnit[] = [
   {
@@ -24,266 +26,505 @@ export const DEFAULT_UL_OPTIONS: InisiasiUnit[] = [
     no: 1,
     kodeUL: 'BKT',
     namaUL: 'UL BUKITTINGGI',
-    idSpreadsheet: '1KFUEh_jHtjZRtxCLYMK9aJpgSJEm3RblFjURuNYw2Ik',
-    urlGas: 'https://script.google.com/macros/s/AKfycbxtykzff_RNTvEM3_Cib2DkR7FfDQSX2ofFdeJPwFOM6FvuvPYkpIgZcg2T10rMiXg/exec',
-    folderIdSpreadsheet: '1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv',
-    folderIdFoto: '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
-    folderIdAbsensi: '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5',
-    notes: 'Unit Layanan Bukittinggi (Database Supabase Aktif: APHRO-Database)',
+    idSpreadsheet: '',
+    urlGas: '',
+    folderIdSpreadsheet: '',
+    folderIdFoto:
+      '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
+    folderIdAbsensi:
+      '1zDU9fGaFan01Y9Dogtd0xHOPM1S1Vry5',
+    isCustom: false,
+    notes: 'Unit Layanan Bukittinggi',
   },
   {
     id: 'UL1',
     no: 2,
     kodeUL: 'PDG',
     namaUL: 'UL PADANG',
-    idSpreadsheet: '1_fcFRbbkZphcd4OuKJcTBKoajZLw8D2R',
-    urlGas: 'https://script.google.com/macros/s/AKfycbzHiGy0DkB9FG9PBG66sGpnhyA3HGQf-Tucf22Oe050qG2Q9BtPYVGqGHFny-z9gdbDSA/exec',
-    folderIdSpreadsheet: '1_fcFRbbkZphcd4OuKJcTBKoajZLw8D2R',
-    folderIdFoto: '1nd5UtHbTxyplyCrmraMTTvrtS6AezDEY',
-    folderIdAbsensi: '1fqRjx5w4joPR58WBhIjJDZNLNznOU98b',
-    notes: 'Unit Layanan Padang (Database Supabase Aktif: APHRO-Database)',
+    idSpreadsheet: '',
+    urlGas: '',
+    folderIdSpreadsheet: '',
+    folderIdFoto:
+      '1nd5UtHbTxyplyCrmraMTTvrtS6AezDEY',
+    folderIdAbsensi:
+      '1fqRjx5w4joPR58WBhIjJDZNLNznOU98b',
+    isCustom: false,
+    notes: 'Unit Layanan Padang',
   },
   {
     id: 'UL3',
     no: 3,
     kodeUL: 'SLK',
     namaUL: 'UL SOLOK',
-    idSpreadsheet: '1KFUEh_jHtjZRtxCLYMK9aJpgSJEm3RblFjURuNYw2Ik',
-    urlGas: 'https://script.google.com/macros/s/AKfycbxtykzff_RNTvEM3_Cib2DkR7FfDQSX2ofFdeJPwFOM6FvuvPYkpIgZcg2T10rMiXg/exec',
-    folderIdSpreadsheet: '1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv',
-    folderIdFoto: '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
-    folderIdAbsensi: '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5',
-    notes: 'Unit Layanan Solok (Database Supabase Aktif: APHRO-Database)',
+    idSpreadsheet: '',
+    urlGas: '',
+    folderIdSpreadsheet: '',
+    folderIdFoto:
+      '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
+    folderIdAbsensi:
+      '1zDU9fGaFan01Y9Dogtd0xHOPM1S1Vry5',
+    isCustom: false,
+    notes: 'Unit Layanan Solok',
   },
   {
     id: 'UL4',
     no: 4,
     kodeUL: 'PYK',
     namaUL: 'UL PAYAKUMBUH',
-    idSpreadsheet: '1KFUEh_jHtjZRtxCLYMK9aJpgSJEm3RblFjURuNYw2Ik',
-    urlGas: 'https://script.google.com/macros/s/AKfycbxtykzff_RNTvEM3_Cib2DkR7FfDQSX2ofFdeJPwFOM6FvuvPYkpIgZcg2T10rMiXg/exec',
-    folderIdSpreadsheet: '1boNO8nAA9j_xY3pJ0SLyuFB5w8J-F3xv',
-    folderIdFoto: '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
-    folderIdAbsensi: '1zDU9fGaFan01Y9Dogtd0XhOPM1S1Vry5',
-    notes: 'Unit Layanan Payakumbuh (Database Supabase Aktif: APHRO-Database)',
-  }
+    idSpreadsheet: '',
+    urlGas: '',
+    folderIdSpreadsheet: '',
+    folderIdFoto:
+      '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
+    folderIdAbsensi:
+      '1zDU9fGaFan01Y9Dogtd0xHOPM1S1Vry5',
+    isCustom: false,
+    notes: 'Unit Layanan Payakumbuh',
+  },
 ];
 
-export const DEFAULT_OPERATIONAL_UNITS = DEFAULT_UL_OPTIONS;
-export const FALLBACK_INISIASI_UNITS = DEFAULT_UL_OPTIONS;
-
-export class InisiasiService {
-  /**
-   * Ekstrak clean Spreadsheet ID dari berbagai format input
-   */
-  static extractSpreadsheetId(input: string): string {
-    if (!input) return DEFAULT_INISIASI_SPREADSHEET_ID;
-    const trimmed = input.trim();
-    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-    if (match && match[1]) {
-      return match[1];
-    }
-    return trimmed;
+/**
+ * Normalisasi ID Unit Layanan.
+ *
+ * Contoh:
+ * UL1 / 1 / PADANG / PDG -> UL1
+ * UL2 / 2 / BUKITTINGGI / BKT -> UL2
+ */
+export function getStandardUnitId(
+  value?: string | number | null
+): string {
+  if (value === undefined || value === null) {
+    return '';
   }
 
-  /**
-   * Validasi apakah sebuah string adalah "UL" yang valid dan BUKAN "ULP"
-   */
-  static isValidUL(val: string): boolean {
-    if (!val) return false;
-    const clean = val.trim().toUpperCase();
-    if (clean.length < 2) return false;
+  const normalized = String(value)
+    .trim()
+    .toUpperCase();
 
-    // Filter keluar jika bertipe ULP (Unit Layanan Pelanggan)
-    if (clean.startsWith('ULP ') || clean.startsWith('ULP-') || clean.startsWith('ULP_')) {
-      return false;
-    }
+  switch (normalized) {
+    case 'UL1':
+    case '1':
+    case 'PADANG':
+    case 'PDG':
+      return 'UL1';
 
-    // Filter keluar nama kolom / header
-    if (clean === 'ULP' || clean === 'UL' || clean === 'NAMA_UL' || clean === 'NAMA UL' || clean === 'NAMA_ULP' || clean === 'ID' || clean === 'KODE_UL') {
-      return false;
-    }
+    case 'UL2':
+    case '2':
+    case 'BUKITTINGGI':
+    case 'BUKIT TINGGI':
+    case 'BKT':
+      return 'UL2';
 
-    return true;
+    case 'UL3':
+    case '3':
+    case 'SOLOK':
+    case 'SLK':
+      return 'UL3';
+
+    case 'UL4':
+    case '4':
+    case 'PAYAKUMBUH':
+    case 'PYK':
+      return 'UL4';
+
+    default:
+      return normalized;
   }
+}
 
-  /**
-   * Cek apakah Unit Layanan valid dan siap digunakan
-   */
-  static isConfigured(unit?: InisiasiUnit | null): boolean {
-    if (!unit) return false;
-    return Boolean(unit.id && unit.namaUL && unit.namaUL.trim().length > 1);
-  }
+/**
+ * Mengambil seluruh Unit Layanan dari HyperCloudHost.
+ *
+ * Endpoint:
+ * GET /api/inisiasi
+ */
+export async function fetchInisiasiUnits(): Promise<{
+  success: boolean;
+  data: InisiasiUnit[];
+  source: 'hypercloud' | 'default';
+  message?: string;
+}> {
+  try {
+    const result = await ApiService.fetchInisiasiUnits();
 
-  /**
-   * Mengembalikan daftar konfigurasi yang masih kosong pada Unit Layanan
-   */
-  static getMissingConfigs(unit?: InisiasiUnit | null): string[] {
-    if (!unit) return ['Unit Layanan belum dipilih'];
-    const missing: string[] = [];
-    if (!unit.id) {
-      missing.push('ID Unit Layanan');
-    }
-    if (!unit.namaUL) {
-      missing.push('Nama Unit Layanan');
-    }
-    return missing;
-  }
-
-  /**
-   * Mengambil data Pilihan UL dari Supabase Tabel "INISIASI"
-   */
-  static async fetchInisiasiUnits(
-    _spreadsheetInput?: string,
-    _sheetName?: string,
-    _gasUrl?: string
-  ): Promise<{
-    success: boolean;
-    data: InisiasiUnit[];
-    source: 'supabase' | 'cache' | 'default';
-    message?: string;
-  }> {
-    return await SupabaseService.fetchInisiasiUnits();
-  }
-
-  static generateKodeUL(namaUL: string): string {
-    const clean = namaUL.replace(/^(UL\s*|UNIT\s*LAYANAN\s*)/i, '').trim();
-    if (!clean) return 'UL-1';
-    const words = clean.split(/\s+/);
-    if (words.length === 1) {
-      return words[0].slice(0, 3).toUpperCase();
-    }
-    return words.map(w => w[0]).join('').slice(0, 4).toUpperCase();
-  }
-
-  static saveToCache(units: InisiasiUnit[]): void {
-    try {
-      localStorage.setItem('aphro_cached_inisiasi_units', JSON.stringify(units));
-    } catch {
-      // Ignore localStorage errors
-    }
-  }
-
-  static getFromCache(): InisiasiUnit[] | null {
-    try {
-      const saved = localStorage.getItem('aphro_cached_inisiasi_units');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      // Fallback to null
-    }
-    return null;
-  }
-
-  static getStandardUnitId(input?: string | null): 'UL1' | 'UL2' | 'UL3' | 'UL4' | string {
-    if (!input) return 'UL1';
-    const str = String(input).toUpperCase().trim();
-    if (str === 'UL1' || str === '1' || str.includes('PADANG') || str === 'PDG') return 'UL1';
-    if (str === 'UL2' || str === '2' || str.includes('BUKITTINGGI') || str === 'BKT') return 'UL2';
-    if (str === 'UL3' || str === '3' || str.includes('SOLOK') || str === 'SLK') return 'UL3';
-    if (str === 'UL4' || str === '4' || str.includes('PAYAKUMBUH') || str === 'PYK') return 'UL4';
-    return str;
-  }
-
-  static isUserMatchingUnit(userUnitId?: string | null, targetUnitId?: string | null): boolean {
-    if (!userUnitId || !targetUnitId) return true;
-    return this.getStandardUnitId(userUnitId) === this.getStandardUnitId(targetUnitId);
-  }
-
-  static getActiveInisiasiUnit(): { unitId: string; namaUL: string; unitName: string } {
-    try {
-      const rawSelected = localStorage.getItem('aphro_selected_inisiasi_ul');
-      if (rawSelected) {
-        const parsed = JSON.parse(rawSelected);
-        const rawId = parsed?.unitId || parsed?.id;
-        const rawName = parsed?.unitName || parsed?.namaUL;
-        if (rawId && rawName) {
-          return {
-            unitId: this.getStandardUnitId(rawId),
-            namaUL: rawName,
-            unitName: rawName,
-          };
-        }
-      }
-    } catch {
-      // Ignore
-    }
-
-    const storedId = localStorage.getItem('aphro_selected_unit_id') || localStorage.getItem('aphro_unit_id');
-    const storedName = localStorage.getItem('aphro_nama_unit_layanan') || localStorage.getItem('aphro_unit_name');
-    if (storedId || storedName) {
-      const standardId = this.getStandardUnitId(storedId || storedName || 'UL1');
-      const name =
-        storedName ||
-        (standardId === 'UL2'
-          ? 'UL BUKITTINGGI'
-          : standardId === 'UL3'
-          ? 'UL SOLOK'
-          : standardId === 'UL4'
-          ? 'UL PAYAKUMBUH'
-          : 'UL PADANG');
+    if (
+      !result.success ||
+      !Array.isArray(result.data) ||
+      result.data.length === 0
+    ) {
       return {
-        unitId: standardId,
-        namaUL: name,
-        unitName: name,
+        success: false,
+        data: [],
+        source: 'default',
+        message:
+          result.message ||
+          'Gagal memuat INISIASI dari HyperCloudHost',
       };
     }
 
-    return { unitId: 'UL1', namaUL: 'UL PADANG', unitName: 'UL PADANG' };
-  }
+    /**
+     * Mapping:
+     *
+     * PostgreSQL:
+     * ID
+     * Kode_UL
+     * Nama_UL
+     * Folder_id_Foto
+     * Folder_id_absensi
+     *
+     * menjadi struktur InisiasiUnit yang digunakan aplikasi.
+     */
+    const data: InisiasiUnit[] = result.data.map(
+      (row: any, index: number) => {
+        const id = getStandardUnitId(
+          row.ID || row.id
+        );
 
-  static getSelectedUnit(): InisiasiUnit | null {
-    try {
-      const saved = localStorage.getItem('aphro_selected_inisiasi_ul');
-      if (saved) {
-        return JSON.parse(saved);
+        const defaultUnit =
+          DEFAULT_UL_OPTIONS.find(
+            (unit) => unit.id === id
+          );
+
+        return {
+          id,
+
+          no:
+            defaultUnit?.no ??
+            index + 1,
+
+          kodeUL: String(
+            row.Kode_UL ||
+              row.kodeUL ||
+              defaultUnit?.kodeUL ||
+              ''
+          ),
+
+          namaUL: String(
+            row.Nama_UL ||
+              row.namaUL ||
+              defaultUnit?.namaUL ||
+              ''
+          ),
+
+          /**
+           * Spreadsheet INISIASI sudah tidak digunakan.
+           */
+          idSpreadsheet: '',
+          urlGas: '',
+          folderIdSpreadsheet: '',
+
+          /**
+           * Folder Google Drive tetap digunakan
+           * untuk foto/realisasi dan absensi.
+           */
+          folderIdFoto: String(
+            row.Folder_id_Foto ||
+              row.folderIdFoto ||
+              defaultUnit?.folderIdFoto ||
+              ''
+          ),
+
+          folderIdAbsensi: String(
+            row.Folder_id_absensi ||
+              row.folderIdAbsensi ||
+              defaultUnit?.folderIdAbsensi ||
+              ''
+          ),
+
+          isCustom: false,
+
+          notes:
+            defaultUnit?.notes ||
+            `Unit Layanan ${id}`,
+        };
       }
-    } catch {
-      // Fallback to null
-    }
+    );
+
+    return {
+      success: true,
+      data,
+      source: 'hypercloud',
+      message: `Berhasil memuat ${data.length} Unit Layanan dari HyperCloudHost.`,
+    };
+  } catch (error: any) {
+    console.error(
+      '[InisiasiService] fetchInisiasiUnits error:',
+      error
+    );
+
+    return {
+      success: false,
+      data: [],
+      source: 'default',
+      message:
+        error?.message ||
+        'Terjadi kesalahan saat mengambil INISIASI dari HyperCloudHost',
+    };
+  }
+}
+
+/**
+ * Mendapatkan Unit Layanan berdasarkan ID.
+ */
+export async function getInisiasiUnitById(
+  unitId: string
+): Promise<InisiasiUnit | null> {
+  const result = await fetchInisiasiUnits();
+
+  if (!result.success) {
     return null;
   }
 
-  static getSelectedUnitId(): string {
-    const unit = this.getSelectedUnit();
-    if (unit && unit.id) return unit.id;
-    
-    const storedId = localStorage.getItem('aphro_selected_unit_id') || localStorage.getItem('aphro_unit_id');
-    if (storedId) return this.getStandardUnitId(storedId);
-    
-    return 'UL2';
-  }
+  const standardId = getStandardUnitId(unitId);
 
-  static saveSelectedUnit(unit: InisiasiUnit): void {
-    try {
-      const cleanUnitId = this.getStandardUnitId(unit.id);
-      const explicitUnit = {
-        ...unit,
-        unitId: cleanUnitId,
-        unitName: unit.namaUL,
-      };
-      localStorage.setItem('aphro_selected_inisiasi_ul', JSON.stringify(explicitUnit));
-      localStorage.setItem('aphro_selected_unit_id', cleanUnitId);
-      localStorage.setItem('aphro_unit_id', cleanUnitId);
-      localStorage.setItem('aphro_unit_name', unit.namaUL);
-      localStorage.setItem('aphro_has_initiated', 'true');
-      localStorage.setItem('aphro_nama_unit_layanan', unit.namaUL);
+  return (
+    result.data.find(
+      (unit) =>
+        getStandardUnitId(unit.id) === standardId
+    ) || null
+  );
+}
 
-      // Sync directly into pln_mobile_settings for instant UI reflection
-      const rawSaved = localStorage.getItem('pln_mobile_settings');
-      const parsed = rawSaved ? JSON.parse(rawSaved) : {};
-      parsed.namaUnitLayanan = unit.namaUL;
-      parsed.unitId = cleanUnitId;
-      parsed.unitName = unit.namaUL;
-      parsed.spreadsheetId = cleanUnitId;
-      if (unit.folderIdSpreadsheet) parsed.driveFolderId = unit.folderIdSpreadsheet;
-      if (unit.folderIdFoto) parsed.photoFolderId = unit.folderIdFoto;
-      if (unit.folderIdAbsensi) parsed.absensiFolderId = unit.folderIdAbsensi;
-      localStorage.setItem('pln_mobile_settings', JSON.stringify(parsed));
-    } catch {
-      // Ignore localStorage errors
+/**
+ * Mendapatkan Unit Layanan aktif.
+ *
+ * Prioritas:
+ * 1. aphro_selected_inisiasi_ul
+ * 2. aphro_selected_unit_id
+ * 3. aphro_unit_id
+ * 4. UL1
+ */
+export function getActiveInisiasiUnit(): InisiasiUnit {
+  try {
+    const selectedInisiasi =
+      localStorage.getItem(
+        'aphro_selected_inisiasi_ul'
+      );
+
+    const selectedUnitId =
+      localStorage.getItem(
+        'aphro_selected_unit_id'
+      );
+
+    const unitId =
+      localStorage.getItem(
+        'aphro_unit_id'
+      );
+
+    const selected =
+      selectedInisiasi ||
+      selectedUnitId ||
+      unitId;
+
+    if (selected) {
+      const standardId =
+        getStandardUnitId(selected);
+
+      const found =
+        DEFAULT_UL_OPTIONS.find(
+          (unit) =>
+            getStandardUnitId(unit.id) ===
+            standardId
+        );
+
+      if (found) {
+        return found;
+      }
     }
+  } catch (error) {
+    console.warn(
+      '[InisiasiService] Gagal membaca localStorage:',
+      error
+    );
   }
+
+  /**
+   * Default tetap UL1.
+   * Jangan mengubah ini dulu karena dapat memengaruhi
+   * alur login/pemilihan unit yang sudah berjalan.
+   */
+  return (
+    DEFAULT_UL_OPTIONS.find(
+      (unit) => unit.id === 'UL1'
+    ) ||
+    DEFAULT_UL_OPTIONS[0]
+  );
+}
+
+/**
+ * Mendapatkan Unit ID yang sedang dipilih.
+ *
+ * Jika belum ada pilihan tersimpan,
+ * default aplikasi tetap UL2.
+ */
+export function getSelectedUnitId(): string {
+  try {
+    const selected =
+      localStorage.getItem(
+        'aphro_selected_unit_id'
+      );
+
+    if (selected) {
+      return getStandardUnitId(selected);
+    }
+
+    const unitId =
+      localStorage.getItem('aphro_unit_id');
+
+    if (unitId) {
+      return getStandardUnitId(unitId);
+    }
+  } catch (error) {
+    console.warn(
+      '[InisiasiService] Gagal membaca selected unit:',
+      error
+    );
+  }
+
+  return 'UL2';
+}
+
+/**
+ * Menyimpan Unit Layanan yang dipilih.
+ */
+export function saveSelectedUnit(
+  unitId: string
+): void {
+  const standardId =
+    getStandardUnitId(unitId);
+
+  try {
+    localStorage.setItem(
+      'aphro_selected_unit_id',
+      standardId
+    );
+
+    localStorage.setItem(
+      'aphro_selected_inisiasi_ul',
+      standardId
+    );
+
+    localStorage.setItem(
+      'aphro_unit_id',
+      standardId
+    );
+
+    /**
+     * Sinkronisasi dengan setting mobile
+     * jika object tersebut sudah ada.
+     */
+    const settingsRaw =
+      localStorage.getItem(
+        'pln_mobile_settings'
+      );
+
+    if (settingsRaw) {
+      try {
+        const settings =
+          JSON.parse(settingsRaw);
+
+        settings.unitId = standardId;
+
+        localStorage.setItem(
+          'pln_mobile_settings',
+          JSON.stringify(settings)
+        );
+      } catch {
+        // Abaikan jika settings bukan JSON valid.
+      }
+    }
+  } catch (error) {
+    console.warn(
+      '[InisiasiService] Gagal menyimpan selected unit:',
+      error
+    );
+  }
+}
+
+/**
+ * Mengambil data unit aktif dari HyperCloudHost.
+ */
+export async function getActiveUnitFromHyperCloud(): Promise<InisiasiUnit | null> {
+  const activeUnit =
+    getActiveInisiasiUnit();
+
+  const result =
+    await fetchInisiasiUnits();
+
+  if (!result.success) {
+    return activeUnit || null;
+  }
+
+  const standardId =
+    getStandardUnitId(activeUnit.id);
+
+  return (
+    result.data.find(
+      (unit) =>
+        getStandardUnitId(unit.id) ===
+        standardId
+    ) ||
+    activeUnit ||
+    null
+  );
+}
+
+/**
+ * Memastikan Unit ID valid.
+ */
+export function isValidUnitId(
+  unitId?: string | null
+): boolean {
+  if (!unitId) {
+    return false;
+  }
+
+  const standardId =
+    getStandardUnitId(unitId);
+
+  return DEFAULT_UL_OPTIONS.some(
+    (unit) => unit.id === standardId
+  );
+}
+
+/**
+ * Mendapatkan nama Unit Layanan.
+ */
+export function getUnitName(
+  unitId?: string | null
+): string {
+  if (!unitId) {
+    return '';
+  }
+
+  const standardId =
+    getStandardUnitId(unitId);
+
+  const unit =
+    DEFAULT_UL_OPTIONS.find(
+      (item) => item.id === standardId
+    );
+
+  return unit?.namaUL || '';
+}
+
+/**
+ * Mendapatkan kode Unit Layanan.
+ */
+export function getUnitCode(
+  unitId?: string | null
+): string {
+  if (!unitId) {
+    return '';
+  }
+
+  const standardId =
+    getStandardUnitId(unitId);
+
+  const unit =
+    DEFAULT_UL_OPTIONS.find(
+      (item) => item.id === standardId
+    );
+
+  return unit?.kodeUL || '';
 }
