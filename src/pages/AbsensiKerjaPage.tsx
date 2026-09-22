@@ -133,18 +133,17 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     todayAbsensi && Boolean(todayAbsensi.fotoKeluar || (todayAbsensi as any).FOTO_KELUAR)
   );
 
-  // Strictly filtered petugas list based on user requirements (unitId, ULP, ROW number)
+  // Strictly filtered petugas list based on user's logged-in Regu ROW (unitId, ULP, REGU / ROW number)
   const availablePetugas = useMemo(() => {
     const targetUnitId = currentUser?.unitId || localStorage.getItem('aphro_selected_unit_id') || '';
     const targetUlpClean = cleanStr(ulpName);
     const targetRowNumber = extractRowNumber(currentUser?.userName) ?? extractRowNumber(reguName);
 
-    // 1. Strict Match: unitId && ulp && row number
-    const strictMatches = petugasList.filter((p) => {
+    return petugasList.filter((p) => {
       if (!p || p.status === 'Non-Aktif') return false;
       const pUnitId = p.unitId || '';
       
-      // Flexible unit check
+      // 1. Flexible unit check
       const isUnitMatch = Boolean(
         !targetUnitId || 
         !pUnitId || 
@@ -152,7 +151,9 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         pUnitId.includes(targetUnitId) || 
         targetUnitId.includes(pUnitId)
       );
+      if (!isUnitMatch) return false;
 
+      // 2. Flexible ULP check
       const pUlpClean = cleanStr(p.ulpName);
       const isUlpMatch = Boolean(
         !targetUlpClean || 
@@ -161,50 +162,24 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         pUlpClean.includes(targetUlpClean) || 
         targetUlpClean.includes(pUlpClean)
       );
+      if (!isUlpMatch) return false;
 
-      const pRowNum = extractRowNumber(p.reguName);
-      const isRowMatch = Boolean(targetRowNumber !== null && pRowNum !== null && pRowNum === targetRowNumber);
-      
-      return isUnitMatch && isUlpMatch && isRowMatch;
-    });
-
-    if (strictMatches.length > 0) return strictMatches;
-
-    // 2. Broad Match: name/clean matching (fallback)
-    const broadMatches = petugasList.filter((p) => {
-      if (!p || p.status === 'Non-Aktif') return false;
+      // 3. Strict Regu / ROW match
       const cleanPRegu = cleanStr(p.reguName);
-      const isExactRegu = (p.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
-      const isCleanMatch = Boolean(userReguClean && cleanPRegu && cleanPRegu === userReguClean);
+      const isExactRegu = Boolean(reguName && p.reguName && (p.reguName.trim().toLowerCase() === reguName.trim().toLowerCase()));
+      const isCleanMatch = Boolean(userReguClean && cleanPRegu && (cleanPRegu === userReguClean || cleanPRegu.includes(userReguClean) || userReguClean.includes(cleanPRegu)));
       const isIdMatch = Boolean(currentUser?.reguId && p.reguId && p.reguId === currentUser.reguId);
       
       let isNumberMatch = false;
-      if (userRowNumber !== null) {
+      if (targetRowNumber !== null) {
         const pNum = extractRowNumber(p.reguName);
-        if (pNum !== null && pNum === userRowNumber) {
-          if (userUlpClean && cleanStr(p.ulpName)) {
-            isNumberMatch = cleanStr(p.ulpName) === userUlpClean;
-          } else {
-            isNumberMatch = true;
-          }
+        if (pNum !== null && pNum === targetRowNumber) {
+          isNumberMatch = true;
         }
       }
+
       return isExactRegu || isCleanMatch || isIdMatch || isNumberMatch;
     });
-
-    if (broadMatches.length > 0) return broadMatches;
-
-    // 3. ULP Fallback: match any active officer in the same ULP
-    const ulpMatches = petugasList.filter((p) => {
-      if (!p || p.status === 'Non-Aktif') return false;
-      const pUlpClean = cleanStr(p.ulpName);
-      return Boolean(userUlpClean && pUlpClean && (pUlpClean === userUlpClean || pUlpClean.includes(userUlpClean) || userUlpClean.includes(pUlpClean)));
-    });
-
-    if (ulpMatches.length > 0) return ulpMatches;
-
-    // 4. Return all active petugas for unit if available
-    return petugasList.filter((p) => p && p.status !== 'Non-Aktif');
   }, [petugasList, currentUser, reguName, ulpName, userReguClean, userRowNumber, userUlpClean]);
 
   // Helper to get all Petugas members matching the active Regu
