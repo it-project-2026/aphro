@@ -53,7 +53,28 @@ function toNullableTimestamp(val: any): string | null {
   if (val === undefined || val === null) return null;
   const str = String(val).trim();
   if (str === '' || str === 'null' || str === 'undefined' || str === '""' || str === "''") return null;
-  return str;
+
+  // Standard ISO or YYYY-MM-DD format
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str;
+  }
+
+  // Handle DD/MM/YYYY or DD-MM-YYYY format (e.g. 21/09/2026 16:47:00)
+  const dmyMatch = str.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    const time = dmyMatch[4] || '00:00:00';
+    return `${year}-${month}-${day}T${time}`;
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+
+  return null;
 }
 
 /**
@@ -1704,10 +1725,10 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
 
     const params = [
       id,
-      a.unitId || 'UL1',
+      a.unitId || a.UnitId || 'UL1',
       tanggalVal,
-      a.NAMA_REGU || a.namaRegu || '',
-      a.ULP || a.ulpName || '',
+      a.NAMA_REGU || a.namaRegu || a.reguName || a.Regu || '',
+      a.ULP || a.ulpName || a.namaUlp || a.Nama_ULP || '',
       a.PETUGAS_1 || a.petugas1 || '',
       a.KET_1 || a.ket1 || 'HADIR',
       a.PETUGAS_2 || a.petugas2 || '',

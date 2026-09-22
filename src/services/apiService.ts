@@ -1,5 +1,6 @@
 import { Realisasi } from '../types';
 import { normalizeRealisasiRow } from '../utils/realisasiNormalizer';
+import { normalizeAbsensi } from './syncService';
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_URL || 'https://api.aphro-row.my.id';
@@ -106,7 +107,7 @@ export class ApiService {
       return 'Permintaan terlalu banyak. Harap tunggu beberapa saat lalu coba lagi (HTTP 429).';
     }
     if (status >= 500) {
-      return 'Server API HyperCloudHost sedang mengalami masalah. Silakan coba lagi nanti.';
+      return defaultMsg || 'Server API HyperCloudHost sedang mengalami masalah. Silakan coba lagi nanti.';
     }
     return defaultMsg || `API mengembalikan status HTTP ${status}`;
   }
@@ -655,11 +656,12 @@ export class ApiService {
       }
 
       const json = await res.json();
-      const list = Array.isArray(json.data)
+      const rawList = Array.isArray(json.data)
         ? json.data
         : Array.isArray(json)
         ? json
         : [];
+      const list = rawList.map(normalizeAbsensi);
       return { success: true, data: list };
     } catch (err: any) {
       console.error('[ApiService.fetchAbsensi Error]', err);

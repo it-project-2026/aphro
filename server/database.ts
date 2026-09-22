@@ -110,6 +110,18 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
         }
       }
     }
+    // 3. Filter by ID / WO_ID
+    const idIndex = text.indexOf('"ID" = $') !== -1 ? text.indexOf('"ID" = $') : text.indexOf('"WO_ID" = $');
+    if (idIndex !== -1) {
+      const match = text.slice(idIndex).match(/"(?:ID|WO_ID)"\s*=\s*\$(\d+)/);
+      if (match) {
+        const paramIdx = parseInt(match[1], 10) - 1;
+        const targetId = params[paramIdx];
+        if (targetId) {
+          rows = rows.filter(r => String(r.ID || r.id || r.WO_ID || '').toUpperCase() === String(targetId).toUpperCase());
+        }
+      }
+    }
   }
 
   let affectedRows: any[] = [];

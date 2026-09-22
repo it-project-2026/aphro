@@ -109,24 +109,28 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   const todayISO = getWIBDateString();
   const todayAbsensi = absensiList.find((a) => {
     if (!a) return false;
-    const aDate = normalizeDateISO(a.tanggal);
-    const isToday = aDate === todayISO || String(a.tanggal || '').slice(0, 10) === todayStr;
-    const matchRegu = cleanStr(a.reguName) === userReguClean || (userRowNumber !== null && extractRowNumber(a.reguName) === userRowNumber);
-    const matchUser = cleanStr(a.userName) === cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id) || cleanStr(a.namaPetugas) === cleanStr(currentUser?.name);
+    const aDate = normalizeDateISO(a.tanggal || (a as any).TANGGAL);
+    const isToday = aDate === todayISO || String(a.tanggal || (a as any).TANGGAL || '').slice(0, 10) === todayStr;
+    const reguVal = a.reguName || (a as any).NAMA_REGU;
+    const matchRegu = cleanStr(reguVal) === userReguClean || (userRowNumber !== null && extractRowNumber(reguVal) === userRowNumber);
+    const userVal = a.userName || (a as any).USER_NAME;
+    const petugasVal = a.namaPetugas || (a as any).NAMA_PETUGAS;
+    const matchUser = cleanStr(userVal) === cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id) || cleanStr(petugasVal) === cleanStr(currentUser?.name);
     return isToday && (matchRegu || matchUser);
   });
 
   // Check if Absensi Masuk has already been done today
   const hasDoneAbsensiMasuk = Boolean(
     todayAbsensi && (
-      Boolean(todayAbsensi.fotoMasuk) || 
-      (Array.isArray(todayAbsensi.petugasList) && todayAbsensi.petugasList.length > 0)
+      Boolean(todayAbsensi.fotoMasuk || (todayAbsensi as any).FOTO_MASUK) || 
+      (Array.isArray(todayAbsensi.petugasList) && todayAbsensi.petugasList.length > 0) ||
+      Boolean((todayAbsensi as any).PETUGAS_1)
     )
   );
 
   // Check if Absensi Keluar has already been done today
   const hasDoneAbsensiKeluar = Boolean(
-    todayAbsensi && Boolean(todayAbsensi.fotoKeluar)
+    todayAbsensi && Boolean(todayAbsensi.fotoKeluar || (todayAbsensi as any).FOTO_KELUAR)
   );
 
   // Strictly filtered petugas list based on user requirements (unitId, ULP, ROW number)
@@ -460,6 +464,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
       // When doing "Absen Pulang" (Keluar), we update the existing record
       const absensiPayload = {
+        unitId: currentUser?.unitId || localStorage.getItem('aphro_selected_unit_id') || 'UL2',
         tanggal: todayAbsensi?.tanggal || todayStr,
         reguName: todayAbsensi?.reguName || reguName,
         penyulangName: todayAbsensi?.penyulangName || (currentUser as any)?.penyulangName || '',
@@ -475,13 +480,6 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       };
 
       await addAbsensi(absensiPayload);
-
-      showToast(
-        !hasDoneAbsensiMasuk 
-          ? 'Absensi Masuk berhasil disimpan!' 
-          : 'Absensi Keluar berhasil disimpan!', 
-        'success'
-      );
 
       setActiveTab('monitoring_absensi');
       onSuccess();

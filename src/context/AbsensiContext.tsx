@@ -82,8 +82,8 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
 
     const existingIndex = absensiList.findIndex(a => {
       if (!a) return false;
-      const rowDate = normalizeDate(a.tanggal);
-      const rowRegu = (a.reguName || '').trim().toLowerCase();
+      const rowDate = normalizeDate(a.tanggal || (a as any).TANGGAL);
+      const rowRegu = (a.reguName || (a as any).NAMA_REGU || '').trim().toLowerCase();
       const targetRegu = (absData.reguName || '').trim().toLowerCase();
       return rowDate === targetDate && rowRegu === targetRegu;
     });
@@ -116,6 +116,7 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       finalAbs = {
+        unitId: absData.unitId || activeUnitId,
         ...absData,
         id: 'ABS-' + Date.now(),
         timestampMasuk: absData.fotoMasuk ? nowStr : undefined,
@@ -152,6 +153,15 @@ export function AbsensiProvider({ children }: { children: React.ReactNode }) {
         } else {
           console.error(`[ABSENSI TRACE 4] API FAILED: ${result.message}`);
           showToast(`Gagal menyimpan ke server: ${result.message}`, 'error');
+          // Update local state so data is preserved, but return without triggering duplicate offline toasts
+          const newList = [...absensiList];
+          if (existingIndex >= 0) {
+            newList[existingIndex] = finalAbs;
+          } else {
+            newList.unshift(finalAbs);
+          }
+          setAbsensiList(newList);
+          return finalAbs;
         }
       } catch (err: any) {
         console.error('[ABSENSI TRACE 4] addAbsensi Exception:', err);
