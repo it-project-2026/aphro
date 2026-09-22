@@ -508,6 +508,139 @@ export function getUnitName(
   return unit?.namaUL || '';
 }
 
+export const DEFAULT_OPERATIONAL_UNITS = DEFAULT_UL_OPTIONS;
+export const FALLBACK_INISIASI_UNITS = DEFAULT_UL_OPTIONS;
+export const DEFAULT_INISIASI_SPREADSHEET_ID = '1ETeUidNrx1JqbBPkZLemJodXVTi23gHTZ2UC2SIQwss';
+export const DEFAULT_INISIASI_SPREADSHEET_URL = 'https://npeeobcpffmlyiknszhh.supabase.co';
+export const DEFAULT_INISIASI_SHEET_NAME = 'INISIASI';
+
+export class InisiasiService {
+  static extractSpreadsheetId(input: string): string {
+    if (!input) return DEFAULT_INISIASI_SPREADSHEET_ID;
+    const trimmed = input.trim();
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+    return trimmed;
+  }
+
+  static isValidUL(val: string): boolean {
+    if (!val) return false;
+    const clean = val.trim().toUpperCase();
+    if (clean.length < 2) return false;
+    if (clean.startsWith('ULP ') || clean.startsWith('ULP-') || clean.startsWith('ULP_')) return false;
+    if (['ULP', 'UL', 'NAMA_UL', 'NAMA UL', 'NAMA_ULP', 'ID', 'KODE_UL'].includes(clean)) return false;
+    return true;
+  }
+
+  static isConfigured(unit?: InisiasiUnit | null): boolean {
+    if (!unit) return false;
+    return Boolean(unit.id && unit.namaUL && unit.namaUL.trim().length > 1);
+  }
+
+  static getMissingConfigs(unit?: InisiasiUnit | null): string[] {
+    if (!unit) return ['Unit Layanan belum dipilih'];
+    const missing: string[] = [];
+    if (!unit.id) missing.push('ID Unit Layanan');
+    if (!unit.namaUL) missing.push('Nama Unit Layanan');
+    return missing;
+  }
+
+  static async fetchInisiasiUnits(
+    _spreadsheetInput?: string,
+    _sheetName?: string,
+    _gasUrl?: string
+  ) {
+    return await fetchInisiasiUnits();
+  }
+
+  static generateKodeUL(namaUL: string): string {
+    const clean = namaUL.replace(/^(UL\s*|UNIT\s*LAYANAN\s*)/i, '').trim();
+    if (!clean) return 'UL-1';
+    const words = clean.split(/\s+/);
+    if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+    return words.map(w => w[0]).join('').slice(0, 4).toUpperCase();
+  }
+
+  static saveToCache(units: InisiasiUnit[]): void {
+    try {
+      localStorage.setItem('aphro_cached_inisiasi_units', JSON.stringify(units));
+    } catch {
+      // Ignore
+    }
+  }
+
+  static getFromCache(): InisiasiUnit[] | null {
+    try {
+      const saved = localStorage.getItem('aphro_cached_inisiasi_units');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  }
+
+  static getStandardUnitId(input?: string | null): string {
+    return getStandardUnitId(input);
+  }
+
+  static isUserMatchingUnit(userUnitId?: string | null, targetUnitId?: string | null): boolean {
+    if (!userUnitId || !targetUnitId) return true;
+    return getStandardUnitId(userUnitId) === getStandardUnitId(targetUnitId);
+  }
+
+  static getActiveInisiasiUnit() {
+    const unit = getActiveInisiasiUnit();
+    return {
+      unitId: unit.id,
+      namaUL: unit.namaUL,
+      unitName: unit.namaUL,
+    };
+  }
+
+  static getSelectedUnit(): InisiasiUnit | null {
+    try {
+      const saved = localStorage.getItem('aphro_selected_inisiasi_ul');
+      if (saved) {
+        if (typeof saved === 'string' && (saved.startsWith('{') || saved.startsWith('"'))) {
+          try {
+            return JSON.parse(saved);
+          } catch {
+            // string id
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    const id = getSelectedUnitId();
+    return DEFAULT_UL_OPTIONS.find(u => u.id === id) || null;
+  }
+
+  static getSelectedUnitId(): string {
+    return getSelectedUnitId();
+  }
+
+  static saveSelectedUnit(unit: InisiasiUnit | string): void {
+    if (typeof unit === 'string') {
+      saveSelectedUnit(unit);
+    } else if (unit && unit.id) {
+      saveSelectedUnit(unit.id);
+      try {
+        localStorage.setItem('aphro_selected_inisiasi_ul', JSON.stringify(unit));
+        localStorage.setItem('aphro_unit_name', unit.namaUL);
+        localStorage.setItem('aphro_nama_unit_layanan', unit.namaUL);
+      } catch {
+        // Ignore
+      }
+    }
+  }
+}
+
 /**
  * Mendapatkan kode Unit Layanan.
  */

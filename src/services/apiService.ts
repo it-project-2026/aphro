@@ -35,6 +35,7 @@ export interface FetchRealisasiParams {
   tanggalSampai?: string;
   ULP?: string;
   Nomor_WO?: string;
+  unitId?: string;
 }
 
 export class ApiService {
@@ -195,6 +196,7 @@ export class ApiService {
       tanggalSampai,
       ULP,
       Nomor_WO,
+      unitId,
     } = params;
 
     const token = this.getAuthToken();
@@ -208,6 +210,9 @@ export class ApiService {
     queryParams.set('page', String(page));
     queryParams.set('limit', String(limit));
 
+    if (unitId?.trim() && unitId !== 'ALL') {
+      queryParams.set('unitId', unitId.trim());
+    }
     if (tanggalDari?.trim()) {
       queryParams.set('tanggalDari', tanggalDari.trim());
     }

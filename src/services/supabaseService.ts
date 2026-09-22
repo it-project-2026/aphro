@@ -999,63 +999,25 @@ export class SupabaseService {
     const endDate = `${year}-${monthPadded}-${String(lastDay).padStart(2, '0')}`;
 
     try {
-      // 1. Fetch WORK_ORDER for the period using explicit select fields
-      let woQuery = supabase
-        .from(SUPABASE_TABLES.WORK_ORDER)
-        .select(WORK_ORDER_SELECT_FIELDS)
-        .gte('Tanggal', startDate)
-        .lte('Tanggal', endDate);
+      const woRes = await ApiService.fetchWorkOrders(stdId);
+      const relRes = await ApiService.fetchRealisasi({
+        unitId: stdId,
+        limit: 1000,
+        tanggalDari: startDate,
+        tanggalSampai: endDate,
+      });
 
-      if (stdId && stdId !== 'ALL') {
-        woQuery = woQuery.or(this.getUnitQueryFilter(stdId));
-      }
+      const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
+      const rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
 
-      const { data: woData, error: woError } = await woQuery.order('Tanggal', { ascending: true });
-      if (woError) {
-        console.warn('Rekap period WO query warning:', woError.message);
-      }
-
-      const workOrders: WorkOrder[] = Array.isArray(woData)
-        ? woData.map((row: any) => this.normalizeWorkOrderRow(row))
-        : [];
-
-      // 2. Fetch REALISASI for the period using lightweight explicit select fields with pagination
-      let allRelRows: any[] = [];
-      let page = 0;
-      const chunkSize = 1000;
-
-      while (true) {
-        let relQuery = supabase
-          .from(SUPABASE_TABLES.REALISASI)
-          .select('ID, unitId, WO_ID, Nomor_WO, ULP, REGU_ROW, PENYULANG, TANGGAL, Keterangan, Jenis_Tanaman')
-          .gte('TANGGAL', startDate)
-          .lte('TANGGAL', endDate);
-
-        if (stdId && stdId !== 'ALL') {
-          relQuery = relQuery.or(`unitId.eq.${stdId},unitId.is.null`);
-        }
-
-        const { data: relChunk, error: relError } = await relQuery
-          .order('TANGGAL', { ascending: true })
-          .range(page * chunkSize, (page + 1) * chunkSize - 1);
-
-        if (relError || !relChunk || relChunk.length === 0) {
-          if (relError) console.warn('Rekap period REALISASI query error:', relError.message);
-          break;
-        }
-
-        allRelRows = allRelRows.concat(relChunk);
-        if (relChunk.length < chunkSize) break;
-        page++;
-      }
-
-      const realisasiList: Realisasi[] = allRelRows.map((row: any) => this.normalizeRealisasiRow(row));
+      const workOrders = rawWo.map((row: any) => this.normalizeWorkOrderRow(row));
+      const realisasiList = rawRel.map((row: any) => this.normalizeRealisasiRow(row));
 
       return {
         success: true,
         workOrders,
         realisasiList,
-        message: `Memuat ${workOrders.length} Work Order dan ${realisasiList.length} Realisasi untuk periode ${monthPadded}/${year}.`,
+        message: `Memuat ${workOrders.length} Work Order dan ${realisasiList.length} Realisasi dari HyperCloud untuk ${monthPadded}/${year}.`,
       };
     } catch (err: any) {
       console.warn('fetchRekapPeriodData exception:', err);
@@ -1063,7 +1025,7 @@ export class SupabaseService {
         success: false,
         workOrders: [],
         realisasiList: [],
-        message: err.message,
+        message: err.message || 'Backend HyperCloud tidak dapat dihubungi.',
       };
     }
   }
@@ -1539,11 +1501,10 @@ export class SupabaseService {
     const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
     const targetUnitId = unitId || this.getActiveUnitId();
 
-    // 1. Primary: HyperCloudHost Node.js API
     if (isOnline) {
       try {
         const apiRes = await ApiService.fetchUsers(targetUnitId);
-        if (apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
+        if (apiRes.success && Array.isArray(apiRes.data)) {
           const users: User[] = apiRes.data.map((u: any) => this.normalizeUserRow(u));
           return {
             success: true,
@@ -1551,38 +1512,30 @@ export class SupabaseService {
             source: 'supabase',
             message: `Berhasil memuat ${users.length} user dari API HyperCloudHost.`,
           };
-        }
-      } catch (apiErr) {
-        console.warn('ApiService fetchUsers error, falling back:', apiErr);
-      }
-    }
-
-    // 2. Secondary fallback: Supabase USERS table
-    if (isOnline && isSupabaseConfigured()) {
-      try {
-        const { data, error } = await supabase
-          .from(SUPABASE_TABLES.USERS)
-          .select('*');
-
-        if (!error && Array.isArray(data) && data.length > 0) {
-          const users: User[] = data.map((u: any) => this.normalizeUserRow(u));
+        } else if (!apiRes.success) {
           return {
-            success: true,
-            data: users,
-            source: 'supabase',
-            message: `Berhasil memuat ${users.length} user dari database Supabase.`,
+            success: false,
+            data: [],
+            source: 'initial',
+            message: apiRes.message || 'Gagal memuat pengguna dari HyperCloudHost.',
           };
         }
-      } catch (err) {
-        console.warn('Supabase fetchUsers exception:', err);
+      } catch (apiErr: any) {
+        console.warn('ApiService fetchUsers error:', apiErr);
+        return {
+          success: false,
+          data: [],
+          source: 'initial',
+          message: 'Backend HyperCloud tidak dapat dihubungi.',
+        };
       }
     }
 
     return {
-      success: true,
+      success: false,
       data: [],
       source: 'initial',
-      message: 'Tabel USERS di database HyperCloud masih kosong.',
+      message: 'Aplikasi sedang offline dan tidak terhubung ke HyperCloudHost.',
     };
   }
 
