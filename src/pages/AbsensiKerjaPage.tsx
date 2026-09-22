@@ -171,7 +171,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     if (strictMatches.length > 0) return strictMatches;
 
     // 2. Broad Match: name/clean matching (fallback)
-    return petugasList.filter((p) => {
+    const broadMatches = petugasList.filter((p) => {
       if (!p || p.status === 'Non-Aktif') return false;
       const cleanPRegu = cleanStr(p.reguName);
       const isExactRegu = (p.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
@@ -191,6 +191,20 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       }
       return isExactRegu || isCleanMatch || isIdMatch || isNumberMatch;
     });
+
+    if (broadMatches.length > 0) return broadMatches;
+
+    // 3. ULP Fallback: match any active officer in the same ULP
+    const ulpMatches = petugasList.filter((p) => {
+      if (!p || p.status === 'Non-Aktif') return false;
+      const pUlpClean = cleanStr(p.ulpName);
+      return Boolean(userUlpClean && pUlpClean && (pUlpClean === userUlpClean || pUlpClean.includes(userUlpClean) || userUlpClean.includes(pUlpClean)));
+    });
+
+    if (ulpMatches.length > 0) return ulpMatches;
+
+    // 4. Return all active petugas for unit if available
+    return petugasList.filter((p) => p && p.status !== 'Non-Aktif');
   }, [petugasList, currentUser, reguName, ulpName, userReguClean, userRowNumber, userUlpClean]);
 
   // Helper to get all Petugas members matching the active Regu
@@ -219,12 +233,9 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       }));
     }
 
-    // 4. Ultimate Fallback: current logged-in user
-    if (currentUser?.name && currentUser.name !== 'User') {
-      return [{ nama: currentUser.name, keterangan: 'HADIR' as const }];
-    }
-
-    return [{ nama: '', keterangan: 'HADIR' as const }];
+    // 4. Ultimate Fallback: current logged-in user or default name
+    const defaultOfficerName = currentUser?.name || currentUser?.userName || 'Petugas 1';
+    return [{ nama: defaultOfficerName, keterangan: 'HADIR' as const }];
   }, [availablePetugas, users, reguName, userReguClean, currentUser]);
 
   const [petugasRows, setPetugasRows] = useState<AbsensiPetugas[]>(() => {
@@ -255,19 +266,14 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     if (isManuallyEditedRef.current) return;
 
     const masterMembers = getReguMembersFromMaster();
-    const hasRealOfficers = masterMembers.length > 0 && masterMembers.some((m) => m.nama && m.nama.trim() !== '' && m.nama !== currentUser?.userName);
+    const hasValidMembers = masterMembers.length > 0 && masterMembers.some((m) => m.nama && m.nama.trim() !== '');
 
-    // Check if current rows are just fallback/empty
+    // Check if current rows are empty or blank
     const isFallbackState = petugasRows.length === 0 || (
-      petugasRows.length === 1 && (
-        !petugasRows[0].nama || 
-        petugasRows[0].nama === '' || 
-        petugasRows[0].nama === currentUser?.userName || 
-        petugasRows[0].nama === currentUser?.name
-      )
+      petugasRows.length === 1 && (!petugasRows[0].nama || petugasRows[0].nama.trim() === '')
     );
 
-    if (hasRealOfficers && (isFallbackState || petugasRows.length !== masterMembers.length)) {
+    if (hasValidMembers && (isFallbackState || (petugasRows.length !== masterMembers.length && !isFallbackState))) {
       setPetugasRows(masterMembers);
     }
   }, [todayAbsensi, hasDoneAbsensiMasuk, getReguMembersFromMaster, currentUser, petugasRows.length]);
@@ -464,6 +470,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
       // When doing "Absen Pulang" (Keluar), we update the existing record
       const absensiPayload = {
+        id: todayAbsensi?.id,
         unitId: currentUser?.unitId || localStorage.getItem('aphro_selected_unit_id') || 'UL2',
         tanggal: todayAbsensi?.tanggal || todayStr,
         reguName: todayAbsensi?.reguName || reguName,

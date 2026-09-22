@@ -59,14 +59,18 @@ function toNullableTimestamp(val: any): string | null {
     return str;
   }
 
-  // Handle DD/MM/YYYY or DD-MM-YYYY format (e.g. 21/09/2026 16:47:00)
-  const dmyMatch = str.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
+  // Handle DD/MM/YYYY or DD-MM-YYYY format (including Indonesian locale "22/09/2026, 12.34.56" or "22-09-2026 12:34:56")
+  const cleanedStr = str.replace(',', '').replace(/\./g, ':');
+  const dmyMatch = cleanedStr.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
   if (dmyMatch) {
     const day = dmyMatch[1].padStart(2, '0');
     const month = dmyMatch[2].padStart(2, '0');
     const year = dmyMatch[3];
-    const time = dmyMatch[4] || '00:00:00';
-    return `${year}-${month}-${day}T${time}`;
+    const timeParts = (dmyMatch[4] || '00:00:00').split(':');
+    const hh = (timeParts[0] || '00').padStart(2, '0');
+    const mm = (timeParts[1] || '00').padStart(2, '0');
+    const ss = (timeParts[2] || '00').padStart(2, '0');
+    return `${year}-${month}-${day}T${hh}:${mm}:${ss}`;
   }
 
   const parsed = new Date(str);
@@ -829,8 +833,11 @@ router.get('/regu-row', async (req: Request, res: Response) => {
  */
 router.get('/petugas', async (req: Request, res: Response) => {
   const { unitId, isAll } = parseUnitFilter(req);
-  const ulpFilter = (req.query.ulp || req.query.ULP || '').toString().trim();
-  const reguFilter = (req.query.regu || req.query.reguName || req.query.REGU || '').toString().trim();
+  let ulpFilter = (req.query.ulp || req.query.ULP || '').toString().trim();
+  let reguFilter = (req.query.regu || req.query.reguName || req.query.REGU || '').toString().trim();
+
+  // Clean ULP filter e.g. "UL BUKITTINGGI" -> "BUKITTINGGI"
+  const cleanUlp = ulpFilter.replace(/^(ULP|UL)\s+/i, '').trim();
 
   try {
     let sql = `SELECT * FROM public."PETUGAS" WHERE 1=1`;
@@ -838,20 +845,32 @@ router.get('/petugas', async (req: Request, res: Response) => {
 
     if (!isAll && unitId) {
       params.push(unitId);
-      sql += ` AND "unitId" = $${params.length}`;
+      sql += ` AND (UPPER("unitId") = UPPER($${params.length}) OR "unitId" IS NULL OR "unitId" = '')`;
     }
 
-    if (ulpFilter) {
-      params.push(`%${ulpFilter}%`);
-      sql += ` AND "ULP" ILIKE $${params.length}`;
+    if (cleanUlp) {
+      params.push(`%${cleanUlp}%`);
+      sql += ` AND ("ULP" ILIKE $${params.length} OR "namaULP" ILIKE $${params.length})`;
     }
 
     if (reguFilter) {
       params.push(`%${reguFilter}%`);
-      sql += ` AND ("Regu" ILIKE $${params.length} OR "Nama_Regu" ILIKE $${params.length})`;
+      sql += ` AND ("Regu" ILIKE $${params.length} OR "Nama_Regu" ILIKE $${params.length} OR "reguName" ILIKE $${params.length})`;
     }
 
-    const resDb = await query(sql, params);
+    let resDb = await query(sql, params);
+
+    // Fallback: If strict filtered query returned 0 rows, fetch all petugas for unit
+    if (resDb.rows.length === 0 && (cleanUlp || reguFilter)) {
+      let fallbackSql = `SELECT * FROM public."PETUGAS" WHERE 1=1`;
+      const fallbackParams: any[] = [];
+      if (!isAll && unitId) {
+        fallbackParams.push(unitId);
+        fallbackSql += ` AND (UPPER("unitId") = UPPER($${fallbackParams.length}) OR "unitId" IS NULL OR "unitId" = '')`;
+      }
+      fallbackSql += ` ORDER BY "ID" ASC LIMIT 500`;
+      resDb = await query(fallbackSql, fallbackParams);
+    }
 
     return res.json({
       status: 'success',
