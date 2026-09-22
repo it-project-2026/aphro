@@ -137,9 +137,10 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   const availablePetugas = useMemo(() => {
     const targetUnitId = currentUser?.unitId || localStorage.getItem('aphro_selected_unit_id') || '';
     const targetUlpClean = cleanStr(ulpName);
-    const targetRowNumber = extractRowNumber(currentUser?.userName) ?? extractRowNumber(reguName);
+    const targetRowNumber = extractRowNumber(currentUser?.userName) ?? extractRowNumber(reguName) ?? extractRowNumber(currentUser?.reguName);
 
-    return petugasList.filter((p) => {
+    // Primary filter: match Unit/ULP + Regu ROW
+    const filtered = petugasList.filter((p) => {
       if (!p || p.status === 'Non-Aktif') return false;
       const pUnitId = p.unitId || '';
       
@@ -151,7 +152,6 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         pUnitId.includes(targetUnitId) || 
         targetUnitId.includes(pUnitId)
       );
-      if (!isUnitMatch) return false;
 
       // 2. Flexible ULP check
       const pUlpClean = cleanStr(p.ulpName);
@@ -162,9 +162,8 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         pUlpClean.includes(targetUlpClean) || 
         targetUlpClean.includes(pUlpClean)
       );
-      if (!isUlpMatch) return false;
 
-      // 3. Strict Regu / ROW match
+      // 3. Regu / ROW match
       const cleanPRegu = cleanStr(p.reguName);
       const isExactRegu = Boolean(reguName && p.reguName && (p.reguName.trim().toLowerCase() === reguName.trim().toLowerCase()));
       const isCleanMatch = Boolean(userReguClean && cleanPRegu && (cleanPRegu === userReguClean || cleanPRegu.includes(userReguClean) || userReguClean.includes(cleanPRegu)));
@@ -178,8 +177,33 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
         }
       }
 
-      return isExactRegu || isCleanMatch || isIdMatch || isNumberMatch;
+      const isReguMatch = isExactRegu || isCleanMatch || isIdMatch || isNumberMatch;
+
+      return (isUnitMatch || isUlpMatch) && isReguMatch;
     });
+
+    if (filtered.length > 0) return filtered;
+
+    // Fallback filter: match by ROW number or Regu name alone across all petugasList
+    if (targetRowNumber !== null || userReguClean) {
+      const rowFiltered = petugasList.filter((p) => {
+        if (!p || p.status === 'Non-Aktif') return false;
+        if (targetRowNumber !== null) {
+          const pNum = extractRowNumber(p.reguName);
+          if (pNum !== null && pNum === targetRowNumber) return true;
+        }
+        if (userReguClean && p.reguName) {
+          const cleanPRegu = cleanStr(p.reguName);
+          if (cleanPRegu && (cleanPRegu === userReguClean || cleanPRegu.includes(userReguClean) || userReguClean.includes(cleanPRegu))) {
+            return true;
+          }
+        }
+        return false;
+      });
+      if (rowFiltered.length > 0) return rowFiltered;
+    }
+
+    return [];
   }, [petugasList, currentUser, reguName, ulpName, userReguClean, userRowNumber, userUlpClean]);
 
   // Helper to validate real person name vs system usernames (e.g. "row03", "usr-01")
@@ -211,7 +235,10 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       const isExactRegu = (u.reguName || '').trim().toLowerCase() === reguName.trim().toLowerCase();
       const isCleanMatch = Boolean(userReguClean && cleanURegu && cleanURegu === userReguClean);
       const isIdMatch = Boolean(currentUser?.reguId && u.reguId && u.reguId === currentUser.reguId);
-      return isExactRegu || isCleanMatch || isIdMatch;
+      const uRowNo = extractRowNumber(u.reguName) ?? extractRowNumber(u.userName);
+      const targetRowNo = extractRowNumber(reguName) ?? extractRowNumber(currentUser?.userName);
+      const isRowMatch = Boolean(uRowNo !== null && targetRowNo !== null && uRowNo === targetRowNo);
+      return isExactRegu || isCleanMatch || isIdMatch || isRowMatch;
     });
 
     const validUsers = matchedUsers.filter((u) => isValidPersonName(u.name, u.userName));
@@ -222,17 +249,23 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       }));
     }
 
-    // 4. Default Fallback: If user's display name is a real person name, use it; otherwise provide default team rows
+    // 4. Default Fallback: If user's display name is a real person name, use it; otherwise provide regu-specific team placeholders
     if (isValidPersonName(currentUser?.name, currentUser?.userName)) {
-      return [{ nama: currentUser!.name, keterangan: 'HADIR' as const }];
+      return [
+        { nama: currentUser!.name, keterangan: 'HADIR' as const },
+        { nama: `Anggota 2 - ${reguName || 'Regu Active'}`, keterangan: 'HADIR' as const },
+        { nama: `Anggota 3 - ${reguName || 'Regu Active'}`, keterangan: 'HADIR' as const },
+        { nama: `Anggota 4 - ${reguName || 'Regu Active'}`, keterangan: 'HADIR' as const },
+      ];
     }
 
-    // Standard 4 team members placeholder if master data is empty
+    // Standard team members placeholder labeled with the active Regu Name
+    const label = reguName || 'Regu Active';
     return [
-      { nama: 'Petugas 1', keterangan: 'HADIR' as const },
-      { nama: 'Petugas 2', keterangan: 'HADIR' as const },
-      { nama: 'Petugas 3', keterangan: 'HADIR' as const },
-      { nama: 'Petugas 4', keterangan: 'HADIR' as const },
+      { nama: `Petugas 1 (${label})`, keterangan: 'HADIR' as const },
+      { nama: `Petugas 2 (${label})`, keterangan: 'HADIR' as const },
+      { nama: `Petugas 3 (${label})`, keterangan: 'HADIR' as const },
+      { nama: `Petugas 4 (${label})`, keterangan: 'HADIR' as const },
     ];
   }, [availablePetugas, users, reguName, userReguClean, currentUser]);
 

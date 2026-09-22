@@ -1724,13 +1724,25 @@ export class SupabaseService {
 
           const defaults = this.getDefaultMasterForUnit(targetUnitId);
 
-          if (mappedUsers.length > 0 || mappedUlp.length > 0 || mappedPenyulang.length > 0 || mappedRegu.length > 0 || mappedPetugas.length > 0) {
+          const mergedPetugas = [...mappedPetugas];
+          INITIAL_PETUGAS.forEach((ip) => {
+            const ipNama = (ip.nama || '').toLowerCase().trim();
+            const ipRegu = (ip.reguName || '').toLowerCase().trim();
+            if (!mergedPetugas.some((mp) => 
+              (mp.nama || '').toLowerCase().trim() === ipNama &&
+              (mp.reguName || '').toLowerCase().trim() === ipRegu
+            )) {
+              mergedPetugas.push(ip);
+            }
+          });
+
+          if (mappedUsers.length > 0 || mappedUlp.length > 0 || mappedPenyulang.length > 0 || mappedRegu.length > 0 || mergedPetugas.length > 0) {
             return {
               users: mappedUsers,
               ulp: mappedUlp.length > 0 ? mappedUlp : (defaults.ulp.length > 0 ? defaults.ulp : INITIAL_ULP),
               penyulang: mappedPenyulang.length > 0 ? mappedPenyulang : INITIAL_PENYULANG,
               regu: mappedRegu.length > 0 ? mappedRegu : (defaults.regu.length > 0 ? defaults.regu : INITIAL_REGU),
-              petugas: mappedPetugas.length > 0 ? mappedPetugas : INITIAL_PETUGAS,
+              petugas: mergedPetugas,
               source: 'supabase',
             };
           }

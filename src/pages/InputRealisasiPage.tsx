@@ -11,7 +11,7 @@ import { compressImage } from '../utils/imageCompression';
 import { GASApiService } from '../services/gasApiService';
 import { SupabaseService } from '../services/supabaseService';
 import { formatDriveViewUrl, ensureGoogleDrivePhotoUrl } from '../utils/driveUtils';
-import { getWIBDateString, getLocalDateTimeString, normalizeDateISO, formatDateDisplay } from '../utils/dateUtils';
+import { getWIBDateString, getLocalDateTimeString, normalizeDateISO, formatDateDisplay, parseDateFromNomorWO } from '../utils/dateUtils';
 import {
   Camera,
   Upload,
@@ -68,95 +68,136 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       .replace(/[^a-z0-9]/gi, '')
       .trim();
 
-  // Filter Work Orders strictly for TODAY with STATUS "BELUM SELESAI" for the logged-in user
-  const availableWorkOrders = displayedWorkOrders
-    .filter((wo) => {
-      // Always show current WO if in edit mode or explicitly selected via UI context to prevent form breaking
-      if (editMode && initialData && wo.id === initialData.workOrderId) return true;
-      if (!editMode && selectedWoIdForRealisasi && wo.id === selectedWoIdForRealisasi) return true;
+  // Helper to extract row number e.g. "ROW 03" -> 3
+  const extractRowNo = (s: any) => {
+    const m = String(s || '').match(/(?:row|regu|tim|users|usr)[-_\s]*0?(\d+)/i) || String(s || '').match(/\b0?(\d+)\b/);
+    return m ? parseInt(m[1], 10) : null;
+  };
 
-      // --- 1. DATE RESTRICTION: HARI INI SAJA (WIB) ---
-      const todayStr = getWIBDateString();
-      const woDate = normalizeDateISO(wo.tanggal || wo.createdAt);
+  // Helper to check if WO date matches today
+  const isDateMatchToday = (wo: any, todayStr: string): boolean => {
+    const woIso = normalizeDateISO(wo.tanggal || wo.createdAt);
+    if (woIso === todayStr) return true;
 
-      const isToday = woDate === todayStr;
-      if (!isToday) return false;
+    const woNoDate = parseDateFromNomorWO(wo.nomorWO);
+    if (woNoDate === todayStr) return true;
 
-      // --- 2. STATUS RESTRICTION: STATUS "BELUM SELESAI" ---
-      const statusUpper = String(wo.status || '').toUpperCase().trim();
-      const isFinished =
-        statusUpper === 'SELESAI' ||
-        statusUpper === 'FINISHED' ||
-        statusUpper === 'DONE' ||
-        statusUpper === 'COMPLETE' ||
-        (wo.progressPercent !== undefined && wo.progressPercent >= 100);
+    const [yyyy, mm, dd] = todayStr.split('-');
+    const dmySlash = `${dd}/${mm}/${yyyy}`;
+    const dmyDash = `${dd}-${mm}-${yyyy}`;
+    const raw = String(wo.tanggal || '').trim();
+    if (raw.includes(todayStr) || raw.includes(dmySlash) || raw.includes(dmyDash)) return true;
 
-      const isBelumSelesai = !isFinished;
-      if (!isBelumSelesai) return false;
+    return false;
+  };
 
-      // --- 3. USER RESTRICTION: PER USER YANG LOGIN ---
-      // Admins / Adm / SuperAdmin see all work orders for today with status BELUM SELESAI
-      if (currentUser && !isUserRole) {
-        // If Admin has a specific ULP assigned, check ULP match
-        if (currentUser.ulpName && wo.ulpName) {
-          const u1 = cleanStr(currentUser.ulpName);
-          const u2 = cleanStr(wo.ulpName);
-          if (u1 && u2 && !u1.includes(u2) && !u2.includes(u1)) return false;
-        }
+  // Helper to check if WO is finished
+  const isFinishedWO = (wo: any): boolean => {
+    const statusUpper = String(wo.status || '').toUpperCase().trim();
+    return (
+      statusUpper === 'SELESAI' ||
+      statusUpper === 'FINISHED' ||
+      statusUpper === 'DONE' ||
+      statusUpper === 'COMPLETE' ||
+      (wo.progressPercent !== undefined && wo.progressPercent >= 100)
+    );
+  };
+
+  // Helper to check if WO belongs to logged in user / regu / ULP
+  const isAssignedToUser = (wo: any): boolean => {
+    if (!currentUser) return true;
+    if (!isUserRole) {
+      if (currentUser.ulpName && wo.ulpName) {
+        const u1 = cleanStr(currentUser.ulpName);
+        const u2 = cleanStr(wo.ulpName);
+        if (u1 && u2 && !u1.includes(u2) && !u2.includes(u1)) return false;
+      }
+      return true;
+    }
+
+    // Direct ID match
+    if (currentUser.reguId && wo.reguId && String(currentUser.reguId) === String(wo.reguId)) return true;
+    if (currentUser.id && wo.petugasId && String(currentUser.id) === String(wo.petugasId)) return true;
+
+    // Regu Row number match e.g. ROW 03 vs ROW 3
+    const uRowNo = extractRowNo(currentUser.reguName || currentUser.userName);
+    const woRowNo = extractRowNo(wo.reguName || (wo as any).regu || wo.nomorWO);
+    if (uRowNo !== null && woRowNo !== null && uRowNo === woRowNo) return true;
+
+    const userCandidates = [
+      cleanStr(currentUser.reguName),
+      cleanStr(currentUser.userName),
+      cleanStr(currentUser.name),
+      cleanStr(currentUser.nip),
+      cleanStr(currentUser.id),
+    ].filter(Boolean);
+
+    const woReguClean = cleanStr(wo.reguName || (wo as any).regu);
+    const woPetugasClean = cleanStr(wo.petugasName || (wo as any).petugas);
+    const woCreatedByClean = cleanStr((wo as any).createdBy);
+
+    const isMatched = userCandidates.some((uCand) => {
+      if (!uCand) return false;
+      if (woReguClean && (woReguClean === uCand || (woReguClean.length >= 2 && uCand.length >= 2 && (woReguClean.includes(uCand) || uCand.includes(woReguClean))))) {
         return true;
       }
-
-      // Regular "User" only sees WOs assigned to their Regu / Petugas Name / User ID
-      if (currentUser && isUserRole) {
-        // Direct ID match
-        if (currentUser.reguId && wo.reguId && String(currentUser.reguId) === String(wo.reguId)) return true;
-        if (currentUser.id && wo.petugasId && String(currentUser.id) === String(wo.petugasId)) return true;
-
-        const userCandidates = [
-          cleanStr(currentUser.reguName),
-          cleanStr(currentUser.userName),
-          cleanStr(currentUser.name),
-          cleanStr(currentUser.nip),
-          cleanStr(currentUser.id),
-        ].filter(Boolean);
-
-        const woReguClean = cleanStr(wo.reguName || (wo as any).regu);
-        const woPetugasClean = cleanStr(wo.petugasName || (wo as any).petugas);
-        const woCreatedByClean = cleanStr((wo as any).createdBy);
-
-        const isMatched = userCandidates.some((uCand) => {
-          if (!uCand) return false;
-          if (woReguClean && (woReguClean === uCand || (woReguClean.length >= 2 && uCand.length >= 2 && (woReguClean.includes(uCand) || uCand.includes(woReguClean))))) {
-            return true;
-          }
-          if (woPetugasClean && (woPetugasClean === uCand || (woPetugasClean.length >= 2 && uCand.length >= 2 && (woPetugasClean.includes(uCand) || uCand.includes(woPetugasClean))))) {
-            return true;
-          }
-          if (woCreatedByClean && woCreatedByClean === uCand) {
-            return true;
-          }
-          return false;
-        });
-
-        if (isMatched) return true;
-
-        // Fallback: If user has no reguName set, check if matched by ULP name
-        if (!currentUser.reguName && currentUser.ulpName && wo.ulpName) {
-          const u1 = cleanStr(currentUser.ulpName);
-          const u2 = cleanStr(wo.ulpName);
-          if (u1 && u2 && (u1.includes(u2) || u2.includes(u1))) return true;
-        }
-
-        return false;
+      if (woPetugasClean && (woPetugasClean === uCand || (woPetugasClean.length >= 2 && uCand.length >= 2 && (woPetugasClean.includes(uCand) || uCand.includes(woPetugasClean))))) {
+        return true;
       }
+      if (woCreatedByClean && woCreatedByClean === uCand) {
+        return true;
+      }
+      return false;
+    });
 
-      return true;
-    })
-    .sort((a, b) => {
+    if (isMatched) return true;
+
+    // ULP match fallback
+    if (currentUser.ulpName && wo.ulpName) {
+      const u1 = cleanStr(currentUser.ulpName);
+      const u2 = cleanStr(wo.ulpName);
+      if (u1 && u2 && (u1.includes(u2) || u2.includes(u1))) return true;
+    }
+
+    return false;
+  };
+
+  // Compute available Work Orders with multi-tier fallbacks
+  const availableWorkOrders = React.useMemo(() => {
+    const todayStr = getWIBDateString();
+    const sourceList = displayedWorkOrders.length > 0 ? displayedWorkOrders : workOrders;
+
+    // Level 1: Strict match for Today + Unfinished + Assigned User/Regu
+    let result = sourceList.filter((wo) => {
+      if (editMode && initialData && wo.id === initialData.workOrderId) return true;
+      if (!editMode && selectedWoIdForRealisasi && wo.id === selectedWoIdForRealisasi) return true;
+      return isDateMatchToday(wo, todayStr) && !isFinishedWO(wo) && isAssignedToUser(wo);
+    });
+
+    // Level 2: Fallback if 0 items - Include ALL unfinished Work Orders for assigned User/Regu
+    if (result.length === 0) {
+      result = sourceList.filter((wo) => {
+        if (editMode && initialData && wo.id === initialData.workOrderId) return true;
+        if (!editMode && selectedWoIdForRealisasi && wo.id === selectedWoIdForRealisasi) return true;
+        return !isFinishedWO(wo) && isAssignedToUser(wo);
+      });
+    }
+
+    // Level 3: Fallback if still 0 items - Include ALL unfinished Work Orders in source list
+    if (result.length === 0) {
+      result = sourceList.filter((wo) => {
+        if (editMode && initialData && wo.id === initialData.workOrderId) return true;
+        if (!editMode && selectedWoIdForRealisasi && wo.id === selectedWoIdForRealisasi) return true;
+        return !isFinishedWO(wo);
+      });
+    }
+
+    return result.sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.tanggal).getTime();
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.tanggal).getTime();
       return dateB - dateA;
     });
+  }, [displayedWorkOrders, workOrders, editMode, initialData, selectedWoIdForRealisasi, currentUser, isUserRole]);
 
   const [selectedWoId, setSelectedWoId] = React.useState<string>(() => {
     if (editMode && initialData) return initialData.workOrderId;
