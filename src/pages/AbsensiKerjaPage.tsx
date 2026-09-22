@@ -182,16 +182,29 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     });
   }, [petugasList, currentUser, reguName, ulpName, userReguClean, userRowNumber, userUlpClean]);
 
+  // Helper to validate real person name vs system usernames (e.g. "row03", "usr-01")
+  const isValidPersonName = (n?: string, uname?: string) => {
+    if (!n) return false;
+    const s = n.trim();
+    if (!s) return false;
+    if (/^(row|usr|user|adm|admin)[-_\s]*\d*$/i.test(s)) return false;
+    if (uname && s.toLowerCase() === uname.trim().toLowerCase()) return false;
+    return true;
+  };
+
   // Helper to get all Petugas members matching the active Regu
   const getReguMembersFromMaster = useCallback((): AbsensiPetugas[] => {
     if (availablePetugas.length > 0) {
-      return availablePetugas.map((p) => ({
-        nama: p.nama,
-        keterangan: 'HADIR' as const,
-      }));
+      const validPetugas = availablePetugas.filter((p) => isValidPersonName(p.nama));
+      if (validPetugas.length > 0) {
+        return validPetugas.map((p) => ({
+          nama: p.nama,
+          keterangan: 'HADIR' as const,
+        }));
+      }
     }
 
-    // 3. Last Fallback: match from Users list
+    // 3. Match from Users list
     const matchedUsers = users.filter((u) => {
       if (!u || u.status === 'Non-Aktif') return false;
       const cleanURegu = cleanStr(u.reguName);
@@ -201,16 +214,26 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       return isExactRegu || isCleanMatch || isIdMatch;
     });
 
-    if (matchedUsers.length > 0) {
-      return matchedUsers.map((u) => ({
+    const validUsers = matchedUsers.filter((u) => isValidPersonName(u.name, u.userName));
+    if (validUsers.length > 0) {
+      return validUsers.map((u) => ({
         nama: u.name,
         keterangan: 'HADIR' as const,
       }));
     }
 
-    // 4. Ultimate Fallback: current logged-in user or default name
-    const defaultOfficerName = currentUser?.name || currentUser?.userName || 'Petugas 1';
-    return [{ nama: defaultOfficerName, keterangan: 'HADIR' as const }];
+    // 4. Default Fallback: If user's display name is a real person name, use it; otherwise provide default team rows
+    if (isValidPersonName(currentUser?.name, currentUser?.userName)) {
+      return [{ nama: currentUser!.name, keterangan: 'HADIR' as const }];
+    }
+
+    // Standard 4 team members placeholder if master data is empty
+    return [
+      { nama: 'Petugas 1', keterangan: 'HADIR' as const },
+      { nama: 'Petugas 2', keterangan: 'HADIR' as const },
+      { nama: 'Petugas 3', keterangan: 'HADIR' as const },
+      { nama: 'Petugas 4', keterangan: 'HADIR' as const },
+    ];
   }, [availablePetugas, users, reguName, userReguClean, currentUser]);
 
   const [petugasRows, setPetugasRows] = useState<AbsensiPetugas[]>(() => {

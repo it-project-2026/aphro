@@ -854,8 +854,31 @@ router.get('/petugas', async (req: Request, res: Response) => {
     }
 
     if (reguFilter) {
-      params.push(`%${reguFilter}%`);
-      sql += ` AND ("Regu" ILIKE $${params.length} OR "Nama_Regu" ILIKE $${params.length} OR "reguName" ILIKE $${params.length})`;
+      const reguClean = reguFilter.replace(/\s+(Bukittinggi|Padang|Solok|Payakumbuh|Kota|Baso|Koto Tuo|Padang Panjang|Lubuk Basung|Lubuk Sikaping|Simpang Empat|Suliki|Sawahlunto|Sijunjung|Muara Labuh).*$/i, '').trim();
+      const mNum = reguFilter.match(/(?:row|regu|tim|users|usr)[-_\s]*0?(\d+)/i) || reguFilter.match(/\b0?(\d+)\b/);
+      const rowNum = mNum ? parseInt(mNum[1], 10) : null;
+
+      if (rowNum !== null) {
+        const numPadded = String(rowNum).padStart(2, '0');
+        const pExact = `%${reguFilter}%`;
+        const pClean = `%${reguClean}%`;
+        const pRowPad = `%ROW ${numPadded}%`;
+        const pRowRaw = `%ROW ${rowNum}%`;
+        const pReguPad = `%REGU ${numPadded}%`;
+        const pReguRaw = `%REGU ${rowNum}%`;
+
+        params.push(pExact, pClean, pRowPad, pRowRaw, pReguPad, pReguRaw);
+        const l = params.length;
+        sql += ` AND ("Regu" ILIKE $${l-5} OR "Nama_Regu" ILIKE $${l-5} OR "reguName" ILIKE $${l-5}
+                  OR "Regu" ILIKE $${l-4} OR "Nama_Regu" ILIKE $${l-4} OR "reguName" ILIKE $${l-4}
+                  OR "Regu" ILIKE $${l-3} OR "Nama_Regu" ILIKE $${l-3} OR "reguName" ILIKE $${l-3}
+                  OR "Regu" ILIKE $${l-2} OR "Nama_Regu" ILIKE $${l-2} OR "reguName" ILIKE $${l-2}
+                  OR "Regu" ILIKE $${l-1} OR "Nama_Regu" ILIKE $${l-1} OR "reguName" ILIKE $${l-1}
+                  OR "Regu" ILIKE $${l} OR "Nama_Regu" ILIKE $${l} OR "reguName" ILIKE $${l})`;
+      } else {
+        params.push(`%${reguFilter}%`);
+        sql += ` AND ("Regu" ILIKE $${params.length} OR "Nama_Regu" ILIKE $${params.length} OR "reguName" ILIKE $${params.length})`;
+      }
     }
 
     let resDb = await query(sql, params);
@@ -1606,6 +1629,27 @@ router.delete(
 // 6. ABSENSI
 // ==========================================
 
+let isAbsensiSchemaEnsured = false;
+
+async function ensureAbsensiSchema() {
+  if (isAbsensiSchemaEnsured) return;
+  try {
+    await query(`
+      ALTER TABLE public."ABSENSI" ALTER COLUMN "FOTO_MASUK" TYPE TEXT;
+      ALTER TABLE public."ABSENSI" ALTER COLUMN "FOTO_KELUAR" TYPE TEXT;
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "USER_NAME" VARCHAR(255);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "NAMA_PETUGAS" VARCHAR(255);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "NIP" VARCHAR(255);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "PENYULANG" VARCHAR(255);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "LATITUDE" VARCHAR(100);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "LONGITUDE" VARCHAR(100);
+    `);
+    isAbsensiSchemaEnsured = true;
+  } catch (err: any) {
+    console.warn('[ABSENSI SCHEMA] Migration note:', err.message);
+  }
+}
+
 /**
  * GET /api/absensi
  */
@@ -1616,8 +1660,8 @@ router.get('/absensi', async (req: Request, res: Response) => {
     req.query
   );
 
-  const { unitId, isAll } =
-    parseUnitFilter(req);
+  await ensureAbsensiSchema();
+  const { unitId, isAll } = parseUnitFilter(req);
 
   try {
     console.log(`[ABSENSI TRACE 1] Fetching absensi list. UnitId: ${unitId}, isAll: ${isAll}`);
@@ -1631,9 +1675,8 @@ router.get('/absensi', async (req: Request, res: Response) => {
 
     if (!isAll && unitId) {
       params.push(unitId);
-
       sql += `
-        AND "unitId" = $${params.length}
+        AND (UPPER("unitId") = UPPER($${params.length}) OR "unitId" IS NULL OR "unitId" = '')
       `;
     }
 
@@ -1667,11 +1710,11 @@ router.get('/absensi', async (req: Request, res: Response) => {
  * Helper for POST/PUT Absensi (Upsert)
  */
 const handleUpsertAbsensi = async (req: Request, res: Response) => {
+  await ensureAbsensiSchema();
   const method = req.method;
-  console.log(`[ABSENSI TRACE 2] Starting ${method} upsert. Payload ID: ${req.body?.id || req.body?.ID || 'new'}`);
   logApiCall(req.method, req.path, req.body);
   const a = req.body || {};
-  const id = req.params.id || a.ID || a.id || `ABS-${Date.now()}`;
+  let targetId = req.params.id || a.ID || a.id;
 
   // Extract from petugasList if present
   if (Array.isArray(a.petugasList)) {
@@ -1689,8 +1732,48 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
 
   // Handle timestamp and date fields safely
   const tanggalVal = toNullableTimestamp(a.TANGGAL || a.tanggal || a.Tanggal) || new Date().toISOString().split('T')[0];
+  const reguNameVal = a.NAMA_REGU || a.namaRegu || a.reguName || a.Regu || '';
   const timestampMasukVal = toNullableTimestamp(a['TIMESTAMP MASUK'] || a.timestampMasuk || a.waktuMasuk || a.createdAt);
   const timestampKeluarVal = toNullableTimestamp(a['TIMESTAMP KELUAR'] || a.timestampKeluar || a.waktuKeluar || a.waktuPulang);
+
+  // If ID is not explicitly provided or is client generated, check if an entry exists for today + regu
+  const extractRowNo = (s: string) => {
+    const m = s.match(/(?:row|regu|tim|users|usr)[-_\s]*0?(\d+)/i) || s.match(/\b0?(\d+)\b/);
+    return m ? m[1] : null;
+  };
+  const rowNo = extractRowNo(reguNameVal);
+
+  if (!targetId || targetId.startsWith('ABS-')) {
+    try {
+      let checkSql = `SELECT "ID" FROM public."ABSENSI" WHERE ("TANGGAL"::text LIKE $1 OR "TANGGAL"::text LIKE $2)`;
+      const checkParams: any[] = [`${tanggalVal}%`, `${tanggalVal.slice(0, 10)}%`];
+
+      if (reguNameVal) {
+        checkParams.push(`%${reguNameVal}%`);
+        checkSql += ` AND ("NAMA_REGU" ILIKE $${checkParams.length}`;
+        if (rowNo) {
+          checkParams.push(`%ROW%${rowNo}%`, `%REGU%${rowNo}%`);
+          checkSql += ` OR "NAMA_REGU" ILIKE $${checkParams.length - 1} OR "NAMA_REGU" ILIKE $${checkParams.length}`;
+        }
+        checkSql += `)`;
+      }
+
+      checkSql += ` ORDER BY "ID" DESC LIMIT 1`;
+      const existRes = await query(checkSql, checkParams);
+      if (existRes.rows.length > 0) {
+        targetId = existRes.rows[0].ID;
+        console.log(`[ABSENSI UPSERT] Found existing record for ${tanggalVal} - ${reguNameVal}. Merging into ID: ${targetId}`);
+      }
+    } catch (e: any) {
+      console.warn('[ABSENSI UPSERT] Check existing record note:', e.message);
+    }
+  }
+
+  if (!targetId) {
+    targetId = `ABS-${Date.now()}`;
+  }
+
+  console.log(`[ABSENSI TRACE 2] Upserting Absensi ID: ${targetId}`);
 
   try {
     const sql = `
@@ -1700,6 +1783,10 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
         "TANGGAL",
         "NAMA_REGU",
         "ULP",
+        "PENYULANG",
+        "USER_NAME",
+        "NAMA_PETUGAS",
+        "NIP",
         "PETUGAS_1",
         "KET_1",
         "PETUGAS_2",
@@ -1713,11 +1800,14 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
         "FOTO_MASUK",
         "TIMESTAMP MASUK",
         "FOTO_KELUAR",
-        "TIMESTAMP KELUAR"
+        "TIMESTAMP KELUAR",
+        "LATITUDE",
+        "LONGITUDE"
       )
       VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,$15,$16,$17,$18,$19
+        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25
       )
       ON CONFLICT ("ID")
       DO UPDATE SET
@@ -1725,6 +1815,10 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
         "TANGGAL" = EXCLUDED."TANGGAL",
         "NAMA_REGU" = EXCLUDED."NAMA_REGU",
         "ULP" = EXCLUDED."ULP",
+        "PENYULANG" = COALESCE(NULLIF(EXCLUDED."PENYULANG", ''), public."ABSENSI"."PENYULANG"),
+        "USER_NAME" = COALESCE(NULLIF(EXCLUDED."USER_NAME", ''), public."ABSENSI"."USER_NAME"),
+        "NAMA_PETUGAS" = COALESCE(NULLIF(EXCLUDED."NAMA_PETUGAS", ''), public."ABSENSI"."NAMA_PETUGAS"),
+        "NIP" = COALESCE(NULLIF(EXCLUDED."NIP", ''), public."ABSENSI"."NIP"),
         "PETUGAS_1" = EXCLUDED."PETUGAS_1",
         "KET_1" = EXCLUDED."KET_1",
         "PETUGAS_2" = EXCLUDED."PETUGAS_2",
@@ -1735,19 +1829,25 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
         "KET_4" = EXCLUDED."KET_4",
         "PETUGAS_5" = EXCLUDED."PETUGAS_5",
         "KET_5" = EXCLUDED."KET_5",
-        "FOTO_MASUK" = EXCLUDED."FOTO_MASUK",
-        "TIMESTAMP MASUK" = EXCLUDED."TIMESTAMP MASUK",
-        "FOTO_KELUAR" = EXCLUDED."FOTO_KELUAR",
-        "TIMESTAMP KELUAR" = EXCLUDED."TIMESTAMP KELUAR"
+        "FOTO_MASUK" = COALESCE(NULLIF(EXCLUDED."FOTO_MASUK", ''), public."ABSENSI"."FOTO_MASUK"),
+        "TIMESTAMP MASUK" = COALESCE(EXCLUDED."TIMESTAMP MASUK", public."ABSENSI"."TIMESTAMP MASUK"),
+        "FOTO_KELUAR" = COALESCE(NULLIF(EXCLUDED."FOTO_KELUAR", ''), public."ABSENSI"."FOTO_KELUAR"),
+        "TIMESTAMP KELUAR" = COALESCE(EXCLUDED."TIMESTAMP KELUAR", public."ABSENSI"."TIMESTAMP KELUAR"),
+        "LATITUDE" = COALESCE(NULLIF(EXCLUDED."LATITUDE", ''), public."ABSENSI"."LATITUDE"),
+        "LONGITUDE" = COALESCE(NULLIF(EXCLUDED."LONGITUDE", ''), public."ABSENSI"."LONGITUDE")
       RETURNING *;
     `;
 
     const params = [
-      id,
-      a.unitId || a.UnitId || 'UL1',
+      targetId,
+      a.unitId || a.UnitId || 'UL2',
       tanggalVal,
-      a.NAMA_REGU || a.namaRegu || a.reguName || a.Regu || '',
+      reguNameVal,
       a.ULP || a.ulpName || a.namaUlp || a.Nama_ULP || '',
+      a.PENYULANG || a.penyulangName || a.namaPenyulang || '',
+      a.USER_NAME || a.userName || a.username || '',
+      a.NAMA_PETUGAS || a.namaPetugas || a.petugasName || '',
+      a.NIP || a.nip || '',
       a.PETUGAS_1 || a.petugas1 || '',
       a.KET_1 || a.ket1 || 'HADIR',
       a.PETUGAS_2 || a.petugas2 || '',
@@ -1762,9 +1862,11 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
       timestampMasukVal,
       a.FOTO_KELUAR || a.fotoKeluar || '',
       timestampKeluarVal,
+      a.LATITUDE || a.latitude ? String(a.LATITUDE || a.latitude) : '',
+      a.LONGITUDE || a.longitude ? String(a.LONGITUDE || a.longitude) : '',
     ];
 
-    console.log(`[ABSENSI TRACE 2] Executing SQL: INSERT ON CONFLICT. ID: ${id}`);
+    console.log(`[ABSENSI TRACE 2] Executing SQL: INSERT ON CONFLICT. ID: ${targetId}`);
     const resDb = await query(sql, params);
 
     if (resDb.rowCount === 0) {
@@ -1776,25 +1878,13 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[ABSENSI TRACE 2] UPSERT Success. rowCount: ${resDb.rowCount}. Verifying write...`);
-    const verifyRes = await query(`SELECT * FROM public."ABSENSI" WHERE "ID" = $1`, [id]);
-
-    if (verifyRes.rowCount === 0) {
-       console.error(`[ABSENSI TRACE 2] VERIFICATION FAILED. Record with ID ${id} not found after write!`);
-       return res.status(500).json({
-         success: false,
-         status: 'error',
-         message: 'Verifikasi database gagal: Record absensi tidak ditemukan setelah disimpan.',
-       });
-    } else {
-       console.log(`[ABSENSI TRACE 2] VERIFICATION Success. Record confirmed in DB.`);
-    }
+    console.log(`[ABSENSI TRACE 2] UPSERT Success. rowCount: ${resDb.rowCount}. Record confirmed in DB.`);
 
     return res.json({
       success: true,
       status: 'success',
       source: 'hypercloud',
-      data: verifyRes.rows[0] || resDb.rows[0],
+      data: resDb.rows[0],
     });
   } catch (err: any) {
     console.error('[ABSENSI UPSERT] Error:', err.message);
