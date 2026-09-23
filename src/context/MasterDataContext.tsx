@@ -56,6 +56,8 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const [petugasList, setPetugasList] = React.useState<Petugas[]>([]);
   const [users, setUsers] = React.useState<User[]>([]);
 
+  const activeRequestIdRef = React.useRef<string>('');
+
   const refreshMasterData = React.useCallback(async (forceRefresh = false, filters: { ulp?: string; regu?: string } = {}) => {
     // GUARD #1: Do not execute fetchMasterData if user is not authenticated or token is missing!
     if (!isAuthenticated || !user) {
@@ -70,10 +72,20 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     }
 
     const unitId = user.unitId ? InisiasiService.getStandardUnitId(user.unitId) : InisiasiService.getSelectedUnitId();
+    const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    activeRequestIdRef.current = requestId;
 
     try {
       console.log(`[AUTH TRACE] authenticated=true tokenPresent=true unitId=${unitId}`);
+      console.log(`[MASTER DATA REQUEST]\nrequestId=${requestId}\nunitId=${unitId}\nsource=HYPERCLOUD`);
+
       const res = await ApiService.fetchMasterData(unitId, filters);
+
+      // Check if this request is still the active one (prevent race condition / stale overwrites)
+      if (activeRequestIdRef.current !== requestId) {
+        console.warn(`[MASTER DATA STALE RESPONSE IGNORED]\nrequestId=${requestId}`);
+        return;
+      }
 
       if (res.isAuthError || res.status === 401) {
         console.warn(`[DB SOURCE] entity=MASTER_DATA source=AUTH_ERROR unitId=${unitId}`);
@@ -81,13 +93,16 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
       }
 
       if (res) {
+        const totalCounts = (res.ulp?.length || 0) + (res.penyulang?.length || 0) + (res.regu?.length || 0) + (res.petugas?.length || 0) + (res.users?.length || 0);
+        console.log(`[MASTER DATA RESPONSE]\nrequestId=${requestId}\ncount=${totalCounts}`);
+
         setUlpList(Array.isArray(res.ulp) ? res.ulp : []);
         setPenyulangList(Array.isArray(res.penyulang) ? res.penyulang : []);
         setReguList(Array.isArray(res.regu) ? res.regu : []);
         setPetugasList(Array.isArray(res.petugas) ? res.petugas : []);
         setUsers(Array.isArray(res.users) ? res.users : []);
 
-        const totalCounts = (res.ulp?.length || 0) + (res.penyulang?.length || 0) + (res.regu?.length || 0) + (res.petugas?.length || 0) + (res.users?.length || 0);
+        console.log(`[MASTER DATA STATE APPLY]\nrequestId=${requestId}`);
         const sourceLabel = totalCounts > 0 ? 'HYPERCLOUD_SUCCESS' : 'HYPERCLOUD_EMPTY';
 
         console.log(`[DB SOURCE] entity=MASTER_DATA source=${sourceLabel} unitId=${unitId} counts: ULP=${res.ulp?.length || 0}, Penyulang=${res.penyulang?.length || 0}, Regu=${res.regu?.length || 0}, Petugas=${res.petugas?.length || 0}, Users=${res.users?.length || 0}`);

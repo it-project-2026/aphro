@@ -66,50 +66,144 @@ export function normalizeUser(u: any): User {
 }
 
 export function normalizeULP(u: any): ULP {
+  if (!u || typeof u !== 'object') {
+    return {
+      id: 'ulp-' + Math.random().toString(36).substring(2, 7),
+      kodeULP: '',
+      namaULP: '',
+      manajer: '',
+      kontak: '',
+      alamat: '',
+      status: 'Aktif',
+    };
+  }
+
+  const id = String(u.id || u.ID || u.Id || u.ulp_id || u.ULP_ID || u.kode_ulp || u.Kode_ULP || u.kodeULP || 'ulp-' + Math.random().toString(36).substring(2, 7));
+  const kodeULP = String(u.kodeULP || u.Kode_ULP || u.kode_ulp || u.Kode || u.kode || u.id || u.ID || '');
+  const namaULP = String(u.namaULP || u.Nama_ULP || u.nama_ulp || u.ULP || u.ulp || u.Nama || u.nama || u.ULP_Name || u.ulp_name || u.NamaULP || '').trim();
+  const manajer = String(u.manajer || u.Manajer || u.manager || u.Manager || '').trim();
+  const kontak = String(u.kontak || u.Kontak || u.no_hp || u.No_HP || u.phone || '').trim();
+  const alamat = String(u.alamat || u.Alamat || u.address || '').trim();
+  const status = (u.status === 'Non-Aktif' || u.status === 'Nonaktif' || u.Status === 'Non-Aktif' || u.Status === 'Nonaktif' || u.status === false || u.is_active === false) ? 'Non-Aktif' : 'Aktif';
+  const unitId = String(u.unitId || u.unit_id || u.UnitID || u.Unit_ID || u.kode_ul || u.Kode_UL || '').trim();
+
   return {
-    id: String(u.id || u.ID || 'ulp-' + Math.random().toString(36).substring(2, 7)),
-    kodeULP: String(u.kodeULP || u.Kode_ULP || u.Kode || ''),
-    namaULP: String(u.namaULP || u.Nama_ULP || u.ULP || u.Nama || ''),
-    manajer: String(u.manajer || u.Manajer || ''),
-    kontak: String(u.kontak || u.Kontak || ''),
-    alamat: String(u.alamat || u.Alamat || ''),
-    status: (u.status === 'Non-Aktif' || u.status === 'Nonaktif' || u.Status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
+    id,
+    unitId: unitId || undefined,
+    kodeULP,
+    namaULP: namaULP || kodeULP || id,
+    manajer,
+    kontak,
+    alamat,
+    status,
   };
 }
 
 export function normalizePenyulang(p: any): Penyulang {
+  if (!p || typeof p !== 'object') {
+    return {
+      id: 'pyl-' + Math.random().toString(36).substring(2, 7),
+      kodePenyulang: 'PYL-01',
+      namaPenyulang: '',
+      ulpId: '',
+      ulpName: '',
+      panjangKms: 0,
+      jumlahTrafo: 0,
+      status: 'Normal',
+    };
+  }
+
+  const id = String(p.id || p.ID || p.Id || p.penyulang_id || p.Penyulang_ID || p.kode_penyulang || p.Kode_Penyulang || p.kodePenyulang || 'pyl-' + Math.random().toString(36).substring(2, 7));
+  const kodePenyulang = String(p.kodePenyulang || p.Kode_Penyulang || p.kode_penyulang || p.Kode || p.kode || p.feeder || p.Feeder || 'PYL-01');
+  const namaPenyulang = String(p.namaPenyulang || p.Nama_Penyulang || p.nama_penyulang || p.Penyulang || p.penyulang || p.Nama || p.nama || p.NAMA_PENYULANG || p.FE_PENYULANG || p.feeder || p.Feeder || '').trim();
+  const ulpId = String(p.ulpId || p.ulp_id || p.ULPId || p.ULP_ID || p.id_ulp || p.ID_ULP || '').trim();
+  const ulpName = String(p.ulpName || p.ulp_name || p.ULP || p.ulp || p.Nama_ULP || p.nama_ulp || p.namaULP || p.NamaULP || p.NAMA_ULP || '').trim();
+  const unitId = String(p.unitId || p.unit_id || p.UnitID || p.Unit_ID || '').trim();
+
   const rawStatus = String(p.status || p.Status || 'Normal');
   let status: 'Normal' | 'Rawan Hazard' | 'Maintenance' = 'Normal';
   if (/hazard/i.test(rawStatus)) status = 'Rawan Hazard';
   else if (/maintenance|maint/i.test(rawStatus)) status = 'Maintenance';
 
   return {
-    id: String(p.id || p.ID || 'pyl-' + Math.random().toString(36).substring(2, 7)),
-    kodePenyulang: String(p.kodePenyulang || p.Kode_Penyulang || p.Kode || 'PYL-01'),
-    namaPenyulang: String(p.namaPenyulang || p.Nama_Penyulang || p.Penyulang || p.Nama || ''),
-    ulpId: String(p.ulpId || p.ULPId || ''),
-    ulpName: String(p.ulpName || p.ULP || p.Nama_ULP || ''),
-    panjangKms: Number(p.panjangKms || p.Panjang_Kms || 0),
-    jumlahTrafo: Number(p.jumlahTrafo || p.Jumlah_Trafo || 0),
+    id,
+    unitId: unitId || undefined,
+    kodePenyulang,
+    namaPenyulang: namaPenyulang || kodePenyulang || id,
+    ulpId,
+    ulpName,
+    panjangKms: parseNumeric(p.panjangKms ?? p.panjang_kms ?? p.Panjang_Kms ?? p.panjang ?? p.Panjang ?? p.kms ?? p.KMS, 0),
+    jumlahTrafo: parseNumeric(p.jumlahTrafo ?? p.jumlah_trafo ?? p.Jumlah_Trafo ?? p.trafo ?? p.Trafo, 0),
     status,
   };
 }
 
 export function normalizeRegu(r: any): ReguROW {
+  if (!r || typeof r !== 'object') {
+    return {
+      id: 'rgu-' + Math.random().toString(36).substring(2, 7),
+      kodeRegu: '',
+      namaRegu: '',
+      penanggungJawab: '',
+      jumlahAnggota: 4,
+      kontak: '',
+      status: 'Aktif',
+    };
+  }
+
+  const id = String(r.id || r.ID || r.Id || r.regu_id || r.Regu_ID || r.kode_regu || r.Kode_Regu || r.kodeRegu || 'rgu-' + Math.random().toString(36).substring(2, 7));
+  const kodeRegu = String(r.kodeRegu || r.Kode_Regu || r.kode_regu || r.Kode || r.kode || '');
+  const namaRegu = String(r.namaRegu || r.Nama_Regu || r.nama_regu || r.Regu_ROW || r.regu_row || r.Regu || r.regu || r.Nama || r.nama || r.NAMA_REGU || r.Tim || r.tim || r.nama_tim || r.Tim_ROW || '').trim();
+  const penanggungJawab = String(r.penanggungJawab || r.penanggung_jawab || r.PenanggungJawab || r.Penanggung_Jawab || r.pj || r.PJ || r.kontak || r.Kontak || '').trim();
+  const ulpId = String(r.ulpId || r.ulp_id || r.ULPId || r.ULP_ID || r.id_ulp || r.ID_ULP || '').trim();
+  const ulpName = String(r.ulpName || r.ulp_name || pUlpName(r) || '').trim();
+  const unitId = String(r.unitId || r.unit_id || r.UnitID || r.Unit_ID || '').trim();
+  const status = (r.status === 'Non-Aktif' || r.status === 'Nonaktif' || r.Status === 'Non-Aktif' || r.Status === 'Nonaktif' || r.status === false || r.is_active === false) ? 'Non-Aktif' : 'Aktif';
+
   return {
-    id: String(r.id || r.ID || 'rgu-' + Math.random().toString(36).substring(2, 7)),
-    kodeRegu: String(r.kodeRegu || r.Kode_Regu || r.Kode || ''),
-    namaRegu: String(r.namaRegu || r.Nama_Regu || r.Regu_ROW || r.Regu || ''),
-    penanggungJawab: String(r.penanggungJawab || r.PenanggungJawab || r.Kontak || ''),
-    ulpId: String(r.ulpId || r.ULPId || ''),
-    ulpName: String(r.ulpName || r.ULP || r.Nama_ULP || ''),
-    jumlahAnggota: Number(r.jumlahAnggota || r.Jumlah_Anggota || 0),
-    kontak: String(r.kontak || r.Kontak || ''),
-    status: (r.status === 'Non-Aktif' || r.status === 'Nonaktif' || r.Status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
+    id,
+    unitId: unitId || undefined,
+    kodeRegu,
+    namaRegu: namaRegu || kodeRegu || id,
+    penanggungJawab,
+    ulpId: ulpId || undefined,
+    ulpName: ulpName || undefined,
+    jumlahAnggota: parseNumeric(r.jumlahAnggota ?? r.jumlah_anggota ?? r.Jumlah_Anggota ?? r.anggota ?? r.Anggota, 4),
+    kontak: String(r.kontak || r.Kontak || r.no_hp || r.No_HP || r.phone || ''),
+    status,
   };
 }
 
+function pUlpName(item: any): string {
+  return item?.ULP || item?.ulp || item?.Nama_ULP || item?.nama_ulp || item?.namaULP || item?.NamaULP || item?.NAMA_ULP || '';
+}
+
 export function normalizePetugas(p: any): Petugas {
+  if (!p || typeof p !== 'object') {
+    return {
+      id: 'ptg-' + Math.random().toString(36).substring(2, 7),
+      nip: '',
+      nama: '',
+      reguId: '',
+      reguName: '',
+      ulpId: '',
+      ulpName: '',
+      noHp: '',
+      role: 'User',
+      status: 'Aktif',
+    };
+  }
+
+  const id = String(p.id || p.ID || p.Id || p.petugas_id || p.Petugas_ID || p.nip || p.NIP || 'ptg-' + Math.random().toString(36).substring(2, 7));
+  const nip = String(p.nip || p.NIP || p.id || p.ID || '');
+  const nama = String(p.nama || p.Nama || p.namaPetugas || p.nama_petugas || p.Nama_Petugas || p.NAMA_PETUGAS || p.Petugas || p.petugas || p.name || p.Name || p.Nama_Anggota || p.NamaAnggota || p.petugas_name || nip || id).trim();
+  const reguId = String(p.reguId || p.regu_id || p.ReguID || p.Regu_ID || p.id_regu || p.ID_REGU || '').trim();
+  const reguName = String(p.reguName || p.regu_name || p.Regu || p.regu || p.Nama_Regu || p.nama_regu || p.namaRegu || p.NAMA_REGU || p.Regu_ROW || p.regu_row || p.Tim || p.tim || p.Nama_Tim || p.nama_tim || p.Tim_ROW || p.Kelompok || '').trim();
+  const ulpId = String(p.ulpId || p.ulp_id || p.ULPId || p.ULP_ID || p.id_ulp || p.ID_ULP || '').trim();
+  const ulpName = String(p.ulpName || p.ulp_name || pUlpName(p) || '').trim();
+  const unitId = String(p.unitId || p.unit_id || p.UnitID || p.Unit_ID || '').trim();
+  const status = (p.status === 'Non-Aktif' || p.status === 'Nonaktif' || p.Status === 'Non-Aktif' || p.Status === 'Nonaktif' || p.status === false || p.is_active === false) ? 'Non-Aktif' : 'Aktif';
+
   const rawRole = String(p.role || p.Role || 'User').trim();
   let role: UserRole = 'User';
   if (/^super\s*admin$/i.test(rawRole) || /superadmin/i.test(rawRole)) role = 'SuperAdmin';
@@ -117,16 +211,17 @@ export function normalizePetugas(p: any): Petugas {
   else if (/admin/i.test(rawRole)) role = 'Admin';
 
   return {
-    id: String(p.id || p.ID || 'ptg-' + Math.random().toString(36).substring(2, 7)),
-    nip: String(p.nip || p.NIP || p.id || p.ID || ''),
-    nama: String(p.nama || p.Nama || p.Petugas || p.namaPetugas || p.Nama_Petugas || p.NAMA_PETUGAS || p.nama_petugas || p.Nama_petugas || p.name || p.Name || p.petugas_name || p.Petugas_Name || p.Nama_Anggota || p.NamaAnggota || p.petugas_name || ''),
-    reguId: String(p.reguId || p.ReguID || ''),
-    reguName: String(p.reguName || p.Regu || p.Nama_Regu || p.NAMA_REGU || p.regu || p.NamaRegu || p.ReguROW || p.Nama_Regu_ROW || p.Tim || p.Nama_Tim || p.Tim_ROW || p.Kelompok || ''),
-    ulpId: String(p.ulpId || p.ULPId || ''),
-    ulpName: String(p.ulpName || p.ULP || p.Nama_ULP || p.NAMA_ULP || p.ulp || p.NamaULP || p.namaULP || p.nama_ulp || ''),
-    noHp: String(p.noHp || p.nomorHP || p.Nomor_HP || p.Kontak || ''),
+    id,
+    unitId: unitId || undefined,
+    nip,
+    nama,
+    reguId,
+    reguName,
+    ulpId,
+    ulpName,
+    noHp: String(p.noHp || p.no_hp || p.nomorHP || p.Nomor_HP || p.Kontak || p.kontak || p.phone || ''),
     role,
-    status: (p.status === 'Non-Aktif' || p.status === 'Nonaktif' || p.Status === 'Non-Aktif' ? 'Non-Aktif' : 'Aktif'),
+    status,
   };
 }
 

@@ -91,24 +91,21 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
 
   // Filter Penyulang based on selected ULP with flexible matching
   const matchedUlp = ulpList.find((u) => normalizeUlp(u.namaULP) === normalizeUlp(ulpName));
-  let filteredPenyulang = penyulangList.filter((p) => {
+  const filteredPenyulang = penyulangList.filter((p) => {
+    if (!ulpName) return true;
     const target = normalizeUlp(ulpName);
     const pUlp = normalizeUlp(p.ulpName || '');
     const isUlpNameMatch = Boolean(pUlp && target && (pUlp === target || pUlp.includes(target) || target.includes(pUlp)));
-    const isUlpIdMatch = Boolean(matchedUlp && p.ulpId === matchedUlp.id);
+    const isUlpIdMatch = Boolean(matchedUlp && p.ulpId && p.ulpId === matchedUlp.id);
     return isUlpNameMatch || isUlpIdMatch;
   });
 
-  // Fallback to all penyulangs if no specific mapping found for selected ULP
-  if (filteredPenyulang.length === 0) {
-    filteredPenyulang = penyulangList;
-  }
+  const listToUse = filteredPenyulang.length > 0 ? filteredPenyulang : (ulpName ? [] : penyulangList);
 
-  // Extract unique penyulang options including any from workOrders & realisasi
+  // Extract unique penyulang options
   const availablePenyulangNames = Array.from(
     new Set([
-      ...filteredPenyulang.map(p => p.namaPenyulang),
-      ...penyulangList.map(p => p.namaPenyulang),
+      ...listToUse.map(p => p.namaPenyulang),
       ...workOrders.filter(w => !ulpName || normalizeUlp(w.ulpName) === normalizeUlp(ulpName)).map(w => w.penyulangName)
     ].filter(Boolean))
   );

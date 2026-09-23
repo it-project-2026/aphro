@@ -73,11 +73,10 @@ export const EditWorkOrderModal: React.FC<EditWorkOrderModalProps> = ({ workOrde
     return isUlpNameMatch || isUlpIdMatch;
   });
 
-  const availablePenyulang = filteredPenyulang.length > 0 ? filteredPenyulang : penyulangList;
+  const availablePenyulang = filteredPenyulang.length > 0 ? filteredPenyulang : (ulpName ? [] : penyulangList);
   const availablePenyulangNames = Array.from(
     new Set([
-      ...availablePenyulang.map(p => p.namaPenyulang),
-      ...penyulangList.map(p => p.namaPenyulang)
+      ...availablePenyulang.map(p => p.namaPenyulang)
     ].filter(Boolean))
   );
 

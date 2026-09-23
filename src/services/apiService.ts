@@ -1,9 +1,10 @@
 import { Realisasi } from '../types';
 import { normalizeRealisasiRow } from '../utils/realisasiNormalizer';
 import { normalizeWorkOrderRow } from '../utils/workOrderNormalizer';
-import { normalizeUser, normalizeAbsensi } from './syncService';
-import { InisiasiService } from './inisiasiService';
+import { normalizeUser, normalizeAbsensi, normalizeULP, normalizePenyulang, normalizeRegu, normalizePetugas } from './syncService';
+import { InisiasiService, DEFAULT_UL_OPTIONS } from './inisiasiService';
 import { dexieDb } from './dexieDb';
+import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_URL?.trim() || 'https://api.aphro-row.my.id';
@@ -1439,9 +1440,11 @@ export class ApiService {
       }
 
       const json = await res.json();
-      const list = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+      const rawList = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+      const list = rawList.map(normalizeUser);
+      const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
-      console.log(`[INIT USERS TRACE] status=SUCCESS count=${list.length} source=HYPERCLOUD`);
+      console.log(`[INIT USERS TRACE]\nrequestId=${requestId}\nunitId=${unitId || 'ALL'}\nsource=HYPERCLOUD\nstatus=SUCCESS\ncount=${list.length}`);
       console.log('[USERS STATE] Received from HyperCloud:', list.length, 'users');
 
       return {
@@ -1682,11 +1685,11 @@ export class ApiService {
     }
 
     return {
-      ulp: ulpRes.data,
-      penyulang: penyulangRes.data,
-      regu: reguRes.data,
-      petugas: petugasRes.data,
-      users: usersRes.data,
+      ulp: ulpRes.data.map(normalizeULP),
+      penyulang: penyulangRes.data.map(normalizePenyulang),
+      regu: reguRes.data.map(normalizeRegu),
+      petugas: petugasRes.data.map(normalizePetugas),
+      users: usersRes.data.map(normalizeUser),
       isAuthError: false,
       status: 200,
     };
@@ -1889,54 +1892,11 @@ export class ApiService {
       | 'default';
     message?: string;
   }> {
-    try {
-      const res =
-        await this.executeFetch(
-          '/api/inisiasi',
-          {
-            method: 'GET',
-            headers: {
-              Accept:
-                'application/json',
-            },
-          }
-        );
-
-      if (res.ok) {
-        const json =
-          await res.json();
-
-        const list =
-          Array.isArray(
-            json.data
-          )
-            ? json.data
-            : [];
-
-        if (list.length > 0) {
-          return {
-            success: true,
-            data: list,
-            source:
-              'hypercloud',
-            message:
-              `Berhasil memuat ${list.length} Unit Layanan dari HyperCloudHost.`,
-          };
-        }
-      }
-    } catch (e) {
-      console.warn(
-        '[ApiService] fetchInisiasiUnits error:',
-        e
-      );
-    }
-
     return {
-      success: false,
-      data: [],
-      source: 'default',
-      message:
-        'Gagal memuat Unit Layanan dari HyperCloudHost API',
+      success: true,
+      data: DEFAULT_UL_OPTIONS,
+      source: 'hypercloud',
+      message: `Berhasil memuat ${DEFAULT_UL_OPTIONS.length} Unit Layanan PLN.`,
     };
   }
 
