@@ -5,7 +5,6 @@
  * AuthService -> Supabase (USERS table) + Dexie (Local fallback for offline login)
  */
 
-import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { dexieDb, LocalUser } from './dexieDb';
 import { User, UserRole } from '../types';
 import { normalizeUser } from './syncService';

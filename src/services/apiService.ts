@@ -264,14 +264,9 @@ export class ApiService {
     queryParams.set('page', String(page));
     queryParams.set('limit', String(limit));
 
-    if (
-      unitId?.trim() &&
-      unitId !== 'ALL'
-    ) {
-      queryParams.set(
-        'unitId',
-        unitId.trim()
-      );
+    const targetUnitId = (unitId && unitId.trim() !== '' ? unitId : InisiasiService.getSelectedUnitId()).trim();
+    if (targetUnitId && targetUnitId !== 'ALL') {
+      queryParams.set('unitId', targetUnitId);
     }
 
     if (tanggalDari?.trim()) {
@@ -426,85 +421,94 @@ export class ApiService {
     serverId?: string;
     message?: string;
   }> {
-    const token =
-      this.getAuthToken();
+    const token = this.getAuthToken();
 
     if (!token) {
+      console.warn('[SYNC] Cannot save REALISASI: JWT token not available.');
       return {
         success: false,
-        message:
-          'Token login tidak ditemukan. Silakan login kembali.',
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
+    const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    const payload = {
+      id: data.id || data.realisasiId,
+      realisasiId: data.id || data.realisasiId,
+      woId: data.workOrderId || data.woId || '',
+      workOrderId: data.workOrderId || data.woId || '',
+      nomorWO: data.nomorWO || '',
+      unitId: unitId,
+      ULP: data.ulpName || data.ULP || '',
+      ulpName: data.ulpName || data.ULP || '',
+      regu: data.reguName || data.regu || data.REGU_ROW || '',
+      reguName: data.reguName || data.regu || data.REGU_ROW || '',
+      penyulang: data.penyulangName || data.penyulang || data.PENYULANG || '',
+      penyulangName: data.penyulangName || data.penyulang || data.PENYULANG || '',
+      noTiang: data.noTiang || data.NO_TIANG || '',
+      tanggalRealisasi: data.tanggalRealisasi || data.tanggal || data.TANGGAL || getWIBDateString(),
+      fotoSebelum: data.fotoSebelumUrl || data.fotoSebelum || '',
+      fotoSesudah: data.fotoSesudahUrl || data.fotoSesudah || '',
+      fotoSebelumUrl: data.fotoSebelumUrl || data.fotoSebelum || '',
+      fotoSesudahUrl: data.fotoSesudahUrl || data.fotoSesudah || '',
+      jenisTanaman: data.jenisTanaman || '',
+      lokasiKerja: data.lokasiKerja || '',
+      keterangan: data.keterangan || 'TEBANG',
+      pertumbuhanTanaman: data.pertumbuhanTanaman || '',
+      kendala: data.kendala || '',
+      latitude: Number(data.latitude || 0),
+      longitude: Number(data.longitude || 0),
+      petugas: data.petugasName || data.petugas || '',
+      petugasId: data.petugasId || '',
+      petugasName: data.petugasName || data.petugas || '',
+      progressPercent: 100,
+      status: 'Selesai',
+    };
+
+    console.log('[SYNC] ONLINE');
+    console.log(`[SYNC] Sending REALISASI to HyperCloud: POST /api/realisasi (unitId=${unitId}, JWT=AVAILABLE, id=${payload.id})`);
+
     try {
-      const res =
-        await this.executeFetch(
-          '/api/realisasi',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-              Accept:
-                'application/json',
-              Authorization:
-                `Bearer ${token}`,
-            },
-            body:
-              JSON.stringify(data),
-          }
-        );
+      const res = await this.executeFetch('/api/realisasi', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        let serverMsg:
-          | string
-          | undefined;
-
+        let serverMsg: string | undefined;
         try {
-          const errJson =
-            await res.json();
-
-          serverMsg =
-            errJson?.message;
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
         } catch {
           // ignore
         }
 
+        console.warn(`[SYNC] FAILED endpoint=/api/realisasi HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
         return {
           success: false,
-          message:
-            this.formatErrorMessage(
-              res.status,
-              serverMsg
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
-      const json =
-        await res
-          .json()
-          .catch(() => ({}));
+      const json = await res.json().catch(() => ({}));
+      const finalServerId = json.id || json.data?.id || payload.id;
+      console.log(`[SYNC] HTTP ${res.status} - REALISASI saved to HyperCloud (ID: ${finalServerId})`);
 
       return {
         success: true,
-        serverId:
-          json.id ||
-          json.data?.id ||
-          data.id,
-        message:
-          json.message,
+        serverId: finalServerId,
+        message: json.message,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.saveRealisasi Error]',
-        err
-      );
-
+      console.warn(`[SYNC] FAILED endpoint=/api/realisasi reason=${err?.message || 'Network error'} record kept as PENDING`);
       return {
         success: false,
-        message:
-          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
   }
@@ -519,74 +523,61 @@ export class ApiService {
     success: boolean;
     message?: string;
   }> {
-    const token =
-      this.getAuthToken();
+    const token = this.getAuthToken();
 
     if (!token) {
+      console.warn('[SYNC] Cannot update REALISASI: JWT token not available.');
       return {
         success: false,
-        message:
-          'Token login tidak ditemukan. Silakan login kembali.',
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
+    const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    const payload = {
+      ...data,
+      unitId,
+    };
+
+    console.log('[SYNC] ONLINE');
+    console.log(`[SYNC] Updating REALISASI to HyperCloud: PUT /api/realisasi/${id} (unitId=${unitId}, JWT=AVAILABLE)`);
+
     try {
-      const res =
-        await this.executeFetch(
-          `/api/realisasi/${encodeURIComponent(id)}`,
-          {
-            method: 'PUT',
-            headers: {
-              'Content-Type':
-                'application/json',
-              Accept:
-                'application/json',
-              Authorization:
-                `Bearer ${token}`,
-            },
-            body:
-              JSON.stringify(data),
-          }
-        );
+      const res = await this.executeFetch(`/api/realisasi/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        let serverMsg:
-          | string
-          | undefined;
-
+        let serverMsg: string | undefined;
         try {
-          const errJson =
-            await res.json();
-
-          serverMsg =
-            errJson?.message;
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
         } catch {
           // ignore
         }
 
+        console.warn(`[SYNC] FAILED endpoint=/api/realisasi/${id} HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
         return {
           success: false,
-          message:
-            this.formatErrorMessage(
-              res.status,
-              serverMsg
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
+      console.log(`[SYNC] HTTP ${res.status} - REALISASI updated in HyperCloud (ID: ${id})`);
       return {
         success: true,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.updateRealisasi Error]',
-        err
-      );
-
+      console.warn(`[SYNC] FAILED endpoint=/api/realisasi/${id} reason=${err?.message || 'Network error'} record kept as PENDING`);
       return {
         success: false,
-        message:
-          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
   }
@@ -773,82 +764,101 @@ export class ApiService {
   }
 
   /**
-   * Save Work Order.
+   * Save Work Order directly to HyperCloud PostgreSQL.
    */
   static async saveWorkOrder(
     data: any
   ): Promise<{
     success: boolean;
+    serverId?: string;
     message?: string;
   }> {
-    const token =
-      this.getAuthToken();
+    const token = this.getAuthToken();
 
     if (!token) {
+      console.warn('[SYNC] Cannot save WORK_ORDER: JWT token not available.');
       return {
         success: false,
-        message:
-          'Token login tidak ditemukan. Silakan login kembali.',
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
+    const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    const payload = {
+      id: data.id || data.WO_ID,
+      WO_ID: data.WO_ID || data.id,
+      woId: data.woId || data.WO_ID || data.id,
+      unitId: unitId,
+      nomorWO: data.nomorWO || data.Nomor_WO || '',
+      Nomor_WO: data.Nomor_WO || data.nomorWO || '',
+      tanggal: data.tanggal || data.Tanggal || getWIBDateString(),
+      Tanggal: data.Tanggal || data.tanggal || getWIBDateString(),
+      ulpName: data.ulpName || data.ULP || '',
+      ULP: data.ULP || data.ulpName || '',
+      penyulangName: data.penyulangName || data.Penyulang || '',
+      Penyulang: data.Penyulang || data.penyulangName || '',
+      reguName: data.reguName || data.Regu_ROW || data.regu || '',
+      Regu_ROW: data.Regu_ROW || data.reguName || data.regu || '',
+      pekerjaan: data.pekerjaan || data.PEKERJAAN || 'NORMAL',
+      PEKERJAAN: data.PEKERJAAN || data.pekerjaan || 'NORMAL',
+      volumePekerjaan: Number(data.volumePekerjaan || data.VOLUME || 0),
+      VOLUME: String(data.VOLUME || data.volumePekerjaan || 0),
+      satuan: data.satuan || data.SATUAN || 'KMS',
+      SATUAN: data.SATUAN || data.satuan || 'KMS',
+      woMulai: data.woMulai || data.WO_AWAL || null,
+      WO_AWAL: data.WO_AWAL || data.woMulai || null,
+      woAkhir: data.woAkhir || data.WO_AKHIR || null,
+      WO_AKHIR: data.WO_AKHIR || data.woAkhir || null,
+      status: (data.status || data.STATUS || 'Belum Dikerjakan').toUpperCase(),
+      STATUS: (data.STATUS || data.status || 'Belum Dikerjakan').toUpperCase(),
+      totalRealisasi: Number(data.totalRealisasi || data.TOTAL_REALISASI || 0),
+      TOTAL_REALISASI: String(data.TOTAL_REALISASI || data.totalRealisasi || 0),
+      satuanTotalRealisasi: data.satuanTotalRealisasi || data.SATUAN_TOTAL_REALISASI || 'KMS',
+      SATUAN_TOTAL_REALISASI: data.SATUAN_TOTAL_REALISASI || data.satuanTotalRealisasi || 'KMS',
+      createdAt: data.createdAt || data.Created_At || getLocalDateTimeString(),
+      Created_At: data.Created_At || data.createdAt || getLocalDateTimeString(),
+    };
+
+    console.log('[SYNC] ONLINE');
+    console.log(`[SYNC] Sending WORK_ORDER to HyperCloud: POST /api/work-orders (unitId=${unitId}, JWT=AVAILABLE, id=${payload.id})`);
+
     try {
-      const res =
-        await this.executeFetch(
-          '/api/work-orders',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-              Accept:
-                'application/json',
-              Authorization:
-                `Bearer ${token}`,
-            },
-            body:
-              JSON.stringify(data),
-          }
-        );
+      const res = await this.executeFetch('/api/work-orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        let serverMsg:
-          | string
-          | undefined;
-
+        let serverMsg: string | undefined;
         try {
-          const errJson =
-            await res.json();
-
-          serverMsg =
-            errJson?.message;
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
         } catch {
           // ignore
         }
 
+        console.warn(`[SYNC] FAILED endpoint=/api/work-orders HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
         return {
           success: false,
-          message:
-            this.formatErrorMessage(
-              res.status,
-              serverMsg
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
+      console.log(`[SYNC] HTTP ${res.status} - WORK_ORDER saved to HyperCloud (ID: ${payload.id})`);
       return {
         success: true,
+        serverId: payload.id,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.saveWorkOrder Error]',
-        err
-      );
-
+      console.warn(`[SYNC] FAILED endpoint=/api/work-orders reason=${err?.message || 'Network error'} record kept as PENDING`);
       return {
         success: false,
-        message:
-          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
   }
@@ -863,74 +873,61 @@ export class ApiService {
     success: boolean;
     message?: string;
   }> {
-    const token =
-      this.getAuthToken();
+    const token = this.getAuthToken();
 
     if (!token) {
+      console.warn('[SYNC] Cannot update WORK_ORDER: JWT token not available.');
       return {
         success: false,
-        message:
-          'Token login tidak ditemukan. Silakan login kembali.',
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
+    const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    const payload = {
+      ...data,
+      unitId,
+    };
+
+    console.log('[SYNC] ONLINE');
+    console.log(`[SYNC] Updating WORK_ORDER to HyperCloud: PUT /api/work-orders/${id} (unitId=${unitId}, JWT=AVAILABLE)`);
+
     try {
-      const res =
-        await this.executeFetch(
-          `/api/work-orders/${encodeURIComponent(id)}`,
-          {
-            method: 'PUT',
-            headers: {
-              'Content-Type':
-                'application/json',
-              Accept:
-                'application/json',
-              Authorization:
-                `Bearer ${token}`,
-            },
-            body:
-              JSON.stringify(data),
-          }
-        );
+      const res = await this.executeFetch(`/api/work-orders/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        let serverMsg:
-          | string
-          | undefined;
-
+        let serverMsg: string | undefined;
         try {
-          const errJson =
-            await res.json();
-
-          serverMsg =
-            errJson?.message;
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
         } catch {
           // ignore
         }
 
+        console.warn(`[SYNC] FAILED endpoint=/api/work-orders/${id} HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
         return {
           success: false,
-          message:
-            this.formatErrorMessage(
-              res.status,
-              serverMsg
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
+      console.log(`[SYNC] HTTP ${res.status} - WORK_ORDER updated in HyperCloud (ID: ${id})`);
       return {
         success: true,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.updateWorkOrder Error]',
-        err
-      );
-
+      console.warn(`[SYNC] FAILED endpoint=/api/work-orders/${id} reason=${err?.message || 'Network error'} record kept as PENDING`);
       return {
         success: false,
-        message:
-          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
   }
@@ -1045,82 +1042,93 @@ export class ApiService {
   }
 
   /**
-   * Save Absensi.
+   * Save Absensi directly to HyperCloud PostgreSQL.
    */
   static async saveAbsensi(
     data: any
   ): Promise<{
     success: boolean;
+    serverId?: string;
     message?: string;
   }> {
-    const token =
-      this.getAuthToken();
+    const token = this.getAuthToken();
 
     if (!token) {
+      console.warn('[SYNC] Cannot save ABSENSI: JWT token not available.');
       return {
         success: false,
-        message:
-          'Token login tidak ditemukan. Silakan login kembali.',
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
+    const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    const payload = {
+      id: data.id || `ABS-${Date.now()}`,
+      unitId: unitId,
+      tanggal: data.tanggal || data.TANGGAL || getWIBDateString(),
+      TANGGAL: data.TANGGAL || data.tanggal || getWIBDateString(),
+      ulpName: data.ulpName || data.ULP || '',
+      ULP: data.ULP || data.ulpName || '',
+      reguName: data.reguName || data.NAMA_REGU || data.REGU_ROW || '',
+      NAMA_REGU: data.NAMA_REGU || data.reguName || data.REGU_ROW || '',
+      petugasList: data.petugasList || data.PETUGAS || [],
+      PETUGAS: data.PETUGAS || data.petugasList || [],
+      fotoMasuk: data.fotoMasuk || data.FOTO_MASUK || '',
+      FOTO_MASUK: data.FOTO_MASUK || data.fotoMasuk || '',
+      timestampMasuk: data.timestampMasuk || data.TIMESTAMP_MASUK || '',
+      TIMESTAMP_MASUK: data.TIMESTAMP_MASUK || data.timestampMasuk || '',
+      fotoKeluar: data.fotoKeluar || data.FOTO_KELUAR || '',
+      FOTO_KELUAR: data.FOTO_KELUAR || data.fotoKeluar || '',
+      timestampKeluar: data.timestampKeluar || data.TIMESTAMP_KELUAR || '',
+      TIMESTAMP_KELUAR: data.TIMESTAMP_KELUAR || data.timestampKeluar || '',
+      latitude: Number(data.latitude || data.LATITUDE || 0),
+      LATITUDE: Number(data.LATITUDE || data.latitude || 0),
+      longitude: Number(data.longitude || data.LONGITUDE || 0),
+      LONGITUDE: Number(data.LONGITUDE || data.longitude || 0),
+      createdAt: data.createdAt || data.CREATED_AT || getLocalDateTimeString(),
+      CREATED_AT: data.CREATED_AT || data.createdAt || getLocalDateTimeString(),
+    };
+
+    console.log('[SYNC] ONLINE');
+    console.log(`[SYNC] Sending ABSENSI to HyperCloud: POST /api/absensi (unitId=${unitId}, JWT=AVAILABLE, id=${payload.id})`);
+
     try {
-      const res =
-        await this.executeFetch(
-          '/api/absensi',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-              Accept:
-                'application/json',
-              Authorization:
-                `Bearer ${token}`,
-            },
-            body:
-              JSON.stringify(data),
-          }
-        );
+      const res = await this.executeFetch('/api/absensi', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        let serverMsg:
-          | string
-          | undefined;
-
+        let serverMsg: string | undefined;
         try {
-          const errJson =
-            await res.json();
-
-          serverMsg =
-            errJson?.message;
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
         } catch {
           // ignore
         }
 
+        console.warn(`[SYNC] FAILED endpoint=/api/absensi HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
         return {
           success: false,
-          message:
-            this.formatErrorMessage(
-              res.status,
-              serverMsg
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
+      console.log(`[SYNC] HTTP ${res.status} - ABSENSI saved to HyperCloud (ID: ${payload.id})`);
       return {
         success: true,
+        serverId: payload.id,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.saveAbsensi Error]',
-        err
-      );
-
+      console.warn(`[SYNC] FAILED endpoint=/api/absensi reason=${err?.message || 'Network error'} record kept as PENDING`);
       return {
         success: false,
-        message:
-          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
   }
@@ -1135,74 +1143,61 @@ export class ApiService {
     success: boolean;
     message?: string;
   }> {
-    const token =
-      this.getAuthToken();
+    const token = this.getAuthToken();
 
     if (!token) {
+      console.warn('[SYNC] Cannot update ABSENSI: JWT token not available.');
       return {
         success: false,
-        message:
-          'Token login tidak ditemukan. Silakan login kembali.',
+        message: 'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
+    const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    const payload = {
+      ...data,
+      unitId,
+    };
+
+    console.log('[SYNC] ONLINE');
+    console.log(`[SYNC] Updating ABSENSI to HyperCloud: PUT /api/absensi/${id} (unitId=${unitId}, JWT=AVAILABLE)`);
+
     try {
-      const res =
-        await this.executeFetch(
-          `/api/absensi/${encodeURIComponent(id)}`,
-          {
-            method: 'PUT',
-            headers: {
-              'Content-Type':
-                'application/json',
-              Accept:
-                'application/json',
-              Authorization:
-                `Bearer ${token}`,
-            },
-            body:
-              JSON.stringify(data),
-          }
-        );
+      const res = await this.executeFetch(`/api/absensi/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        let serverMsg:
-          | string
-          | undefined;
-
+        let serverMsg: string | undefined;
         try {
-          const errJson =
-            await res.json();
-
-          serverMsg =
-            errJson?.message;
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
         } catch {
           // ignore
         }
 
+        console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
         return {
           success: false,
-          message:
-            this.formatErrorMessage(
-              res.status,
-              serverMsg
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
+      console.log(`[SYNC] HTTP ${res.status} - ABSENSI updated in HyperCloud (ID: ${id})`);
       return {
         success: true,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.updateAbsensi Error]',
-        err
-      );
-
+      console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} reason=${err?.message || 'Network error'} record kept as PENDING`);
       return {
         success: false,
-        message:
-          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
   }
@@ -1372,14 +1367,23 @@ export class ApiService {
 
     if (!token) {
       console.warn('[ApiService] fetchUsers: Token JWT tidak ditemukan.');
+      const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+      if (isOnline) {
+        return {
+          success: false,
+          data: [],
+          source: 'none',
+          message: 'Token JWT tidak ditemukan. Silakan login terlebih dahulu.',
+        };
+      }
       const dexieUsers = await dexieDb.users.toArray().catch(() => []);
       if (dexieUsers && dexieUsers.length > 0) {
-        console.log('[USERS STATE] Received from Dexie cache:', dexieUsers.length, 'users');
+        console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
         return {
           success: true,
           data: dexieUsers,
           source: 'dexie',
-          message: 'JWT token tidak ditemukan. Memuat data pengguna dari cache lokal.',
+          message: 'Mode Offline: Memuat data pengguna dari cache lokal.',
         };
       }
       return {
@@ -1446,9 +1450,24 @@ export class ApiService {
           serverMsg
         );
 
+        // On HTTP 401/403 or online error: DO NOT fallback to Dexie cache!
+        const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+        if (isOnline || res.status === 401 || res.status === 403) {
+          return {
+            success: false,
+            data: [],
+            source: 'none',
+            message:
+              this.formatErrorMessage(
+                res.status,
+                serverMsg
+              ),
+          };
+        }
+
         const dexieUsers = await dexieDb.users.toArray().catch(() => []);
         if (dexieUsers && dexieUsers.length > 0) {
-          console.log('[USERS STATE] Received from Dexie cache:', dexieUsers.length, 'users');
+          console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
           return {
             success: true,
             data: dexieUsers,
@@ -1490,23 +1509,26 @@ export class ApiService {
       };
     } catch (err: any) {
       console.warn(
-        '[ApiService.fetchUsers Error, attempting Dexie fallback]',
+        '[ApiService.fetchUsers Exception]',
         err?.message || err
       );
 
-      try {
-        const dexieUsers = await dexieDb.users.toArray();
-        if (dexieUsers && dexieUsers.length > 0) {
-          console.log('[USERS STATE] Received from Dexie cache:', dexieUsers.length, 'users');
-          return {
-            success: true,
-            data: dexieUsers,
-            source: 'dexie',
-            message: 'Memuat data pengguna dari cache lokal.',
-          };
+      const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+      if (!isOnline) {
+        try {
+          const dexieUsers = await dexieDb.users.toArray();
+          if (dexieUsers && dexieUsers.length > 0) {
+            console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
+            return {
+              success: true,
+              data: dexieUsers,
+              source: 'dexie',
+              message: 'Memuat data pengguna dari cache lokal.',
+            };
+          }
+        } catch (dexieErr) {
+          console.warn('[ApiService.fetchUsers Dexie error]', dexieErr);
         }
-      } catch (dexieErr) {
-        console.warn('[ApiService.fetchUsers Dexie error]', dexieErr);
       }
 
       return {
@@ -1638,154 +1660,97 @@ export class ApiService {
     regu: any[];
     petugas: any[];
     users: any[];
+    isAuthError?: boolean;
+    status?: number;
   }> {
-    const token =
-      this.getAuthToken();
+    const token = this.getAuthToken();
 
-    const headers: Record<
-      string,
-      string
-    > = {
-      Accept:
-        'application/json',
-    };
-
-    if (token) {
-      headers[
-        'Authorization'
-      ] = `Bearer ${token}`;
+    if (!token) {
+      console.warn('[ApiService] fetchMasterData aborted: JWT token missing.');
+      return {
+        ulp: [],
+        penyulang: [],
+        regu: [],
+        petugas: [],
+        users: [],
+        isAuthError: true,
+        status: 401,
+      };
     }
 
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
     const query =
-      unitId &&
-      unitId !== 'ALL'
+      unitId && unitId !== 'ALL'
         ? `?unitId=${encodeURIComponent(unitId)}`
         : '';
 
-    const masterQuery =
-      query || '?unitId=ALL';
+    const masterQuery = query || '?unitId=ALL';
 
-    let petugasQuery =
-      masterQuery;
+    let petugasQuery = masterQuery;
 
     if (filters.ulp) {
-      petugasQuery +=
-        `&ulp=${encodeURIComponent(filters.ulp)}`;
+      petugasQuery += `&ulp=${encodeURIComponent(filters.ulp)}`;
     }
 
     if (filters.regu) {
-      petugasQuery +=
-        `&regu=${encodeURIComponent(filters.regu)}`;
+      petugasQuery += `&regu=${encodeURIComponent(filters.regu)}`;
     }
 
-    const [
-      ulpRes,
-      penyulangRes,
-      reguRes,
-      petugasRes,
-      usersRes,
-    ] = await Promise.all([
-      this.executeFetch(
-        `/api/ulp${masterQuery}`,
-        { headers }
-      )
-        .then((r) =>
-          r.ok
-            ? r.json()
-            : { data: [] }
-        )
-        .catch(() => ({
-          data: [],
-        })),
+    const safeFetch = async (url: string) => {
+      try {
+        const r = await this.executeFetch(url, { headers });
+        if (r.status === 401 || r.status === 403) {
+          return { data: [], isAuthError: true, status: r.status };
+        }
+        if (r.ok) {
+          const json = await r.json();
+          return { data: Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [], status: 200 };
+        }
+        return { data: [], status: r.status };
+      } catch {
+        return { data: [], status: 500 };
+      }
+    };
 
-      this.executeFetch(
-        `/api/penyulang${masterQuery}`,
-        { headers }
-      )
-        .then((r) =>
-          r.ok
-            ? r.json()
-            : { data: [] }
-        )
-        .catch(() => ({
-          data: [],
-        })),
-
-      this.executeFetch(
-        `/api/regu-row${masterQuery}`,
-        { headers }
-      )
-        .then((r) =>
-          r.ok
-            ? r.json()
-            : { data: [] }
-        )
-        .catch(() => ({
-          data: [],
-        })),
-
-      this.executeFetch(
-        `/api/petugas${petugasQuery}`,
-        { headers }
-      )
-        .then((r) =>
-          r.ok
-            ? r.json()
-            : { data: [] }
-        )
-        .catch(() => ({
-          data: [],
-        })),
-
-      this.executeFetch(
-        `/api/users${masterQuery}`,
-        { headers }
-      )
-        .then((r) =>
-          r.ok
-            ? r.json()
-            : { data: [] }
-        )
-        .catch(() => ({
-          data: [],
-        })),
+    const [ulpRes, penyulangRes, reguRes, petugasRes, usersRes] = await Promise.all([
+      safeFetch(`/api/ulp${masterQuery}`),
+      safeFetch(`/api/penyulang${masterQuery}`),
+      safeFetch(`/api/regu-row${masterQuery}`),
+      safeFetch(`/api/petugas${petugasQuery}`),
+      safeFetch(`/api/users${masterQuery}`),
     ]);
 
+    const isAuthError =
+      ulpRes.isAuthError ||
+      penyulangRes.isAuthError ||
+      reguRes.isAuthError ||
+      petugasRes.isAuthError ||
+      usersRes.isAuthError;
+
+    if (isAuthError) {
+      return {
+        ulp: [],
+        penyulang: [],
+        regu: [],
+        petugas: [],
+        users: [],
+        isAuthError: true,
+        status: 401,
+      };
+    }
+
     return {
-      ulp:
-        Array.isArray(
-          ulpRes.data
-        )
-          ? ulpRes.data
-          : [],
-
-      penyulang:
-        Array.isArray(
-          penyulangRes.data
-        )
-          ? penyulangRes.data
-          : [],
-
-      regu:
-        Array.isArray(
-          reguRes.data
-        )
-          ? reguRes.data
-          : [],
-
-      petugas:
-        Array.isArray(
-          petugasRes.data
-        )
-          ? petugasRes.data
-          : [],
-
-      users:
-        Array.isArray(
-          usersRes.data
-        )
-          ? usersRes.data
-          : [],
+      ulp: ulpRes.data,
+      penyulang: penyulangRes.data,
+      regu: reguRes.data,
+      petugas: petugasRes.data,
+      users: usersRes.data,
+      isAuthError: false,
+      status: 200,
     };
   }
 

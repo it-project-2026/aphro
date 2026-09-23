@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ULP, Penyulang, ReguROW, Petugas, User } from '../types';
 import { useSettings } from './SettingsContext';
+import { useAuth } from './AuthContext';
 import { ApiService } from '../services/apiService';
 import { InisiasiService } from '../services/inisiasiService';
 
@@ -46,7 +47,8 @@ const MasterDataContext = React.createContext<MasterDataContextType | undefined>
 
 export function MasterDataProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
-  const activeUnitId = InisiasiService.getSelectedUnitId();
+  const { user, isAuthenticated } = useAuth();
+  const activeUnitId = user?.unitId || InisiasiService.getSelectedUnitId();
 
   const [ulpList, setUlpList] = React.useState<ULP[]>([]);
   const [penyulangList, setPenyulangList] = React.useState<Penyulang[]>([]);
@@ -55,10 +57,29 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const [users, setUsers] = React.useState<User[]>([]);
 
   const refreshMasterData = React.useCallback(async (forceRefresh = false, filters: { ulp?: string; regu?: string } = {}) => {
-    const unitId = InisiasiService.getSelectedUnitId();
-    
+    // GUARD #1: Do not execute fetchMasterData if user is not authenticated or token is missing!
+    if (!isAuthenticated || !user) {
+      console.log('[MasterDataContext] Skipping refreshMasterData: User not authenticated.');
+      return;
+    }
+
+    const token = ApiService.getAuthToken();
+    if (!token) {
+      console.log('[MasterDataContext] Skipping refreshMasterData: JWT Token missing.');
+      return;
+    }
+
+    const unitId = user.unitId ? InisiasiService.getStandardUnitId(user.unitId) : InisiasiService.getSelectedUnitId();
+
     try {
+      console.log(`[AUTH TRACE] authenticated=true tokenPresent=true unitId=${unitId}`);
       const res = await ApiService.fetchMasterData(unitId, filters);
+
+      if (res.isAuthError || res.status === 401) {
+        console.warn(`[DB SOURCE] entity=MASTER_DATA source=AUTH_ERROR unitId=${unitId}`);
+        return;
+      }
+
       if (res) {
         setUlpList(Array.isArray(res.ulp) ? res.ulp : []);
         setPenyulangList(Array.isArray(res.penyulang) ? res.penyulang : []);
@@ -66,16 +87,27 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
         setPetugasList(Array.isArray(res.petugas) ? res.petugas : []);
         setUsers(Array.isArray(res.users) ? res.users : []);
 
-        console.log(`[DB SOURCE] entity=MASTER_DATA source=HYPERCLOUD unitId=${unitId} counts: ULP=${res.ulp?.length || 0}, Penyulang=${res.penyulang?.length || 0}, Regu=${res.regu?.length || 0}, Petugas=${res.petugas?.length || 0}, Users=${res.users?.length || 0}`);
+        const totalCounts = (res.ulp?.length || 0) + (res.penyulang?.length || 0) + (res.regu?.length || 0) + (res.petugas?.length || 0) + (res.users?.length || 0);
+        const sourceLabel = totalCounts > 0 ? 'HYPERCLOUD_SUCCESS' : 'HYPERCLOUD_EMPTY';
+
+        console.log(`[DB SOURCE] entity=MASTER_DATA source=${sourceLabel} unitId=${unitId} counts: ULP=${res.ulp?.length || 0}, Penyulang=${res.penyulang?.length || 0}, Regu=${res.regu?.length || 0}, Petugas=${res.petugas?.length || 0}, Users=${res.users?.length || 0}`);
       }
     } catch (err) {
       console.warn('Error loading Master Data from HyperCloud:', err);
     }
-  }, [setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
+  }, [isAuthenticated, user, setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
 
   React.useEffect(() => {
-    refreshMasterData(true);
-  }, [refreshMasterData, settings.namaUnitLayanan, activeUnitId]);
+    if (isAuthenticated && user && user.unitId) {
+      refreshMasterData(true);
+    } else {
+      setUlpList([]);
+      setPenyulangList([]);
+      setReguList([]);
+      setPetugasList([]);
+      setUsers([]);
+    }
+  }, [refreshMasterData, isAuthenticated, user, settings.namaUnitLayanan, activeUnitId]);
 
   const setMasterData = React.useCallback((data: {
     ulp?: ULP[];

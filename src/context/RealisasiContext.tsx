@@ -236,10 +236,24 @@ export function RealisasiProvider({
       async (
         params: FetchRealisasiParams = {}
       ) => {
+        if (!user || !user.unitId) {
+          console.log('[RealisasiContext] Skipping fetchRealisasiFromApi: User not authenticated.');
+          return;
+        }
+
+        const token = ApiService.getAuthToken();
+        if (!token) {
+          console.log('[RealisasiContext] Skipping fetchRealisasiFromApi: Token missing.');
+          return;
+        }
+
         setIsLoading(true);
         setError(null);
 
+        const unitId = user.unitId ? InisiasiService.getStandardUnitId(user.unitId) : InisiasiService.getSelectedUnitId();
+
         const newParams = {
+          unitId,
           ...lastFetchParams.current,
           ...params,
         };
@@ -257,8 +271,10 @@ export function RealisasiProvider({
               if (res.pagination) {
                 setPagination(res.pagination);
               }
+              console.log(`[DB SOURCE] entity=REALISASI source=HYPERCLOUD unitId=${unitId} count=${list.length}`);
             } else {
               setError(res.message || 'Gagal mengambil data Realisasi');
+              console.warn(`[DB SOURCE] entity=REALISASI source=AUTH_OR_API_ERROR unitId=${unitId}`);
             }
           } catch (err: any) {
           console.warn(
@@ -271,24 +287,28 @@ export function RealisasiProvider({
               'Gagal terhubung ke Database Realisasi'
           );
 
-          try {
-            const localRecords =
-              await dexieDb.realisasi.toArray();
+          const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+          if (!isOnline) {
+            try {
+              const localRecords =
+                await dexieDb.realisasi.toArray();
 
-            if (
-              localRecords.length > 0
-            ) {
-              setRealisasiList(
-                mapLocalToUI(
-                  localRecords
-                )
+              if (
+                localRecords.length > 0
+              ) {
+                console.log(`[DB SOURCE] entity=REALISASI source=OFFLINE_DEXIE count=${localRecords.length}`);
+                setRealisasiList(
+                  mapLocalToUI(
+                    localRecords
+                  )
+                );
+              }
+            } catch (dexErr) {
+              console.warn(
+                'Dexie fallback failed:',
+                dexErr
               );
             }
-          } catch (dexErr) {
-            console.warn(
-              'Dexie fallback failed:',
-              dexErr
-            );
           }
         } finally {
           setIsLoading(false);
@@ -627,24 +647,50 @@ export function RealisasiProvider({
             const saveRes = await ApiService.saveRealisasi(newRelUI);
 
             if (saveRes && saveRes.success) {
-              showToast('Data Realisasi berhasil tersimpan ke HyperCloud.', 'success');
+              // 1.1 Persist local copy in Dexie with SYNCED status (so offline view is ready without queuing)
+              try {
+                await dexieDb.realisasi.put({
+                  ...localRecord,
+                  syncStatus: 'SYNCED',
+                  serverId: saveRes.serverId || localId,
+                  updatedAt: timestamp,
+                });
+                for (const p of localPhotos) {
+                  await dexieDb.photos.put({
+                    ...p,
+                    syncStatus: 'SYNCED',
+                  });
+                }
+                await dexieDb.sync_queue.delete(idempotencyKey);
+              } catch (e) {
+                console.warn('[RealisasiContext] Dexie cache save error:', e);
+              }
+
+              showToast('✓ Data Realisasi berhasil disimpan ke HyperCloud.', 'success');
               
               // Immediate UI update
-              setRealisasiList(prev => [newRelUI, ...prev]);
+              setRealisasiList((prev) => [newRelUI, ...prev]);
 
               await refreshRealisasi(true);
               await fetchDashboardRealisasi();
               return newRelUI;
+            } else {
+              console.warn('[RealisasiContext] API save returned error, falling back to offline queue:', saveRes?.message);
             }
           } catch (directErr) {
-            console.warn('[RealisasiContext] Direct save failed:', directErr);
+            console.warn('[RealisasiContext] Direct save exception:', directErr);
           }
         }
 
-        // 2. OFFLINE FALLBACK
-        setRealisasiList(prev => [newRelUI, ...prev]);
+        // 2. OFFLINE FALLBACK (Offline or API failed)
+        setRealisasiList((prev) => [newRelUI, ...prev]);
         await offlineSyncQueue.enqueueRealisasi(localRecord, localPhotos);
-        showToast('Koneksi terganggu. Realisasi disimpan di antrean offline.', 'info');
+        
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          showToast('⚠ Tidak ada koneksi Internet. Data tersimpan sementara di perangkat dan akan disinkronkan saat koneksi tersedia.', 'info');
+        } else {
+          showToast('⚠ HyperCloud tidak dapat dihubungi. Data disimpan sementara dan menunggu sinkronisasi.', 'warning');
+        }
         return newRelUI;
       },
       [
@@ -652,6 +698,89 @@ export function RealisasiProvider({
         showToast,
         fetchRealisasiFromApi,
         fetchDashboardRealisasi,
+        refreshRealisasi,
+      ]
+    );
+
+  // ============================================================
+  // UPDATE REALISASI
+  // ============================================================
+
+  const updateRealisasi =
+    React.useCallback(
+      async (
+        id: string,
+        updates: Partial<Realisasi>
+      ) => {
+        const existing =
+          realisasiList.find(
+            (r) =>
+              r.id === id ||
+              r.syncId === id
+          );
+
+        if (!existing) return;
+
+        const updatedRel = {
+          ...existing,
+          ...updates,
+          updatedAt: getLocalDateTimeString(),
+        };
+
+        setRealisasiList(
+          (prev) =>
+            prev.map(
+              (rel) =>
+                rel.id === id ||
+                rel.syncId === id
+                  ? updatedRel
+                  : rel
+            )
+        );
+
+        const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+
+        if (isOnline) {
+          try {
+            const apiRes = await ApiService.updateRealisasi(id, updatedRel);
+            if (apiRes && apiRes.success) {
+              await dexieDb.realisasi.update(id, {
+                ...updates,
+                syncStatus: 'SYNCED',
+                updatedAt: getLocalDateTimeString(),
+              }).catch(() => {});
+              showToast('✓ Realisasi berhasil diperbarui di HyperCloud', 'success');
+              return;
+            }
+          } catch (e) {
+            console.warn('[RealisasiContext] Online update failed:', e);
+          }
+        }
+
+        // Offline or API error fallback
+        try {
+          await dexieDb.realisasi.update(
+            id,
+            {
+              ...updates,
+              syncStatus: 'PENDING',
+              updatedAt: getLocalDateTimeString(),
+            }
+          );
+
+          if (!isOnline) {
+            showToast('⚠ Tidak ada koneksi Internet. Perubahan disimpan di perangkat.', 'info');
+          } else {
+            showToast('⚠ Server tidak dapat dihubungi. Perubahan disimpan di antrean lokal.', 'warning');
+          }
+        } catch (err) {
+          console.warn('Update Dexie Realisasi error:', err);
+        }
+      },
+      [
+        realisasiList,
+        setRealisasiList,
+        showToast,
       ]
     );
 
@@ -969,71 +1098,6 @@ export function RealisasiProvider({
         showToast,
         fetchRealisasiFromApi,
         fetchDashboardRealisasi,
-      ]
-    );
-
-  // ============================================================
-  // UPDATE REALISASI
-  // ============================================================
-
-  const updateRealisasi =
-    React.useCallback(
-      async (
-        id: string,
-        updates: Partial<Realisasi>
-      ) => {
-        const existing =
-          realisasiList.find(
-            (r) =>
-              r.id === id ||
-              r.syncId === id
-          );
-
-        if (!existing) return;
-
-        const updatedRel = {
-          ...existing,
-          ...updates,
-        };
-
-        setRealisasiList(
-          (prev) =>
-            prev.map(
-              (rel) =>
-                rel.id === id ||
-                rel.syncId === id
-                  ? updatedRel
-                  : rel
-            )
-        );
-
-        try {
-          await dexieDb.realisasi.update(
-            id,
-            {
-              ...updates,
-              syncStatus:
-                'PENDING',
-              updatedAt:
-                getLocalDateTimeString(),
-            }
-          );
-
-          showToast(
-            'Realisasi berhasil diperbarui di perangkat',
-            'info'
-          );
-        } catch (err) {
-          console.warn(
-            'Update Dexie Realisasi error:',
-            err
-          );
-        }
-      },
-      [
-        realisasiList,
-        setRealisasiList,
-        showToast,
       ]
     );
 

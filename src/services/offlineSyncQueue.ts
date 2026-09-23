@@ -299,6 +299,17 @@ class OfflineSyncQueueEngine {
       console.warn(`[SyncQueueEngine] Sync failed for key ${item.idempotencyKey}:`, error);
 
       const errStr = String(error?.message || error || '').toLowerCase();
+      const is404 = errStr.includes('404') || errStr.includes('not found') || errStr.includes('tidak ditemukan');
+
+      if (is404) {
+        item.status = 'FAILED_ENDPOINT_NOT_FOUND';
+        item.retryCount = 999;
+        item.error = error?.message || 'Endpoint tidak ditemukan (HTTP 404).';
+        await dexieDb.sync_queue.put(item);
+        console.warn(`[SyncQueueEngine] Item ${item.idempotencyKey} marked as FAILED_ENDPOINT_NOT_FOUND. Stopping retries.`);
+        return false;
+      }
+
       const isClientError = errStr.includes('400') || errStr.includes('pgrst') || errStr.includes('column') || errStr.includes('schema') || errStr.includes('bad request');
 
       const nextRetry = item.retryCount + 1;

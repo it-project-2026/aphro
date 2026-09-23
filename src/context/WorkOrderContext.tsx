@@ -40,16 +40,28 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
   // Auto-fetch Work Orders from HyperCloud / Dexie
   const refreshWorkOrders = React.useCallback(async (page: number = 0) => {
+    if (!user || !user.unitId) {
+      console.log('[WorkOrderContext] Skipping refreshWorkOrders: User not authenticated.');
+      return;
+    }
+
+    const token = ApiService.getAuthToken();
+    if (!token) {
+      console.log('[WorkOrderContext] Skipping refreshWorkOrders: Token missing.');
+      return;
+    }
+
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
 
     try {
       if (page === 0) setIsLoading(true);
 
+      const unitId = user.unitId ? InisiasiService.getStandardUnitId(user.unitId) : InisiasiService.getSelectedUnitId();
+
       // 1. ONLINE-FIRST: Fetch from HyperCloud API
       const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
       if (isOnline) {
-        const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
         const res = await ApiService.fetchWorkOrders(unitId);
 
         if (res.success && Array.isArray(res.data)) {
@@ -84,15 +96,21 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           setIsLoading(false);
           isFetchingRef.current = false;
           return;
+        } else {
+          console.warn(`[DB SOURCE] entity=WORK_ORDERS source=AUTH_OR_API_ERROR unitId=${unitId}`);
+          setIsLoading(false);
+          isFetchingRef.current = false;
+          return;
         }
       }
 
-      // 2. OFFLINE FALLBACK: Load from Dexie DB
+      // 2. OFFLINE FALLBACK: Load from Dexie DB ONLY if offline
       const cachedLocals = await dexieDb.work_orders.toArray();
       if (cachedLocals.length > 0) {
+        console.log(`[DB SOURCE] entity=WORK_ORDERS source=OFFLINE_DEXIE count=${cachedLocals.length}`);
         setWorkOrders(cachedLocals);
       } else if (page === 0) {
-        setWorkOrders(INITIAL_WORK_ORDERS);
+        setWorkOrders([]);
       }
     } catch (err) {
       console.warn('Error loading Work Orders:', err);
@@ -100,7 +118,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       isFetchingRef.current = false;
     }
-  }, []);
+  }, [user]);
 
   React.useEffect(() => {
     lastSyncRef.current = undefined;

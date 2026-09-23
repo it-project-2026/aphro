@@ -51,7 +51,7 @@ export interface LocalSyncQueueItem {
   payload: any;
   timestamp: string;
   retryCount: number;
-  status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED';
+  status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED' | 'FAILED_ENDPOINT_NOT_FOUND';
   error?: string;
   lastAttemptAt?: string;
 }

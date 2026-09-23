@@ -125,10 +125,18 @@ export function AbsensiProvider({
    * HyperCloud PostgreSQL adalah sumber data utama.
    */
   const refreshAbsensi = React.useCallback(async () => {
-    const unitId =
-      user?.unitId ||
-      InisiasiService.getSelectedUnitId() ||
-      'UL2';
+    if (!user || !user.unitId) {
+      console.log('[AbsensiContext] Skipping refreshAbsensi: User not authenticated.');
+      return;
+    }
+
+    const token = ApiService.getAuthToken();
+    if (!token) {
+      console.log('[AbsensiContext] Skipping refreshAbsensi: Token missing.');
+      return;
+    }
+
+    const unitId = user.unitId ? InisiasiService.getStandardUnitId(user.unitId) : InisiasiService.getSelectedUnitId();
 
     console.log(
       `[ABSENSI TRACE] refreshAbsensi triggered. UnitId: ${unitId}`

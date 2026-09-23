@@ -13,6 +13,7 @@ import { ApiService } from '../services/apiService';
 import { User } from '../types';
 import { InisiasiService, DEFAULT_UL_OPTIONS } from '../services/inisiasiService';
 import { AuthService } from '../services/authService';
+import { dexieDb } from '../services/dexieDb';
 import {
   Zap,
   ShieldCheck,
@@ -82,56 +83,30 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [showGasModal, setShowGasModal] = useState(false);
   const [tempGasUrl, setTempGasUrl] = useState('');
 
-  // Fetch Users directly from HyperCloud Host PostgreSQL
+  // Load offline users from Dexie cache ONLY if offline
   const loadHyperCloudUsers = useCallback(async (showNotification = false) => {
     if (!navigator.onLine) {
-      console.log('[USERS STATE] Skip HyperCloud load: Offline');
-      if (showNotification) showToast('Sedang offline. Menggunakan data akun lokal.', 'info');
-      return;
-    }
-    setIsFetchingSupabaseUsers(true);
-    console.log('[USERS STATE] fetchUsers started for HyperCloud');
-    try {
-      const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-      console.log('[USERS STATE] Requesting users for unit:', activeInisiasi.unitId);
-      const res = await ApiService.fetchUsers(activeInisiasi.unitId);
-      
-      if (res && res.success && res.data && res.data.length > 0) {
-        if (res.source === 'hypercloud') {
-          console.log('[USERS STATE] Received from HyperCloud:', res.data.length, 'users');
-          if (showNotification) {
-            showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud Host (PostgreSQL).`, 'success');
-          }
-        } else {
-          console.log('[USERS STATE] Received from Dexie cache:', res.data.length, 'users');
-          if (showNotification) {
-            showToast(`Memuat ${res.data.length} akun pengguna dari Dexie cache (Offline/Fallback).`, 'info');
-          }
+      try {
+        const dexieUsers = await dexieDb.users.toArray();
+        if (dexieUsers && dexieUsers.length > 0) {
+          console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
+          setMasterData({ users: dexieUsers });
+          if (showNotification) showToast(`Memuat ${dexieUsers.length} akun pengguna dari cache offline.`, 'info');
+        } else if (showNotification) {
+          showToast('Tidak ada data akun tersimpan di cache lokal.', 'info');
         }
-        const normalized = res.data.map((u: any) => ApiService.normalizeUserRow(u));
-        setMasterData({ users: normalized });
-      } else {
-        console.log('[USERS STATE] HyperCloud returned no users or success=false', res);
-        if (showNotification) {
-          showToast(res?.message || 'Tabel USERS di HyperCloud Host tidak dapat dimuat.', 'info');
-        }
+      } catch {
+        // Ignore
       }
-    } catch (err: any) {
-      console.error('[USERS STATE] HyperCloud fetch error:', err.message);
+    } else {
       if (showNotification) {
-        showToast(`Tidak dapat mengambil data USER dari Database HyperCloud. Periksa koneksi server.`, 'error');
+        showToast('Silakan login dengan Username dan Password Anda.', 'info');
       }
-    } finally {
-      setIsFetchingSupabaseUsers(false);
     }
   }, [setMasterData, showToast]);
 
-  const hasFetchedUsersRef = useRef(false);
-
-  // Auto-fetch Users from HyperCloud on component mount
   useEffect(() => {
-    if (!hasFetchedUsersRef.current && navigator.onLine) {
-      hasFetchedUsersRef.current = true;
+    if (!navigator.onLine) {
       loadHyperCloudUsers(false);
     }
   }, [loadHyperCloudUsers]);

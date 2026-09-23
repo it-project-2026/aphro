@@ -25,7 +25,7 @@ export interface PendingOperation {
   payload: any;
   timestamp: string;
   retryCount: number;
-  status: 'PENDING' | 'PROCESSING' | 'FAILED';
+  status: 'PENDING' | 'PROCESSING' | 'FAILED' | 'FAILED_ENDPOINT_NOT_FOUND';
   error?: string;
 }
 
