@@ -44,6 +44,7 @@ export class ApiService {
       import.meta.env.VITE_API_URL ||
       API_BASE_URL ||
       'https://api.aphro-row.my.id';
+
     return rawUrl.trim().replace(/\/+$/, '');
   }
 
@@ -67,20 +68,29 @@ export class ApiService {
     if (savedUserStr) {
       try {
         const parsed = JSON.parse(savedUserStr);
+
         const tok =
           parsed.token ||
           parsed.jwtToken ||
           parsed.accessToken ||
           parsed.token_jwt;
-        if (tok) return tok;
-      } catch {}
+
+        if (tok) {
+          return tok;
+        }
+      } catch {
+        // Ignore JSON parse error
+      }
     }
 
-    return localStorage.getItem('aphro_sys_token') || 'system-hypercloud-token';
+    return (
+      localStorage.getItem('aphro_sys_token') ||
+      'system-hypercloud-token'
+    );
   }
 
   /**
-   * Helper internal untuk memformat pesan kesalahan status HTTP
+   * Helper internal untuk memformat pesan kesalahan status HTTP.
    */
   private static formatErrorMessage(
     status: number,
@@ -89,44 +99,81 @@ export class ApiService {
     if (status === 400) {
       return defaultMsg || 'Permintaan tidak valid (HTTP 400).';
     }
+
     if (status === 401) {
       return 'Sesi login telah berakhir atau token tidak valid. Silakan login kembali.';
     }
+
     if (status === 403) {
-      return defaultMsg || 'Akses ke data ditolak oleh server (HTTP 403).';
+      return (
+        defaultMsg ||
+        'Akses ke data ditolak oleh server (HTTP 403).'
+      );
     }
+
     if (status === 404) {
-      return defaultMsg || 'Endpoint atau data tidak ditemukan (HTTP 404).';
+      return (
+        defaultMsg ||
+        'Endpoint atau data tidak ditemukan (HTTP 404).'
+      );
     }
+
     if (status === 409) {
       return (
         defaultMsg ||
         'Konflik data atau data duplikat ditemukan di server (HTTP 409).'
       );
     }
+
     if (status === 429) {
       return 'Permintaan terlalu banyak. Harap tunggu beberapa saat lalu coba lagi (HTTP 429).';
     }
+
     if (status >= 500) {
-      return defaultMsg || 'Server API HyperCloudHost sedang mengalami masalah. Silakan coba lagi nanti.';
+      return (
+        defaultMsg ||
+        'Server API HyperCloudHost sedang mengalami masalah. Silakan coba lagi nanti.'
+      );
     }
-    return defaultMsg || `API mengembalikan status HTTP ${status}`;
+
+    return (
+      defaultMsg ||
+      `API mengembalikan status HTTP ${status}`
+    );
   }
 
   /**
-   * Helper to perform HTTP request with automatic priority to local Express API (/api/...)
+   * Helper utama untuk melakukan HTTP request.
+   *
+   * PRODUCTION APHRO:
+   * https://www.aphro-row.my.id
+   *         |
+   *         | API
+   *         v
+   * https://api.aphro-row.my.id
+   *
+   * Production TIDAK BOLEH menggunakan:
+   * https://www.aphro-row.my.id/api/...
+   *
+   * Local API hanya digunakan jika:
+   * VITE_USE_LOCAL_API=true
+   * dan aplikasi bukan production APHRO.
    */
   public static async executeFetch(
     pathAndQuery: string,
     options: RequestInit = {}
   ): Promise<Response> {
-    const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+    const cleanPath = pathAndQuery.startsWith('/')
+      ? pathAndQuery
+      : `/${pathAndQuery}`;
+
     const token = this.getAuthToken();
-    
-    // Build plain headers object for maximum compatibility with all browsers/iframes
+
+    /**
+     * Build headers object.
+     */
     const headersObj: Record<string, string> = {};
-    
-    // Copy any input headers safely
+
     if (options.headers) {
       if (options.headers instanceof Headers) {
         options.headers.forEach((val, key) => {
@@ -143,41 +190,160 @@ export class ApiService {
       }
     }
 
+    /**
+     * Tambahkan Authorization jika belum diberikan.
+     */
     if (!headersObj['Authorization'] && token) {
       headersObj['Authorization'] = `Bearer ${token}`;
     }
+
+    /**
+     * Default Accept header.
+     */
     if (!headersObj['Accept']) {
       headersObj['Accept'] = 'application/json';
     }
 
-    const requestOptions = { ...options, headers: headersObj };
+    const requestOptions: RequestInit = {
+      ...options,
+      headers: headersObj,
+    };
 
-    // Get current browser origin if in browser, to resolve absolute URLs and bypass sandbox base-URL restrictions
-    const host = typeof window !== 'undefined' && window.location ? window.location.origin : '';
-    const localUrl = `${host}${cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`}`;
+    /**
+     * =========================================================
+     * HYPERCLOUD API
+     * =========================================================
+     */
+    const externalBase = this.getCleanBaseUrl();
+
+    const externalUrl =
+      `${externalBase}` +
+      `${
+        cleanPath.startsWith('/api')
+          ? cleanPath
+          : `/api${cleanPath}`
+      }`;
+
+    /**
+     * Deteksi hostname browser.
+     */
+    const hostname =
+      typeof window !== 'undefined'
+        ? window.location.hostname
+        : '';
+
+    /**
+     * Domain production APHRO.
+     */
+    const isAphroProduction =
+      hostname === 'www.aphro-row.my.id' ||
+      hostname === 'aphro-row.my.id';
+
+    /**
+     * Local API hanya boleh digunakan:
+     *
+     * 1. VITE_USE_LOCAL_API=true
+     * 2. bukan production APHRO
+     */
+    const allowLocalApi =
+      import.meta.env.VITE_USE_LOCAL_API === 'true' &&
+      !isAphroProduction;
+
+    /**
+     * =========================================================
+     * PRODUCTION
+     * =========================================================
+     *
+     * Jika aplikasi berjalan di:
+     *
+     * https://www.aphro-row.my.id
+     *
+     * langsung gunakan:
+     *
+     * https://api.aphro-row.my.id
+     */
+    if (!allowLocalApi) {
+      console.log(
+        `[ApiService] Using HyperCloud API: ${externalUrl}`
+      );
+
+      return fetch(
+        externalUrl,
+        requestOptions
+      );
+    }
+
+    /**
+     * =========================================================
+     * LOCAL DEVELOPMENT
+     * =========================================================
+     */
+    const host =
+      typeof window !== 'undefined' &&
+      window.location
+        ? window.location.origin
+        : '';
+
+    const localUrl =
+      `${host}` +
+      `${
+        cleanPath.startsWith('/api')
+          ? cleanPath
+          : `/api${cleanPath}`
+      }`;
 
     try {
-      const res = await fetch(localUrl, requestOptions);
-      // Return the local response immediately if we got any HTTP status code from the local server
-      return res;
-    } catch (localErr) {
-      console.warn(`[ApiService] Local Express API fetch to ${localUrl} failed (network/CORS/sandbox):`, localErr);
-      
-      // Fallback only if local fetch literally throws a network error (not a 4xx/5xx status)
-      const externalBase = this.getCleanBaseUrl();
-      if (externalBase && !externalBase.includes('localhost') && !externalBase.includes('127.0.0.1') && !externalBase.includes(host)) {
-        const externalUrl = `${externalBase}${cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`}`;
-        console.log(`[ApiService] Falling back to external URL: ${externalUrl}`);
-        try {
-          return await fetch(externalUrl, requestOptions);
-        } catch (extErr) {
-          console.error(`[ApiService] External fallback to ${externalUrl} also failed:`, extErr);
-          throw extErr;
-        }
+      console.log(
+        `[ApiService] Using local API: ${localUrl}`
+      );
+
+      const res = await fetch(
+        localUrl,
+        requestOptions
+      );
+
+      /**
+       * Local API hanya dianggap berhasil
+       * jika HTTP status 2xx/3xx.
+       *
+       * Jika 400/401/403/404/500,
+       * coba HyperCloudHost.
+       */
+      if (res.ok) {
+        return res;
       }
-      throw localErr;
+
+      console.warn(
+        `[ApiService] Local API returned HTTP ${res.status}. ` +
+          `Falling back to HyperCloudHost: ${externalUrl}`
+      );
+
+      return fetch(
+        externalUrl,
+        requestOptions
+      );
+    } catch (localErr) {
+      console.warn(
+        `[ApiService] Local API failed: ${localUrl}`,
+        localErr
+      );
+
+      console.log(
+        `[ApiService] Falling back to HyperCloudHost: ${externalUrl}`
+      );
+
+      return fetch(
+        externalUrl,
+        requestOptions
+      );
     }
   }
+
+  /**
+   * =========================================================
+   * REALISASI
+   * =========================================================
+   */
 
   /**
    * Mengambil data REALISASI dari Node.js API
@@ -200,6 +366,7 @@ export class ApiService {
     } = params;
 
     const token = this.getAuthToken();
+
     if (!token) {
       throw new Error(
         'Token login tidak ditemukan. Silakan login kembali.'
@@ -207,42 +374,70 @@ export class ApiService {
     }
 
     const queryParams = new URLSearchParams();
+
     queryParams.set('page', String(page));
     queryParams.set('limit', String(limit));
 
-    if (unitId?.trim() && unitId !== 'ALL') {
-      queryParams.set('unitId', unitId.trim());
-    }
-    if (tanggalDari?.trim()) {
-      queryParams.set('tanggalDari', tanggalDari.trim());
-    }
-    if (tanggalSampai?.trim()) {
-      queryParams.set('tanggalSampai', tanggalSampai.trim());
-    }
-    if (ULP?.trim() && ULP !== 'ALL') {
-      queryParams.set('ULP', ULP.trim());
-    }
-    if (Nomor_WO?.trim()) {
-      queryParams.set('Nomor_WO', Nomor_WO.trim());
+    if (
+      unitId?.trim() &&
+      unitId !== 'ALL'
+    ) {
+      queryParams.set(
+        'unitId',
+        unitId.trim()
+      );
     }
 
-    const baseUrl = this.getCleanBaseUrl();
-    const url = `${baseUrl}/api/realisasi?${queryParams.toString()}`;
+    if (tanggalDari?.trim()) {
+      queryParams.set(
+        'tanggalDari',
+        tanggalDari.trim()
+      );
+    }
+
+    if (tanggalSampai?.trim()) {
+      queryParams.set(
+        'tanggalSampai',
+        tanggalSampai.trim()
+      );
+    }
+
+    if (
+      ULP?.trim() &&
+      ULP !== 'ALL'
+    ) {
+      queryParams.set(
+        'ULP',
+        ULP.trim()
+      );
+    }
+
+    if (Nomor_WO?.trim()) {
+      queryParams.set(
+        'Nomor_WO',
+        Nomor_WO.trim()
+      );
+    }
 
     let response: Response;
+
     try {
-      response = await this.executeFetch(`/api/realisasi?${queryParams.toString()}`, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      response = await this.executeFetch(
+        `/api/realisasi?${queryParams.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
     } catch (networkError: any) {
       console.error(
         '[ApiService.fetchRealisasi Network Error]',
         networkError
       );
+
       throw new Error(
         'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.'
       );
@@ -250,102 +445,176 @@ export class ApiService {
 
     if (!response.ok) {
       let serverMessage: string | undefined;
+
       try {
-        const errorJson = await response.json();
-        serverMessage = errorJson?.message;
+        const errorJson =
+          await response.json();
+
+        serverMessage =
+          errorJson?.message;
       } catch {
         // Response bukan JSON
       }
 
-      const errorMessage = this.formatErrorMessage(
-        response.status,
-        serverMessage
+      const errorMessage =
+        this.formatErrorMessage(
+          response.status,
+          serverMessage
+        );
+
+      throw new Error(
+        errorMessage
       );
-      throw new Error(errorMessage);
     }
 
     let json: any;
+
     try {
       json = await response.json();
     } catch {
-      throw new Error('Response dari API Realisasi tidak valid.');
+      throw new Error(
+        'Response dari API Realisasi tidak valid.'
+      );
     }
 
-    if (!json || typeof json !== 'object') {
-      throw new Error('Format response API Realisasi tidak valid.');
+    if (
+      !json ||
+      typeof json !== 'object'
+    ) {
+      throw new Error(
+        'Format response API Realisasi tidak valid.'
+      );
     }
 
-    const rawData = Array.isArray(json.data) ? json.data : [];
-    const normalizedData: Realisasi[] = rawData.map((item: any) =>
-      normalizeRealisasiRow(item)
-    );
+    const rawData =
+      Array.isArray(json.data)
+        ? json.data
+        : [];
 
-    const paginationMeta: PaginationMeta = json.pagination || {
-      page,
-      limit,
-      total: normalizedData.length,
-      totalPages: Math.ceil(normalizedData.length / limit) || 1,
-      hasNextPage: false,
-      hasPreviousPage: page > 1,
-    };
+    const normalizedData: Realisasi[] =
+      rawData.map(
+        (item: any) =>
+          normalizeRealisasiRow(item)
+      );
+
+    const paginationMeta: PaginationMeta =
+      json.pagination || {
+        page,
+        limit,
+        total:
+          normalizedData.length,
+        totalPages:
+          Math.ceil(
+            normalizedData.length /
+              limit
+          ) || 1,
+        hasNextPage: false,
+        hasPreviousPage:
+          page > 1,
+      };
 
     return {
-      status: json.status || 'success',
-      unitId: json.unitId,
-      pagination: paginationMeta,
-      data: normalizedData,
-      filters: json.filters,
-      message: json.message,
+      status:
+        json.status || 'success',
+      unitId:
+        json.unitId,
+      pagination:
+        paginationMeta,
+      data:
+        normalizedData,
+      filters:
+        json.filters,
+      message:
+        json.message,
     };
   }
 
   /**
-   * Post new Realisasi record to HyperCloudHost PostgreSQL
+   * Post new Realisasi record
+   * to HyperCloudHost PostgreSQL.
    */
   static async saveRealisasi(
     data: any
-  ): Promise<{ success: boolean; serverId?: string; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    serverId?: string;
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     try {
-      const res = await this.executeFetch('/api/realisasi', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+      const res =
+        await this.executeFetch(
+          '/api/realisasi',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body:
+              JSON.stringify(data),
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      const json = await res.json().catch(() => ({}));
+      const json =
+        await res
+          .json()
+          .catch(() => ({}));
+
       return {
         success: true,
-        serverId: json.id || json.data?.id || data.id,
-        message: json.message,
+        serverId:
+          json.id ||
+          json.data?.id ||
+          data.id,
+        message:
+          json.message,
       };
     } catch (err: any) {
-      console.error('[ApiService.saveRealisasi Error]', err);
+      console.error(
+        '[ApiService.saveRealisasi Error]',
+        err
+      );
+
       return {
         success: false,
         message:
@@ -355,48 +624,79 @@ export class ApiService {
   }
 
   /**
-   * Update Realisasi record in HyperCloudHost PostgreSQL
+   * Update Realisasi record.
    */
   static async updateRealisasi(
     id: string,
     data: any
-  ): Promise<{ success: boolean; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     try {
-      const res = await this.executeFetch(`/api/realisasi/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+      const res =
+        await this.executeFetch(
+          `/api/realisasi/${encodeURIComponent(id)}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type':
+                'application/json',
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body:
+              JSON.stringify(data),
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      return { success: true };
+      return {
+        success: true,
+      };
     } catch (err: any) {
-      console.error('[ApiService.updateRealisasi Error]', err);
+      console.error(
+        '[ApiService.updateRealisasi Error]',
+        err
+      );
+
       return {
         success: false,
         message:
@@ -406,45 +706,74 @@ export class ApiService {
   }
 
   /**
-   * Delete Realisasi record from HyperCloudHost PostgreSQL
+   * Delete Realisasi record.
    */
   static async deleteRealisasi(
     id: string
-  ): Promise<{ success: boolean; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     try {
-      const res = await this.executeFetch(`/api/realisasi/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res =
+        await this.executeFetch(
+          `/api/realisasi/${encodeURIComponent(id)}`,
+          {
+            method: 'DELETE',
+            headers: {
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      return { success: true };
+      return {
+        success: true,
+      };
     } catch (err: any) {
-      console.error('[ApiService.deleteRealisasi Error]', err);
+      console.error(
+        '[ApiService.deleteRealisasi Error]',
+        err
+      );
+
       return {
         success: false,
         message:
@@ -454,58 +783,100 @@ export class ApiService {
   }
 
   /**
-   * Fetch Work Orders from HyperCloudHost PostgreSQL
+   * =========================================================
+   * WORK ORDER
+   * =========================================================
+   */
+
+  /**
+   * Fetch Work Orders.
    */
   static async fetchWorkOrders(
     unitId?: string
-  ): Promise<{ success: boolean; data: any[]; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    data: any[];
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
         data: [],
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     const query =
-      unitId && unitId !== 'ALL'
+      unitId &&
+      unitId !== 'ALL'
         ? `?unitId=${encodeURIComponent(unitId)}`
         : '';
 
     try {
-      const res = await this.executeFetch(`/api/work-orders${query}`, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res =
+        await this.executeFetch(
+          `/api/work-orders${query}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
           data: [],
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      const json = await res.json();
-      const list = Array.isArray(json.data)
-        ? json.data
-        : Array.isArray(json)
-        ? json
-        : [];
-      return { success: true, data: list };
+      const json =
+        await res.json();
+
+      const list =
+        Array.isArray(json.data)
+          ? json.data
+          : Array.isArray(json)
+          ? json
+          : [];
+
+      return {
+        success: true,
+        data: list,
+      };
     } catch (err: any) {
-      console.error('[ApiService.fetchWorkOrders Error]', err);
+      console.error(
+        '[ApiService.fetchWorkOrders Error]',
+        err
+      );
+
       return {
         success: false,
         data: [],
@@ -516,47 +887,78 @@ export class ApiService {
   }
 
   /**
-   * Save Work Order to HyperCloudHost PostgreSQL
+   * Save Work Order.
    */
   static async saveWorkOrder(
     data: any
-  ): Promise<{ success: boolean; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     try {
-      const res = await this.executeFetch('/api/work-orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+      const res =
+        await this.executeFetch(
+          '/api/work-orders',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body:
+              JSON.stringify(data),
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      return { success: true };
+      return {
+        success: true,
+      };
     } catch (err: any) {
-      console.error('[ApiService.saveWorkOrder Error]', err);
+      console.error(
+        '[ApiService.saveWorkOrder Error]',
+        err
+      );
+
       return {
         success: false,
         message:
@@ -566,48 +968,79 @@ export class ApiService {
   }
 
   /**
-   * Update Work Order in HyperCloudHost PostgreSQL
+   * Update Work Order.
    */
   static async updateWorkOrder(
     id: string,
     data: any
-  ): Promise<{ success: boolean; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     try {
-      const res = await this.executeFetch(`/api/work-orders/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+      const res =
+        await this.executeFetch(
+          `/api/work-orders/${encodeURIComponent(id)}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type':
+                'application/json',
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body:
+              JSON.stringify(data),
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      return { success: true };
+      return {
+        success: true,
+      };
     } catch (err: any) {
-      console.error('[ApiService.updateWorkOrder Error]', err);
+      console.error(
+        '[ApiService.updateWorkOrder Error]',
+        err
+      );
+
       return {
         success: false,
         message:
@@ -617,59 +1050,105 @@ export class ApiService {
   }
 
   /**
-   * Fetch Absensi from HyperCloudHost PostgreSQL
+   * =========================================================
+   * ABSENSI
+   * =========================================================
+   */
+
+  /**
+   * Fetch Absensi.
    */
   static async fetchAbsensi(
     unitId?: string
-  ): Promise<{ success: boolean; data: any[]; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    data: any[];
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
         data: [],
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     const query =
-      unitId && unitId !== 'ALL'
+      unitId &&
+      unitId !== 'ALL'
         ? `?unitId=${encodeURIComponent(unitId)}`
         : '';
 
     try {
-      const res = await this.executeFetch(`/api/absensi${query}`, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res =
+        await this.executeFetch(
+          `/api/absensi${query}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
           data: [],
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      const json = await res.json();
-      const rawList = Array.isArray(json.data)
-        ? json.data
-        : Array.isArray(json)
-        ? json
-        : [];
-      const list = rawList.map(normalizeAbsensi);
-      return { success: true, data: list };
+      const json =
+        await res.json();
+
+      const rawList =
+        Array.isArray(json.data)
+          ? json.data
+          : Array.isArray(json)
+          ? json
+          : [];
+
+      const list =
+        rawList.map(
+          normalizeAbsensi
+        );
+
+      return {
+        success: true,
+        data: list,
+      };
     } catch (err: any) {
-      console.error('[ApiService.fetchAbsensi Error]', err);
+      console.error(
+        '[ApiService.fetchAbsensi Error]',
+        err
+      );
+
       return {
         success: false,
         data: [],
@@ -680,47 +1159,78 @@ export class ApiService {
   }
 
   /**
-   * Save Absensi to HyperCloudHost PostgreSQL
+   * Save Absensi.
    */
   static async saveAbsensi(
     data: any
-  ): Promise<{ success: boolean; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     try {
-      const res = await this.executeFetch('/api/absensi', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+      const res =
+        await this.executeFetch(
+          '/api/absensi',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body:
+              JSON.stringify(data),
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      return { success: true };
+      return {
+        success: true,
+      };
     } catch (err: any) {
-      console.error('[ApiService.saveAbsensi Error]', err);
+      console.error(
+        '[ApiService.saveAbsensi Error]',
+        err
+      );
+
       return {
         success: false,
         message:
@@ -730,48 +1240,79 @@ export class ApiService {
   }
 
   /**
-   * Update Absensi in HyperCloudHost PostgreSQL
+   * Update Absensi.
    */
   static async updateAbsensi(
     id: string,
     data: any
-  ): Promise<{ success: boolean; message?: string }> {
-    const token = this.getAuthToken();
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         success: false,
-        message: 'Token login tidak ditemukan. Silakan login kembali.',
+        message:
+          'Token login tidak ditemukan. Silakan login kembali.',
       };
     }
 
     try {
-      const res = await this.executeFetch(`/api/absensi/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+      const res =
+        await this.executeFetch(
+          `/api/absensi/${encodeURIComponent(id)}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type':
+                'application/json',
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body:
+              JSON.stringify(data),
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
         } catch {
           // ignore
         }
+
         return {
           success: false,
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      return { success: true };
+      return {
+        success: true,
+      };
     } catch (err: any) {
-      console.error('[ApiService.updateAbsensi Error]', err);
+      console.error(
+        '[ApiService.updateAbsensi Error]',
+        err
+      );
+
       return {
         success: false,
         message:
@@ -781,26 +1322,46 @@ export class ApiService {
   }
 
   /**
-   * Check API Health
+   * =========================================================
+   * HEALTH CHECK
+   * =========================================================
    */
+
   static async checkHealth(): Promise<{
     status: string;
     database: string;
     databaseName?: string;
     timestamp?: string;
   }> {
-    const res = await this.executeFetch('/api/health', {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
+    const res =
+      await this.executeFetch(
+        '/api/health',
+        {
+          method: 'GET',
+          headers: {
+            Accept:
+              'application/json',
+          },
+        }
+      );
+
     if (!res.ok) {
-      throw new Error(`Health check failed with status ${res.status}`);
+      throw new Error(
+        `Health check failed with status ${res.status}`
+      );
     }
+
     return await res.json();
   }
 
   /**
-   * Login to HyperCloudHost Node.js API
+   * =========================================================
+   * LOGIN
+   * =========================================================
+   */
+
+  /**
+   * Login to HyperCloudHost Node.js API.
    */
   static async login(
     username: string,
@@ -812,174 +1373,330 @@ export class ApiService {
     token?: string;
     user?: any;
   }> {
-    const cleanUsername = (username || '').trim();
-    const cleanPassword = (password || '').trim();
-    const cleanUnitId = (unitId || '').trim();
+    const cleanUsername =
+      (username || '').trim();
+
+    const cleanPassword =
+      (password || '').trim();
+
+    const cleanUnitId =
+      (unitId || '').trim();
 
     try {
-      const res = await this.executeFetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          Username: cleanUsername,
-          Password: cleanPassword,
-          unitId: cleanUnitId,
-        }),
-      });
+      const res =
+        await this.executeFetch(
+          '/api/login',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+              Accept:
+                'application/json',
+            },
+            body:
+              JSON.stringify({
+                Username:
+                  cleanUsername,
+                Password:
+                  cleanPassword,
+                unitId:
+                  cleanUnitId,
+              }),
+          }
+        );
 
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json.status === 'error') {
+      const json =
+        await res
+          .json()
+          .catch(() => ({}));
+
+      if (
+        !res.ok ||
+        json.status === 'error'
+      ) {
         return {
           status: 'error',
-          message: json.message || this.formatErrorMessage(res.status),
+          message:
+            json.message ||
+            this.formatErrorMessage(
+              res.status
+            ),
         };
       }
 
       if (json.token) {
         try {
-          localStorage.setItem('aphro_token', json.token);
-          localStorage.setItem('jwt_token', json.token);
+          localStorage.setItem(
+            'aphro_token',
+            json.token
+          );
+
+          localStorage.setItem(
+            'jwt_token',
+            json.token
+          );
         } catch {
-          // ignore
+          // Ignore storage error
         }
       }
 
       return {
         status: 'success',
-        message: json.message || 'Login berhasil',
-        token: json.token,
-        user: json.user,
+        message:
+          json.message ||
+          'Login berhasil',
+        token:
+          json.token,
+        user:
+          json.user,
       };
     } catch (err: any) {
-      console.error('[ApiService.login Error]', err);
+      console.error(
+        '[ApiService.login Error]',
+        err
+      );
+
       return {
         status: 'error',
-        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
+        message:
+          'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
   }
 
   /**
-   * Fetch all users from HyperCloudHost API
+   * =========================================================
+   * USERS
+   * =========================================================
+   */
+
+  /**
+   * Fetch all users.
    */
   static async fetchUsers(
     unitId?: string
-  ): Promise<{ success: boolean; data: any[]; message?: string }> {
-    const token = this.getAuthToken();
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
+  ): Promise<{
+    success: boolean;
+    data: any[];
+    message?: string;
+  }> {
+    const token =
+      this.getAuthToken();
+
+    const headers: Record<
+      string,
+      string
+    > = {
+      Accept:
+        'application/json',
     };
+
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers[
+        'Authorization'
+      ] = `Bearer ${token}`;
     }
 
     const query =
-      unitId && unitId !== 'ALL'
+      unitId &&
+      unitId !== 'ALL'
         ? `?unitId=${encodeURIComponent(unitId)}`
         : '';
 
     try {
-      console.log(`[ApiService] fetchUsers starting for unit: ${unitId || 'ALL'}`);
-      const res = await this.executeFetch(`/api/users${query}`, {
-        method: 'GET',
-        headers,
-      });
+      console.log(
+        `[ApiService] fetchUsers starting for unit: ${
+          unitId || 'ALL'
+        }`
+      );
+
+      const res =
+        await this.executeFetch(
+          `/api/users${query}`,
+          {
+            method: 'GET',
+            headers,
+          }
+        );
 
       if (!res.ok) {
-        let serverMsg: string | undefined;
+        let serverMsg:
+          | string
+          | undefined;
+
         try {
-          const errJson = await res.json();
-          serverMsg = errJson?.message;
-        } catch {}
-        console.warn(`[ApiService] fetchUsers failed with status ${res.status}:`, serverMsg);
+          const errJson =
+            await res.json();
+
+          serverMsg =
+            errJson?.message;
+        } catch {
+          // Ignore
+        }
+
+        console.warn(
+          `[ApiService] fetchUsers failed with status ${res.status}:`,
+          serverMsg
+        );
+
         return {
           success: false,
           data: [],
-          message: this.formatErrorMessage(res.status, serverMsg),
+          message:
+            this.formatErrorMessage(
+              res.status,
+              serverMsg
+            ),
         };
       }
 
-      const json = await res.json();
-      const list = Array.isArray(json.data)
-        ? json.data
-        : Array.isArray(json)
-        ? json
-        : [];
-      console.log(`[ApiService] fetchUsers success: found ${list.length} users`);
-      return { success: true, data: list };
+      const json =
+        await res.json();
+
+      const list =
+        Array.isArray(json.data)
+          ? json.data
+          : Array.isArray(json)
+          ? json
+          : [];
+
+      console.log(
+        `[ApiService] fetchUsers success: found ${list.length} users`
+      );
+
+      return {
+        success: true,
+        data: list,
+      };
     } catch (err: any) {
-      console.error('[ApiService.fetchUsers Error]', err);
+      console.error(
+        '[ApiService.fetchUsers Error]',
+        err
+      );
+
       return {
         success: false,
         data: [],
-        message: 'Tidak dapat terhubung ke API HyperCloudHost.',
+        message:
+          'Tidak dapat terhubung ke API HyperCloudHost.',
       };
     }
   }
 
   /**
-   * Mengambil seluruh data REALISASI dari HyperCloudHost API
-   * khusus untuk kebutuhan Dashboard (non-paginated).
+   * =========================================================
+   * REALISASI DASHBOARD
+   * =========================================================
+   */
+
+  /**
+   * Mengambil seluruh data REALISASI
+   * untuk Dashboard.
    */
   static async fetchRealisasiDashboard(): Promise<{
     status: string;
     data: Realisasi[];
     message?: string;
   }> {
-    const token = this.getAuthToken();
+    const token =
+      this.getAuthToken();
+
     if (!token) {
       return {
         status: 'error',
         data: [],
-        message: 'Token login tidak ditemukan.',
+        message:
+          'Token login tidak ditemukan.',
       };
     }
 
     try {
-      const res = await this.executeFetch('/api/realisasi/dashboard', {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res =
+        await this.executeFetch(
+          '/api/realisasi/dashboard',
+          {
+            method: 'GET',
+            headers: {
+              Accept:
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
 
       if (!res.ok) {
         return {
           status: 'error',
           data: [],
-          message: this.formatErrorMessage(res.status),
+          message:
+            this.formatErrorMessage(
+              res.status
+            ),
         };
       }
 
-      const json = await res.json();
-      const rawData = Array.isArray(json.data) ? json.data : [];
-      const normalizedData = rawData.map((item: any) => normalizeRealisasiRow(item));
+      const json =
+        await res.json();
+
+      const rawData =
+        Array.isArray(json.data)
+          ? json.data
+          : [];
+
+      const normalizedData =
+        rawData.map(
+          (item: any) =>
+            normalizeRealisasiRow(
+              item
+            )
+        );
 
       return {
-        status: json.status || 'success',
-        data: normalizedData,
-        message: json.message,
+        status:
+          json.status ||
+          'success',
+        data:
+          normalizedData,
+        message:
+          json.message,
       };
     } catch (err: any) {
-      console.error('[ApiService.fetchRealisasiDashboard Error]', err);
+      console.error(
+        '[ApiService.fetchRealisasiDashboard Error]',
+        err
+      );
+
       return {
         status: 'error',
         data: [],
-        message: 'Tidak dapat terhubung ke API Dashboard.',
+        message:
+          'Tidak dapat terhubung ke API Dashboard.',
       };
     }
   }
 
   /**
-   * Fetch Master Data (ULP, Penyulang, Regu-ROW, Petugas) from HyperCloudHost API
+   * =========================================================
+   * MASTER DATA
+   * =========================================================
+   */
+
+  /**
+   * Fetch Master Data:
+   * ULP
+   * Penyulang
+   * Regu-ROW
+   * Petugas
+   * Users
    */
   static async fetchMasterData(
     unitId?: string,
-    filters: { ulp?: string; regu?: string } = {}
+    filters: {
+      ulp?: string;
+      regu?: string;
+    } = {}
   ): Promise<{
     ulp: any[];
     penyulang: any[];
@@ -987,148 +1704,401 @@ export class ApiService {
     petugas: any[];
     users: any[];
   }> {
-    const token = this.getAuthToken();
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
+    const token =
+      this.getAuthToken();
+
+    const headers: Record<
+      string,
+      string
+    > = {
+      Accept:
+        'application/json',
     };
+
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers[
+        'Authorization'
+      ] = `Bearer ${token}`;
     }
 
-    const query = unitId && unitId !== 'ALL' ? `?unitId=${encodeURIComponent(unitId)}` : '';
-    const masterQuery = query || '?unitId=ALL';
-    
-    // For petugas, we add specific filters if provided
-    let petugasQuery = masterQuery;
-    if (filters.ulp) petugasQuery += `&ulp=${encodeURIComponent(filters.ulp)}`;
-    if (filters.regu) petugasQuery += `&regu=${encodeURIComponent(filters.regu)}`;
+    const query =
+      unitId &&
+      unitId !== 'ALL'
+        ? `?unitId=${encodeURIComponent(unitId)}`
+        : '';
 
-    const [ulpRes, penyulangRes, reguRes, petugasRes, usersRes] = await Promise.all([
-      this.executeFetch(`/api/ulp${masterQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-      this.executeFetch(`/api/penyulang${masterQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-      this.executeFetch(`/api/regu-row${masterQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-      this.executeFetch(`/api/petugas${petugasQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-      this.executeFetch(`/api/users${masterQuery}`, { headers }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+    const masterQuery =
+      query || '?unitId=ALL';
+
+    let petugasQuery =
+      masterQuery;
+
+    if (filters.ulp) {
+      petugasQuery +=
+        `&ulp=${encodeURIComponent(filters.ulp)}`;
+    }
+
+    if (filters.regu) {
+      petugasQuery +=
+        `&regu=${encodeURIComponent(filters.regu)}`;
+    }
+
+    const [
+      ulpRes,
+      penyulangRes,
+      reguRes,
+      petugasRes,
+      usersRes,
+    ] = await Promise.all([
+      this.executeFetch(
+        `/api/ulp${masterQuery}`,
+        { headers }
+      )
+        .then((r) =>
+          r.ok
+            ? r.json()
+            : { data: [] }
+        )
+        .catch(() => ({
+          data: [],
+        })),
+
+      this.executeFetch(
+        `/api/penyulang${masterQuery}`,
+        { headers }
+      )
+        .then((r) =>
+          r.ok
+            ? r.json()
+            : { data: [] }
+        )
+        .catch(() => ({
+          data: [],
+        })),
+
+      this.executeFetch(
+        `/api/regu-row${masterQuery}`,
+        { headers }
+      )
+        .then((r) =>
+          r.ok
+            ? r.json()
+            : { data: [] }
+        )
+        .catch(() => ({
+          data: [],
+        })),
+
+      this.executeFetch(
+        `/api/petugas${petugasQuery}`,
+        { headers }
+      )
+        .then((r) =>
+          r.ok
+            ? r.json()
+            : { data: [] }
+        )
+        .catch(() => ({
+          data: [],
+        })),
+
+      this.executeFetch(
+        `/api/users${masterQuery}`,
+        { headers }
+      )
+        .then((r) =>
+          r.ok
+            ? r.json()
+            : { data: [] }
+        )
+        .catch(() => ({
+          data: [],
+        })),
     ]);
 
     return {
-      ulp: Array.isArray(ulpRes.data) ? ulpRes.data : [],
-      penyulang: Array.isArray(penyulangRes.data) ? penyulangRes.data : [],
-      regu: Array.isArray(reguRes.data) ? reguRes.data : [],
-      petugas: Array.isArray(petugasRes.data) ? petugasRes.data : [],
-      users: Array.isArray(usersRes.data) ? usersRes.data : [],
+      ulp:
+        Array.isArray(
+          ulpRes.data
+        )
+          ? ulpRes.data
+          : [],
+
+      penyulang:
+        Array.isArray(
+          penyulangRes.data
+        )
+          ? penyulangRes.data
+          : [],
+
+      regu:
+        Array.isArray(
+          reguRes.data
+        )
+          ? reguRes.data
+          : [],
+
+      petugas:
+        Array.isArray(
+          petugasRes.data
+        )
+          ? petugasRes.data
+          : [],
+
+      users:
+        Array.isArray(
+          usersRes.data
+        )
+          ? usersRes.data
+          : [],
     };
   }
 
   /**
-   * Delete Work Order from HyperCloudHost API
+   * =========================================================
+   * DELETE WORK ORDER
+   * =========================================================
    */
+
   static async deleteWorkOrder(
     id: string
-  ): Promise<{ success: boolean; message?: string }> {
-    try {
-      const res = await this.executeFetch(`/api/work-orders/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        return { success: false, message: this.formatErrorMessage(res.status) };
-      }
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message };
-    }
-  }
-
-  /**
-   * Delete Absensi from HyperCloudHost API
-   */
-  static async deleteAbsensi(
-    id: string
-  ): Promise<{ success: boolean; message?: string }> {
-    try {
-      const res = await this.executeFetch(`/api/absensi/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        return { success: false, message: this.formatErrorMessage(res.status) };
-      }
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message };
-    }
-  }
-
-  /**
-   * Save User to HyperCloudHost API
-   */
-  static async saveUser(
-    userData: any
-  ): Promise<{ success: boolean; message?: string }> {
-    try {
-      const res = await this.executeFetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
-      });
-      if (!res.ok) {
-        return { success: false, message: this.formatErrorMessage(res.status) };
-      }
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message };
-    }
-  }
-
-  /**
-   * Delete User from HyperCloudHost API
-   */
-  static async deleteUser(
-    id: string
-  ): Promise<{ success: boolean; message?: string }> {
-    try {
-      const res = await this.executeFetch(`/api/users/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        return { success: false, message: this.formatErrorMessage(res.status) };
-      }
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, message: err.message };
-    }
-  }
-
-  /**
-   * Fetch Inisiasi Units from HyperCloudHost API
-   */
-  static async fetchInisiasiUnits(): Promise<{
+  ): Promise<{
     success: boolean;
-    data: any[];
-    source: 'hypercloud' | 'cache' | 'default';
     message?: string;
   }> {
     try {
-      const res = await this.executeFetch('/api/inisiasi', { method: 'GET' });
+      const res =
+        await this.executeFetch(
+          `/api/work-orders/${encodeURIComponent(id)}`,
+          {
+            method: 'DELETE',
+          }
+        );
+
+      if (!res.ok) {
+        return {
+          success: false,
+          message:
+            this.formatErrorMessage(
+              res.status
+            ),
+        };
+      }
+
+      return {
+        success: true,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message:
+          err.message,
+      };
+    }
+  }
+
+  /**
+   * =========================================================
+   * DELETE ABSENSI
+   * =========================================================
+   */
+
+  static async deleteAbsensi(
+    id: string
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    try {
+      const res =
+        await this.executeFetch(
+          `/api/absensi/${encodeURIComponent(id)}`,
+          {
+            method: 'DELETE',
+          }
+        );
+
+      if (!res.ok) {
+        return {
+          success: false,
+          message:
+            this.formatErrorMessage(
+              res.status
+            ),
+        };
+      }
+
+      return {
+        success: true,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message:
+          err.message,
+      };
+    }
+  }
+
+  /**
+   * =========================================================
+   * SAVE USER
+   * =========================================================
+   */
+
+  static async saveUser(
+    userData: any
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    try {
+      const res =
+        await this.executeFetch(
+          '/api/users',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+              Accept:
+                'application/json',
+            },
+            body:
+              JSON.stringify(
+                userData
+              ),
+          }
+        );
+
+      if (!res.ok) {
+        return {
+          success: false,
+          message:
+            this.formatErrorMessage(
+              res.status
+            ),
+        };
+      }
+
+      return {
+        success: true,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message:
+          err.message,
+      };
+    }
+  }
+
+  /**
+   * =========================================================
+   * DELETE USER
+   * =========================================================
+   */
+
+  static async deleteUser(
+    id: string
+  ): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    try {
+      const res =
+        await this.executeFetch(
+          `/api/users/${encodeURIComponent(id)}`,
+          {
+            method: 'DELETE',
+          }
+        );
+
+      if (!res.ok) {
+        return {
+          success: false,
+          message:
+            this.formatErrorMessage(
+              res.status
+            ),
+        };
+      }
+
+      return {
+        success: true,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message:
+          err.message,
+      };
+    }
+  }
+
+  /**
+   * =========================================================
+   * INISIASI UNIT
+   * =========================================================
+   */
+
+  static async fetchInisiasiUnits(): Promise<{
+    success: boolean;
+    data: any[];
+    source:
+      | 'hypercloud'
+      | 'cache'
+      | 'default';
+    message?: string;
+  }> {
+    try {
+      const res =
+        await this.executeFetch(
+          '/api/inisiasi',
+          {
+            method: 'GET',
+            headers: {
+              Accept:
+                'application/json',
+            },
+          }
+        );
+
       if (res.ok) {
-        const json = await res.json();
-        const list = Array.isArray(json.data) ? json.data : [];
+        const json =
+          await res.json();
+
+        const list =
+          Array.isArray(
+            json.data
+          )
+            ? json.data
+            : [];
+
         if (list.length > 0) {
           return {
             success: true,
             data: list,
-            source: 'hypercloud',
-            message: `Berhasil memuat ${list.length} Unit Layanan dari HyperCloudHost.`,
+            source:
+              'hypercloud',
+            message:
+              `Berhasil memuat ${list.length} Unit Layanan dari HyperCloudHost.`,
           };
         }
       }
     } catch (e) {
-      console.warn('[ApiService] fetchInisiasiUnits error:', e);
+      console.warn(
+        '[ApiService] fetchInisiasiUnits error:',
+        e
+      );
     }
+
     return {
       success: false,
       data: [],
       source: 'default',
-      message: 'Gagal memuat Unit Layanan dari HyperCloudHost API',
+      message:
+        'Gagal memuat Unit Layanan dari HyperCloudHost API',
     };
   }
 }
