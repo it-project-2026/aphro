@@ -87,15 +87,12 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
   // Filter logic for SELECT query
   if (upper.startsWith('SELECT')) {
     // 1. Filter by unitId
-    const unitIdIndex = text.indexOf('"unitId" = $');
-    if (unitIdIndex !== -1) {
-      const match = text.slice(unitIdIndex).match(/"unitId"\s*=\s*\$(\d+)/);
-      if (match) {
-        const paramIdx = parseInt(match[1], 10) - 1;
-        const targetUnitId = params[paramIdx];
-        if (targetUnitId) {
-          rows = rows.filter(r => String(r.unitId || r.UnitId || r.unitid || '').toUpperCase() === String(targetUnitId).toUpperCase());
-        }
+    const unitMatch = text.match(/(?:UPPER\()?"unitId"(?:\))?\s*=\s*(?:UPPER\()?\s*\$(\d+)/i);
+    if (unitMatch) {
+      const paramIdx = parseInt(unitMatch[1], 10) - 1;
+      const targetUnitId = params[paramIdx];
+      if (targetUnitId && String(targetUnitId).toUpperCase() !== 'ALL') {
+        rows = rows.filter(r => String(r.unitId || r.UnitId || r.unitid || '').toUpperCase() === String(targetUnitId).toUpperCase());
       }
     }
     // 2. Filter by UserID

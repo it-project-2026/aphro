@@ -84,44 +84,58 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [tempGasUrl, setTempGasUrl] = useState('');
 
   const [inisiasiUsers, setInisiasiUsers] = useState<User[]>([]);
+  const activeInisiasiRequestIdRef = useRef<string>('');
 
   // Load pre-login inisiasi accounts from HyperCloud /api/inisiasi (NO JWT required)
   const loadInisiasiData = useCallback(async (showNotification = false) => {
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
     const activeUnitId = activeInisiasi.unitId;
+    const reqId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    activeInisiasiRequestIdRef.current = reqId;
 
     setIsFetchingSupabaseUsers(true);
 
     if (isOnline) {
-      console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi`);
       try {
         const res = await ApiService.fetchInisiasi(activeUnitId);
-        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-          console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=SUCCESS\ncount=${res.data.length}`);
+        
+        // Guard against stale response / race conditions
+        if (activeInisiasiRequestIdRef.current !== reqId) {
+          console.warn(`[INIT USERS TRACE] Stale response ignored: ${reqId}`);
+          return;
+        }
+
+        if (res && res.success && Array.isArray(res.data)) {
           setInisiasiUsers(res.data);
 
           if (showNotification) {
-            showToast(`Berhasil memuat ${res.data.length} akun inisiasi dari HyperCloud.`, 'success');
+            showToast(res.message || `Berhasil memuat ${res.data.length} akun inisiasi dari HyperCloud.`, 'success');
           }
         } else {
-          console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=SUCCESS\ncount=0`);
+          // Explicit error when online - DO NOT fallback to Dexie!
+          setInisiasiUsers([]);
           if (showNotification) {
-            showToast('Daftar inisiasi siap.', 'info');
+            showToast(res?.message || 'Gagal memuat akun inisiasi dari HyperCloud.', 'error');
           }
         }
       } catch (err: any) {
-        console.warn('[INIT USERS TRACE] Error fetching inisiasi data:', err);
+        if (activeInisiasiRequestIdRef.current !== reqId) return;
+        setInisiasiUsers([]);
         if (showNotification) {
-          showToast('Tidak dapat terhubung ke server HyperCloud.', 'error');
+          showToast(err?.message || 'Tidak dapat terhubung ke server HyperCloud.', 'error');
         }
       } finally {
-        setIsFetchingSupabaseUsers(false);
+        if (activeInisiasiRequestIdRef.current === reqId) {
+          setIsFetchingSupabaseUsers(false);
+        }
       }
     } else {
-      // Offline fallback
+      // Offline fallback only when truly offline
       try {
         const dexieUsers = await dexieDb.users.toArray();
+        if (activeInisiasiRequestIdRef.current !== reqId) return;
+
         if (dexieUsers && dexieUsers.length > 0) {
           console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
           setInisiasiUsers(dexieUsers);
@@ -132,7 +146,9 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       } catch {
         // Ignore
       } finally {
-        setIsFetchingSupabaseUsers(false);
+        if (activeInisiasiRequestIdRef.current === reqId) {
+          setIsFetchingSupabaseUsers(false);
+        }
       }
     }
   }, [showToast]);

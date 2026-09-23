@@ -1887,14 +1887,18 @@ export class ApiService {
   static async fetchInisiasi(unitId?: string): Promise<{
     success: boolean;
     data: any[];
-    source: 'hypercloud' | 'default';
+    source: 'hypercloud' | 'none';
+    http?: number;
+    reason?: string;
     message?: string;
   }> {
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    const query = unitId && unitId !== 'ALL' ? `?unitId=${encodeURIComponent(unitId)}` : '';
+    const targetUnitId = unitId || 'ALL';
+    const query = targetUnitId && targetUnitId !== 'ALL' ? `?unitId=${encodeURIComponent(targetUnitId)}` : '';
+    const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const startedAt = new Date().toISOString();
 
     if (isOnline) {
-      console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi${query}`);
       try {
         const res = await this.executeFetch(`/api/inisiasi${query}`, {
           method: 'GET',
@@ -1903,32 +1907,77 @@ export class ApiService {
           },
         });
 
+        const completedAt = new Date().toISOString();
+
         if (res.ok) {
           const json = await res.json();
-          const rawList = Array.isArray(json?.data) ? json.data : Array.isArray(json?.users) ? json.users : Array.isArray(json) ? json : [];
+          const rawList = Array.isArray(json?.users) ? json.users : Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
           const list = rawList.map(normalizeUser);
 
-          console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=SUCCESS\ncount=${list.length}`);
+          console.log(`[INIT USERS TRACE]\nrequestId=${requestId}\nunitId=${targetUnitId}\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=SUCCESS\nhttp=${res.status}\nstartedAt=${startedAt}\ncompletedAt=${completedAt}\ncount=${list.length}`);
 
           return {
             success: true,
             data: list,
             source: 'hypercloud',
+            http: res.status,
             message: `Berhasil memuat ${list.length} akun inisiasi dari HyperCloud.`,
           };
         } else {
-          console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=INFO\ncount=0\nmessage=Inisiasi public default active`);
+          let serverMsg = '';
+          try {
+            const errJson = await res.json();
+            serverMsg = errJson?.message || '';
+          } catch {
+            // Ignore
+          }
+
+          let reason = 'HTTP_ERROR';
+          if (res.status === 404) {
+            reason = 'ENDPOINT_NOT_FOUND';
+          } else if (res.status === 401) {
+            reason = 'UNAUTHORIZED';
+          } else if (res.status >= 500) {
+            reason = 'SERVER_ERROR';
+          }
+
+          const errorMsg = res.status === 404 
+            ? 'Endpoint /api/inisiasi tidak ditemukan pada backend HyperCloud'
+            : (serverMsg || `HyperCloud mengembalikan status HTTP ${res.status}`);
+
+          console.warn(`[INIT USERS TRACE]\nrequestId=${requestId}\nunitId=${targetUnitId}\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=FAILED\nhttp=${res.status}\nreason=${reason}\nstartedAt=${startedAt}\ncompletedAt=${completedAt}\nmessage=${errorMsg}`);
+
+          return {
+            success: false,
+            data: [],
+            source: 'none',
+            http: res.status,
+            reason,
+            message: errorMsg,
+          };
         }
       } catch (err: any) {
-        console.log('[INIT USERS TRACE] fetchInisiasi info:', err?.message || err);
+        const completedAt = new Date().toISOString();
+        console.warn(`[INIT USERS TRACE]\nrequestId=${requestId}\nunitId=${targetUnitId}\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=FAILED\nhttp=0\nreason=NETWORK_ERROR\nstartedAt=${startedAt}\ncompletedAt=${completedAt}\nmessage=${err?.message || 'Network request failed'}`);
+
+        return {
+          success: false,
+          data: [],
+          source: 'none',
+          http: 0,
+          reason: 'NETWORK_ERROR',
+          message: err?.message || 'Tidak dapat terhubung ke server HyperCloud.',
+        };
       }
     }
 
+    // Truly offline mode only
     return {
-      success: true,
+      success: false,
       data: [],
-      source: 'default',
-      message: 'Inisiasi default aktif.',
+      source: 'none',
+      reason: 'OFFLINE',
+      message: 'Perangkat sedang dalam mode offline.',
     };
   }
 

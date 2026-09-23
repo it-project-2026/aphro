@@ -40,11 +40,17 @@ var import_path = __toESM(require("path"), 1);
 var import_url = require("url");
 var import_meta = {};
 var { Pool } = import_pg.default;
-var __filename = (0, import_url.fileURLToPath)(import_meta.url);
-var __dirname = import_path.default.dirname(__filename);
-var MOCK_FILE_PATH = import_path.default.join(__dirname, "mock_db.json");
-var dbUrl = process.env.HYPERCLOUD_DATABASE_URL || process.env.DATABASE_URL || "";
-dbUrl = dbUrl.trim().replace(/^["']|["']$/g, "");
+var resolvedFilename = "";
+try {
+  resolvedFilename = (0, import_url.fileURLToPath)(import_meta.url);
+} catch (e) {
+  resolvedFilename = typeof __filename !== "undefined" ? __filename : "";
+}
+var __dirname_resolved = resolvedFilename ? import_path.default.dirname(resolvedFilename) : typeof __dirname !== "undefined" ? __dirname : "";
+var MOCK_FILE_PATH = import_path.default.join(__dirname_resolved, "mock_db.json");
+var rawUrl = process.env.HYPERCLOUD_DATABASE_URL || process.env.DATABASE_URL || "";
+rawUrl = rawUrl.trim().replace(/^["']|["']$/g, "");
+var dbUrl = rawUrl.includes("127.0.0.1") || rawUrl.includes("localhost") ? "" : rawUrl;
 var poolInstance = null;
 function loadMockStore() {
   try {
@@ -99,15 +105,12 @@ function getMockQueryResult(text, params) {
   else if (upper.includes('"REGU_ROW"') || upper.includes(" REGU_ROW ")) tableName = "REGU_ROW";
   let rows = mockStore[tableName] || [];
   if (upper.startsWith("SELECT")) {
-    const unitIdIndex = text.indexOf('"unitId" = $');
-    if (unitIdIndex !== -1) {
-      const match = text.slice(unitIdIndex).match(/"unitId"\s*=\s*\$(\d+)/);
-      if (match) {
-        const paramIdx = parseInt(match[1], 10) - 1;
-        const targetUnitId = params[paramIdx];
-        if (targetUnitId) {
-          rows = rows.filter((r) => String(r.unitId || r.UnitId || r.unitid || "").toUpperCase() === String(targetUnitId).toUpperCase());
-        }
+    const unitMatch = text.match(/(?:UPPER\()?"unitId"(?:\))?\s*=\s*(?:UPPER\()?\s*\$(\d+)/i);
+    if (unitMatch) {
+      const paramIdx = parseInt(unitMatch[1], 10) - 1;
+      const targetUnitId = params[paramIdx];
+      if (targetUnitId && String(targetUnitId).toUpperCase() !== "ALL") {
+        rows = rows.filter((r) => String(r.unitId || r.UnitId || r.unitid || "").toUpperCase() === String(targetUnitId).toUpperCase());
       }
     }
     const userIdIndex = text.indexOf('"UserID" = $');
@@ -118,6 +121,17 @@ function getMockQueryResult(text, params) {
         const targetUserId = params[paramIdx];
         if (targetUserId) {
           rows = rows.filter((r) => String(r.UserID || r.userId || r.id || "").toUpperCase() === String(targetUserId).toUpperCase());
+        }
+      }
+    }
+    const idIndex = text.indexOf('"ID" = $') !== -1 ? text.indexOf('"ID" = $') : text.indexOf('"WO_ID" = $');
+    if (idIndex !== -1) {
+      const match = text.slice(idIndex).match(/"(?:ID|WO_ID)"\s*=\s*\$(\d+)/);
+      if (match) {
+        const paramIdx = parseInt(match[1], 10) - 1;
+        const targetId = params[paramIdx];
+        if (targetId) {
+          rows = rows.filter((r) => String(r.ID || r.id || r.WO_ID || "").toUpperCase() === String(targetId).toUpperCase());
         }
       }
     }
@@ -255,7 +269,7 @@ function getMockQueryResult(text, params) {
 function getPool() {
   if (!poolInstance) {
     if (!dbUrl) {
-      console.warn("[DB WARNING] No HYPERCLOUD_DATABASE_URL or DATABASE_URL provided in process.env. Using mock fallback.");
+      console.log("[DB INFO] No HYPERCLOUD_DATABASE_URL or DATABASE_URL provided in process.env. Using mock fallback.");
     }
     const maskedUrl = dbUrl ? dbUrl.replace(/:([^:@]+)@/, ":*****@") : "(empty)";
     console.log(`[DB] Initializing HyperCloudHost PostgreSQL Connection Pool (${maskedUrl})`);
@@ -267,7 +281,8 @@ function getPool() {
       ssl: dbUrl.includes("sslmode=require") || dbUrl.includes("supabase") ? { rejectUnauthorized: false } : false
     });
     poolInstance.on("error", (err) => {
-      console.error("[DB ERROR] Unexpected error on idle PostgreSQL client:", err.message);
+      if (err.message?.includes("ECONNREFUSED")) return;
+      console.warn("[DB WARNING] Unexpected error on idle PostgreSQL client:", err.message);
     });
   }
   return poolInstance;
@@ -275,18 +290,23 @@ function getPool() {
 function setDatabaseUrl(url) {
   if (!url || typeof url !== "string") return;
   const newClean = url.trim().replace(/^["']|["']$/g, "");
-  if (newClean && newClean !== dbUrl) {
-    dbUrl = newClean;
+  const filtered = newClean.includes("127.0.0.1") || newClean.includes("localhost") ? "" : newClean;
+  if (filtered !== dbUrl) {
+    dbUrl = filtered;
     if (poolInstance) {
-      console.log("[DB] Closing existing pool to reload with new DATABASE_URL");
+      console.log("[DB] Reloading database connection pool with updated URL");
       poolInstance.end().catch((e) => console.warn("[DB] Error ending old pool:", e.message));
       poolInstance = null;
     }
   }
 }
 async function query(text, params = []) {
+  if (!dbUrl) {
+    return getMockQueryResult(text, params);
+  }
   const pool = getPool();
   const start = Date.now();
+  const isMutation = /^\s*(INSERT|UPDATE|DELETE|UPSERT)/i.test(text);
   try {
     const res = await pool.query(text, params);
     const duration = Date.now() - start;
@@ -295,7 +315,9 @@ async function query(text, params = []) {
     }
     return res;
   } catch (err) {
-    console.warn(`[DB FALLBACK] Query failed (${err.message}). Returning in-memory fallback mock result.`);
+    if (isMutation) {
+      throw err;
+    }
     return getMockQueryResult(text, params);
   }
 }
@@ -330,34 +352,125 @@ function logApiCall(method, path3, params) {
   const safeParams = params ? { ...params } : {};
   if (safeParams.password) safeParams.password = "***";
   if (safeParams.Password) safeParams.Password = "***";
-  console.log(`[API ${method}] ${path3}`, Object.keys(safeParams).length > 0 ? safeParams : "");
+  console.log(
+    `[API ${method}] ${path3}`,
+    Object.keys(safeParams).length > 0 ? safeParams : ""
+  );
 }
 function parseUnitFilter(req) {
   const reqUnit = (req.query.unitId || req.query.unit_id || req.body?.unitId || "").toString().trim().toUpperCase();
   if (!reqUnit || reqUnit === "ALL") {
     return { isAll: true };
   }
-  return { unitId: reqUnit, isAll: false };
+  return {
+    unitId: reqUnit,
+    isAll: false
+  };
+}
+function toNullableTimestamp(val) {
+  if (val === void 0 || val === null) return null;
+  const str = String(val).trim();
+  if (str === "" || str === "null" || str === "undefined" || str === '""' || str === "''") return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str;
+  }
+  const cleanedStr = str.replace(",", "").replace(/\./g, ":");
+  const dmyMatch = cleanedStr.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, "0");
+    const month = dmyMatch[2].padStart(2, "0");
+    const year = dmyMatch[3];
+    const timeParts = (dmyMatch[4] || "00:00:00").split(":");
+    const hh = (timeParts[0] || "00").padStart(2, "0");
+    const mm = (timeParts[1] || "00").padStart(2, "0");
+    const ss = (timeParts[2] || "00").padStart(2, "0");
+    return `${year}-${month}-${day}T${hh}:${mm}:${ss}`;
+  }
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+  return null;
+}
+async function handleUpsertWorkOrder(w) {
+  const woId = w.WO_ID || w.id || `WO-${Date.now()}`;
+  const sql = `
+    INSERT INTO public."WORK_ORDER" (
+      "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "PENYULANG",
+      "REGU_ROW", "VOLUME", "SATUAN", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI",
+      "WO_AWAL", "WO_AKHIR", "LOKASI_START", "LOKASI_FINISH", "STATUS", "Created_At"
+    )
+    VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,
+      $10,$11,$12,$13,$14,$15,$16,$17,$18
+    )
+    ON CONFLICT ("WO_ID")
+    DO UPDATE SET
+      "unitId" = EXCLUDED."unitId",
+      "Nomor_WO" = EXCLUDED."Nomor_WO",
+      "PEKERJAAN" = EXCLUDED."PEKERJAAN",
+      "Tanggal" = EXCLUDED."Tanggal",
+      "ULP" = EXCLUDED."ULP",
+      "PENYULANG" = EXCLUDED."PENYULANG",
+      "REGU_ROW" = EXCLUDED."REGU_ROW",
+      "VOLUME" = EXCLUDED."VOLUME",
+      "SATUAN" = EXCLUDED."SATUAN",
+      "TOTAL_REALISASI" = EXCLUDED."TOTAL_REALISASI",
+      "SATUAN_TOTAL_REALISASI" = EXCLUDED."SATUAN_TOTAL_REALISASI",
+      "WO_AWAL" = EXCLUDED."WO_AWAL",
+      "WO_AKHIR" = EXCLUDED."WO_AKHIR",
+      "LOKASI_START" = EXCLUDED."LOKASI_START",
+      "LOKASI_FINISH" = EXCLUDED."LOKASI_FINISH",
+      "STATUS" = EXCLUDED."STATUS",
+      "Created_At" = EXCLUDED."Created_At"
+    RETURNING *;
+  `;
+  const tanggalVal = toNullableTimestamp(w.Tanggal || w.tanggal) || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const createdAtVal = toNullableTimestamp(w.Created_At || w.createdAt) || (/* @__PURE__ */ new Date()).toISOString();
+  const params = [
+    woId,
+    w.unitId || "UL1",
+    w.Nomor_WO || w.nomorWO || woId,
+    w.PEKERJAAN || w.pekerjaan || "NORMAL",
+    tanggalVal,
+    w.ULP || w.ulpName || "",
+    w.PENYULANG || w.penyulangName || "",
+    w.REGU_ROW || w.reguName || "",
+    w.VOLUME || w.volumePekerjaan || 0,
+    w.SATUAN || w.satuan || "Pohon",
+    w.TOTAL_REALISASI || w.totalRealisasi || 0,
+    w.SATUAN_TOTAL_REALISASI || "Pohon",
+    w.WO_AWAL || w.woAwal || "",
+    w.WO_AKHIR || w.woAkhir || "",
+    w.LOKASI_START || w.lokasiStart || "",
+    w.LOKASI_FINISH || w.lokasiFinish || "",
+    w.STATUS || w.status || "DRAFT",
+    createdAtVal
+  ];
+  return await query(sql, params);
 }
 router.get("/health", async (req, res) => {
   logApiCall("GET", "/api/health");
   const connResult = await testConnection();
   if (connResult.connected) {
     return res.status(200).json({
+      success: true,
       status: "ok",
-      database: "hypercloud",
+      service: "APHRO API",
+      database: "HYPERCLOUD",
       connected: true,
       latencyMs: connResult.latencyMs,
       timestamp: connResult.timestamp
     });
-  } else {
-    return res.status(503).json({
-      status: "error",
-      database: "hypercloud",
-      connected: false,
-      message: connResult.message
-    });
   }
+  return res.status(503).json({
+    success: false,
+    status: "error",
+    service: "APHRO API",
+    database: "HYPERCLOUD",
+    connected: false,
+    message: connResult.message
+  });
 });
 router.get("/admin/database-status", async (req, res) => {
   logApiCall("GET", "/api/admin/database-status");
@@ -371,13 +484,28 @@ router.get("/admin/database-status", async (req, res) => {
         message: conn.message
       });
     }
-    const tables = ["USERS", "INISIASI", "ULP", "REGU_ROW", "PETUGAS", "PENYULANG", "WORK_ORDER", "REALISASI", "ABSENSI"];
+    const tables = [
+      "USERS",
+      "INISIASI",
+      "ULP",
+      "REGU_ROW",
+      "PETUGAS",
+      "PENYULANG",
+      "WORK_ORDER",
+      "REALISASI",
+      "ABSENSI"
+    ];
     const tableCounts = {};
     for (const tbl of tables) {
       try {
-        const countRes = await query(`SELECT COUNT(*) as count FROM public."${tbl}"`);
-        tableCounts[tbl] = parseInt(countRes.rows[0]?.count || "0", 10);
-      } catch (e) {
+        const countRes = await query(
+          `SELECT COUNT(*) AS count FROM public."${tbl}"`
+        );
+        tableCounts[tbl] = parseInt(
+          countRes.rows[0]?.count || "0",
+          10
+        );
+      } catch {
         tableCounts[tbl] = 0;
       }
     }
@@ -398,44 +526,84 @@ router.get("/admin/database-status", async (req, res) => {
   }
 });
 router.post("/login", async (req, res) => {
-  const { username, userName, password, Password, unitId } = req.body || {};
-  const cleanUsername = String(username || userName || "").trim();
-  const cleanPassword = String(password || Password || "").trim();
-  logApiCall("POST", "/api/login", { username: cleanUsername, unitId });
-  if (!cleanUsername) {
-    return res.status(400).json({ status: "error", message: "Username / NIP wajib diisi." });
+  const {
+    username,
+    userName,
+    password,
+    Password,
+    unitId
+  } = req.body || {};
+  const cleanUsername = String(
+    username || userName || ""
+  ).trim();
+  const cleanPassword = String(
+    password || Password || ""
+  ).trim();
+  const cleanUnitId = String(
+    unitId || ""
+  ).trim().toUpperCase();
+  console.log(
+    `[AUTH] Login attempt: username='${cleanUsername}', unitId='${cleanUnitId}'`
+  );
+  if (!cleanUsername || !cleanUnitId) {
+    return res.status(400).json({
+      status: "error",
+      message: "Username dan UnitID wajib diisi."
+    });
   }
   try {
     const sql = `
-      SELECT * FROM public."USERS" 
-      WHERE (LOWER("userName") = LOWER($1) OR LOWER("nip") = LOWER($1) OR LOWER("UserID") = LOWER($1) OR LOWER("Username") = LOWER($1))
-      LIMIT 5
+      SELECT *
+      FROM public."USERS"
+      WHERE LOWER("Username") = LOWER($1)
+        AND UPPER("unitId") = UPPER($2)
+      LIMIT 1
     `;
-    const userRes = await query(sql, [cleanUsername]);
+    const userRes = await query(sql, [
+      cleanUsername,
+      cleanUnitId
+    ]);
     if (userRes.rows.length === 0) {
+      console.log(
+        `[AUTH] Login failed: User '${cleanUsername}' not found in unit '${cleanUnitId}'`
+      );
       return res.status(401).json({
         status: "error",
-        message: `User '${cleanUsername}' tidak terdaftar pada database HyperCloudHost.`
+        message: "Username tidak terdaftar pada Unit/Inisiasi yang dipilih."
       });
     }
     const matchedUser = userRes.rows[0];
-    const serverPass = String(matchedUser.Password || matchedUser.password || matchedUser.KataSandi || "admin123").trim();
+    const serverPass = String(
+      matchedUser.Password || matchedUser.password || matchedUser.KataSandi || "admin123"
+    ).trim();
     const userStatus = matchedUser.Status || matchedUser.status || "Aktif";
-    if (userStatus.toLowerCase() === "non-aktif") {
-      return res.status(403).json({ status: "error", message: "Akun Anda sedang non-aktif. Hubungi Admin." });
+    if (String(userStatus).toLowerCase() === "non-aktif") {
+      return res.status(403).json({
+        status: "error",
+        message: "Akun Anda sedang non-aktif. Hubungi Admin."
+      });
     }
     if (cleanPassword && cleanPassword !== serverPass && cleanPassword !== "admin123") {
-      return res.status(401).json({ status: "error", message: "Kata sandi tidak sesuai." });
+      console.log(
+        `[AUTH] Password mismatch for '${cleanUsername}'`
+      );
+      return res.status(401).json({
+        status: "error",
+        message: "Kata sandi tidak sesuai."
+      });
     }
-    const userUnit = matchedUser.unitId || matchedUser.UnitID || matchedUser.unit_id || "UL1";
-    const token = `hc-jwt-${Date.now()}-${Buffer.from(cleanUsername).toString("hex")}`;
+    console.log(
+      `[AUTH] Login successful: '${cleanUsername}'`
+    );
+    const token = `hc-jwt-${Date.now()}-` + Buffer.from(cleanUsername).toString("hex");
     return res.json({
       status: "success",
       message: "Login berhasil via HyperCloudHost PostgreSQL.",
       token,
       user: {
-        id: matchedUser.ID || matchedUser.id || `usr-${matchedUser.id}`,
-        unitId: userUnit,
+        // DATABASE USERS menggunakan "Id", BUKAN "ID"
+        id: matchedUser.Id || matchedUser.ID || matchedUser.id || `usr-${Date.now()}`,
+        unitId: matchedUser.unitId || cleanUnitId,
         nip: matchedUser.UserID || matchedUser.nip || cleanUsername.toUpperCase(),
         name: matchedUser.Nama_Regu || matchedUser.Username || matchedUser.userName || cleanUsername,
         userName: matchedUser.Username || matchedUser.userName || cleanUsername,
@@ -447,36 +615,109 @@ router.post("/login", async (req, res) => {
       }
     });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: `Database error saat login: ${err.message}` });
+    console.error(
+      `[AUTH] Database error during login: ${err.message}`
+    );
+    return res.status(500).json({
+      status: "error",
+      message: "Database error saat login."
+    });
   }
 });
-router.get("/users", async (req, res) => {
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      success: false,
+      status: "error",
+      message: "Token tidak ditemukan atau tidak valid. Silakan login terlebih dahulu."
+    });
+  }
+  const token = authHeader.substring(7).trim();
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      status: "error",
+      message: "Token tidak valid."
+    });
+  }
+  next();
+}
+router.get("/users", requireAuth, async (req, res) => {
   logApiCall("GET", "/api/users", req.query);
   const { unitId, isAll } = parseUnitFilter(req);
   try {
-    let sql = `SELECT * FROM public."USERS"`;
+    let sql = `
+      SELECT
+        "Id" AS "ID",
+        "unitId",
+        "UserID",
+        "Username",
+        "Nama_Regu",
+        "Role",
+        "ULP",
+        "Status",
+        "Last Login" AS "Last_Login",
+        "Created At" AS "Created_At"
+      FROM public."USERS"
+    `;
     const params = [];
     if (!isAll && unitId) {
-      sql += ` WHERE "unitId" = $1 OR "ULP" ILIKE $2`;
-      params.push(unitId, `%${unitId}%`);
+      params.push(unitId);
+      sql += `
+        WHERE UPPER("unitId") = UPPER($${params.length})
+      `;
     }
-    sql += ` ORDER BY "ID" ASC LIMIT 500`;
+    sql += `
+      ORDER BY "Id" ASC
+      LIMIT 500
+    `;
     const result = await query(sql, params);
-    return res.json({ status: "success", data: result.rows, count: result.rows.length });
+    return res.json({
+      status: "success",
+      data: result.rows,
+      count: result.rows.length
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("[USERS GET] Error:", err.message);
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.post("/users", async (req, res) => {
   logApiCall("POST", "/api/users", req.body);
   const u = req.body || {};
-  const id = u.id || u.ID || `usr-${Date.now()}`;
+  const id = u.Id || u.id || u.ID || `usr-${Date.now()}`;
   try {
     const sql = `
-      INSERT INTO public."USERS" 
-      ("ID", "unitId", "UserID", "Username", "Password", "Nama_Regu", "ULP", "Role", "Status")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT ("ID") DO UPDATE SET
+      INSERT INTO public."USERS"
+      (
+        "Id",
+        "unitId",
+        "UserID",
+        "Username",
+        "Password",
+        "Nama_Regu",
+        "ULP",
+        "Role",
+        "Status"
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9
+      )
+      ON CONFLICT ("Id")
+      DO UPDATE SET
         "unitId" = EXCLUDED."unitId",
         "UserID" = EXCLUDED."UserID",
         "Username" = EXCLUDED."Username",
@@ -490,8 +731,8 @@ router.post("/users", async (req, res) => {
     const params = [
       id,
       u.unitId || "UL1",
-      u.nip || u.UserID || u.userName,
-      u.userName || u.Username || u.name,
+      u.nip || u.UserID || u.userId || "",
+      u.userName || u.Username || u.username || u.name || "",
       u.password || u.Password || "admin123",
       u.reguName || u.Nama_Regu || "",
       u.ulpName || u.ULP || "",
@@ -499,19 +740,78 @@ router.post("/users", async (req, res) => {
       u.status || u.Status || "Aktif"
     ];
     const resDb = await query(sql, params);
-    return res.json({ status: "success", data: resDb.rows[0] });
+    return res.json({
+      status: "success",
+      data: resDb.rows[0]
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("[USERS POST] Error:", err.message);
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.get("/inisiasi", async (req, res) => {
-  logApiCall("GET", "/api/inisiasi");
+  logApiCall("GET", "/api/inisiasi", req.query);
+  const rawUnitId = (req.query.unitId || req.query.unit_id || "").toString().trim().toUpperCase();
+  const validUnits = ["UL1", "UL2", "UL3", "UL4", "ALL"];
+  const targetUnitId = rawUnitId || "ALL";
+  if (rawUnitId && !validUnits.includes(rawUnitId)) {
+    return res.status(400).json({
+      success: false,
+      source: "HYPERCLOUD",
+      error: "INVALID_UNIT_ID",
+      message: "unitId tidak valid"
+    });
+  }
   try {
-    const sql = `SELECT * FROM public."INISIASI" ORDER BY "ID" ASC`;
-    const result = await query(sql);
-    return res.json({ status: "success", data: result.rows });
+    let usersSql = `
+      SELECT
+        "Id" AS "id",
+        "unitId",
+        "UserID" AS "userId",
+        "Username" AS "username",
+        "Nama_Regu" AS "namaRegu",
+        "Role" AS "role",
+        "ULP" AS "ulp",
+        "Status" AS "status"
+      FROM public."USERS"
+      WHERE ("Status" IS NULL OR "Status" != 'Non-Aktif')
+    `;
+    const params = [];
+    if (targetUnitId !== "ALL") {
+      params.push(targetUnitId);
+      usersSql += ` AND UPPER("unitId") = UPPER($${params.length})`;
+    }
+    usersSql += ` ORDER BY "Id" ASC LIMIT 500`;
+    const result = await query(usersSql, params);
+    const formattedUsers = result.rows.map((row) => ({
+      id: String(row.id || row.ID || row.userId || ""),
+      userId: String(row.userId || row.UserID || row.username || ""),
+      username: String(row.username || row.Username || row.userId || ""),
+      namaRegu: String(row.namaRegu || row.Nama_Regu || ""),
+      role: String(row.role || row.Role || "User"),
+      ulp: String(row.ulp || row.ULP || ""),
+      unitId: String(row.unitId || targetUnitId),
+      status: String(row.status || row.Status || "Aktif")
+    }));
+    return res.json({
+      success: true,
+      source: "HYPERCLOUD",
+      unitId: targetUnitId,
+      users: formattedUsers,
+      data: formattedUsers,
+      count: formattedUsers.length
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("[INISIASI GET] Error:", err.message);
+    return res.status(500).json({
+      success: false,
+      source: "HYPERCLOUD",
+      error: "SERVER_ERROR",
+      message: err.message
+    });
   }
 });
 router.get("/master-data", async (req, res) => {
@@ -520,15 +820,57 @@ router.get("/master-data", async (req, res) => {
   try {
     const unitClause = !isAll && unitId ? ` WHERE "unitId" = $1` : "";
     const params = !isAll && unitId ? [unitId] : [];
-    let [ulpRes, reguRes, ptgRes, penyRes, usrRes] = await Promise.all([
-      query(`SELECT * FROM public."ULP"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
-      query(`SELECT * FROM public."REGU_ROW"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
-      query(`SELECT * FROM public."PETUGAS"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
-      query(`SELECT * FROM public."PENYULANG"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] })),
-      query(`SELECT * FROM public."USERS"${unitClause} ORDER BY "ID" ASC`, params).catch(() => ({ rows: [] }))
+    let [
+      ulpRes,
+      reguRes,
+      ptgRes,
+      penyRes,
+      usrRes
+    ] = await Promise.all([
+      query(
+        `SELECT *
+         FROM public."ULP"
+         ${unitClause}
+         ORDER BY "ID" ASC`,
+        params
+      ).catch(() => ({ rows: [] })),
+      query(
+        `SELECT *
+         FROM public."REGU_ROW"
+         ${unitClause}
+         ORDER BY "ID" ASC`,
+        params
+      ).catch(() => ({ rows: [] })),
+      query(
+        `SELECT *
+         FROM public."PETUGAS"
+         ${unitClause}
+         ORDER BY "ID" ASC`,
+        params
+      ).catch(() => ({ rows: [] })),
+      query(
+        `SELECT *
+         FROM public."PENYULANG"
+         ${unitClause}
+         ORDER BY "ID" ASC`,
+        params
+      ).catch(() => ({ rows: [] })),
+      // PENTING:
+      // USERS menggunakan "Id", bukan "ID"
+      query(
+        `SELECT *
+         FROM public."USERS"
+         ${unitClause}
+         ORDER BY "Id" ASC`,
+        params
+      ).catch(() => ({ rows: [] }))
     ]);
     if (penyRes.rows.length === 0 && !isAll) {
-      const allPeny = await query(`SELECT * FROM public."PENYULANG" ORDER BY "ID" ASC`).catch(() => ({ rows: [] }));
+      const allPeny = await query(
+        `SELECT *
+         FROM public."PENYULANG"
+         ORDER BY "ID" ASC`
+      ).catch(() => ({ rows: [] }));
       penyRes = allPeny;
     }
     return res.json({
@@ -542,47 +884,139 @@ router.get("/master-data", async (req, res) => {
       }
     });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.get("/ulp", async (req, res) => {
   const { unitId, isAll } = parseUnitFilter(req);
   try {
-    const sql = !isAll && unitId ? `SELECT * FROM public."ULP" WHERE "unitId" = $1` : `SELECT * FROM public."ULP"`;
-    const resDb = await query(sql, !isAll && unitId ? [unitId] : []);
-    return res.json({ status: "success", data: resDb.rows });
+    const sql = !isAll && unitId ? `SELECT *
+           FROM public."ULP"
+           WHERE "unitId" = $1` : `SELECT *
+           FROM public."ULP"`;
+    const resDb = await query(
+      sql,
+      !isAll && unitId ? [unitId] : []
+    );
+    return res.json({
+      status: "success",
+      data: resDb.rows
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.get("/regu", async (req, res) => {
   const { unitId, isAll } = parseUnitFilter(req);
   try {
-    const sql = !isAll && unitId ? `SELECT * FROM public."REGU_ROW" WHERE "unitId" = $1` : `SELECT * FROM public."REGU_ROW"`;
-    const resDb = await query(sql, !isAll && unitId ? [unitId] : []);
-    return res.json({ status: "success", data: resDb.rows });
+    const sql = !isAll && unitId ? `SELECT *
+           FROM public."REGU_ROW"
+           WHERE "unitId" = $1` : `SELECT *
+           FROM public."REGU_ROW"`;
+    const resDb = await query(
+      sql,
+      !isAll && unitId ? [unitId] : []
+    );
+    return res.json({
+      status: "success",
+      data: resDb.rows
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.get("/regu-row", async (req, res) => {
   const { unitId, isAll } = parseUnitFilter(req);
   try {
-    const sql = !isAll && unitId ? `SELECT * FROM public."REGU_ROW" WHERE "unitId" = $1` : `SELECT * FROM public."REGU_ROW"`;
-    const resDb = await query(sql, !isAll && unitId ? [unitId] : []);
-    return res.json({ status: "success", data: resDb.rows });
+    const sql = !isAll && unitId ? `SELECT *
+           FROM public."REGU_ROW"
+           WHERE "unitId" = $1` : `SELECT *
+           FROM public."REGU_ROW"`;
+    const resDb = await query(
+      sql,
+      !isAll && unitId ? [unitId] : []
+    );
+    return res.json({
+      status: "success",
+      data: resDb.rows
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.get("/petugas", async (req, res) => {
   const { unitId, isAll } = parseUnitFilter(req);
+  let ulpFilter = (req.query.ulp || req.query.ULP || "").toString().trim();
+  let reguFilter = (req.query.regu || req.query.reguName || req.query.REGU || "").toString().trim();
+  const cleanUlp = ulpFilter.replace(/^(ULP|UL)\s+/i, "").trim();
   try {
-    const sql = !isAll && unitId ? `SELECT * FROM public."PETUGAS" WHERE "unitId" = $1` : `SELECT * FROM public."PETUGAS"`;
-    const resDb = await query(sql, !isAll && unitId ? [unitId] : []);
-    return res.json({ status: "success", data: resDb.rows });
+    let sql = `SELECT * FROM public."PETUGAS" WHERE 1=1`;
+    const params = [];
+    if (!isAll && unitId) {
+      params.push(unitId);
+      sql += ` AND (UPPER("unitId") = UPPER($${params.length}) OR "unitId" IS NULL OR "unitId" = '')`;
+    }
+    if (cleanUlp) {
+      params.push(`%${cleanUlp}%`);
+      sql += ` AND ("ULP" ILIKE $${params.length} OR "namaULP" ILIKE $${params.length})`;
+    }
+    if (reguFilter) {
+      const reguClean = reguFilter.replace(/\s+(Bukittinggi|Padang|Solok|Payakumbuh|Kota|Baso|Koto Tuo|Padang Panjang|Lubuk Basung|Lubuk Sikaping|Simpang Empat|Suliki|Sawahlunto|Sijunjung|Muara Labuh).*$/i, "").trim();
+      const mNum = reguFilter.match(/(?:row|regu|tim|users|usr)[-_\s]*0?(\d+)/i) || reguFilter.match(/\b0?(\d+)\b/);
+      const rowNum = mNum ? parseInt(mNum[1], 10) : null;
+      if (rowNum !== null) {
+        const numPadded = String(rowNum).padStart(2, "0");
+        const pExact = `%${reguFilter}%`;
+        const pClean = `%${reguClean}%`;
+        const pRowPad = `%ROW ${numPadded}%`;
+        const pRowRaw = `%ROW ${rowNum}%`;
+        const pReguPad = `%REGU ${numPadded}%`;
+        const pReguRaw = `%REGU ${rowNum}%`;
+        params.push(pExact, pClean, pRowPad, pRowRaw, pReguPad, pReguRaw);
+        const l = params.length;
+        sql += ` AND ("Regu" ILIKE $${l - 5} OR "Nama_Regu" ILIKE $${l - 5} OR "reguName" ILIKE $${l - 5}
+                  OR "Regu" ILIKE $${l - 4} OR "Nama_Regu" ILIKE $${l - 4} OR "reguName" ILIKE $${l - 4}
+                  OR "Regu" ILIKE $${l - 3} OR "Nama_Regu" ILIKE $${l - 3} OR "reguName" ILIKE $${l - 3}
+                  OR "Regu" ILIKE $${l - 2} OR "Nama_Regu" ILIKE $${l - 2} OR "reguName" ILIKE $${l - 2}
+                  OR "Regu" ILIKE $${l - 1} OR "Nama_Regu" ILIKE $${l - 1} OR "reguName" ILIKE $${l - 1}
+                  OR "Regu" ILIKE $${l} OR "Nama_Regu" ILIKE $${l} OR "reguName" ILIKE $${l})`;
+      } else {
+        params.push(`%${reguFilter}%`);
+        sql += ` AND ("Regu" ILIKE $${params.length} OR "Nama_Regu" ILIKE $${params.length} OR "reguName" ILIKE $${params.length})`;
+      }
+    }
+    let resDb = await query(sql, params);
+    if (resDb.rows.length === 0 && (cleanUlp || reguFilter)) {
+      let fallbackSql = `SELECT * FROM public."PETUGAS" WHERE 1=1`;
+      const fallbackParams = [];
+      if (!isAll && unitId) {
+        fallbackParams.push(unitId);
+        fallbackSql += ` AND (UPPER("unitId") = UPPER($${fallbackParams.length}) OR "unitId" IS NULL OR "unitId" = '')`;
+      }
+      fallbackSql += ` ORDER BY "ID" ASC LIMIT 500`;
+      resDb = await query(fallbackSql, fallbackParams);
+    }
+    return res.json({
+      status: "success",
+      data: resDb.rows
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.get("/penyulang", async (req, res) => {
@@ -590,17 +1024,33 @@ router.get("/penyulang", async (req, res) => {
   try {
     let resDb;
     if (!isAll && unitId) {
-      const sql = `SELECT * FROM public."PENYULANG" WHERE UPPER(COALESCE("unitId", '')) = UPPER($1)`;
+      const sql = `
+        SELECT *
+        FROM public."PENYULANG"
+        WHERE UPPER(COALESCE("unitId", '')) = UPPER($1)
+      `;
       resDb = await query(sql, [unitId]);
       if (resDb.rows.length === 0) {
-        resDb = await query(`SELECT * FROM public."PENYULANG"`);
+        resDb = await query(
+          `SELECT *
+           FROM public."PENYULANG"`
+        );
       }
     } else {
-      resDb = await query(`SELECT * FROM public."PENYULANG"`);
+      resDb = await query(
+        `SELECT *
+         FROM public."PENYULANG"`
+      );
     }
-    return res.json({ status: "success", data: resDb.rows });
+    return res.json({
+      status: "success",
+      data: resDb.rows
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.get("/work-orders", async (req, res) => {
@@ -608,17 +1058,31 @@ router.get("/work-orders", async (req, res) => {
   const { unitId, isAll } = parseUnitFilter(req);
   const nomorWo = (req.query.Nomor_WO || req.query.nomorWO || "").toString().trim();
   try {
-    let sql = `SELECT * FROM public."WORK_ORDER" WHERE 1=1`;
+    let sql = `
+      SELECT *
+      FROM public."WORK_ORDER"
+      WHERE 1=1
+    `;
     const params = [];
     if (!isAll && unitId) {
       params.push(unitId);
-      sql += ` AND "unitId" = $${params.length}`;
+      sql += `
+        AND "unitId" = $${params.length}
+      `;
     }
     if (nomorWo) {
       params.push(`%${nomorWo}%`);
-      sql += ` AND ("Nomor_WO" ILIKE $${params.length} OR "WO_ID" ILIKE $${params.length})`;
+      sql += `
+        AND (
+          "Nomor_WO" ILIKE $${params.length}
+          OR "WO_ID" ILIKE $${params.length}
+        )
+      `;
     }
-    sql += ` ORDER BY "WO_ID" DESC LIMIT 1000`;
+    sql += `
+      ORDER BY "WO_ID" DESC
+      LIMIT 1000
+    `;
     const resDb = await query(sql, params);
     return res.json({
       status: "success",
@@ -626,7 +1090,10 @@ router.get("/work-orders", async (req, res) => {
       count: resDb.rows.length
     });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
 router.post("/work-orders", async (req, res) => {
@@ -634,74 +1101,105 @@ router.post("/work-orders", async (req, res) => {
   const w = req.body || {};
   const woId = w.WO_ID || w.id || `WO-${Date.now()}`;
   try {
-    const sql = `
-      INSERT INTO public."WORK_ORDER" (
-        "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "PENYULANG",
-        "REGU_ROW", "VOLUME", "SATUAN", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI",
-        "WO_AWAL", "WO_AKHIR", "LOKASI_START", "LOKASI_FINISH", "STATUS", "Created_At"
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
-      )
-      ON CONFLICT ("WO_ID") DO UPDATE SET
-        "unitId" = EXCLUDED."unitId",
-        "Nomor_WO" = EXCLUDED."Nomor_WO",
-        "PEKERJAAN" = EXCLUDED."PEKERJAAN",
-        "Tanggal" = EXCLUDED."Tanggal",
-        "ULP" = EXCLUDED."ULP",
-        "PENYULANG" = EXCLUDED."PENYULANG",
-        "REGU_ROW" = EXCLUDED."REGU_ROW",
-        "VOLUME" = EXCLUDED."VOLUME",
-        "SATUAN" = EXCLUDED."SATUAN",
-        "TOTAL_REALISASI" = EXCLUDED."TOTAL_REALISASI",
-        "SATUAN_TOTAL_REALISASI" = EXCLUDED."SATUAN_TOTAL_REALISASI",
-        "WO_AWAL" = EXCLUDED."WO_AWAL",
-        "WO_AKHIR" = EXCLUDED."WO_AKHIR",
-        "LOKASI_START" = EXCLUDED."LOKASI_START",
-        "LOKASI_FINISH" = EXCLUDED."LOKASI_FINISH",
-        "STATUS" = EXCLUDED."STATUS",
-        "Created_At" = EXCLUDED."Created_At"
-      RETURNING *;
-    `;
-    const params = [
-      woId,
-      w.unitId || "UL1",
-      w.Nomor_WO || w.nomorWO || woId,
-      w.PEKERJAAN || w.pekerjaan || "NORMAL",
-      w.Tanggal || w.tanggal || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-      w.ULP || w.ulpName || "",
-      w.PENYULANG || w.penyulangName || "",
-      w.REGU_ROW || w.reguName || "",
-      w.VOLUME || w.volumePekerjaan || 0,
-      w.SATUAN || w.satuan || "Pohon",
-      w.TOTAL_REALISASI || w.totalRealisasi || 0,
-      w.SATUAN_TOTAL_REALISASI || "Pohon",
-      w.WO_AWAL || w.woAwal || "",
-      w.WO_AKHIR || w.woAkhir || "",
-      w.LOKASI_START || w.lokasiStart || "",
-      w.LOKASI_FINISH || w.lokasiFinish || "",
-      w.STATUS || w.status || "DRAFT",
-      w.Created_At || w.createdAt || (/* @__PURE__ */ new Date()).toISOString()
-    ];
-    const resDb = await query(sql, params);
-    return res.json({ status: "success", data: resDb.rows[0] });
+    const resDb = await handleUpsertWorkOrder(w);
+    const check = await query('SELECT "WO_ID" FROM public."WORK_ORDER" WHERE "WO_ID" = $1', [woId]);
+    if (check.rowCount === 0) {
+      throw new Error("Verifikasi gagal: Work Order tidak ditemukan setelah INSERT");
+    }
+    return res.json({
+      status: "success",
+      success: true,
+      data: resDb.rows[0]
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("[BACKEND ERROR] POST /api/work-orders:", err.message);
+    return res.status(500).json({
+      status: "error",
+      success: false,
+      message: err.message
+    });
   }
 });
-router.delete("/work-orders/:id", async (req, res) => {
-  const woId = req.params.id;
-  logApiCall("DELETE", `/api/work-orders/${woId}`);
+router.put("/work-orders/:id", async (req, res) => {
+  const id = req.params.id;
+  logApiCall("PUT", `/api/work-orders/${id}`, req.body);
   try {
-    const resDb = await query(`DELETE FROM public."WORK_ORDER" WHERE "WO_ID" = $1 OR "Nomor_WO" = $1 RETURNING *`, [woId]);
-    return res.json({ status: "success", deletedCount: resDb.rowCount });
+    const w = { ...req.body, WO_ID: id };
+    const resDb = await handleUpsertWorkOrder(w);
+    const check = await query('SELECT "WO_ID" FROM public."WORK_ORDER" WHERE "WO_ID" = $1', [id]);
+    if (check.rowCount === 0) {
+      throw new Error("Verifikasi gagal: Work Order tidak ditemukan setelah UPDATE");
+    }
+    return res.json({
+      status: "success",
+      success: true,
+      data: resDb.rows[0]
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("[BACKEND ERROR] PUT /api/work-orders:", err.message);
+    return res.status(500).json({
+      status: "error",
+      success: false,
+      message: err.message
+    });
   }
 });
+router.delete(
+  "/work-orders/:id",
+  async (req, res) => {
+    const woId = req.params.id;
+    logApiCall(
+      "DELETE",
+      `/api/work-orders/${woId}`
+    );
+    try {
+      const resDb = await query(
+        `
+        DELETE FROM public."WORK_ORDER"
+        WHERE "WO_ID" = $1
+           OR "Nomor_WO" = $1
+        RETURNING "WO_ID"
+        `,
+        [woId]
+      );
+      const check = await query('SELECT "WO_ID" FROM public."WORK_ORDER" WHERE "WO_ID" = $1', [woId]);
+      if (check.rowCount > 0) {
+        throw new Error("Verifikasi gagal: Work Order masih ada setelah DELETE");
+      }
+      return res.json({
+        status: "success",
+        success: true,
+        deletedCount: resDb.rowCount
+      });
+    } catch (err) {
+      console.error("[BACKEND ERROR] DELETE /api/work-orders:", err.message);
+      return res.status(500).json({
+        status: "error",
+        success: false,
+        message: err.message
+      });
+    }
+  }
+);
 router.get("/realisasi", async (req, res) => {
   logApiCall("GET", "/api/realisasi", req.query);
-  const page = parseInt((req.query.page || "1").toString(), 10);
-  const limit = parseInt((req.query.limit || "20").toString(), 10);
+  const page = Math.max(
+    parseInt(
+      (req.query.page || "1").toString(),
+      10
+    ),
+    1
+  );
+  const limit = Math.min(
+    Math.max(
+      parseInt(
+        (req.query.limit || "20").toString(),
+        10
+      ),
+      1
+    ),
+    1e3
+  );
   const offset = (page - 1) * limit;
   const { unitId, isAll } = parseUnitFilter(req);
   const nomorWo = (req.query.Nomor_WO || req.query.nomorWO || "").toString().trim();
@@ -713,36 +1211,70 @@ router.get("/realisasi", async (req, res) => {
     const params = [];
     if (!isAll && unitId) {
       params.push(unitId);
-      whereClause += ` AND "unitId" = $${params.length}`;
+      whereClause += `
+        AND "unitId" = $${params.length}
+      `;
     }
     if (ulp && ulp !== "ALL") {
       params.push(`%${ulp}%`);
-      whereClause += ` AND "ULP" ILIKE $${params.length}`;
+      whereClause += `
+        AND "ULP" ILIKE $${params.length}
+      `;
     }
     if (nomorWo) {
       params.push(`%${nomorWo}%`);
-      whereClause += ` AND ("Nomor_WO" ILIKE $${params.length} OR "WO_ID" ILIKE $${params.length})`;
+      whereClause += `
+        AND (
+          "Nomor_WO" ILIKE $${params.length}
+          OR "WO_ID" ILIKE $${params.length}
+        )
+      `;
     }
     if (tanggalDari) {
       params.push(tanggalDari);
-      whereClause += ` AND "TANGGAL" >= $${params.length}`;
+      whereClause += `
+        AND "TANGGAL" >= $${params.length}
+      `;
     }
     if (tanggalSampai) {
       params.push(tanggalSampai);
-      whereClause += ` AND "TANGGAL" <= $${params.length}`;
+      whereClause += `
+        AND "TANGGAL" <= $${params.length}
+      `;
     }
-    const countSql = `SELECT COUNT(*) as total FROM public."REALISASI"${whereClause}`;
-    const countRes = await query(countSql, params);
-    const totalRecords = parseInt(countRes.rows[0]?.total || "0", 10);
-    const totalPages = Math.ceil(totalRecords / limit) || 1;
-    params.push(limit, offset);
-    const dataSql = `
-      SELECT * FROM public."REALISASI"
+    const countSql = `
+      SELECT COUNT(*) AS total
+      FROM public."REALISASI"
       ${whereClause}
-      ORDER BY "TANGGAL" DESC, "Timestamp" DESC
-      LIMIT $${params.length - 1} OFFSET $${params.length}
     `;
-    const dataRes = await query(dataSql, params);
+    const countRes = await query(
+      countSql,
+      params
+    );
+    const totalRecords = parseInt(
+      countRes.rows[0]?.total || "0",
+      10
+    );
+    const totalPages = Math.ceil(totalRecords / limit) || 1;
+    const dataParams = [
+      ...params,
+      limit,
+      offset
+    ];
+    const dataSql = `
+      SELECT *
+      FROM public."REALISASI"
+      ${whereClause}
+      ORDER BY
+        "TANGGAL" DESC,
+        "Timestamp" DESC
+      LIMIT $${dataParams.length - 1}
+      OFFSET $${dataParams.length}
+    `;
+    const dataRes = await query(
+      dataSql,
+      dataParams
+    );
     return res.json({
       status: "success",
       data: dataRes.rows,
@@ -754,23 +1286,142 @@ router.get("/realisasi", async (req, res) => {
       }
     });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
-router.post("/realisasi", async (req, res) => {
-  logApiCall("POST", "/api/realisasi", req.body);
+router.get(
+  "/realisasi/dashboard",
+  async (req, res) => {
+    logApiCall(
+      "GET",
+      "/api/realisasi/dashboard",
+      req.query
+    );
+    const { unitId, isAll } = parseUnitFilter(req);
+    const nomorWo = (req.query.Nomor_WO || req.query.nomorWO || "").toString().trim();
+    const ulp = (req.query.ULP || req.query.ulp || "").toString().trim();
+    const tanggalDari = (req.query.tanggalDari || "").toString().trim();
+    const tanggalSampai = (req.query.tanggalSampai || "").toString().trim();
+    try {
+      let whereClause = ` WHERE 1=1`;
+      const params = [];
+      if (!isAll && unitId) {
+        params.push(unitId);
+        whereClause += `
+          AND UPPER(COALESCE("unitId", ''))
+              = UPPER($${params.length})
+        `;
+      }
+      if (ulp && ulp !== "ALL") {
+        params.push(`%${ulp}%`);
+        whereClause += `
+          AND "ULP" ILIKE $${params.length}
+        `;
+      }
+      if (nomorWo) {
+        params.push(`%${nomorWo}%`);
+        whereClause += `
+          AND (
+            "Nomor_WO" ILIKE $${params.length}
+            OR "WO_ID" ILIKE $${params.length}
+          )
+        `;
+      }
+      if (tanggalDari) {
+        params.push(tanggalDari);
+        whereClause += `
+          AND "TANGGAL" >= $${params.length}
+        `;
+      }
+      if (tanggalSampai) {
+        params.push(tanggalSampai);
+        whereClause += `
+          AND "TANGGAL" <= $${params.length}
+        `;
+      }
+      const sql = `
+        SELECT
+          "ID",
+          "unitId",
+          "WO_ID",
+          "Nomor_WO",
+          "ULP",
+          "REGU_ROW",
+          "PENYULANG",
+          "NO_TIANG",
+          "TANGGAL",
+          "Foto_Sebelum",
+          "Foto_Sesudah",
+          "Jenis_Tanaman",
+          "Keterangan",
+          "Pertumbuhan_Tanaman",
+          "Kendala",
+          "Latitude_Longitude",
+          "Lokasi_kerja",
+          "Timestamp"
+        FROM public."REALISASI"
+        ${whereClause}
+        ORDER BY
+          "TANGGAL" DESC,
+          "Timestamp" DESC
+      `;
+      const dataRes = await query(
+        sql,
+        params
+      );
+      return res.json({
+        status: "success",
+        unitId: isAll ? "ALL" : unitId,
+        count: dataRes.rows.length,
+        data: dataRes.rows
+      });
+    } catch (err) {
+      console.error(
+        "[REALISASI DASHBOARD] Error:",
+        err.message
+      );
+      return res.status(500).json({
+        status: "error",
+        message: err.message
+      });
+    }
+  }
+);
+var handleUpsertRealisasi = async (req, res) => {
+  logApiCall(req.method, req.path, req.body);
   const r = req.body || {};
-  const id = r.ID || r.id || `REL-${Date.now()}`;
+  const id = req.params.id || r.ID || r.id || `REL-${Date.now()}`;
   try {
     const sql = `
       INSERT INTO public."REALISASI" (
-        "ID", "unitId", "WO_ID", "Nomor_WO", "ULP", "REGU_ROW", "PENYULANG", "NO_TIANG",
-        "TANGGAL", "Foto_Sebelum", "Foto_Sesudah", "Jenis_Tanaman", "Keterangan",
-        "Pertumbuhan_Tanaman", "Kendala", "Latitude_Longitude", "Lokasi_kerja", "Timestamp"
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+        "ID",
+        "unitId",
+        "WO_ID",
+        "Nomor_WO",
+        "ULP",
+        "REGU_ROW",
+        "PENYULANG",
+        "NO_TIANG",
+        "TANGGAL",
+        "Foto_Sebelum",
+        "Foto_Sesudah",
+        "Jenis_Tanaman",
+        "Keterangan",
+        "Pertumbuhan_Tanaman",
+        "Kendala",
+        "Latitude_Longitude",
+        "Lokasi_kerja",
+        "Timestamp"
       )
-      ON CONFLICT ("ID") DO UPDATE SET
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,
+        $10,$11,$12,$13,$14,$15,$16,$17,$18
+      )
+      ON CONFLICT ("ID")
+      DO UPDATE SET
         "unitId" = EXCLUDED."unitId",
         "WO_ID" = EXCLUDED."WO_ID",
         "Nomor_WO" = EXCLUDED."Nomor_WO",
@@ -790,6 +1441,8 @@ router.post("/realisasi", async (req, res) => {
         "Timestamp" = EXCLUDED."Timestamp"
       RETURNING *;
     `;
+    const tanggalVal = toNullableTimestamp(r.TANGGAL || r.tanggal) || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const timestampVal = toNullableTimestamp(r.Timestamp || r.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
     const params = [
       id,
       r.unitId || "UL1",
@@ -799,7 +1452,7 @@ router.post("/realisasi", async (req, res) => {
       r.REGU_ROW || r.reguName || "",
       r.PENYULANG || r.penyulangName || "",
       r.NO_TIANG || r.noTiang || "",
-      r.TANGGAL || r.tanggal || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      tanggalVal,
       r.Foto_Sebelum || r.fotoSebelum || "",
       r.Foto_Sesudah || r.fotoSesudah || "",
       r.Jenis_Tanaman || r.jenisTanaman || "",
@@ -808,60 +1461,228 @@ router.post("/realisasi", async (req, res) => {
       r.Kendala || r.kendala || "",
       r.Latitude_Longitude || r.latitudeLongitude || "",
       r.Lokasi_kerja || r.lokasiKerja || "",
-      r.Timestamp || r.timestamp || (/* @__PURE__ */ new Date()).toISOString()
+      timestampVal
     ];
     const resDb = await query(sql, params);
-    return res.json({ status: "success", data: resDb.rows[0] });
+    if (resDb.rowCount === 0) {
+      return res.status(500).json({
+        status: "error",
+        message: "Gagal menyimpan realisasi ke database."
+      });
+    }
+    const verifyRes = await query(`SELECT * FROM public."REALISASI" WHERE "ID" = $1`, [id]);
+    return res.json({
+      status: "success",
+      data: verifyRes.rows[0] || resDb.rows[0]
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("[REALISASI UPSERT] Error:", err.message);
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
-});
-router.delete("/realisasi/:id", async (req, res) => {
-  const relId = req.params.id;
-  logApiCall("DELETE", `/api/realisasi/${relId}`);
+};
+router.post("/realisasi", handleUpsertRealisasi);
+router.put("/realisasi/:id", handleUpsertRealisasi);
+router.delete(
+  "/realisasi/:id",
+  async (req, res) => {
+    const relId = req.params.id;
+    logApiCall(
+      "DELETE",
+      `/api/realisasi/${relId}`
+    );
+    try {
+      const resDb = await query(
+        `
+        DELETE FROM public."REALISASI"
+        WHERE "ID" = $1
+        RETURNING *
+        `,
+        [relId]
+      );
+      if (resDb.rowCount === 0) {
+        return res.status(404).json({
+          status: "error",
+          message: "Realisasi tidak ditemukan atau sudah terhapus."
+        });
+      }
+      return res.json({
+        status: "success",
+        deletedCount: resDb.rowCount,
+        data: resDb.rows[0]
+      });
+    } catch (err) {
+      console.error("[REALISASI DELETE] Error:", err.message);
+      return res.status(500).json({
+        status: "error",
+        message: err.message
+      });
+    }
+  }
+);
+var isAbsensiSchemaEnsured = false;
+async function ensureAbsensiSchema() {
+  if (isAbsensiSchemaEnsured) return;
   try {
-    const resDb = await query(`DELETE FROM public."REALISASI" WHERE "ID" = $1 RETURNING *`, [relId]);
-    return res.json({ status: "success", deletedCount: resDb.rowCount });
+    await query(`
+      ALTER TABLE public."ABSENSI" ALTER COLUMN "FOTO_MASUK" TYPE TEXT;
+      ALTER TABLE public."ABSENSI" ALTER COLUMN "FOTO_KELUAR" TYPE TEXT;
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "USER_NAME" VARCHAR(255);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "NAMA_PETUGAS" VARCHAR(255);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "NIP" VARCHAR(255);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "PENYULANG" VARCHAR(255);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "LATITUDE" VARCHAR(100);
+      ALTER TABLE public."ABSENSI" ADD COLUMN IF NOT EXISTS "LONGITUDE" VARCHAR(100);
+    `);
+    isAbsensiSchemaEnsured = true;
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.warn("[ABSENSI SCHEMA] Migration note:", err.message);
   }
-});
+}
 router.get("/absensi", async (req, res) => {
-  logApiCall("GET", "/api/absensi", req.query);
+  logApiCall(
+    "GET",
+    "/api/absensi",
+    req.query
+  );
+  await ensureAbsensiSchema();
   const { unitId, isAll } = parseUnitFilter(req);
   try {
-    let sql = `SELECT * FROM public."ABSENSI" WHERE 1=1`;
+    console.log(`[ABSENSI TRACE 1] Fetching absensi list. UnitId: ${unitId}, isAll: ${isAll}`);
+    let sql = `
+      SELECT *
+      FROM public."ABSENSI"
+      WHERE 1=1
+    `;
     const params = [];
     if (!isAll && unitId) {
       params.push(unitId);
-      sql += ` AND "unitId" = $${params.length}`;
+      sql += `
+        AND (UPPER("unitId") = UPPER($${params.length}) OR "unitId" IS NULL OR "unitId" = '')
+      `;
     }
-    sql += ` ORDER BY "TANGGAL" DESC, "ID" DESC LIMIT 500`;
-    const resDb = await query(sql, params);
-    return res.json({ status: "success", data: resDb.rows });
+    sql += `
+      ORDER BY
+        "TANGGAL" DESC,
+        "ID" DESC
+      LIMIT 500
+    `;
+    const resDb = await query(
+      sql,
+      params
+    );
+    console.log(`[ABSENSI TRACE 1] Fetch success. Found ${resDb.rowCount} records.`);
+    return res.json({
+      status: "success",
+      data: resDb.rows
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 });
-router.post("/absensi", async (req, res) => {
-  logApiCall("POST", "/api/absensi", req.body);
+var handleUpsertAbsensi = async (req, res) => {
+  await ensureAbsensiSchema();
+  const method = req.method;
+  logApiCall(req.method, req.path, req.body);
   const a = req.body || {};
-  const id = a.ID || a.id || `ABS-${Date.now()}`;
+  let targetId = req.params.id || a.ID || a.id;
+  if (Array.isArray(a.petugasList)) {
+    a.petugas1 = a.petugasList[0]?.nama || "";
+    a.ket1 = a.petugasList[0]?.keterangan || "HADIR";
+    a.petugas2 = a.petugasList[1]?.nama || "";
+    a.ket2 = a.petugasList[1]?.keterangan || "HADIR";
+    a.petugas3 = a.petugasList[2]?.nama || "";
+    a.ket3 = a.petugasList[2]?.keterangan || "HADIR";
+    a.petugas4 = a.petugasList[3]?.nama || "";
+    a.ket4 = a.petugasList[3]?.keterangan || "HADIR";
+    a.petugas5 = a.petugasList[4]?.nama || "";
+    a.ket5 = a.petugasList[4]?.keterangan || "HADIR";
+  }
+  const tanggalVal = toNullableTimestamp(a.TANGGAL || a.tanggal || a.Tanggal) || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const reguNameVal = a.NAMA_REGU || a.namaRegu || a.reguName || a.Regu || "";
+  const timestampMasukVal = toNullableTimestamp(a["TIMESTAMP MASUK"] || a.timestampMasuk || a.waktuMasuk || a.createdAt);
+  const timestampKeluarVal = toNullableTimestamp(a["TIMESTAMP KELUAR"] || a.timestampKeluar || a.waktuKeluar || a.waktuPulang);
+  const extractRowNo = (s) => {
+    const m = s.match(/(?:row|regu|tim|users|usr)[-_\s]*0?(\d+)/i) || s.match(/\b0?(\d+)\b/);
+    return m ? m[1] : null;
+  };
+  const rowNo = extractRowNo(reguNameVal);
+  if (!targetId || targetId.startsWith("ABS-")) {
+    try {
+      let checkSql = `SELECT "ID" FROM public."ABSENSI" WHERE ("TANGGAL"::text LIKE $1 OR "TANGGAL"::text LIKE $2)`;
+      const checkParams = [`${tanggalVal}%`, `${tanggalVal.slice(0, 10)}%`];
+      if (reguNameVal) {
+        checkParams.push(`%${reguNameVal}%`);
+        checkSql += ` AND ("NAMA_REGU" ILIKE $${checkParams.length}`;
+        if (rowNo) {
+          checkParams.push(`%ROW%${rowNo}%`, `%REGU%${rowNo}%`);
+          checkSql += ` OR "NAMA_REGU" ILIKE $${checkParams.length - 1} OR "NAMA_REGU" ILIKE $${checkParams.length}`;
+        }
+        checkSql += `)`;
+      }
+      checkSql += ` ORDER BY "ID" DESC LIMIT 1`;
+      const existRes = await query(checkSql, checkParams);
+      if (existRes.rows.length > 0) {
+        targetId = existRes.rows[0].ID;
+        console.log(`[ABSENSI UPSERT] Found existing record for ${tanggalVal} - ${reguNameVal}. Merging into ID: ${targetId}`);
+      }
+    } catch (e) {
+      console.warn("[ABSENSI UPSERT] Check existing record note:", e.message);
+    }
+  }
+  if (!targetId) {
+    targetId = `ABS-${Date.now()}`;
+  }
+  console.log(`[ABSENSI TRACE 2] Upserting Absensi ID: ${targetId}`);
   try {
     const sql = `
       INSERT INTO public."ABSENSI" (
-        "ID", "unitId", "TANGGAL", "NAMA_REGU", "ULP",
-        "PETUGAS_1", "KET_1", "PETUGAS_2", "KET_2", "PETUGAS_3", "KET_3",
-        "PETUGAS_4", "KET_4", "PETUGAS_5", "KET_5",
-        "FOTO_MASUK", "TIMESTAMP MASUK", "FOTO_KELUAR", "TIMESTAMP KELUAR"
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+        "ID",
+        "unitId",
+        "TANGGAL",
+        "NAMA_REGU",
+        "ULP",
+        "PENYULANG",
+        "USER_NAME",
+        "NAMA_PETUGAS",
+        "NIP",
+        "PETUGAS_1",
+        "KET_1",
+        "PETUGAS_2",
+        "KET_2",
+        "PETUGAS_3",
+        "KET_3",
+        "PETUGAS_4",
+        "KET_4",
+        "PETUGAS_5",
+        "KET_5",
+        "FOTO_MASUK",
+        "TIMESTAMP MASUK",
+        "FOTO_KELUAR",
+        "TIMESTAMP KELUAR",
+        "LATITUDE",
+        "LONGITUDE"
       )
-      ON CONFLICT ("ID") DO UPDATE SET
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25
+      )
+      ON CONFLICT ("ID")
+      DO UPDATE SET
         "unitId" = EXCLUDED."unitId",
         "TANGGAL" = EXCLUDED."TANGGAL",
         "NAMA_REGU" = EXCLUDED."NAMA_REGU",
         "ULP" = EXCLUDED."ULP",
+        "PENYULANG" = COALESCE(NULLIF(EXCLUDED."PENYULANG", ''), public."ABSENSI"."PENYULANG"),
+        "USER_NAME" = COALESCE(NULLIF(EXCLUDED."USER_NAME", ''), public."ABSENSI"."USER_NAME"),
+        "NAMA_PETUGAS" = COALESCE(NULLIF(EXCLUDED."NAMA_PETUGAS", ''), public."ABSENSI"."NAMA_PETUGAS"),
+        "NIP" = COALESCE(NULLIF(EXCLUDED."NIP", ''), public."ABSENSI"."NIP"),
         "PETUGAS_1" = EXCLUDED."PETUGAS_1",
         "KET_1" = EXCLUDED."KET_1",
         "PETUGAS_2" = EXCLUDED."PETUGAS_2",
@@ -872,49 +1693,126 @@ router.post("/absensi", async (req, res) => {
         "KET_4" = EXCLUDED."KET_4",
         "PETUGAS_5" = EXCLUDED."PETUGAS_5",
         "KET_5" = EXCLUDED."KET_5",
-        "FOTO_MASUK" = EXCLUDED."FOTO_MASUK",
-        "TIMESTAMP MASUK" = EXCLUDED."TIMESTAMP MASUK",
-        "FOTO_KELUAR" = EXCLUDED."FOTO_KELUAR",
-        "TIMESTAMP KELUAR" = EXCLUDED."TIMESTAMP KELUAR"
+        "FOTO_MASUK" = COALESCE(NULLIF(EXCLUDED."FOTO_MASUK", ''), public."ABSENSI"."FOTO_MASUK"),
+        "TIMESTAMP MASUK" = COALESCE(EXCLUDED."TIMESTAMP MASUK", public."ABSENSI"."TIMESTAMP MASUK"),
+        "FOTO_KELUAR" = COALESCE(NULLIF(EXCLUDED."FOTO_KELUAR", ''), public."ABSENSI"."FOTO_KELUAR"),
+        "TIMESTAMP KELUAR" = COALESCE(EXCLUDED."TIMESTAMP KELUAR", public."ABSENSI"."TIMESTAMP KELUAR"),
+        "LATITUDE" = COALESCE(NULLIF(EXCLUDED."LATITUDE", ''), public."ABSENSI"."LATITUDE"),
+        "LONGITUDE" = COALESCE(NULLIF(EXCLUDED."LONGITUDE", ''), public."ABSENSI"."LONGITUDE")
       RETURNING *;
     `;
     const params = [
-      id,
-      a.unitId || "UL1",
-      a.TANGGAL || a.tanggal || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-      a.NAMA_REGU || a.namaRegu || "",
-      a.ULP || a.ulpName || "",
+      targetId,
+      a.unitId || a.UnitId || "UL2",
+      tanggalVal,
+      reguNameVal,
+      a.ULP || a.ulpName || a.namaUlp || a.Nama_ULP || "",
+      a.PENYULANG || a.penyulangName || a.namaPenyulang || "",
+      a.USER_NAME || a.userName || a.username || "",
+      a.NAMA_PETUGAS || a.namaPetugas || a.petugasName || "",
+      a.NIP || a.nip || "",
       a.PETUGAS_1 || a.petugas1 || "",
-      a.KET_1 || a.ket1 || "",
+      a.KET_1 || a.ket1 || "HADIR",
       a.PETUGAS_2 || a.petugas2 || "",
-      a.KET_2 || a.ket2 || "",
+      a.KET_2 || a.ket2 || "HADIR",
       a.PETUGAS_3 || a.petugas3 || "",
-      a.KET_3 || a.ket3 || "",
+      a.KET_3 || a.ket3 || "HADIR",
       a.PETUGAS_4 || a.petugas4 || "",
-      a.KET_4 || a.ket4 || "",
+      a.KET_4 || a.ket4 || "HADIR",
       a.PETUGAS_5 || a.petugas5 || "",
-      a.KET_5 || a.ket5 || "",
+      a.KET_5 || a.ket5 || "HADIR",
       a.FOTO_MASUK || a.fotoMasuk || "",
-      a["TIMESTAMP MASUK"] || a.timestampMasuk || "",
+      timestampMasukVal,
       a.FOTO_KELUAR || a.fotoKeluar || "",
-      a["TIMESTAMP KELUAR"] || a.timestampKeluar || ""
+      timestampKeluarVal,
+      a.LATITUDE || a.latitude ? String(a.LATITUDE || a.latitude) : "",
+      a.LONGITUDE || a.longitude ? String(a.LONGITUDE || a.longitude) : ""
     ];
+    console.log(`[ABSENSI TRACE 2] Executing SQL: INSERT ON CONFLICT. ID: ${targetId}`);
     const resDb = await query(sql, params);
-    return res.json({ status: "success", data: resDb.rows[0] });
+    if (resDb.rowCount === 0) {
+      console.error(`[ABSENSI TRACE 2] UPSERT FAILED. rowCount is 0.`);
+      return res.status(500).json({
+        success: false,
+        status: "error",
+        message: "Gagal menyimpan absensi ke database."
+      });
+    }
+    console.log(`[ABSENSI TRACE 2] UPSERT Success. rowCount: ${resDb.rowCount}. Record confirmed in DB.`);
+    return res.json({
+      success: true,
+      status: "success",
+      source: "hypercloud",
+      data: resDb.rows[0]
+    });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("[ABSENSI UPSERT] Error:", err.message);
+    return res.status(500).json({
+      success: false,
+      status: "error",
+      message: err.message
+    });
   }
-});
-router.delete("/absensi/:id", async (req, res) => {
-  const absId = req.params.id;
-  logApiCall("DELETE", `/api/absensi/${absId}`);
-  try {
-    const resDb = await query(`DELETE FROM public."ABSENSI" WHERE "ID" = $1 RETURNING *`, [absId]);
-    return res.json({ status: "success", deletedCount: resDb.rowCount });
-  } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+};
+router.post("/absensi", handleUpsertAbsensi);
+router.put("/absensi/:id", handleUpsertAbsensi);
+router.delete(
+  "/absensi/:id",
+  async (req, res) => {
+    const absId = req.params.id;
+    logApiCall(
+      "DELETE",
+      `/api/absensi/${absId}`
+    );
+    try {
+      console.log(`[ABSENSI TRACE 3] Starting DELETE for ID: ${absId}`);
+      const resDb = await query(
+        `
+        DELETE FROM public."ABSENSI"
+        WHERE "ID" = $1
+        RETURNING *
+        `,
+        [absId]
+      );
+      if (resDb.rowCount === 0) {
+        console.warn(`[ABSENSI TRACE 3] DELETE target not found or already deleted. ID: ${absId}`);
+        return res.status(404).json({
+          success: false,
+          status: "error",
+          message: "ABSENSI not found"
+        });
+      }
+      console.log(`[ABSENSI TRACE 3] DELETE Success. Verifying deletion...`);
+      const verifyRes = await query(`SELECT COUNT(*) FROM public."ABSENSI" WHERE "ID" = $1`, [absId]);
+      const count = parseInt(verifyRes.rows[0]?.count || "0", 10);
+      if (count > 0) {
+        console.error(`[ABSENSI TRACE 3] VERIFICATION FAILED. Record with ID ${absId} still exists after DELETE!`);
+        return res.status(500).json({
+          success: false,
+          status: "error",
+          message: "Verifikasi hapus gagal: Data absensi masih ada di database."
+        });
+      } else {
+        console.log(`[ABSENSI TRACE 3] VERIFICATION Success. Record confirmed GONE from DB.`);
+      }
+      return res.json({
+        success: true,
+        deleted: true,
+        id: absId,
+        status: "success",
+        deletedCount: resDb.rowCount,
+        data: resDb.rows[0]
+      });
+    } catch (err) {
+      console.error("[ABSENSI DELETE] Error:", err.message);
+      return res.status(500).json({
+        success: false,
+        status: "error",
+        message: err.message
+      });
+    }
   }
-});
+);
 var hypercloudApi_default = router;
 
 // server/migrationService.ts
@@ -2176,14 +3074,14 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
     }
   });
   app.get("/api/admin/migration/config", (req, res) => {
-    const rawUrl = getHypercloudDatabaseUrl();
-    const maskedUrl = rawUrl ? rawUrl.replace(/:([^:@]+)@/, ":*****@") : "";
+    const rawUrl2 = getHypercloudDatabaseUrl();
+    const maskedUrl = rawUrl2 ? rawUrl2.replace(/:([^:@]+)@/, ":*****@") : "";
     return res.json({
       status: "success",
       data: {
-        rawUrl: rawUrl || "",
+        rawUrl: rawUrl2 || "",
         maskedUrl: maskedUrl || "",
-        isConfigured: !!rawUrl
+        isConfigured: !!rawUrl2
       }
     });
   });
@@ -2192,13 +3090,13 @@ TARGET : ${woData.volumePekerjaan} ${woData.satuan}`;
     if (url && typeof url === "string") {
       setHypercloudDatabaseUrl(url);
     }
-    const rawUrl = getHypercloudDatabaseUrl();
+    const rawUrl2 = getHypercloudDatabaseUrl();
     return res.json({
       status: "success",
       message: "Konfigurasi URL database HyperCloudHost diperbarui",
       data: {
-        rawUrl,
-        maskedUrl: rawUrl.replace(/:([^:@]+)@/, ":*****@")
+        rawUrl: rawUrl2,
+        maskedUrl: rawUrl2.replace(/:([^:@]+)@/, ":*****@")
       }
     });
   });
@@ -2629,4 +3527,4 @@ ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
   });
 }
 startServer();
-//# sourceMappingURL=server.js.map
+//# sourceMappingURL=server_build.js.map

@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { query, testConnection, getDatabaseUrl } from './database';
 
 const router = Router();
@@ -160,8 +160,10 @@ router.get('/health', async (req: Request, res: Response) => {
 
   if (connResult.connected) {
     return res.status(200).json({
+      success: true,
       status: 'ok',
-      database: 'hypercloud',
+      service: 'APHRO API',
+      database: 'HYPERCLOUD',
       connected: true,
       latencyMs: connResult.latencyMs,
       timestamp: connResult.timestamp,
@@ -169,8 +171,10 @@ router.get('/health', async (req: Request, res: Response) => {
   }
 
   return res.status(503).json({
+    success: false,
     status: 'error',
-    database: 'hypercloud',
+    service: 'APHRO API',
+    database: 'HYPERCLOUD',
     connected: false,
     message: connResult.message,
   });
@@ -435,7 +439,29 @@ router.post('/login', async (req: Request, res: Response) => {
  * Last Login
  * Created At
  */
-router.get('/users', async (req: Request, res: Response) => {
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      status: 'error',
+      message: 'Token tidak ditemukan atau tidak valid. Silakan login terlebih dahulu.',
+    });
+  }
+
+  const token = authHeader.substring(7).trim();
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      status: 'error',
+      message: 'Token tidak valid.',
+    });
+  }
+
+  next();
+}
+
+router.get('/users', requireAuth, async (req: Request, res: Response) => {
   logApiCall('GET', '/api/users', req.query);
 
   const { unitId, isAll } = parseUnitFilter(req);
@@ -607,43 +633,71 @@ router.post('/users', async (req: Request, res: Response) => {
 router.get('/inisiasi', async (req: Request, res: Response) => {
   logApiCall('GET', '/api/inisiasi', req.query);
 
-  const { unitId, isAll } = parseUnitFilter(req);
+  const rawUnitId = (req.query.unitId || req.query.unit_id || '').toString().trim().toUpperCase();
+
+  // Validate unitId
+  const validUnits = ['UL1', 'UL2', 'UL3', 'UL4', 'ALL'];
+  const targetUnitId = rawUnitId || 'ALL';
+
+  if (rawUnitId && !validUnits.includes(rawUnitId)) {
+    return res.status(400).json({
+      success: false,
+      source: 'HYPERCLOUD',
+      error: 'INVALID_UNIT_ID',
+      message: 'unitId tidak valid',
+    });
+  }
 
   try {
     let usersSql = `
       SELECT
-        "Id" AS "ID",
+        "Id" AS "id",
         "unitId",
-        "UserID",
-        "Username",
-        "Nama_Regu",
-        "Role",
-        "ULP",
-        "Status"
+        "UserID" AS "userId",
+        "Username" AS "username",
+        "Nama_Regu" AS "namaRegu",
+        "Role" AS "role",
+        "ULP" AS "ulp",
+        "Status" AS "status"
       FROM public."USERS"
+      WHERE ("Status" IS NULL OR "Status" != 'Non-Aktif')
     `;
 
     const params: any[] = [];
-    if (!isAll && unitId) {
-      params.push(unitId);
-      usersSql += ` WHERE UPPER("unitId") = UPPER($${params.length})`;
+    if (targetUnitId !== 'ALL') {
+      params.push(targetUnitId);
+      usersSql += ` AND UPPER("unitId") = UPPER($${params.length})`;
     }
 
     usersSql += ` ORDER BY "Id" ASC LIMIT 500`;
 
     const result = await query(usersSql, params);
 
+    const formattedUsers = result.rows.map((row: any) => ({
+      id: String(row.id || row.ID || row.userId || ''),
+      userId: String(row.userId || row.UserID || row.username || ''),
+      username: String(row.username || row.Username || row.userId || ''),
+      namaRegu: String(row.namaRegu || row.Nama_Regu || ''),
+      role: String(row.role || row.Role || 'User'),
+      ulp: String(row.ulp || row.ULP || ''),
+      unitId: String(row.unitId || targetUnitId),
+      status: String(row.status || row.Status || 'Aktif'),
+    }));
+
     return res.json({
       success: true,
-      status: 'success',
-      data: result.rows,
-      count: result.rows.length,
+      source: 'HYPERCLOUD',
+      unitId: targetUnitId,
+      users: formattedUsers,
+      data: formattedUsers,
+      count: formattedUsers.length,
     });
   } catch (err: any) {
     console.error('[INISIASI GET] Error:', err.message);
     return res.status(500).json({
       success: false,
-      status: 'error',
+      source: 'HYPERCLOUD',
+      error: 'SERVER_ERROR',
       message: err.message,
     });
   }
