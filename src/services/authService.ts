@@ -38,26 +38,26 @@ export class AuthService {
         const apiRes = await ApiService.login(cleanUsername, cleanPassword, targetUnitId);
         if (apiRes.status === 'success' && apiRes.user) {
           const rawUser = apiRes.user;
-          const userUnitId = InisiasiService.getStandardUnitId(rawUser.unitId || rawUser.UnitID || targetUnitId);
+          const userUnitId = InisiasiService.getStandardUnitId(rawUser.unitId || rawUser.UnitID || rawUser.unit_id || targetUnitId) || targetUnitId;
 
-          if (userUnitId && !InisiasiService.isUserMatchingUnit(userUnitId, targetUnitId)) {
-            return {
-              success: false,
-              error: `User '${cleanUsername}' terdaftar pada UL (${userUnitId}), bukan di Inisiasi terpilih (${targetUnitId}).`,
-            };
+          // Automatically sync active unit selection to user's real unit
+          if (userUnitId) {
+            InisiasiService.saveSelectedUnit(userUnitId);
           }
+
+          const activeUnitObj = InisiasiService.getActiveInisiasiUnit();
 
           const normalized: User = {
             id: String(rawUser.Id || rawUser.UserID || rawUser.id || `usr-${cleanUsername}`),
-            unitId: targetUnitId,
-            unitName: InisiasiService.getActiveInisiasiUnit().namaUL,
+            unitId: userUnitId,
+            unitName: rawUser.unitName || rawUser.UnitName || activeUnitObj.namaUL,
             nip: String(rawUser.UserID || cleanUsername).toUpperCase(),
-            name: String(rawUser.Nama_Regu || rawUser.Username || cleanUsername),
+            name: String(rawUser.Nama_Regu || rawUser.Username || rawUser.name || cleanUsername),
             userName: String(rawUser.Username || cleanUsername),
             email: `${cleanUsername}@pln.co.id`,
             role: (rawUser.Role || 'User') as UserRole,
-            reguName: String(rawUser.Nama_Regu || ''),
-            ulpName: String(rawUser.ULP || ''),
+            reguName: String(rawUser.Nama_Regu || rawUser.reguName || ''),
+            ulpName: String(rawUser.ULP || rawUser.ulpName || ''),
             status: rawUser.Status || 'Aktif',
           };
 
@@ -83,11 +83,17 @@ export class AuthService {
   static async saveLocalSession(user: User): Promise<void> {
     try {
       localStorage.setItem('aphro_user', JSON.stringify(user));
+      localStorage.setItem('pln_mobile_user', JSON.stringify(user));
       localStorage.setItem('aphro_has_initiated', 'true');
+
+      if (user.unitId) {
+        InisiasiService.saveSelectedUnit(user.unitId);
+      }
 
       const token = (user as any).token || (user as any).jwtToken || (user as any).accessToken;
       if (token) {
         localStorage.setItem('aphro_token', token);
+        localStorage.setItem('jwt_token', token);
       }
 
       await dexieDb.users.put({

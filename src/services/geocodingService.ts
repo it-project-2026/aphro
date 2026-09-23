@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { LocationInfo } from '../utils/pdfExportTypes';
+import { ApiService } from './apiService';
 
 export const locationCache: Record<string, LocationInfo> = {};
 
@@ -15,9 +16,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Location
   }
 
   try {
-    // Calling local server proxy to avoid CORS/Failed to fetch issues
-    const url = `/api/reverse-geocode?lat=${lat}&lon=${lng}`;
-    const response = await fetch(url);
+    const response = await ApiService.executeFetch(`/api/reverse-geocode?lat=${lat}&lon=${lng}`);
     
     if (!response.ok) {
       throw new Error(`Server returned ${response.status}`);

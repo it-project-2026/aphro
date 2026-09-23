@@ -296,6 +296,27 @@ export async function getInisiasiUnitById(
  */
 export function getActiveInisiasiUnit(): InisiasiUnit {
   try {
+    const userStr =
+      localStorage.getItem('aphro_user') ||
+      localStorage.getItem('pln_mobile_user');
+
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u && u.unitId) {
+          const std = getStandardUnitId(u.unitId);
+          if (std) {
+            const found = DEFAULT_UL_OPTIONS.find(
+              (unit) => getStandardUnitId(unit.id) === std
+            );
+            if (found) return found;
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
     const selectedInisiasi =
       localStorage.getItem(
         'aphro_selected_inisiasi_ul'
@@ -339,9 +360,7 @@ export function getActiveInisiasiUnit(): InisiasiUnit {
   }
 
   /**
-   * Default tetap UL1.
-   * Jangan mengubah ini dulu karena dapat memengaruhi
-   * alur login/pemilihan unit yang sudah berjalan.
+   * Default UL1
    */
   return (
     DEFAULT_UL_OPTIONS.find(
@@ -353,12 +372,25 @@ export function getActiveInisiasiUnit(): InisiasiUnit {
 
 /**
  * Mendapatkan Unit ID yang sedang dipilih.
- *
- * Jika belum ada pilihan tersimpan,
- * default aplikasi tetap UL2.
  */
 export function getSelectedUnitId(): string {
   try {
+    const userStr =
+      localStorage.getItem('aphro_user') ||
+      localStorage.getItem('pln_mobile_user');
+
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u && u.unitId) {
+          const std = getStandardUnitId(u.unitId);
+          if (std) return std;
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
     const selected =
       localStorage.getItem(
         'aphro_selected_unit_id'
@@ -381,7 +413,7 @@ export function getSelectedUnitId(): string {
     );
   }
 
-  return 'UL2';
+  return 'UL1';
 }
 
 /**

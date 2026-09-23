@@ -29,22 +29,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [setUser]);
 
   const login = React.useCallback((userData: User) => {
-    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-    const activeUnitId = activeInisiasi.unitId;
-    const userUnitId = userData.unitId ? InisiasiService.getStandardUnitId(userData.unitId) : activeUnitId;
+    const userUnitId = userData.unitId ? InisiasiService.getStandardUnitId(userData.unitId) : 'UL1';
     
-    console.log("[APHRO LOGIN]", {
-      selectedUnitId: activeUnitId,
-      username: userData.userName || userData.nip,
-      authenticatedUserId: userData.id,
-      authenticatedUserUnitId: userUnitId
-    });
+    // Always sync selected unit to logged-in user's unit
+    InisiasiService.saveSelectedUnit(userUnitId);
+    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
 
-    if (userData.unitId && !InisiasiService.isUserMatchingUnit(userData.unitId, activeUnitId)) {
-      console.error("[APHRO LOGIN MISMATCH]", { selectedUnitId: activeUnitId, userUnitId: userData.unitId });
-      logout();
-      throw new Error("User tidak sesuai dengan UL yang dipilih.");
-    }
+    console.log("[APHRO LOGIN]", {
+      userUnitId,
+      username: userData.userName || userData.nip,
+      authenticatedUserId: userData.id
+    });
 
     const fullUser: User = {
       ...userData,
@@ -54,18 +49,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setUser(fullUser);
     AuthService.saveLocalSession(fullUser);
-  }, [setUser, logout]);
+  }, [setUser]);
 
-  // Validate current user session on mount or state change against active inisiasi unit
+  // Synchronize active inisiasi unit with current user unit on mount / user state update
   React.useEffect(() => {
     if (user && user.unitId) {
-      const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-      if (!InisiasiService.isUserMatchingUnit(user.unitId, activeInisiasi.unitId)) {
-        console.warn(`[APHRO SESSION MISMATCH] Existing user unitId (${user.unitId}) does not match active Inisiasi unitId (${activeInisiasi.unitId}). Resetting session.`);
-        logout();
-      }
+      const stdUserUnit = InisiasiService.getStandardUnitId(user.unitId);
+      InisiasiService.saveSelectedUnit(stdUserUnit);
     }
-  }, [user, logout]);
+  }, [user]);
 
   const loginWithCredentials = React.useCallback(async (userid: string, password?: string) => {
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();

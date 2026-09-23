@@ -502,7 +502,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
       // When doing "Absen Pulang" (Keluar), we update the existing record
       const absensiPayload = {
         id: todayAbsensi?.id,
-        unitId: currentUser?.unitId || localStorage.getItem('aphro_selected_unit_id') || 'UL2',
+        unitId: currentUser?.unitId || localStorage.getItem('aphro_selected_unit_id') || 'UL1',
         tanggal: todayAbsensi?.tanggal || todayStr,
         reguName: todayAbsensi?.reguName || reguName,
         penyulangName: todayAbsensi?.penyulangName || (currentUser as any)?.penyulangName || '',
@@ -519,8 +519,11 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
       await addAbsensi(absensiPayload);
 
-      setActiveTab('monitoring_absensi');
-      onSuccess();
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        setActiveTab('input_realisasi');
+      }
     } catch (err: any) {
       showToast(`Gagal menyimpan absensi: ${err.message}`, 'error');
     } finally {

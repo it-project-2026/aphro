@@ -6,6 +6,7 @@ import { useUI } from '../context/UIContext';
 import { useToast } from '../hooks/useToast';
 import { useGASSync } from '../hooks/useGASSync';
 import { GASApiService } from '../services/gasApiService';
+import { ApiService } from '../services/apiService';
 import { Save, ArrowLeft, FilePlus, Database, CheckCircle2, Sparkles, Layers, AlertTriangle, ChevronDown } from 'lucide-react';
 import { WOStatus } from '../types';
 import { getLocalDateTimeString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
@@ -357,7 +358,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
         
         // Trigger push notification for the targeted regu
         try {
-          await fetch('/api/send-notification', {
+          await ApiService.executeFetch('/api/send-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
