@@ -141,14 +141,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
       // 1. Check unitId if specified
       if (wo.unitId) {
-        const uId = String(wo.unitId).trim().toUpperCase();
-        if (uId === 'UL1' || uId.includes('PADANG') || uId.includes('PDG')) {
-          if (activeUnitKey !== 'PADANG' && activeUnitId !== 'UL1') return false;
-        } else if (uId === 'UL2' || uId.includes('BUKITTINGGI') || uId.includes('BKT')) {
-          if (activeUnitKey !== 'BUKITTINGGI' && activeUnitId !== 'UL2') return false;
-        } else if (uId === 'UL3' || uId === 'UL4' || uId.includes('PAYAKUMBUH') || uId.includes('PYK')) {
-          if (activeUnitKey !== 'PAYAKUMBUH' && activeUnitId !== 'UL3' && activeUnitId !== 'UL4') return false;
-        }
+        if (!InisiasiService.isUserMatchingUnit(wo.unitId, activeUnitId)) return false;
       }
 
       // 2. Check namaUnitLayanan or unitName

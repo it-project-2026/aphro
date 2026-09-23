@@ -22,23 +22,8 @@ import { ApiService } from './apiService';
  */
 export const DEFAULT_UL_OPTIONS: InisiasiUnit[] = [
   {
-    id: 'UL2',
-    no: 1,
-    kodeUL: 'BKT',
-    namaUL: 'UL BUKITTINGGI',
-    idSpreadsheet: '',
-    urlGas: '',
-    folderIdSpreadsheet: '',
-    folderIdFoto:
-      '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
-    folderIdAbsensi:
-      '1zDU9fGaFan01Y9Dogtd0xHOPM1S1Vry5',
-    isCustom: false,
-    notes: 'Unit Layanan Bukittinggi',
-  },
-  {
     id: 'UL1',
-    no: 2,
+    no: 1,
     kodeUL: 'PDG',
     namaUL: 'UL PADANG',
     idSpreadsheet: '',
@@ -50,6 +35,21 @@ export const DEFAULT_UL_OPTIONS: InisiasiUnit[] = [
       '1fqRjx5w4joPR58WBhIjJDZNLNznOU98b',
     isCustom: false,
     notes: 'Unit Layanan Padang',
+  },
+  {
+    id: 'UL2',
+    no: 2,
+    kodeUL: 'BKT',
+    namaUL: 'UL BUKITTINGGI',
+    idSpreadsheet: '',
+    urlGas: '',
+    folderIdSpreadsheet: '',
+    folderIdFoto:
+      '1idu8U3COKEqdcCewdWntu9X06ZMnzskr',
+    folderIdAbsensi:
+      '1zDU9fGaFan01Y9Dogtd0xHOPM1S1Vry5',
+    isCustom: false,
+    notes: 'Unit Layanan Bukittinggi',
   },
   {
     id: 'UL3',
@@ -296,6 +296,43 @@ export async function getInisiasiUnitById(
  */
 export function getActiveInisiasiUnit(): InisiasiUnit {
   try {
+    // 1. Explicitly selected Inisiasi Unit takes top priority
+    const selectedInisiasi =
+      localStorage.getItem('aphro_selected_inisiasi_ul');
+
+    const selectedUnitId =
+      localStorage.getItem('aphro_selected_unit_id');
+
+    const unitId =
+      localStorage.getItem('aphro_unit_id');
+
+    const selected =
+      selectedInisiasi ||
+      selectedUnitId ||
+      unitId;
+
+    if (selected) {
+      let rawSelectedId = selected;
+      if (typeof selected === 'string' && (selected.startsWith('{') || selected.startsWith('"'))) {
+        try {
+          const parsed = JSON.parse(selected);
+          if (parsed?.id) rawSelectedId = parsed.id;
+        } catch {
+          // ignore
+        }
+      }
+
+      const standardId = getStandardUnitId(rawSelectedId);
+      const found = DEFAULT_UL_OPTIONS.find(
+        (unit) => getStandardUnitId(unit.id) === standardId
+      );
+
+      if (found) {
+        return found;
+      }
+    }
+
+    // 2. Fallback to logged in user's unit
     const userStr =
       localStorage.getItem('aphro_user') ||
       localStorage.getItem('pln_mobile_user');
@@ -316,42 +353,6 @@ export function getActiveInisiasiUnit(): InisiasiUnit {
         // Ignore
       }
     }
-
-    const selectedInisiasi =
-      localStorage.getItem(
-        'aphro_selected_inisiasi_ul'
-      );
-
-    const selectedUnitId =
-      localStorage.getItem(
-        'aphro_selected_unit_id'
-      );
-
-    const unitId =
-      localStorage.getItem(
-        'aphro_unit_id'
-      );
-
-    const selected =
-      selectedInisiasi ||
-      selectedUnitId ||
-      unitId;
-
-    if (selected) {
-      const standardId =
-        getStandardUnitId(selected);
-
-      const found =
-        DEFAULT_UL_OPTIONS.find(
-          (unit) =>
-            getStandardUnitId(unit.id) ===
-            standardId
-        );
-
-      if (found) {
-        return found;
-      }
-    }
   } catch (error) {
     console.warn(
       '[InisiasiService] Gagal membaca localStorage:',
@@ -360,7 +361,7 @@ export function getActiveInisiasiUnit(): InisiasiUnit {
   }
 
   /**
-   * Default UL1
+   * Default UL1 (UL Padang)
    */
   return (
     DEFAULT_UL_OPTIONS.find(
@@ -375,6 +376,25 @@ export function getActiveInisiasiUnit(): InisiasiUnit {
  */
 export function getSelectedUnitId(): string {
   try {
+    const selected =
+      localStorage.getItem('aphro_selected_unit_id') ||
+      localStorage.getItem('aphro_selected_inisiasi_ul') ||
+      localStorage.getItem('aphro_unit_id');
+
+    if (selected) {
+      let rawSelectedId = selected;
+      if (typeof selected === 'string' && (selected.startsWith('{') || selected.startsWith('"'))) {
+        try {
+          const parsed = JSON.parse(selected);
+          if (parsed?.id) rawSelectedId = parsed.id;
+        } catch {
+          // ignore
+        }
+      }
+      const std = getStandardUnitId(rawSelectedId);
+      if (std) return std;
+    }
+
     const userStr =
       localStorage.getItem('aphro_user') ||
       localStorage.getItem('pln_mobile_user');
@@ -390,22 +410,6 @@ export function getSelectedUnitId(): string {
         // Ignore
       }
     }
-
-    const selected =
-      localStorage.getItem(
-        'aphro_selected_unit_id'
-      );
-
-    if (selected) {
-      return getStandardUnitId(selected);
-    }
-
-    const unitId =
-      localStorage.getItem('aphro_unit_id');
-
-    if (unitId) {
-      return getStandardUnitId(unitId);
-    }
   } catch (error) {
     console.warn(
       '[InisiasiService] Gagal membaca selected unit:',
@@ -420,10 +424,11 @@ export function getSelectedUnitId(): string {
  * Menyimpan Unit Layanan yang dipilih.
  */
 export function saveSelectedUnit(
-  unitId: string
+  unitId: string | InisiasiUnit
 ): void {
-  const standardId =
-    getStandardUnitId(unitId);
+  const rawId = typeof unitId === 'string' ? unitId : unitId?.id;
+  const standardId = getStandardUnitId(rawId) || 'UL1';
+  const foundUnit = DEFAULT_UL_OPTIONS.find((u) => u.id === standardId);
 
   try {
     localStorage.setItem(
@@ -441,28 +446,52 @@ export function saveSelectedUnit(
       standardId
     );
 
+    if (foundUnit) {
+      localStorage.setItem('aphro_nama_unit_layanan', foundUnit.namaUL);
+    }
+
+    // Update logged-in user unitId if present
+    const userStr = localStorage.getItem('aphro_user');
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u) {
+          u.unitId = standardId;
+          if (foundUnit) u.unitName = foundUnit.namaUL;
+          localStorage.setItem('aphro_user', JSON.stringify(u));
+        }
+      } catch {}
+    }
+
+    const plnUserStr = localStorage.getItem('pln_mobile_user');
+    if (plnUserStr) {
+      try {
+        const u = JSON.parse(plnUserStr);
+        if (u) {
+          u.unitId = standardId;
+          if (foundUnit) u.unitName = foundUnit.namaUL;
+          localStorage.setItem('pln_mobile_user', JSON.stringify(u));
+        }
+      } catch {}
+    }
+
     /**
      * Sinkronisasi dengan setting mobile
-     * jika object tersebut sudah ada.
      */
     const settingsRaw =
-      localStorage.getItem(
-        'pln_mobile_settings'
-      );
+      localStorage.getItem('pln_mobile_settings');
 
     if (settingsRaw) {
       try {
-        const settings =
-          JSON.parse(settingsRaw);
-
+        const settings = JSON.parse(settingsRaw);
         settings.unitId = standardId;
-
+        if (foundUnit) settings.namaUnitLayanan = foundUnit.namaUL;
         localStorage.setItem(
           'pln_mobile_settings',
           JSON.stringify(settings)
         );
       } catch {
-        // Abaikan jika settings bukan JSON valid.
+        // Abaikan
       }
     }
   } catch (error) {

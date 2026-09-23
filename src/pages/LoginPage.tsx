@@ -11,7 +11,7 @@ import { GASApiService } from '../services/gasApiService';
 import { normalizeUser } from '../services/syncService';
 import { SupabaseService } from '../services/supabaseService';
 import { User } from '../types';
-import { InisiasiService } from '../services/inisiasiService';
+import { InisiasiService, DEFAULT_UL_OPTIONS } from '../services/inisiasiService';
 import { AuthService } from '../services/authService';
 import { ApiService } from '../services/apiService';
 import {
@@ -461,8 +461,13 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     }, 100);
   };
 
-  // Filter selectable users from Supabase USERS table
+  // Filter selectable users from Supabase USERS table matching Active Inisiasi Unit
+  const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
   const selectableUsers = users.filter((u) => {
+    // Strictly match active Inisiasi Unit
+    if (u.unitId && !InisiasiService.isUserMatchingUnit(u.unitId, activeInisiasi.unitId)) {
+      return false;
+    }
     if (!userSearchTerm.trim()) return true;
     const term = userSearchTerm.toLowerCase().trim();
     return (
@@ -518,19 +523,33 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         {/* Login Card */}
         <div className="bg-white/90 backdrop-blur-2xl border border-teal-100 rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-teal-900/5 space-y-6">
           {/* Active Inisiasi Scope Banner */}
-          <div className="p-3 rounded-2xl bg-cyan-50/90 border border-cyan-200/80 text-cyan-950 flex items-center justify-between shadow-xs">
-            <div className="flex items-center space-x-2.5 min-w-0">
-              <div className="p-1.5 bg-cyan-600 text-white rounded-xl shrink-0">
+          <div className="p-3.5 rounded-2xl bg-cyan-50/90 border border-cyan-200/80 text-cyan-950 flex items-center justify-between shadow-xs gap-3">
+            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+              <div className="p-2 bg-cyan-600 text-white rounded-xl shrink-0">
                 <Building2 className="w-4 h-4" />
               </div>
-              <div className="text-xs min-w-0">
-                <span className="text-[9px] uppercase font-black text-cyan-800 tracking-wider block">Inisiasi Unit Aktif</span>
-                <p className="font-bold text-cyan-950 text-xs truncate">
-                  {InisiasiService.getActiveInisiasiUnit().namaUL} <span className="text-cyan-700 font-extrabold">({InisiasiService.getActiveInisiasiUnit().unitId})</span>
-                </p>
+              <div className="text-xs min-w-0 flex-1 space-y-0.5">
+                <span className="text-[9px] uppercase font-black text-cyan-800 tracking-wider block">Pilih Inisiasi Unit Layanan</span>
+                <select
+                  value={InisiasiService.getActiveInisiasiUnit().unitId}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    InisiasiService.saveSelectedUnit(selectedId);
+                    const newActive = InisiasiService.getActiveInisiasiUnit();
+                    showToast(`Inisiasi Unit beralih ke: ${newActive.namaUL} (${newActive.unitId})`, 'info');
+                    loadHyperCloudUsers(true);
+                  }}
+                  className="w-full font-bold text-cyan-950 text-xs bg-white border border-cyan-300 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-cyan-500 shadow-2xs cursor-pointer"
+                >
+                  {DEFAULT_UL_OPTIONS.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.namaUL} ({u.id})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-cyan-600 text-white shadow-xs shrink-0">
+            <span className="px-3 py-1.5 rounded-xl text-xs font-black bg-cyan-600 text-white shadow-xs shrink-0 self-center">
               {InisiasiService.getActiveInisiasiUnit().unitId}
             </span>
           </div>

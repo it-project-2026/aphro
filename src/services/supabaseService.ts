@@ -118,19 +118,7 @@ export class SupabaseService {
    */
   static getActiveUnitId(): string {
     try {
-      // 1. Check logged-in user session first as the primary source of truth
-      const savedUserStr = this.safeGetItem('aphro_user') || this.safeGetItem('pln_mobile_user');
-      if (savedUserStr) {
-        try {
-          const u = JSON.parse(savedUserStr);
-          if (u?.unitId) {
-            const std = InisiasiService.getStandardUnitId(String(u.unitId));
-            if (std) return std;
-          }
-        } catch {}
-      }
-
-      // 2. Check active inisiasi selection
+      // 1. Check active inisiasi selection first
       const selected = this.safeGetItem('aphro_selected_inisiasi_ul');
       if (selected) {
         try {
@@ -148,6 +136,18 @@ export class SupabaseService {
         if (std) return std;
       }
 
+      // 2. Check logged-in user session
+      const savedUserStr = this.safeGetItem('aphro_user') || this.safeGetItem('pln_mobile_user');
+      if (savedUserStr) {
+        try {
+          const u = JSON.parse(savedUserStr);
+          if (u?.unitId) {
+            const std = InisiasiService.getStandardUnitId(String(u.unitId));
+            if (std) return std;
+          }
+        } catch {}
+      }
+
       const unitName = (this.safeGetItem('aphro_nama_unit_layanan') || '').toUpperCase();
       if (unitName.includes('PADANG') || unitName.includes('PDG')) return 'UL1';
       if (unitName.includes('BUKITTINGGI') || unitName.includes('BKT')) return 'UL2';
@@ -156,7 +156,7 @@ export class SupabaseService {
     } catch {
       // Fallback
     }
-    return 'UL2'; // Default unit fallback
+    return 'UL1'; // Default unit fallback
   }
 
   // ==========================================
