@@ -18,7 +18,6 @@ import { VersionUpdateNotification } from './components/common/VersionUpdateNoti
 import { NotificationListener } from './components/layout/NotificationListener';
 import { Database, Loader2 } from 'lucide-react';
 
-// Direct Eager Imports for Pages (Prevents dynamic module chunk fetch errors offline & on deployment updates)
 import { LoginPage } from './pages/LoginPage';
 import MaintenancePage from './pages/MaintenancePage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -43,47 +42,111 @@ import { useNotifications } from './hooks/useNotifications';
 const LoadingFallback = () => (
   <div className="flex flex-col items-center justify-center p-12 space-y-4">
     <Loader2 className="w-8 h-8 text-[#00A2B9] animate-spin" />
-    <p className="text-xs font-bold text-slate-400">Memuat Halaman...</p>
+    <p className="text-xs font-bold text-slate-400">
+      Memuat Halaman...
+    </p>
   </div>
 );
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
+
   useNotifications();
-  const { activeTab, setActiveTab } = useUI();
-  const { settings } = useSettings();
-  const { hasCheckedInToday } = useAbsensi();
-  const { isSyncing, syncWithGAS, isGasConnected, triggerActivitySync } = useGASSync();
-  const { showToast } = useToast();
-  
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
-  const [showAbsensiForm, setShowAbsensiForm] = React.useState(false);
-  const [isInitialLoading, setIsInitialLoading] = React.useState(true);
-  const [isInitiated, setIsInitiated] = React.useState<boolean>(() => {
-    return localStorage.getItem('aphro_has_initiated') === 'true';
+
+  const { activeTab, setActiveTab } =
+    useUI();
+
+  const { settings } =
+    useSettings();
+
+  const { hasCheckedInToday } =
+    useAbsensi();
+
+  const {
+    isSyncing,
+    syncWithGAS,
+    isGasConnected,
+    triggerActivitySync,
+  } = useGASSync();
+
+  const { showToast } =
+    useToast();
+
+  const [
+    isMobileSidebarOpen,
+    setIsMobileSidebarOpen,
+  ] = React.useState(false);
+
+  const [
+    showAbsensiForm,
+    setShowAbsensiForm,
+  ] = React.useState(false);
+
+  const [
+    isInitialLoading,
+    setIsInitialLoading,
+  ] = React.useState(true);
+
+  const [
+    isInitiated,
+    setIsInitiated,
+  ] = React.useState<boolean>(() => {
+    return (
+      localStorage.getItem(
+        'aphro_has_initiated'
+      ) === 'true'
+    );
   });
 
-
-
-
-  const isAdmRole = user && (
-    (user.role || '').toUpperCase() === 'ADM' ||
-    (user.userName || '').toLowerCase() === 'admbkt' ||
-    (user.nip || '').toLowerCase() === 'admbkt' ||
-    (user.id || '').toLowerCase() === 'admbkt'
-  );
+  const isAdmRole =
+    user &&
+    (
+      (user.role || '')
+        .toUpperCase() === 'ADM' ||
+      (user.userName || '')
+        .toLowerCase() === 'admbkt' ||
+      (user.nip || '')
+        .toLowerCase() === 'admbkt' ||
+      (user.id || '')
+        .toLowerCase() === 'admbkt'
+    );
 
   React.useEffect(() => {
-    // Just handle splash screen timing
-    const timer = setTimeout(() => setIsInitialLoading(false), 1500);
-    return () => clearTimeout(timer);
+    const timer =
+      setTimeout(
+        () =>
+          setIsInitialLoading(false),
+        1500
+      );
+
+    return () =>
+      clearTimeout(timer);
   }, []);
 
   React.useEffect(() => {
-    if (isAdmRole && !['cetak_laporan', 'riwayat_realisasi', 'realisasi_main', 'input_realisasi', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'settings', 'migrasi_database'].includes(activeTab)) {
-      setActiveTab('cetak_laporan');
+    if (
+      isAdmRole &&
+      ![
+        'cetak_laporan',
+        'riwayat_realisasi',
+        'realisasi_main',
+        'input_realisasi',
+        'rekap_harian',
+        'rekap_penyulang',
+        'monitoring_absensi',
+        'settings',
+        'migrasi_database',
+      ].includes(activeTab)
+    ) {
+      setActiveTab(
+        'cetak_laporan'
+      );
     }
-  }, [isAdmRole, activeTab, setActiveTab]);
+  }, [
+    isAdmRole,
+    activeTab,
+    setActiveTab,
+  ]);
 
   const renderActivePage = () => {
     if (isAdmRole) {
@@ -91,57 +154,190 @@ const AppContent: React.FC = () => {
         case 'riwayat_realisasi':
         case 'realisasi_main':
         case 'input_realisasi':
-          return <RealisasiMainPage initialSubTab="history" />;
+          return (
+            <RealisasiMainPage
+              initialSubTab="history"
+            />
+          );
+
         case 'rekap_harian':
-          return <RekapPekerjaanHarianPage />;
+          return (
+            <RekapPekerjaanHarianPage />
+          );
+
         case 'rekap_penyulang':
-          return <RekapPenyulangHarianPage />;
+          return (
+            <RekapPenyulangHarianPage />
+          );
+
         case 'monitoring_absensi':
-          return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
+          return (
+            <AbsensiMainPage
+              initialSubTab="monitoring_absensi"
+            />
+          );
+
         case 'migrasi_database':
-          return <MigrasiDatabasePage />;
+          return (
+            <MigrasiDatabasePage />
+          );
+
         case 'settings':
         case 'setting':
-          return <SettingAplikasiPage />;
+          return (
+            <SettingAplikasiPage />
+          );
+
         case 'cetak_laporan':
         default:
-          return <CetakLaporanPage />;
+          return (
+            <CetakLaporanPage />
+          );
       }
     }
 
     switch (activeTab) {
-      case 'dashboard': 
-        if ((user?.role || '').toUpperCase() === 'USER') {
-          return <WorkOrderMainPage />;
+      case 'dashboard':
+        if (
+          (user?.role || '')
+            .toUpperCase() === 'USER'
+        ) {
+          return (
+            <WorkOrderMainPage />
+          );
         }
-        return <DashboardPage />;
-      case 'work_orders': return <WorkOrderMainPage initialSubTab="list" />;
-      case 'input_wo': return <WorkOrderMainPage initialSubTab="input" />;
-      case 'riwayat_realisasi': return <RealisasiMainPage initialSubTab="history" />;
+
+        return (
+          <DashboardPage />
+        );
+
+      case 'work_orders':
+        return (
+          <WorkOrderMainPage
+            initialSubTab="list"
+          />
+        );
+
+      case 'input_wo':
+        return (
+          <WorkOrderMainPage
+            initialSubTab="input"
+          />
+        );
+
+      case 'riwayat_realisasi':
+        return (
+          <RealisasiMainPage
+            initialSubTab="history"
+          />
+        );
+
       case 'realisasi_main':
-      case 'input_realisasi': return <RealisasiMainPage initialSubTab="input" />;
-      case 'input_realisasi_manual': return <RealisasiMainPage initialSubTab="manual_admin" />;
+      case 'input_realisasi':
+        return (
+          <RealisasiMainPage
+            initialSubTab="input"
+          />
+        );
+
+      case 'input_realisasi_manual':
+        return (
+          <RealisasiMainPage
+            initialSubTab="manual_admin"
+          />
+        );
+
       case 'absensi':
-      case 'absensi_pulang': return <AbsensiMainPage initialSubTab="absensi_pulang" />;
-      case 'monitoring_absensi': return <AbsensiMainPage initialSubTab="monitoring_absensi" />;
-      case 'monitoring': return <MonitoringPage />;
-      case 'cetak_laporan': return <CetakLaporanPage />;
-      case 'rekap_harian': 
-        if ((user?.role || '').toUpperCase() === 'USER') return <DashboardPage />;
-        return <RekapPekerjaanHarianPage />;
-      case 'rekap_penyulang': 
-        if ((user?.role || '').toUpperCase() === 'USER') return <DashboardPage />;
-        return <RekapPenyulangHarianPage />;
-      case 'master_data': return <MasterDataPage />;
-      case 'migrasi_database': return <MigrasiDatabasePage />;
+      case 'absensi_pulang':
+        return (
+          <AbsensiMainPage
+            initialSubTab="absensi_pulang"
+          />
+        );
+
+      case 'monitoring_absensi':
+        return (
+          <AbsensiMainPage
+            initialSubTab="monitoring_absensi"
+          />
+        );
+
+      case 'monitoring':
+        return <MonitoringPage />;
+
+      case 'cetak_laporan':
+        return <CetakLaporanPage />;
+
+      case 'rekap_harian':
+        if (
+          (user?.role || '')
+            .toUpperCase() === 'USER'
+        ) {
+          return (
+            <DashboardPage />
+          );
+        }
+
+        return (
+          <RekapPekerjaanHarianPage />
+        );
+
+      case 'rekap_penyulang':
+        if (
+          (user?.role || '')
+            .toUpperCase() === 'USER'
+        ) {
+          return (
+            <DashboardPage />
+          );
+        }
+
+        return (
+          <RekapPenyulangHarianPage />
+        );
+
+      case 'master_data':
+        return <MasterDataPage />;
+
+      case 'migrasi_database':
+        return (
+          <MigrasiDatabasePage />
+        );
+
       case 'settings':
       case 'setting':
-        if (user?.role !== 'SuperAdmin') return <DashboardPage />;
-        return <SettingAplikasiPage />;
-      case 'logs': return <AuditLogPage />;
-      case 'inisiasi': return <InisiasiPage isFromMenu={true} />;
-      case 'sinkronisasi': return <SinkronisasiPage />;
-      default: return <DashboardPage />;
+        if (
+          user?.role !==
+          'SuperAdmin'
+        ) {
+          return (
+            <DashboardPage />
+          );
+        }
+
+        return (
+          <SettingAplikasiPage />
+        );
+
+      case 'logs':
+        return <AuditLogPage />;
+
+      case 'inisiasi':
+        return (
+          <InisiasiPage
+            isFromMenu={true}
+          />
+        );
+
+      case 'sinkronisasi':
+        return (
+          <SinkronisasiPage />
+        );
+
+      default:
+        return (
+          <DashboardPage />
+        );
     }
   };
 
@@ -149,17 +345,26 @@ const AppContent: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white font-sans relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-tr from-teal-950 via-slate-900 to-teal-950 opacity-90" />
+
         <div className="relative z-10 max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
+
           <div className="relative inline-flex items-center justify-center mx-auto">
             <img
               src={APP_LOGO_URL}
               alt="Logo"
               className="w-48 h-48 sm:w-60 sm:h-60 object-contain animate-pulse drop-shadow-2xl"
               onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                if (!target.dataset.failed) {
-                  target.dataset.failed = 'true';
-                  target.src = 'https://drive.google.com/uc?export=view&id=1V2zz3q_3umHCaTqeJN6u7kbhGdLrK4NE';
+                const target =
+                  e.target as HTMLImageElement;
+
+                if (
+                  !target.dataset.failed
+                ) {
+                  target.dataset.failed =
+                    'true';
+
+                  target.src =
+                    'https://drive.google.com/uc?export=view&id=1V2zz3q_3umHCaTqeJN6u7kbhGdLrK4NE';
                 }
               }}
             />
@@ -167,91 +372,206 @@ const AppContent: React.FC = () => {
 
           <div className="space-y-1">
             <p className="text-xs font-extrabold text-teal-400 tracking-widest uppercase">
-              {settings.namaUnitLayanan || 'UL BUKITTINGGI'}
+              {settings.namaUnitLayanan ||
+                'UL BUKITTINGGI'}
             </p>
           </div>
 
           <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-3">
+
             <div className="flex items-center justify-center space-x-2 text-xs font-bold text-teal-400">
               <Database className="w-4 h-4 animate-bounce" />
-              <span>Menghubungkan ke Supabase APHRO-Database...</span>
+
+              <span>
+                Menghubungkan ke HyperCloud APHRO-Database...
+              </span>
             </div>
+
             <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5">
               <div className="bg-gradient-to-r from-[#00A2B9] via-teal-400 to-[#00A2B9] h-1.5 rounded-full animate-pulse w-3/4 mx-auto" />
             </div>
+
             <p className="text-[11px] text-slate-400">
-              Memuat data USERS, Work Order, Realisasi & Absensi dari Supabase...
+              Memuat data USERS, Work Order, Realisasi & Absensi dari HyperCloud PostgreSQL...
             </p>
+
           </div>
         </div>
       </div>
     );
   }
 
-  // 2. CRITICAL: JIKA USERS SUDAH LOGIN, TIDAK LAGI MASUK KE HALAMAN INISIASI!
+  /*
+   * =========================================================
+   * USER SUDAH LOGIN
+   * =========================================================
+   */
   if (user) {
-    const isUserRole = (user.role || '').toUpperCase() === 'USER';
-    if (isUserRole && !isAdmRole && !hasCheckedInToday) {
+    const isUserRole =
+      (user.role || '')
+        .toUpperCase() ===
+      'USER';
+
+    /*
+     * USER BELUM ABSENSI HARI INI
+     */
+    if (
+      isUserRole &&
+      !isAdmRole &&
+      !hasCheckedInToday
+    ) {
       return (
-        <React.Suspense fallback={<LoadingFallback />}>
+        <React.Suspense
+          fallback={
+            <LoadingFallback />
+          }
+        >
           <NotificationListener />
+
           <SyncStatusBanner />
+
           {showAbsensiForm ? (
-            <AbsensiKerjaPage onSuccess={() => {
-              setShowAbsensiForm(false);
-              setActiveTab('monitoring_absensi');
-            }} />
+            <AbsensiKerjaPage
+              onSuccess={() => {
+                console.log(
+                  '[ABSENSI TRACE APP] Absensi berhasil. Menuju INPUT REALISASI.'
+                );
+
+                /*
+                 * Tutup form absensi.
+                 */
+                setShowAbsensiForm(
+                  false
+                );
+
+                /*
+                 * Setelah absensi berhasil,
+                 * arahkan ke INPUT REALISASI.
+                 */
+                setActiveTab(
+                  'input_realisasi'
+                );
+              }}
+            />
           ) : (
-            <UserWelcomePage onStartAbsensi={() => setShowAbsensiForm(true)} />
+            <UserWelcomePage
+              onStartAbsensi={() =>
+                setShowAbsensiForm(
+                  true
+                )
+              }
+            />
           )}
+
           <ToastContainer />
         </React.Suspense>
       );
     }
 
+    /*
+     * =======================================================
+     * USER SUDAH ABSENSI
+     * =======================================================
+     */
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 pb-20 lg:pb-0">
+
         <NotificationListener />
-        <Navbar onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} />
+
+        <Navbar
+          onToggleSidebar={() =>
+            setIsMobileSidebarOpen(
+              !isMobileSidebarOpen
+            )
+          }
+        />
+
         <SyncStatusBanner />
 
         <div className="flex-1 flex max-w-[1600px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 gap-6">
+
           <Sidebar
-            isOpen={isMobileSidebarOpen}
-            onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            isOpen={
+              isMobileSidebarOpen
+            }
+            onCloseMobile={() =>
+              setIsMobileSidebarOpen(
+                false
+              )
+            }
           />
 
           <main className="flex-1 min-w-0">
-            <React.Suspense fallback={<LoadingFallback />}>
+            <React.Suspense
+              fallback={
+                <LoadingFallback />
+              }
+            >
               {renderActivePage()}
             </React.Suspense>
           </main>
+
         </div>
 
         <Footer />
+
         <MobileBottomNav />
+
         <ToastContainer />
       </div>
     );
   }
 
-  // 3. JIKA BELUM LOGIN: Cek apakah perlu inisiasi awal atau langsung ke Halaman Login
+  /*
+   * =========================================================
+   * BELUM LOGIN
+   * =========================================================
+   */
   if (!isInitiated) {
     return (
-      <React.Suspense fallback={<LoadingFallback />}>
-        <InisiasiPage onInitiationComplete={() => setIsInitiated(true)} />
+      <React.Suspense
+        fallback={
+          <LoadingFallback />
+        }
+      >
+        <InisiasiPage
+          onInitiationComplete={() =>
+            setIsInitiated(
+              true
+            )
+          }
+        />
+
         <ToastContainer />
       </React.Suspense>
     );
   }
 
-  // 4. Halaman Login (Belum login & sudah inisiasi)
-  if (window.location.href === 'https://aphro-plum.vercel.app/') {
-    return <MaintenancePage />;
+  /*
+   * =========================================================
+   * MAINTENANCE
+   * =========================================================
+   */
+  if (
+    window.location.href ===
+    'https://aphro-plum.vercel.app/'
+  ) {
+    return (
+      <MaintenancePage />
+    );
   }
 
+  /*
+   * =========================================================
+   * LOGIN
+   * =========================================================
+   */
   return (
-    <React.Suspense fallback={<LoadingFallback />}>
+    <React.Suspense
+      fallback={
+        <LoadingFallback />
+      }
+    >
       <LoginPage />
       <ToastContainer />
     </React.Suspense>
