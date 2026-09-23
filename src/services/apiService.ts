@@ -166,6 +166,20 @@ export class ApiService {
   }
 
   /**
+   * Helper klasifikasi kode error HTTP ke reason string terstandarisasi.
+   */
+  public static classifyErrorReason(status: number): string {
+    if (status === 401) return 'UNAUTHORIZED';
+    if (status === 403) return 'FORBIDDEN';
+    if (status === 404) return 'ENDPOINT_NOT_FOUND';
+    if (status === 409) return 'CONFLICT';
+    if (status === 422) return 'VALIDATION_ERROR';
+    if (status === 502 || status === 503) return 'UPSTREAM_UNAVAILABLE';
+    if (status >= 500) return 'SERVER_ERROR';
+    return `HTTP_${status}`;
+  }
+
+  /**
    * Helper utama untuk melakukan HTTP request.
    * SELALU menyertakan Authorization: Bearer <JWT>
    * Target Backend: https://api.aphro-row.my.id
@@ -489,7 +503,8 @@ export class ApiService {
           // ignore
         }
 
-        console.warn(`[SYNC] FAILED endpoint=/api/realisasi HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
+        const errReason = ApiService.classifyErrorReason(res.status);
+        console.warn(`[SYNC] FAILED endpoint=/api/realisasi HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'} record kept as PENDING`);
         return {
           success: false,
           message: this.formatErrorMessage(res.status, serverMsg),
@@ -563,7 +578,8 @@ export class ApiService {
           // ignore
         }
 
-        console.warn(`[SYNC] FAILED endpoint=/api/realisasi/${id} HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
+        const errReason = ApiService.classifyErrorReason(res.status);
+        console.warn(`[SYNC] FAILED endpoint=/api/realisasi/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'} record kept as PENDING`);
         return {
           success: false,
           message: this.formatErrorMessage(res.status, serverMsg),
@@ -820,6 +836,16 @@ export class ApiService {
       Created_At: data.Created_At || data.createdAt || getLocalDateTimeString(),
     };
 
+    console.log('[WORK ORDER REQUEST]', {
+      woId: payload.WO_ID,
+      nomorWO: payload.Nomor_WO,
+      unitId: payload.unitId,
+      ulp: payload.ULP,
+      penyulang: payload.Penyulang,
+      regu: payload.Regu_ROW,
+      tanggal: payload.Tanggal,
+    });
+
     console.log('[SYNC] ONLINE');
     console.log(`[SYNC] Sending WORK_ORDER to HyperCloud: POST /api/work-orders (unitId=${unitId}, JWT=AVAILABLE, id=${payload.id})`);
 
@@ -843,19 +869,28 @@ export class ApiService {
           // ignore
         }
 
-        console.warn(`[SYNC] FAILED endpoint=/api/work-orders HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
+        const errReason = ApiService.classifyErrorReason(res.status);
+        if (res.status === 401) {
+          console.warn(`[WORK ORDER SYNC]\nstatus=FAILED\nreason=UNAUTHORIZED\nhttp=401`);
+        } else {
+          console.warn(`[WORK ORDER SYNC]\nstatus=FAILED\nhttp=${res.status}\nreason=${errReason}\ndetail=${serverMsg || 'None'}`);
+        }
+
+        console.warn(`[SYNC] FAILED endpoint=/api/work-orders HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'} record kept as PENDING`);
         return {
           success: false,
           message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
+      console.log(`[WORK ORDER SYNC]\nstatus=SUCCESS\nhttp=${res.status}\nwoId=${payload.id}`);
       console.log(`[SYNC] HTTP ${res.status} - WORK_ORDER saved to HyperCloud (ID: ${payload.id})`);
       return {
         success: true,
         serverId: payload.id,
       };
     } catch (err: any) {
+      console.warn(`[WORK ORDER SYNC]\nstatus=FAILED\nreason=NETWORK_ERROR\nmessage=${err?.message || 'Network error'}`);
       console.warn(`[SYNC] FAILED endpoint=/api/work-orders reason=${err?.message || 'Network error'} record kept as PENDING`);
       return {
         success: false,
@@ -913,7 +948,8 @@ export class ApiService {
           // ignore
         }
 
-        console.warn(`[SYNC] FAILED endpoint=/api/work-orders/${id} HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
+        const errReason = ApiService.classifyErrorReason(res.status);
+        console.warn(`[SYNC] FAILED endpoint=/api/work-orders/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'} record kept as PENDING`);
         return {
           success: false,
           message: this.formatErrorMessage(res.status, serverMsg),
@@ -1113,7 +1149,8 @@ export class ApiService {
           // ignore
         }
 
-        console.warn(`[SYNC] FAILED endpoint=/api/absensi HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
+        const errReason = ApiService.classifyErrorReason(res.status);
+        console.warn(`[SYNC] FAILED endpoint=/api/absensi HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'} record kept as PENDING`);
         return {
           success: false,
           message: this.formatErrorMessage(res.status, serverMsg),
@@ -1183,7 +1220,8 @@ export class ApiService {
           // ignore
         }
 
-        console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} HTTP=${res.status} reason=${serverMsg || 'Server Error'} record kept as PENDING`);
+        const errReason = ApiService.classifyErrorReason(res.status);
+        console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'} record kept as PENDING`);
         return {
           success: false,
           message: this.formatErrorMessage(res.status, serverMsg),

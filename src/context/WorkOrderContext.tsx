@@ -316,20 +316,9 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     };
 
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
-
-    const isNetworkOrTimeoutError = (msg: string): boolean => {
-      const cleanMsg = msg.toLowerCase();
-      return (
-        cleanMsg.includes('tidak dapat terhubung') ||
-        cleanMsg.includes('internet') ||
-        cleanMsg.includes('koneksi') ||
-        cleanMsg.includes('offline') ||
-        cleanMsg.includes('network') ||
-        cleanMsg.includes('timeout') ||
-        cleanMsg.includes('failed to fetch')
-      );
-    };
+    const unitId = (user && user.unitId)
+      ? InisiasiService.getStandardUnitId(user.unitId)
+      : (InisiasiService.getSelectedUnitId() || 'UL2');
 
     // 1. ONLINE-FIRST: Try direct save to HyperCloud
     if (isOnline) {
@@ -361,14 +350,11 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           dexieDb.work_orders.put({ ...newWo, syncStatus: 'SYNCED' }).catch(() => {});
           return newWo;
         } else {
-          const serverMsg = result.message || 'Server error';
-          if (!isNetworkOrTimeoutError(serverMsg)) {
-            showToast(`Gagal menyimpan: ${serverMsg}`, 'error');
-            throw new Error(serverMsg);
-          }
+          showToast(result.message || 'Gagal menyimpan ke HyperCloud. Disimpan ke antrean offline.', 'warning');
         }
       } catch (err: any) {
         console.warn('Network error in addWorkOrder:', err);
+        showToast('Gagal terhubung ke HyperCloud. Disimpan ke antrean offline.', 'warning');
       }
     }
 
@@ -388,9 +374,11 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       payload: newWo,
     });
 
-    showToast(`Koneksi terganggu. Tersimpan di antrean offline.`, 'info');
+    if (!isOnline) {
+      showToast(`Mode offline: Work Order tersimpan di antrean offline.`, 'info');
+    }
     return newWo;
-  }, [correctedWorkOrders, showToast, refreshWorkOrders]);
+  }, [correctedWorkOrders, user, showToast]);
 
   const updateWorkOrder = React.useCallback(async (id: string, updates: Partial<WorkOrder>) => {
     const nowStr = getLocalDateTimeString();

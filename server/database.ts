@@ -71,7 +71,7 @@ function saveMockStore() {
 }
 
 function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
-  const upper = text.toUpperCase();
+  const upper = text.trim().toUpperCase();
   let tableName = 'WORK_ORDER';
   if (upper.includes('"INISIASI"') || upper.includes(' INISIASI ')) tableName = 'INISIASI';
   else if (upper.includes('"USERS"') || upper.includes(' USERS ')) tableName = 'USERS';
@@ -191,20 +191,26 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
         "TANGGAL": params[2] || new Date().toISOString().split('T')[0],
         "NAMA_REGU": params[3] || '',
         "ULP": params[4] || '',
-        "PETUGAS_1": params[5] || '',
-        "KET_1": params[6] || '',
-        "PETUGAS_2": params[7] || '',
-        "KET_2": params[8] || '',
-        "PETUGAS_3": params[9] || '',
-        "KET_3": params[10] || '',
-        "PETUGAS_4": params[11] || '',
-        "KET_4": params[12] || '',
-        "PETUGAS_5": params[13] || '',
-        "KET_5": params[14] || '',
-        "FOTO_MASUK": params[15] || '',
-        "TIMESTAMP MASUK": params[16] || '',
-        "FOTO_KELUAR": params[17] || '',
-        "TIMESTAMP KELUAR": params[18] || ''
+        "PENYULANG": params[5] || '',
+        "USER_NAME": params[6] || '',
+        "NAMA_PETUGAS": params[7] || '',
+        "NIP": params[8] || '',
+        "PETUGAS_1": params[9] || '',
+        "KET_1": params[10] || '',
+        "PETUGAS_2": params[11] || '',
+        "KET_2": params[12] || '',
+        "PETUGAS_3": params[13] || '',
+        "KET_3": params[14] || '',
+        "PETUGAS_4": params[15] || '',
+        "KET_4": params[16] || '',
+        "PETUGAS_5": params[17] || '',
+        "KET_5": params[18] || '',
+        "FOTO_MASUK": params[19] || '',
+        "TIMESTAMP MASUK": params[20] || '',
+        "FOTO_KELUAR": params[21] || '',
+        "TIMESTAMP KELUAR": params[22] || '',
+        "LATITUDE": params[23] || '',
+        "LONGITUDE": params[24] || ''
       };
 
       const idx = rows.findIndex(r => String(r.ID || r.id || '').toUpperCase() === String(obj.ID).toUpperCase());
@@ -223,11 +229,13 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
     if (tableName === 'WORK_ORDER') {
       const beforeLength = rows.length;
       mockStore[tableName] = rows.filter(r => String(r.WO_ID || r.id || '').toUpperCase() !== delVal && String(r.Nomor_WO || '').toUpperCase() !== delVal);
-      affectedRows = [{ deleted: beforeLength - mockStore[tableName].length }];
+      const deletedCount = beforeLength - mockStore[tableName].length;
+      affectedRows = deletedCount > 0 ? [{ deleted: deletedCount }] : [];
     } else {
       const beforeLength = rows.length;
       mockStore[tableName] = rows.filter(r => String(r.ID || r.id || '').toUpperCase() !== delVal);
-      affectedRows = [{ deleted: beforeLength - mockStore[tableName].length }];
+      const deletedCount = beforeLength - mockStore[tableName].length;
+      affectedRows = deletedCount > 0 ? [{ deleted: deletedCount }] : [];
     }
     saveMockStore();
   } else if (upper.startsWith('UPDATE') && params && params.length > 0) {
