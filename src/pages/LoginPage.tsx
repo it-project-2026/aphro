@@ -97,19 +97,24 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       console.log('[USERS STATE] Requesting users for unit:', activeInisiasi.unitId);
       const res = await ApiService.fetchUsers(activeInisiasi.unitId);
       
-      if (res && res.success && res.data) {
-        console.log('[USERS STATE] Received from HyperCloud:', res.data.length, 'users');
-        const normalized = res.data.map((u: any) => SupabaseService.normalizeUserRow(u));
-        console.log('[USERS STATE] Setting USERS state from HYPERCLOUD source');
-        
-        setMasterData({ users: normalized });
-        if (showNotification) {
-          showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud Host (PostgreSQL).`, 'success');
+      if (res && res.success && res.data && res.data.length > 0) {
+        if (res.source === 'hypercloud') {
+          console.log('[USERS STATE] Received from HyperCloud:', res.data.length, 'users');
+          if (showNotification) {
+            showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud Host (PostgreSQL).`, 'success');
+          }
+        } else {
+          console.log('[USERS STATE] Received from Dexie cache:', res.data.length, 'users');
+          if (showNotification) {
+            showToast(`Memuat ${res.data.length} akun pengguna dari Dexie cache (Offline/Fallback).`, 'info');
+          }
         }
+        const normalized = res.data.map((u: any) => SupabaseService.normalizeUserRow(u));
+        setMasterData({ users: normalized });
       } else {
         console.log('[USERS STATE] HyperCloud returned no users or success=false', res);
         if (showNotification) {
-          showToast('Tabel USERS di HyperCloud Host masih kosong.', 'info');
+          showToast(res?.message || 'Tabel USERS di HyperCloud Host tidak dapat dimuat.', 'info');
         }
       }
     } catch (err: any) {

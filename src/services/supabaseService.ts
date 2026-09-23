@@ -1504,13 +1504,16 @@ export class SupabaseService {
     if (isOnline) {
       try {
         const apiRes = await ApiService.fetchUsers(targetUnitId);
-        if (apiRes.success && Array.isArray(apiRes.data)) {
+        if (apiRes.success && Array.isArray(apiRes.data) && apiRes.data.length > 0) {
           const users: User[] = apiRes.data.map((u: any) => this.normalizeUserRow(u));
+          const isHyperCloud = apiRes.source === 'hypercloud';
           return {
             success: true,
             data: users,
-            source: 'supabase',
-            message: `Berhasil memuat ${users.length} user dari API HyperCloudHost.`,
+            source: isHyperCloud ? 'supabase' : 'cache',
+            message: isHyperCloud
+              ? `Berhasil memuat ${users.length} user dari API HyperCloudHost.`
+              : `Memuat ${users.length} user dari Dexie cache (Offline/Fallback).`,
           };
         } else if (!apiRes.success) {
           return {

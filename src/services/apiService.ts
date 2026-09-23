@@ -4,7 +4,7 @@ import { normalizeAbsensi } from './syncService';
 import { dexieDb } from './dexieDb';
 
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'https://api.aphro-row.my.id';
+  import.meta.env.VITE_API_URL?.trim() || 'https://api.aphro-row.my.id';
 
 export interface PaginationMeta {
   page: number;
@@ -42,7 +42,7 @@ export interface FetchRealisasiParams {
 export class ApiService {
   private static getCleanBaseUrl(): string {
     const rawUrl =
-      import.meta.env.VITE_API_URL ||
+      import.meta.env.VITE_API_URL?.trim() ||
       API_BASE_URL ||
       'https://api.aphro-row.my.id';
 
@@ -50,37 +50,59 @@ export class ApiService {
   }
 
   /**
-   * Mengambil JWT token dari localStorage.
+   * Mengambil JWT token dari localStorage berdasarkan urutan prioritas:
+   * 1. aphro_token
+   * 2. jwt_token
+   * 3. token
+   * 4. token dari aphro_user
+   * 5. token dari pln_mobile_user
    */
   static getAuthToken(): string {
-    const directToken =
-      localStorage.getItem('aphro_token') ||
-      localStorage.getItem('jwt_token') ||
-      localStorage.getItem('token');
+    if (typeof localStorage === 'undefined') return '';
 
-    if (directToken && directToken !== 'system-hypercloud-token') {
-      return directToken;
+    // 1. aphro_token
+    const aphroToken = localStorage.getItem('aphro_token');
+    if (aphroToken && aphroToken.trim() && aphroToken !== 'system-hypercloud-token') {
+      return aphroToken.trim();
     }
 
-    const savedUserStr =
-      localStorage.getItem('aphro_user') ||
-      localStorage.getItem('pln_mobile_user');
+    // 2. jwt_token
+    const jwtToken = localStorage.getItem('jwt_token');
+    if (jwtToken && jwtToken.trim() && jwtToken !== 'system-hypercloud-token') {
+      return jwtToken.trim();
+    }
 
-    if (savedUserStr) {
+    // 3. token
+    const token = localStorage.getItem('token');
+    if (token && token.trim() && token !== 'system-hypercloud-token') {
+      return token.trim();
+    }
+
+    // 4. aphro_user
+    const aphroUserStr = localStorage.getItem('aphro_user');
+    if (aphroUserStr) {
       try {
-        const parsed = JSON.parse(savedUserStr);
-
-        const tok =
-          parsed.token ||
-          parsed.jwtToken ||
-          parsed.accessToken ||
-          parsed.token_jwt;
-
-        if (tok && tok !== 'system-hypercloud-token') {
-          return tok;
+        const u = JSON.parse(aphroUserStr);
+        const tok = u?.token || u?.jwtToken || u?.accessToken || u?.token_jwt;
+        if (tok && typeof tok === 'string' && tok.trim() && tok !== 'system-hypercloud-token') {
+          return tok.trim();
         }
       } catch {
-        // Ignore JSON parse error
+        // Ignore
+      }
+    }
+
+    // 5. pln_mobile_user
+    const plnUserStr = localStorage.getItem('pln_mobile_user');
+    if (plnUserStr) {
+      try {
+        const u = JSON.parse(plnUserStr);
+        const tok = u?.token || u?.jwtToken || u?.accessToken || u?.token_jwt;
+        if (tok && typeof tok === 'string' && tok.trim() && tok !== 'system-hypercloud-token') {
+          return tok.trim();
+        }
+      } catch {
+        // Ignore
       }
     }
 
@@ -142,124 +164,61 @@ export class ApiService {
 
   /**
    * Helper utama untuk melakukan HTTP request.
-   *
-   * PRODUCTION APHRO:
-   * https://www.aphro-row.my.id
-   *         |
-   *         | API
-   *         v
-   * https://api.aphro-row.my.id
-   *
-   * Production TIDAK BOLEH menggunakan:
-   * https://www.aphro-row.my.id/api/...
-   *
-   * Local API hanya digunakan jika:
-   * VITE_USE_LOCAL_API=true
-   * dan aplikasi bukan production APHRO.
+   * SELALU menyertakan Authorization: Bearer <JWT>
+   * Target Backend: https://api.aphro-row.my.id
    */
   public static async executeFetch(
     pathAndQuery: string,
     options: RequestInit = {}
   ): Promise<Response> {
-    const cleanPath = pathAndQuery.startsWith('/')
-      ? pathAndQuery
-      : `/${pathAndQuery}`;
-
     const token = this.getAuthToken();
 
-    /**
-     * Build headers object.
-     */
-    const headersObj: Record<string, string> = {};
+    // Pastikan requestOptions.headers selalu digabung dengan Authorization & Accept
+    const headers = new Headers(options.headers || {});
 
-    if (options.headers) {
-      if (options.headers instanceof Headers) {
-        options.headers.forEach((val, key) => {
-          headersObj[key] = val;
-        });
-      } else if (Array.isArray(options.headers)) {
-        options.headers.forEach(([key, val]) => {
-          headersObj[key] = val;
-        });
-      } else {
-        Object.entries(options.headers).forEach(([key, val]) => {
-          headersObj[key] = String(val);
-        });
-      }
+    if (!headers.has('Accept')) {
+      headers.set('Accept', 'application/json');
     }
 
-    /**
-     * Tambahkan Authorization jika belum diberikan.
-     */
-    if (!headersObj['Authorization'] && token) {
-      headersObj['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
     }
 
-    /**
-     * Default Accept header.
-     */
-    if (!headersObj['Accept']) {
-      headersObj['Accept'] = 'application/json';
-    }
-
-    const requestOptions: RequestInit = {
+    const finalOptions: RequestInit = {
       ...options,
-      headers: headersObj,
+      headers,
     };
 
-    /**
-     * =========================================================
-     * HYPERCLOUD & LOCAL API ROUTING WITH FAILOVER
-     * =========================================================
-     */
-    const externalBase = this.getCleanBaseUrl();
-    const externalUrl =
-      `${externalBase}` +
-      `${cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`}`;
+    const externalBase = this.getCleanBaseUrl(); // "https://api.aphro-row.my.id"
+    const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+    const apiPath = cleanPath.startsWith('/api/') ? cleanPath : cleanPath === '/api' ? '/api' : `/api${cleanPath}`;
 
-    const host =
-      typeof window !== 'undefined' && window.location
-        ? window.location.origin
-        : '';
-    const localUrl =
-      `${host}` +
-      `${cleanPath.startsWith('/api') ? cleanPath : `/api${cleanPath}`}`;
+    const externalUrl = `${externalBase}${apiPath}`;
 
-    const hostname =
-      typeof window !== 'undefined'
-        ? window.location.hostname
-        : '';
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
 
-    const isAphroProduction =
-      hostname === 'www.aphro-row.my.id' ||
-      hostname === 'aphro-row.my.id';
-
-    // On Production domain (aphro-row.my.id), try externalUrl first, fallback to localUrl if network fails
-    if (isAphroProduction) {
-      try {
-        console.log(`[ApiService] Production API request: ${externalUrl}`);
-        const res = await fetch(externalUrl, requestOptions);
-        if (res.ok) return res;
-        console.warn(`[ApiService] External API returned HTTP ${res.status}, trying local fallback: ${localUrl}`);
-        return await fetch(localUrl, requestOptions);
-      } catch (prodErr) {
-        console.warn(`[ApiService] External API network error (${externalUrl}), trying local fallback: ${localUrl}`, prodErr);
-        return await fetch(localUrl, requestOptions);
-      }
+    // Pada Domain Production APHRO (atau default), SELALU gunakan backend API utama: https://api.aphro-row.my.id
+    // JANGAN PERNAH fallback ke frontend origin (www.aphro-row.my.id) saat server mengembalikan response HTTP (misal 401, 403, 404, 500).
+    if (isAphroProduction || import.meta.env.VITE_USE_LOCAL_API !== 'true') {
+      console.log(`[ApiService] Production API request: ${externalUrl}`);
+      return await fetch(externalUrl, finalOptions);
     }
 
-    // In Development / Preview mode, try local Express API first (server.ts), then external API
+    // Local dev mode fallback (hanya jika VITE_USE_LOCAL_API === 'true' dan bukan domain production)
+    const host = typeof window !== 'undefined' && window.location ? window.location.origin : '';
+    const localUrl = `${host}${apiPath}`;
+
     try {
-      console.log(`[ApiService] Dev/Preview local API request: ${localUrl}`);
-      const res = await fetch(localUrl, requestOptions);
-      if (res.ok) {
-        return res;
-      }
-      console.warn(`[ApiService] Local API returned HTTP ${res.status}. Falling back to HyperCloudHost: ${externalUrl}`);
-      return await fetch(externalUrl, requestOptions);
+      console.log(`[ApiService] Local API request: ${localUrl}`);
+      const res = await fetch(localUrl, finalOptions);
+      if (res.ok) return res;
+
+      console.warn(`[ApiService] Local API returned HTTP ${res.status}. Trying HyperCloudHost: ${externalUrl}`);
+      return await fetch(externalUrl, finalOptions);
     } catch (localErr) {
-      console.warn(`[ApiService] Local API fetch failed (${localUrl}). Falling back to HyperCloudHost (${externalUrl}):`, localErr);
-      return await fetch(externalUrl, requestOptions);
+      console.warn(`[ApiService] Local API network error (${localUrl}), trying HyperCloudHost (${externalUrl}):`, localErr);
+      return await fetch(externalUrl, finalOptions);
     }
   }
 
@@ -1403,10 +1362,31 @@ export class ApiService {
   ): Promise<{
     success: boolean;
     data: any[];
+    source?: 'hypercloud' | 'dexie' | 'none';
     message?: string;
   }> {
     const token =
       this.getAuthToken();
+
+    if (!token) {
+      console.warn('[ApiService] fetchUsers: Token JWT tidak ditemukan.');
+      const dexieUsers = await dexieDb.users.toArray().catch(() => []);
+      if (dexieUsers && dexieUsers.length > 0) {
+        console.log('[USERS STATE] Received from Dexie cache:', dexieUsers.length, 'users');
+        return {
+          success: true,
+          data: dexieUsers,
+          source: 'dexie',
+          message: 'JWT token tidak ditemukan. Memuat data pengguna dari cache lokal.',
+        };
+      }
+      return {
+        success: false,
+        data: [],
+        source: 'none',
+        message: 'JWT token tidak ditemukan. Silakan login kembali.',
+      };
+    }
 
     const headers: Record<
       string,
@@ -1466,10 +1446,11 @@ export class ApiService {
 
         const dexieUsers = await dexieDb.users.toArray().catch(() => []);
         if (dexieUsers && dexieUsers.length > 0) {
-          console.log(`[ApiService] fetchUsers returning ${dexieUsers.length} users from Dexie local cache`);
+          console.log('[USERS STATE] Received from Dexie cache:', dexieUsers.length, 'users');
           return {
             success: true,
             data: dexieUsers,
+            source: 'dexie',
             message: 'Memuat data pengguna dari cache lokal.',
           };
         }
@@ -1477,6 +1458,7 @@ export class ApiService {
         return {
           success: false,
           data: [],
+          source: 'none',
           message:
             this.formatErrorMessage(
               res.status,
@@ -1496,12 +1478,13 @@ export class ApiService {
           : [];
 
       console.log(
-        `[ApiService] fetchUsers success: found ${list.length} users`
+        '[USERS STATE] Received from HyperCloud:', list.length, 'users'
       );
 
       return {
         success: true,
         data: list,
+        source: 'hypercloud',
       };
     } catch (err: any) {
       console.warn(
@@ -1512,10 +1495,11 @@ export class ApiService {
       try {
         const dexieUsers = await dexieDb.users.toArray();
         if (dexieUsers && dexieUsers.length > 0) {
-          console.log(`[ApiService] fetchUsers returning ${dexieUsers.length} users from Dexie local cache after error`);
+          console.log('[USERS STATE] Received from Dexie cache:', dexieUsers.length, 'users');
           return {
             success: true,
             data: dexieUsers,
+            source: 'dexie',
             message: 'Memuat data pengguna dari cache lokal.',
           };
         }
@@ -1526,6 +1510,7 @@ export class ApiService {
       return {
         success: false,
         data: [],
+        source: 'none',
         message:
           'Tidak dapat terhubung ke API HyperCloudHost.',
       };
