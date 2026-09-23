@@ -2,7 +2,6 @@ import * as React from 'react';
 import { GlobalProvider } from './context/index';
 import { useAuth } from './context/AuthContext';
 import { useSettings } from './context/SettingsContext';
-import { useWorkOrders } from './context/WorkOrderContext';
 import { useAbsensi } from './context/AbsensiContext';
 import { useUI } from './context/UIContext';
 import { useToast } from './hooks/useToast';
@@ -18,6 +17,7 @@ import { VersionUpdateNotification } from './components/common/VersionUpdateNoti
 import { NotificationListener } from './components/layout/NotificationListener';
 import { Database, Loader2 } from 'lucide-react';
 
+// Pages
 import { LoginPage } from './pages/LoginPage';
 import MaintenancePage from './pages/MaintenancePage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -53,14 +53,11 @@ const AppContent: React.FC = () => {
 
   useNotifications();
 
-  const { activeTab, setActiveTab } =
-    useUI();
+  const { activeTab, setActiveTab } = useUI();
 
-  const { settings } =
-    useSettings();
+  const { settings } = useSettings();
 
-  const { hasCheckedInToday } =
-    useAbsensi();
+  const { hasCheckedInToday } = useAbsensi();
 
   const {
     isSyncing,
@@ -69,8 +66,7 @@ const AppContent: React.FC = () => {
     triggerActivitySync,
   } = useGASSync();
 
-  const { showToast } =
-    useToast();
+  const { showToast } = useToast();
 
   const [
     isMobileSidebarOpen,
@@ -80,6 +76,20 @@ const AppContent: React.FC = () => {
   const [
     showAbsensiForm,
     setShowAbsensiForm,
+  ] = React.useState(false);
+
+  /*
+   * =========================================================
+   * FIX UTAMA ABSENSI
+   * =========================================================
+   *
+   * State ini memastikan setelah ABSENSI berhasil,
+   * user tidak dikembalikan lagi ke halaman ABSENSI
+   * walaupun hasCheckedInToday melakukan render ulang.
+   */
+  const [
+    attendanceCompleted,
+    setAttendanceCompleted,
   ] = React.useState(false);
 
   const [
@@ -98,6 +108,11 @@ const AppContent: React.FC = () => {
     );
   });
 
+  /*
+   * =========================================================
+   * ROLE ADM
+   * =========================================================
+   */
   const isAdmRole =
     user &&
     (
@@ -111,18 +126,38 @@ const AppContent: React.FC = () => {
         .toLowerCase() === 'admbkt'
     );
 
+  /*
+   * =========================================================
+   * INITIAL LOADING
+   * =========================================================
+   */
   React.useEffect(() => {
-    const timer =
-      setTimeout(
-        () =>
-          setIsInitialLoading(false),
-        1500
-      );
+    const timer = setTimeout(
+      () => setIsInitialLoading(false),
+      1500
+    );
 
-    return () =>
-      clearTimeout(timer);
+    return () => clearTimeout(timer);
   }, []);
 
+  /*
+   * =========================================================
+   * RESET ATTENDANCE STATE SAAT USER BERGANTI
+   * =========================================================
+   *
+   * Jika logout/login dengan akun berbeda,
+   * state attendanceCompleted harus kembali false.
+   */
+  React.useEffect(() => {
+    setAttendanceCompleted(false);
+    setShowAbsensiForm(false);
+  }, [user?.id]);
+
+  /*
+   * =========================================================
+   * ADM DEFAULT MENU
+   * =========================================================
+   */
   React.useEffect(() => {
     if (
       isAdmRole &&
@@ -138,9 +173,7 @@ const AppContent: React.FC = () => {
         'migrasi_database',
       ].includes(activeTab)
     ) {
-      setActiveTab(
-        'cetak_laporan'
-      );
+      setActiveTab('cetak_laporan');
     }
   }, [
     isAdmRole,
@@ -148,7 +181,17 @@ const AppContent: React.FC = () => {
     setActiveTab,
   ]);
 
+  /*
+   * =========================================================
+   * RENDER ACTIVE PAGE
+   * =========================================================
+   */
   const renderActivePage = () => {
+    /*
+     * -------------------------------------------------------
+     * ADM
+     * -------------------------------------------------------
+     */
     if (isAdmRole) {
       switch (activeTab) {
         case 'riwayat_realisasi':
@@ -196,6 +239,11 @@ const AppContent: React.FC = () => {
       }
     }
 
+    /*
+     * -------------------------------------------------------
+     * USER / ADMIN / SUPERADMIN
+     * -------------------------------------------------------
+     */
     switch (activeTab) {
       case 'dashboard':
         if (
@@ -232,6 +280,15 @@ const AppContent: React.FC = () => {
           />
         );
 
+      /*
+       * =====================================================
+       * INPUT REALISASI
+       * =====================================================
+       *
+       * Setelah ABSENSI berhasil,
+       * activeTab akan menjadi input_realisasi
+       * dan halaman ini yang dibuka.
+       */
       case 'realisasi_main':
       case 'input_realisasi':
         return (
@@ -263,10 +320,14 @@ const AppContent: React.FC = () => {
         );
 
       case 'monitoring':
-        return <MonitoringPage />;
+        return (
+          <MonitoringPage />
+        );
 
       case 'cetak_laporan':
-        return <CetakLaporanPage />;
+        return (
+          <CetakLaporanPage />
+        );
 
       case 'rekap_harian':
         if (
@@ -297,7 +358,9 @@ const AppContent: React.FC = () => {
         );
 
       case 'master_data':
-        return <MasterDataPage />;
+        return (
+          <MasterDataPage />
+        );
 
       case 'migrasi_database':
         return (
@@ -320,7 +383,9 @@ const AppContent: React.FC = () => {
         );
 
       case 'logs':
-        return <AuditLogPage />;
+        return (
+          <AuditLogPage />
+        );
 
       case 'inisiasi':
         return (
@@ -341,14 +406,21 @@ const AppContent: React.FC = () => {
     }
   };
 
+  /*
+   * =========================================================
+   * INITIAL LOADING SCREEN
+   * =========================================================
+   */
   if (isInitialLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white font-sans relative overflow-hidden">
+
         <div className="absolute inset-0 bg-gradient-to-tr from-teal-950 via-slate-900 to-teal-950 opacity-90" />
 
         <div className="relative z-10 max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
 
           <div className="relative inline-flex items-center justify-center mx-auto">
+
             <img
               src={APP_LOGO_URL}
               alt="Logo"
@@ -368,27 +440,34 @@ const AppContent: React.FC = () => {
                 }
               }}
             />
+
           </div>
 
           <div className="space-y-1">
+
             <p className="text-xs font-extrabold text-teal-400 tracking-widest uppercase">
               {settings.namaUnitLayanan ||
                 'UL BUKITTINGGI'}
             </p>
+
           </div>
 
           <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-3">
 
             <div className="flex items-center justify-center space-x-2 text-xs font-bold text-teal-400">
+
               <Database className="w-4 h-4 animate-bounce" />
 
               <span>
                 Menghubungkan ke HyperCloud APHRO-Database...
               </span>
+
             </div>
 
             <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5">
+
               <div className="bg-gradient-to-r from-[#00A2B9] via-teal-400 to-[#00A2B9] h-1.5 rounded-full animate-pulse w-3/4 mx-auto" />
+
             </div>
 
             <p className="text-[11px] text-slate-400">
@@ -396,7 +475,9 @@ const AppContent: React.FC = () => {
             </p>
 
           </div>
+
         </div>
+
       </div>
     );
   }
@@ -413,12 +494,32 @@ const AppContent: React.FC = () => {
       'USER';
 
     /*
-     * USER BELUM ABSENSI HARI INI
+     * =======================================================
+     * GATE ABSENSI
+     * =======================================================
+     *
+     * FIX:
+     *
+     * Sebelumnya:
+     *
+     * !hasCheckedInToday
+     *
+     * menyebabkan user bisa kembali ke ABSENSI
+     * setelah render ulang.
+     *
+     * Sekarang:
+     *
+     * !hasCheckedInToday &&
+     * !attendanceCompleted
+     *
+     * Setelah onSuccess() -> attendanceCompleted = true
+     * sehingga gerbang ABSENSI langsung dilewati.
      */
     if (
       isUserRole &&
       !isAdmRole &&
-      !hasCheckedInToday
+      !hasCheckedInToday &&
+      !attendanceCompleted
     ) {
       return (
         <React.Suspense
@@ -426,34 +527,49 @@ const AppContent: React.FC = () => {
             <LoadingFallback />
           }
         >
+
           <NotificationListener />
 
           <SyncStatusBanner />
 
           {showAbsensiForm ? (
+
             <AbsensiKerjaPage
               onSuccess={() => {
                 console.log(
-                  '[ABSENSI TRACE APP] Absensi berhasil. Menuju INPUT REALISASI.'
+                  '[ABSENSI TRACE APP] Absensi berhasil. Membuka INPUT REALISASI.'
                 );
 
                 /*
-                 * Tutup form absensi.
+                 * =================================================
+                 * FIX UTAMA
+                 * =================================================
+                 *
+                 * Tandai bahwa ABSENSI sudah selesai
+                 * pada sesi login ini.
+                 */
+                setAttendanceCompleted(
+                  true
+                );
+
+                /*
+                 * Tutup form ABSENSI.
                  */
                 setShowAbsensiForm(
                   false
                 );
 
                 /*
-                 * Setelah absensi berhasil,
-                 * arahkan ke INPUT REALISASI.
+                 * Langsung arahkan ke INPUT REALISASI.
                  */
                 setActiveTab(
                   'input_realisasi'
                 );
               }}
             />
+
           ) : (
+
             <UserWelcomePage
               onStartAbsensi={() =>
                 setShowAbsensiForm(
@@ -461,16 +577,18 @@ const AppContent: React.FC = () => {
                 )
               }
             />
+
           )}
 
           <ToastContainer />
+
         </React.Suspense>
       );
     }
 
     /*
      * =======================================================
-     * USER SUDAH ABSENSI
+     * USER SUDAH ABSENSI / ATTENDANCE COMPLETED
      * =======================================================
      */
     return (
@@ -502,6 +620,7 @@ const AppContent: React.FC = () => {
           />
 
           <main className="flex-1 min-w-0">
+
             <React.Suspense
               fallback={
                 <LoadingFallback />
@@ -509,6 +628,7 @@ const AppContent: React.FC = () => {
             >
               {renderActivePage()}
             </React.Suspense>
+
           </main>
 
         </div>
@@ -518,13 +638,14 @@ const AppContent: React.FC = () => {
         <MobileBottomNav />
 
         <ToastContainer />
+
       </div>
     );
   }
 
   /*
    * =========================================================
-   * BELUM LOGIN
+   * BELUM LOGIN - INISIASI
    * =========================================================
    */
   if (!isInitiated) {
@@ -534,6 +655,7 @@ const AppContent: React.FC = () => {
           <LoadingFallback />
         }
       >
+
         <InisiasiPage
           onInitiationComplete={() =>
             setIsInitiated(
@@ -543,6 +665,7 @@ const AppContent: React.FC = () => {
         />
 
         <ToastContainer />
+
       </React.Suspense>
     );
   }
@@ -572,17 +695,28 @@ const AppContent: React.FC = () => {
         <LoadingFallback />
       }
     >
+
       <LoginPage />
+
       <ToastContainer />
+
     </React.Suspense>
   );
 };
 
+/*
+ * ===========================================================
+ * ROOT APP
+ * ===========================================================
+ */
 export default function App() {
   return (
     <GlobalProvider>
+
       <AppContent />
+
       <VersionUpdateNotification />
+
     </GlobalProvider>
   );
 }
