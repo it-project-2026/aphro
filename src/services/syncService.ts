@@ -1,5 +1,6 @@
 import { GASApiService } from './gasApiService';
-import { SupabaseService } from './supabaseService';
+import { ApiService } from './apiService';
+import { InisiasiService } from './inisiasiService';
 import { User, UserRole, WorkOrder, ULP, Penyulang, ReguROW, Petugas } from '../types';
 import { formatDriveViewUrl, formatDriveImageUrl } from '../utils/driveUtils';
 import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
@@ -353,19 +354,14 @@ export class SyncService {
 
     const previousSyncTime = forceFull ? null : this.getLastSyncTime();
     const currentSyncTime = getLocalDateTimeString();
-    const unitId = SupabaseService.getActiveUnitId();
+    const unitId = InisiasiService.getSelectedUnitId();
 
     try {
       // 1. Process pending offline mutation queue first
       await offlineSyncQueue.processQueue();
 
       // 2. Fetch Delta or Full Work Orders
-      const woRes = await SupabaseService.fetchWorkOrders(
-        unitId,
-        0,
-        200,
-        previousSyncTime || undefined
-      );
+      const woRes = await ApiService.fetchWorkOrders(unitId);
 
       let woChanged = 0;
       if (woRes.success && Array.isArray(woRes.data) && woRes.data.length > 0) {
@@ -380,15 +376,14 @@ export class SyncService {
       }
 
       // 3. Fetch Delta or Full Realisasi
-      const relRes = await SupabaseService.fetchRealisasi(
+      const relRes = await ApiService.fetchRealisasi({
         unitId,
-        0,
-        100,
-        previousSyncTime || undefined
-      );
+        page: 1,
+        limit: 100,
+      });
 
       let realisasiChanged = 0;
-      if (relRes.success && Array.isArray(relRes.data) && relRes.data.length > 0) {
+      if ((relRes.status === 'success' || (relRes as any).success) && Array.isArray(relRes.data) && relRes.data.length > 0) {
         realisasiChanged = relRes.data.length;
         const existingLocalList = await dexieDb.realisasi.toArray();
         const existingLocalMap = new Map(existingLocalList.map((r) => [r.id || r.localId, r]));
@@ -479,8 +474,8 @@ export class SyncService {
    */
   static async fetchAllData(gasUrl?: string, spreadsheetId?: string) {
     try {
-      const activeUnitId = SupabaseService.getActiveUnitId();
-      const supaData = await SupabaseService.fetchAllData(activeUnitId);
+      const activeUnitId = InisiasiService.getSelectedUnitId();
+      const supaData = await ApiService.fetchAllData(activeUnitId);
       
       const result = {
         masterData: {
@@ -492,7 +487,7 @@ export class SyncService {
         },
         workOrders: supaData.workOrders || [],
         realisasi: supaData.realisasi || [],
-        absensi: supaData.absensi || [],
+        absensi: (supaData as any).absensi || [],
         errors: []
       };
 

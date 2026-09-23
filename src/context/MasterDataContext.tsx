@@ -1,14 +1,7 @@
 import * as React from 'react';
 import { ULP, Penyulang, ReguROW, Petugas, User } from '../types';
-import { 
-  INITIAL_ULP, 
-  INITIAL_PENYULANG, 
-  INITIAL_REGU, 
-  INITIAL_PETUGAS,
-  INITIAL_USERS
-} from '../data/initialData';
 import { useSettings } from './SettingsContext';
-import { SupabaseService } from '../services/supabaseService';
+import { ApiService } from '../services/apiService';
 import { InisiasiService } from '../services/inisiasiService';
 
 interface MasterDataContextType {
@@ -53,7 +46,7 @@ const MasterDataContext = React.createContext<MasterDataContextType | undefined>
 
 export function MasterDataProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
-  const activeUnitId = SupabaseService.getActiveUnitId();
+  const activeUnitId = InisiasiService.getSelectedUnitId();
 
   const [ulpList, setUlpList] = React.useState<ULP[]>([]);
   const [penyulangList, setPenyulangList] = React.useState<Penyulang[]>([]);
@@ -62,21 +55,21 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const [users, setUsers] = React.useState<User[]>([]);
 
   const refreshMasterData = React.useCallback(async (forceRefresh = false, filters: { ulp?: string; regu?: string } = {}) => {
-    const unitId = SupabaseService.getActiveUnitId();
+    const unitId = InisiasiService.getSelectedUnitId();
     
     try {
-      const res = await SupabaseService.fetchMasterData(unitId, filters);
+      const res = await ApiService.fetchMasterData(unitId, filters);
       if (res) {
-        if (res.ulp?.length > 0) setUlpList(res.ulp);
-        if (res.penyulang?.length > 0) setPenyulangList(res.penyulang);
-        if (res.regu?.length > 0) setReguList(res.regu);
-        if (res.petugas?.length > 0) setPetugasList(res.petugas);
-        if (res.users && Array.isArray(res.users) && res.users.length > 0) {
-          setUsers(res.users);
-        }
+        setUlpList(Array.isArray(res.ulp) ? res.ulp : []);
+        setPenyulangList(Array.isArray(res.penyulang) ? res.penyulang : []);
+        setReguList(Array.isArray(res.regu) ? res.regu : []);
+        setPetugasList(Array.isArray(res.petugas) ? res.petugas : []);
+        setUsers(Array.isArray(res.users) ? res.users : []);
+
+        console.log(`[DB SOURCE] entity=MASTER_DATA source=HYPERCLOUD unitId=${unitId} counts: ULP=${res.ulp?.length || 0}, Penyulang=${res.penyulang?.length || 0}, Regu=${res.regu?.length || 0}, Petugas=${res.petugas?.length || 0}, Users=${res.users?.length || 0}`);
       }
     } catch (err) {
-      console.warn('Error loading Master Data:', err);
+      console.warn('Error loading Master Data from HyperCloud:', err);
     }
   }, [setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
 
@@ -132,7 +125,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     setReguList(prev => [...prev, newItem]);
 
     if (navigator.onLine) {
-      SupabaseService.saveRegu(newItem).catch(() => {});
+      ApiService.saveRegu(newItem).catch(() => {});
     }
   }, [setReguList]);
 
@@ -141,7 +134,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
       if (item.id === id || item.kodeRegu === id || item.namaRegu === id) {
         const updated = { ...item, ...data };
         if (navigator.onLine) {
-          SupabaseService.saveRegu(updated).catch(() => {});
+          ApiService.saveRegu(updated).catch(() => {});
         }
         return updated;
       }
@@ -152,7 +145,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const deleteRegu = React.useCallback((id: string) => {
     setReguList(prev => prev.filter(item => item.id !== id && item.kodeRegu !== id && item.namaRegu !== id));
     if (navigator.onLine) {
-      SupabaseService.deleteRegu(id).catch(() => {});
+      ApiService.deleteRegu(id).catch(() => {});
     }
   }, [setReguList]);
 
@@ -176,8 +169,8 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     setUsers(prev => [...prev, newItem]);
 
     if (navigator.onLine) {
-      SupabaseService.saveUser(newItem).catch((err) => {
-        console.warn('Failed to save user to Supabase:', err);
+      ApiService.saveUser(newItem).catch((err) => {
+        console.warn('Failed to save user to HyperCloud:', err);
       });
     }
   }, [setUsers]);
@@ -188,7 +181,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
         if (item.id === id || item.userName === id || item.nip === id) {
           const updatedItem = { ...item, ...data };
           if (navigator.onLine) {
-            SupabaseService.saveUser(updatedItem).catch(() => {});
+            ApiService.saveUser(updatedItem).catch(() => {});
           }
           return updatedItem;
         }
@@ -201,7 +194,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const deleteUser = React.useCallback((id: string) => {
     setUsers(prev => prev.filter(item => item.id !== id && item.userName !== id && item.nip !== id));
     if (navigator.onLine) {
-      SupabaseService.deleteUser(id).catch(() => {});
+      ApiService.deleteUser(id).catch(() => {});
     }
   }, [setUsers]);
 

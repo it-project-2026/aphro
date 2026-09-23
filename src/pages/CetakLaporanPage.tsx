@@ -44,7 +44,8 @@ import {
   MapPin,
   ExternalLink,
 } from 'lucide-react';
-import { SupabaseService } from '../services/supabaseService';
+import { ApiService } from '../services/apiService';
+import { InisiasiService } from '../services/inisiasiService';
 import { Realisasi, WorkOrder } from '../types';
 import { resolveRealisasiWoStatus } from '../utils/integrityLogger';
 
@@ -195,7 +196,7 @@ export const CetakLaporanPage: React.FC = () => {
   const { realisasiList = [] } = useRealisasi() || {};
 
   // Active Inisiasi Unit ID & Name
-  const activeUnitId = useMemo(() => SupabaseService.getActiveUnitId(), [settings.namaUnitLayanan]);
+  const activeUnitId = useMemo(() => InisiasiService.getSelectedUnitId(), [settings.namaUnitLayanan]);
   const activeUnitName = useMemo(() => settings.namaUnitLayanan || 'UL BUKITTINGGI', [settings.namaUnitLayanan]);
 
   // Helper date generators
@@ -224,7 +225,7 @@ export const CetakLaporanPage: React.FC = () => {
     if (matchingUlp.length > 0) return matchingUlp;
 
     // 2. Fallback to default ULP list for this unit
-    const defaults = SupabaseService.getDefaultMasterForUnit(activeUnitId);
+    const defaults = InisiasiService.getDefaultMasterForUnit(activeUnitId);
     if (defaults.ulp && defaults.ulp.length > 0) return defaults.ulp;
 
     return ulpList;
@@ -241,7 +242,7 @@ export const CetakLaporanPage: React.FC = () => {
   const [targetedRealisasi, setTargetedRealisasi] = useState<Realisasi[]>([]);
   const [targetedWorkOrders, setTargetedWorkOrders] = useState<WorkOrder[]>([]);
   const [isLoadingQuery, setIsLoadingQuery] = useState(false);
-  const [dataSource, setDataSource] = useState<'PostgreSQL/Supabase' | 'Dexie DB (Offline)'>('PostgreSQL/Supabase');
+  const [dataSource, setDataSource] = useState<'HyperCloud PostgreSQL' | 'Dexie DB (Offline)'>('HyperCloud PostgreSQL');
   const [lastQueriedParams, setLastQueriedParams] = useState<{
     ulp: string;
     startDate: string;
@@ -306,7 +307,7 @@ export const CetakLaporanPage: React.FC = () => {
         }
 
         if (navigator.onLine && forUnit.length === 0) {
-          const res = await SupabaseService.fetchTargetedReportData({
+          const res = await ApiService.fetchTargetedReportData({
             jenisLaporan: 'work_order',
             unitId: activeUnitId,
           });
@@ -373,7 +374,7 @@ export const CetakLaporanPage: React.FC = () => {
     setIsLoadingQuery(true);
 
     try {
-      const result = await SupabaseService.fetchTargetedReportData({
+      const result = await ApiService.fetchTargetedReportData({
         jenisLaporan: reportType,
         unitId: activeUnitId,
         nomorWO: filterNoWo !== 'ALL' ? filterNoWo : undefined,
@@ -384,7 +385,7 @@ export const CetakLaporanPage: React.FC = () => {
       if (result.success) {
         setTargetedRealisasi(result.realisasi);
         setTargetedWorkOrders(result.workOrders);
-        setDataSource(result.source === 'supabase' ? 'PostgreSQL/Supabase' : 'Dexie DB (Offline)');
+        setDataSource(result.source === 'hypercloud' ? 'HyperCloud PostgreSQL' : 'Dexie DB (Offline)');
 
         setLastQueriedParams({
           ulp: activeUnitName,
@@ -397,7 +398,7 @@ export const CetakLaporanPage: React.FC = () => {
         });
 
         if (!isSilent) {
-          showToast(`Berhasil memuat ${result.totalCount} data dari ${result.source === 'supabase' ? 'PostgreSQL Server' : 'Dexie Offline Cache'} (WO: ${filterNoWo !== 'ALL' ? filterNoWo : 'Semua'})`, 'success');
+          showToast(`Berhasil memuat ${result.totalCount} data dari ${result.source === 'hypercloud' ? 'HyperCloud Server' : 'Dexie Offline Cache'} (WO: ${filterNoWo !== 'ALL' ? filterNoWo : 'Semua'})`, 'success');
         }
       } else {
         setTargetedRealisasi([]);

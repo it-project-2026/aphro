@@ -1,6 +1,8 @@
 import { Realisasi } from '../types';
 import { normalizeRealisasiRow } from '../utils/realisasiNormalizer';
-import { normalizeAbsensi } from './syncService';
+import { normalizeWorkOrderRow } from '../utils/workOrderNormalizer';
+import { normalizeUser, normalizeAbsensi } from './syncService';
+import { InisiasiService } from './inisiasiService';
 import { dexieDb } from './dexieDb';
 
 export const API_BASE_URL =
@@ -2032,6 +2034,179 @@ export class ApiService {
       source: 'default',
       message:
         'Gagal memuat Unit Layanan dari HyperCloudHost API',
+    };
+  }
+
+  /**
+   * =========================================================
+   * ROW NORMALIZERS
+   * =========================================================
+   */
+  static normalizeUserRow(row: any) {
+    return normalizeUser(row);
+  }
+
+  static normalizeWorkOrderRow(row: any) {
+    return normalizeWorkOrderRow(row);
+  }
+
+  static normalizeRealisasiRow(row: any) {
+    return normalizeRealisasiRow(row);
+  }
+
+  /**
+   * =========================================================
+   * SAVE & DELETE REGU
+   * =========================================================
+   */
+  static async saveRegu(reguData: any): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await this.executeFetch('/api/regu-row', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(reguData),
+      });
+
+      return { success: res.ok };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  }
+
+  static async deleteRegu(id: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await this.executeFetch(`/api/regu-row/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+
+      return { success: res.ok };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  }
+
+  /**
+   * =========================================================
+   * REKAP PERIOD DATA & TARGETED REPORT DATA
+   * =========================================================
+   */
+  static async fetchRekapPeriodData(
+    unitNameOrId: string,
+    year: number,
+    monthIndex: number
+  ) {
+    const cleanId = (unitNameOrId || '').toUpperCase().trim();
+    const stdId = InisiasiService.getStandardUnitId(cleanId) || (cleanId.startsWith('UL') ? cleanId : 'UL1');
+    const monthPadded = String(monthIndex + 1).padStart(2, '0');
+    const startDate = `${year}-${monthPadded}-01`;
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const endDate = `${year}-${monthPadded}-${String(lastDay).padStart(2, '0')}`;
+
+    try {
+      const woRes = await this.fetchWorkOrders(stdId);
+      const relRes = await this.fetchRealisasi({
+        unitId: stdId,
+        limit: 1000,
+        tanggalDari: startDate,
+        tanggalSampai: endDate,
+      });
+
+      const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
+      const rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
+
+      const workOrders = rawWo.map((row: any) => normalizeWorkOrderRow(row));
+      const realisasiList = rawRel.map((row: any) => normalizeRealisasiRow(row));
+
+      console.log(`[DB SOURCE] entity=REKAP_PERIOD source=HYPERCLOUD unitId=${stdId} woCount=${workOrders.length} relCount=${realisasiList.length}`);
+
+      return {
+        success: true,
+        workOrders,
+        realisasiList,
+        message: `Memuat ${workOrders.length} Work Order dan ${realisasiList.length} Realisasi dari HyperCloud untuk ${monthPadded}/${year}.`,
+      };
+    } catch (err: any) {
+      console.warn('fetchRekapPeriodData exception:', err);
+      return {
+        success: false,
+        workOrders: [],
+        realisasiList: [],
+        message: err.message || 'Backend HyperCloud tidak dapat dihubungi.',
+      };
+    }
+  }
+
+  static async fetchTargetedReportData(params: {
+    jenisLaporan: 'realisasi' | 'work_order' | 'foto' | 'peta';
+    unitId?: string;
+    ulpName?: string;
+    startDate?: string;
+    endDate?: string;
+    penyulangName?: string;
+    reguName?: string;
+    nomorWO?: string;
+  }) {
+    const { unitId, nomorWO, startDate, endDate } = params;
+    const stdId = InisiasiService.getStandardUnitId(unitId || '') || 'UL1';
+
+    try {
+      const woRes = await this.fetchWorkOrders(stdId);
+      const relRes = await this.fetchRealisasi({
+        unitId: stdId,
+        limit: 1000,
+        tanggalDari: startDate,
+        tanggalSampai: endDate,
+      });
+
+      const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
+      const rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
+
+      let workOrders = rawWo.map((row: any) => normalizeWorkOrderRow(row));
+      let realisasiList = rawRel.map((row: any) => normalizeRealisasiRow(row));
+
+      if (nomorWO && nomorWO !== 'ALL') {
+        const targetWO = nomorWO.toLowerCase().trim();
+        workOrders = workOrders.filter((w: any) => (w.nomorWO || '').toLowerCase().includes(targetWO));
+        realisasiList = realisasiList.filter((r: any) => (r.nomorWO || '').toLowerCase().includes(targetWO));
+      }
+
+      console.log(`[DB SOURCE] entity=TARGETED_REPORT source=HYPERCLOUD unitId=${stdId} woCount=${workOrders.length} relCount=${realisasiList.length}`);
+
+      return {
+        success: true,
+        realisasi: realisasiList,
+        workOrders,
+        totalCount: params.jenisLaporan === 'work_order' ? workOrders.length : realisasiList.length,
+        source: 'hypercloud' as const,
+      };
+    } catch (err: any) {
+      console.warn('fetchTargetedReportData exception:', err);
+      return {
+        success: false,
+        realisasi: [],
+        workOrders: [],
+        totalCount: 0,
+        source: 'dexie' as const,
+      };
+    }
+  }
+
+  static async fetchAllData(unitId: string) {
+    const stdId = InisiasiService.getStandardUnitId(unitId || '') || 'UL1';
+    const masterData = await this.fetchMasterData(stdId);
+    const woRes = await this.fetchWorkOrders(stdId);
+    const relRes = await this.fetchRealisasi({ unitId: stdId, limit: 1000 });
+
+    const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
+    const rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
+
+    return {
+      masterData,
+      workOrders: rawWo.map((row: any) => normalizeWorkOrderRow(row)),
+      realisasi: rawRel.map((row: any) => normalizeRealisasiRow(row)),
     };
   }
 }

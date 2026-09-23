@@ -700,6 +700,15 @@ export class InisiasiService {
       }
     }
   }
+
+  static getDefaultMasterForUnit(unitId: string) {
+    return {
+      ulp: [],
+      penyulang: [],
+      regu: [],
+      petugas: []
+    };
+  }
 }
 
 /**

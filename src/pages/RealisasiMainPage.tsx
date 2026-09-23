@@ -29,7 +29,6 @@ import { formatExecutionDateTime } from '../utils/dateFormatter';
 import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO } from '../utils/dateUtils';
 import { Realisasi } from '../types';
 import { resolveUserTimRowAndUlp, RekapHarianService, UL_PRESETS } from '../services/rekapHarianService';
-import { SupabaseService } from '../services/supabaseService';
 import { InisiasiService } from '../services/inisiasiService';
 import { dexieDb } from '../services/dexieDb';
 import { InputRealisasiPage } from './InputRealisasiPage';
@@ -260,7 +259,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     );
     const activeUnitId = currentUser.unitId 
       ? InisiasiService.getStandardUnitId(currentUser.unitId)
-      : SupabaseService.getActiveUnitId();
+      : InisiasiService.getSelectedUnitId();
 
     // 1. Strict Unit Isolation check: All Unit Admins & Officers only see their own Unit's data
     if (rel.unitId && activeUnitId) {

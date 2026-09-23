@@ -9,7 +9,6 @@ import {
   DEFAULT_UL_OPTIONS,
 } from '../services/inisiasiService';
 import { getPrimaryTimRowForUnit } from '../services/rekapHarianService';
-import { SupabaseService } from '../services/supabaseService';
 import { SUPABASE_URL, SUPABASE_DATABASE_NAME, SUPABASE_TABLES } from '../services/supabaseClient';
 import { APP_LOGO_URL } from '../data/initialData';
 import {
@@ -56,7 +55,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
     setIsLoading(true);
     setStatusMessage('Menghubungkan ke Supabase APHRO-Database (Tabel INISIASI)...');
     try {
-      const res = await SupabaseService.fetchInisiasiUnits();
+      const res = await InisiasiService.fetchInisiasiUnits();
 
       if (res.success && res.data.length > 0) {
         const filteredUL = res.data.filter(u => InisiasiService.isValidUL(u.namaUL));

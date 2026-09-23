@@ -9,11 +9,10 @@ import { APP_LOGO_URL } from '../data/initialData';
 import { saveAndEmbedGasConfig } from '../config/gasConfig';
 import { GASApiService } from '../services/gasApiService';
 import { normalizeUser } from '../services/syncService';
-import { SupabaseService } from '../services/supabaseService';
+import { ApiService } from '../services/apiService';
 import { User } from '../types';
 import { InisiasiService, DEFAULT_UL_OPTIONS } from '../services/inisiasiService';
 import { AuthService } from '../services/authService';
-import { ApiService } from '../services/apiService';
 import {
   Zap,
   ShieldCheck,
@@ -109,7 +108,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             showToast(`Memuat ${res.data.length} akun pengguna dari Dexie cache (Offline/Fallback).`, 'info');
           }
         }
-        const normalized = res.data.map((u: any) => SupabaseService.normalizeUserRow(u));
+        const normalized = res.data.map((u: any) => ApiService.normalizeUserRow(u));
         setMasterData({ users: normalized });
       } else {
         console.log('[USERS STATE] HyperCloud returned no users or success=false', res);

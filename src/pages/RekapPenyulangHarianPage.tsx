@@ -13,7 +13,7 @@ import {
 import {
   RekapHarianService,
 } from '../services/rekapHarianService';
-import { SupabaseService } from '../services/supabaseService';
+import { ApiService } from '../services/apiService';
 import {
   RekapItemData,
   exportRekapHarianToExcel,
@@ -88,7 +88,7 @@ export const RekapPenyulangHarianPage: React.FC = () => {
 
       if (navigator.onLine) {
         showToast('Mengambil data rekap periode dari database...', 'info');
-        const periodRes = await SupabaseService.fetchRekapPeriodData(
+        const periodRes = await ApiService.fetchRekapPeriodData(
           selectedULKey,
           selectedYear,
           selectedMonthIdx
@@ -156,7 +156,7 @@ export const RekapPenyulangHarianPage: React.FC = () => {
     let isCancelled = false;
     const loadTargetedPeriodData = async () => {
       try {
-        const periodRes = await SupabaseService.fetchRekapPeriodData(
+        const periodRes = await ApiService.fetchRekapPeriodData(
           selectedULKey,
           selectedYear,
           selectedMonthIdx

@@ -8,7 +8,7 @@ import { useToast } from '../hooks/useToast';
 import { WatermarkedPhoto, WOStatus } from '../types';
 import { generateWatermarkedImage } from '../utils/watermark';
 import { GASApiService } from '../services/gasApiService';
-import { SupabaseService } from '../services/supabaseService';
+import { InisiasiService } from '../services/inisiasiService';
 import { ensureGoogleDrivePhotoUrl } from '../utils/driveUtils';
 import { getWIBDateString } from '../utils/dateUtils';
 import {
@@ -632,7 +632,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           unitId:
             selectedWO.unitId ||
             currentUser?.unitId ||
-            SupabaseService.getActiveUnitId(),
+            InisiasiService.getSelectedUnitId(),
           nomorWO: selectedWO.nomorWO,
           ulpName: selectedWO.ulpName,
           reguName: selectedWO.reguName,

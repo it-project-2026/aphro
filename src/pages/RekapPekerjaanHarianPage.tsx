@@ -13,7 +13,7 @@ import {
 import {
   RekapHarianService,
 } from '../services/rekapHarianService';
-import { SupabaseService } from '../services/supabaseService';
+import { ApiService } from '../services/apiService';
 import {
   RekapItemData,
   exportRekapHarianToExcel,
@@ -108,10 +108,10 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       let currentRealisasi = realisasiList;
       let currentWorkOrders = workOrders;
 
-      // 1. Ambil data targeted period dari Supabase jika online
+      // 1. Ambil data targeted period dari database jika online
       if (navigator.onLine) {
         showToast('Mengambil data rekap periode dari database...', 'info');
-        const periodRes = await SupabaseService.fetchRekapPeriodData(
+        const periodRes = await ApiService.fetchRekapPeriodData(
           selectedULKey,
           selectedYear,
           selectedMonthIdx
@@ -201,7 +201,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     let isCancelled = false;
     const loadTargetedPeriodData = async () => {
       try {
-        const periodRes = await SupabaseService.fetchRekapPeriodData(
+        const periodRes = await ApiService.fetchRekapPeriodData(
           selectedULKey,
           selectedYear,
           selectedMonthIdx

@@ -5,7 +5,6 @@ import { useSettings } from './SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { ApiService } from '../services/apiService';
 import { InisiasiService } from '../services/inisiasiService';
-import { SupabaseService } from '../services/supabaseService';
 import { dexieDb } from '../services/dexieDb';
 import { idbService } from '../services/indexedDbService';
 import { INITIAL_WORK_ORDERS } from '../data/initialData';
@@ -55,7 +54,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
         if (res.success && Array.isArray(res.data)) {
           const corrected = res.data.map((row: any) => {
-            const wo = SupabaseService.normalizeWorkOrderRow(row);
+            const wo = ApiService.normalizeWorkOrderRow(row);
             const isNullOrEmpty = !wo.tanggal || 
                                   wo.tanggal === 'null' || 
                                   wo.tanggal === 'undefined' || 
@@ -68,6 +67,8 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
             }
             return wo;
           });
+
+          console.log(`[DB SOURCE] entity=WORK_ORDERS source=HYPERCLOUD unitId=${unitId} count=${corrected.length}`);
 
           // Update Dexie cache in background
           dexieDb.work_orders.bulkPut(
@@ -125,7 +126,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const displayedWorkOrders = React.useMemo(() => {
     const activeUnitName = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
     const activeUnitKey = RekapHarianService.normalizeUnitKey(activeUnitName);
-    const activeUnitId = SupabaseService.getActiveUnitId();
+    const activeUnitId = InisiasiService.getSelectedUnitId();
 
     const cleanStr = (s?: string | null) => {
       if (!s) return '';
