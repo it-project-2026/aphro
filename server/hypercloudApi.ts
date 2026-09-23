@@ -601,25 +601,48 @@ router.post('/users', async (req: Request, res: Response) => {
 
 /**
  * GET /api/inisiasi
+ * Public Pre-Login endpoint for Inisiasi Unit and Account Selection
+ * Does NOT return password, password hash, JWT, or credentials.
  */
 router.get('/inisiasi', async (req: Request, res: Response) => {
-  logApiCall('GET', '/api/inisiasi');
+  logApiCall('GET', '/api/inisiasi', req.query);
+
+  const { unitId, isAll } = parseUnitFilter(req);
 
   try {
-    const sql = `
-      SELECT *
-      FROM public."INISIASI"
-      ORDER BY "ID" ASC
+    let usersSql = `
+      SELECT
+        "Id" AS "ID",
+        "unitId",
+        "UserID",
+        "Username",
+        "Nama_Regu",
+        "Role",
+        "ULP",
+        "Status"
+      FROM public."USERS"
     `;
 
-    const result = await query(sql);
+    const params: any[] = [];
+    if (!isAll && unitId) {
+      params.push(unitId);
+      usersSql += ` WHERE UPPER("unitId") = UPPER($${params.length})`;
+    }
+
+    usersSql += ` ORDER BY "Id" ASC LIMIT 500`;
+
+    const result = await query(usersSql, params);
 
     return res.json({
+      success: true,
       status: 'success',
       data: result.rows,
+      count: result.rows.length,
     });
   } catch (err: any) {
+    console.error('[INISIASI GET] Error:', err.message);
     return res.status(500).json({
+      success: false,
       status: 'error',
       message: err.message,
     });

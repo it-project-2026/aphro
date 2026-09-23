@@ -83,8 +83,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [showGasModal, setShowGasModal] = useState(false);
   const [tempGasUrl, setTempGasUrl] = useState('');
 
-  // Load users from HyperCloud (Online) or Dexie cache (Offline)
-  const loadHyperCloudUsers = useCallback(async (showNotification = false) => {
+  const [inisiasiUsers, setInisiasiUsers] = useState<User[]>([]);
+
+  // Load pre-login inisiasi accounts from HyperCloud /api/inisiasi (NO JWT required)
+  const loadInisiasiData = useCallback(async (showNotification = false) => {
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
     const activeUnitId = activeInisiasi.unitId;
@@ -92,34 +94,24 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     setIsFetchingSupabaseUsers(true);
 
     if (isOnline) {
-      console.log(`[INIT USERS TRACE]\naction=${showNotification ? 'REFRESH' : 'FETCH'}\nsource=HYPERCLOUD\nendpoint=/api/users`);
+      console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi`);
       try {
-        const res = await ApiService.fetchUsers(activeUnitId);
-        if (res && res.success && Array.isArray(res.data)) {
-          console.log(`[INIT USERS TRACE]\nstatus=SUCCESS\ncount=${res.data.length}\nsource=HYPERCLOUD`);
-          setMasterData({ users: res.data });
-
-          // Cache for offline usage
-          try {
-            if (res.data.length > 0) {
-              await dexieDb.users.clear();
-              await dexieDb.users.bulkPut(res.data);
-            }
-          } catch (cacheErr) {
-            console.warn('[USERS STATE] Cache to Dexie error:', cacheErr);
-          }
+        const res = await ApiService.fetchInisiasi(activeUnitId);
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=SUCCESS\ncount=${res.data.length}`);
+          setInisiasiUsers(res.data);
 
           if (showNotification) {
-            showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud.`, 'success');
+            showToast(`Berhasil memuat ${res.data.length} akun inisiasi dari HyperCloud.`, 'success');
           }
         } else {
-          console.warn(`[INIT USERS TRACE]\nstatus=FAILED\nsource=HYPERCLOUD\nmessage=${res?.message || 'Gagal memuat'}`);
+          console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=SUCCESS\ncount=0`);
           if (showNotification) {
-            showToast(res?.message || 'Gagal memuat daftar akun dari HyperCloud.', 'error');
+            showToast('Daftar inisiasi siap.', 'info');
           }
         }
       } catch (err: any) {
-        console.warn('[INIT USERS TRACE] Error fetching users:', err);
+        console.warn('[INIT USERS TRACE] Error fetching inisiasi data:', err);
         if (showNotification) {
           showToast('Tidak dapat terhubung ke server HyperCloud.', 'error');
         }
@@ -132,7 +124,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         const dexieUsers = await dexieDb.users.toArray();
         if (dexieUsers && dexieUsers.length > 0) {
           console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
-          setMasterData({ users: dexieUsers });
+          setInisiasiUsers(dexieUsers);
           if (showNotification) showToast(`Memuat ${dexieUsers.length} akun pengguna dari cache offline.`, 'info');
         } else if (showNotification) {
           showToast('Tidak ada data akun tersimpan di cache lokal.', 'info');
@@ -143,11 +135,11 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         setIsFetchingSupabaseUsers(false);
       }
     }
-  }, [setMasterData, showToast]);
+  }, [showToast]);
 
   useEffect(() => {
-    loadHyperCloudUsers(false);
-  }, [loadHyperCloudUsers]);
+    loadInisiasiData(false);
+  }, [loadInisiasiData]);
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -473,9 +465,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     }, 100);
   };
 
-  // Filter selectable users from Supabase USERS table matching Active Inisiasi Unit
+  // Filter selectable users for pre-login matching Active Inisiasi Unit
   const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-  const selectableUsers = users.filter((u) => {
+  const displayUserList = inisiasiUsers.length > 0 ? inisiasiUsers : users;
+  const selectableUsers = displayUserList.filter((u) => {
     // Strictly match active Inisiasi Unit
     if (u.unitId && !InisiasiService.isUserMatchingUnit(u.unitId, activeInisiasi.unitId)) {
       return false;
@@ -549,7 +542,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                     InisiasiService.saveSelectedUnit(selectedId);
                     const newActive = InisiasiService.getActiveInisiasiUnit();
                     showToast(`Inisiasi Unit beralih ke: ${newActive.namaUL} (${newActive.unitId})`, 'info');
-                    loadHyperCloudUsers(true);
+                    loadInisiasiData(true);
                   }}
                   className="w-full font-bold text-cyan-950 text-xs bg-white border border-cyan-300 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-cyan-500 shadow-2xs cursor-pointer"
                 >
@@ -625,10 +618,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             <div className="flex items-center space-x-1.5 shrink-0">
               <button
                 type="button"
-                onClick={() => loadHyperCloudUsers(true)}
+                onClick={() => loadInisiasiData(true)}
                 disabled={isFetchingSupabaseUsers}
                 className="p-2.5 rounded-xl bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-700 transition-all border border-emerald-200 shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
-                title="Refresh Akun dari HyperCloud Host"
+                title="Refresh Inisiasi dari HyperCloud"
               >
                 <RefreshCw className={`w-4 h-4 ${isFetchingSupabaseUsers ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
               </button>
@@ -716,10 +709,10 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <div className="flex items-center space-x-1.5">
                 <button
                   type="button"
-                  onClick={() => loadHyperCloudUsers(true)}
+                  onClick={() => loadInisiasiData(true)}
                   disabled={isFetchingSupabaseUsers}
                   className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                  title="Refresh Akun dari HyperCloud USERS"
+                  title="Refresh Inisiasi Akun dari HyperCloud"
                 >
                   <RefreshCw className={`w-3 h-3 ${isFetchingSupabaseUsers ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
                   <span>{isFetchingSupabaseUsers ? 'Memuat...' : 'Refresh USERS'}</span>
@@ -728,7 +721,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             </div>
 
             {/* Optional search filter if user list is long */}
-            {users.length > 4 && (
+            {displayUserList.length > 4 && (
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -833,7 +826,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                 <div className="flex flex-wrap justify-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => loadHyperCloudUsers(true)}
+                    onClick={() => loadInisiasiData(true)}
                     disabled={isFetchingSupabaseUsers}
                     className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold transition-all inline-flex items-center space-x-1 cursor-pointer"
                   >

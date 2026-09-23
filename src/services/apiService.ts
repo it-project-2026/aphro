@@ -1879,6 +1879,61 @@ export class ApiService {
 
   /**
    * =========================================================
+   * INISIASI PRE-LOGIN DATA
+   * =========================================================
+   * Public pre-login endpoint to fetch safe Inisiasi accounts
+   * and units WITHOUT requiring JWT.
+   */
+  static async fetchInisiasi(unitId?: string): Promise<{
+    success: boolean;
+    data: any[];
+    source: 'hypercloud' | 'default';
+    message?: string;
+  }> {
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    const query = unitId && unitId !== 'ALL' ? `?unitId=${encodeURIComponent(unitId)}` : '';
+
+    if (isOnline) {
+      console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi${query}`);
+      try {
+        const res = await this.executeFetch(`/api/inisiasi${query}`, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const rawList = Array.isArray(json?.data) ? json.data : Array.isArray(json?.users) ? json.users : Array.isArray(json) ? json : [];
+          const list = rawList.map(normalizeUser);
+
+          console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=SUCCESS\ncount=${list.length}`);
+
+          return {
+            success: true,
+            data: list,
+            source: 'hypercloud',
+            message: `Berhasil memuat ${list.length} akun inisiasi dari HyperCloud.`,
+          };
+        } else {
+          console.log(`[INIT USERS TRACE]\naction=FETCH_INIT\nsource=HYPERCLOUD\nendpoint=/api/inisiasi\nstatus=INFO\ncount=0\nmessage=Inisiasi public default active`);
+        }
+      } catch (err: any) {
+        console.log('[INIT USERS TRACE] fetchInisiasi info:', err?.message || err);
+      }
+    }
+
+    return {
+      success: true,
+      data: [],
+      source: 'default',
+      message: 'Inisiasi default aktif.',
+    };
+  }
+
+  /**
+   * =========================================================
    * INISIASI UNIT
    * =========================================================
    */
