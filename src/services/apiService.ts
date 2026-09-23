@@ -1352,7 +1352,7 @@ export class ApiService {
    */
 
   /**
-   * Fetch all users.
+   * Fetch users from HyperCloud API.
    */
   static async fetchUsers(
     unitId?: string
@@ -1362,93 +1362,50 @@ export class ApiService {
     source?: 'hypercloud' | 'dexie' | 'none';
     message?: string;
   }> {
-    const token =
-      this.getAuthToken();
-
-    if (!token) {
-      console.warn('[ApiService] fetchUsers: Token JWT tidak ditemukan.');
-      const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-      if (isOnline) {
-        return {
-          success: false,
-          data: [],
-          source: 'none',
-          message: 'Token JWT tidak ditemukan. Silakan login terlebih dahulu.',
-        };
-      }
-      const dexieUsers = await dexieDb.users.toArray().catch(() => []);
-      if (dexieUsers && dexieUsers.length > 0) {
-        console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
-        return {
-          success: true,
-          data: dexieUsers,
-          source: 'dexie',
-          message: 'Mode Offline: Memuat data pengguna dari cache lokal.',
-        };
-      }
-      return {
-        success: false,
-        data: [],
-        source: 'none',
-        message: 'JWT token tidak ditemukan. Silakan login kembali.',
-      };
-    }
-
-    const headers: Record<
-      string,
-      string
-    > = {
-      Accept:
-        'application/json',
+    const token = this.getAuthToken();
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
     };
 
     if (token) {
-      headers[
-        'Authorization'
-      ] = `Bearer ${token}`;
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
+    console.log(`[INIT USERS AUTH] authenticated=${Boolean(token)} tokenPresent=${Boolean(token)} endpoint=/api/users`);
+
     const query =
-      unitId &&
-      unitId !== 'ALL'
+      unitId && unitId !== 'ALL'
         ? `?unitId=${encodeURIComponent(unitId)}`
         : '';
 
     try {
-      console.log(
-        `[ApiService] fetchUsers starting for unit: ${
-          unitId || 'ALL'
-        }`
-      );
+      console.log(`[INIT USERS TRACE] action=FETCH source=HYPERCLOUD endpoint=/api/users${query}`);
 
-      const res =
-        await this.executeFetch(
-          `/api/users${query}`,
-          {
-            method: 'GET',
-            headers,
-          }
-        );
+      const res = await this.executeFetch(`/api/users${query}`, {
+        method: 'GET',
+        headers,
+      });
 
       if (!res.ok) {
-        let serverMsg:
-          | string
-          | undefined;
-
+        let serverMsg: string | undefined;
         try {
-          const errJson =
-            await res.json();
-
-          serverMsg =
-            errJson?.message;
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
         } catch {
           // Ignore
         }
 
-        console.warn(
-          `[ApiService] fetchUsers failed with status ${res.status}:`,
-          serverMsg
-        );
+        console.warn(`[INIT USERS TRACE] FAILED HTTP=${res.status} reason=${serverMsg || 'Server Error'}`);
+
+        // If 404
+        if (res.status === 404) {
+          return {
+            success: false,
+            data: [],
+            source: 'none',
+            message: 'Endpoint /api/users tidak ditemukan di server HyperCloud.',
+          };
+        }
 
         // On HTTP 401/403 or online error: DO NOT fallback to Dexie cache!
         const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
@@ -1457,14 +1414,11 @@ export class ApiService {
             success: false,
             data: [],
             source: 'none',
-            message:
-              this.formatErrorMessage(
-                res.status,
-                serverMsg
-              ),
+            message: this.formatErrorMessage(res.status, serverMsg),
           };
         }
 
+        // Offline mode only fallback
         const dexieUsers = await dexieDb.users.toArray().catch(() => []);
         if (dexieUsers && dexieUsers.length > 0) {
           console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
@@ -1480,27 +1434,15 @@ export class ApiService {
           success: false,
           data: [],
           source: 'none',
-          message:
-            this.formatErrorMessage(
-              res.status,
-              serverMsg
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
-      const json =
-        await res.json();
+      const json = await res.json();
+      const list = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
 
-      const list =
-        Array.isArray(json.data)
-          ? json.data
-          : Array.isArray(json)
-          ? json
-          : [];
-
-      console.log(
-        '[USERS STATE] Received from HyperCloud:', list.length, 'users'
-      );
+      console.log(`[INIT USERS TRACE] status=SUCCESS count=${list.length} source=HYPERCLOUD`);
+      console.log('[USERS STATE] Received from HyperCloud:', list.length, 'users');
 
       return {
         success: true,
@@ -1508,10 +1450,7 @@ export class ApiService {
         source: 'hypercloud',
       };
     } catch (err: any) {
-      console.warn(
-        '[ApiService.fetchUsers Exception]',
-        err?.message || err
-      );
+      console.warn('[ApiService.fetchUsers Exception]', err?.message || err);
 
       const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
       if (!isOnline) {
@@ -1535,8 +1474,7 @@ export class ApiService {
         success: false,
         data: [],
         source: 'none',
-        message:
-          'Tidak dapat terhubung ke API HyperCloudHost.',
+        message: 'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.',
       };
     }
   }

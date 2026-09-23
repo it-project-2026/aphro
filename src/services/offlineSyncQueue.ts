@@ -258,6 +258,8 @@ class OfflineSyncQueueEngine {
         const serverResult = await ApiService.saveRealisasi(realisasi);
 
         if (serverResult.success) {
+          console.log(`[DATA FLOW]\nmode=ONLINE\nentity=REALISASI\naction=SYNC\nsource=DEXIE_QUEUE\ntarget=HYPERCLOUD\nstatus=SUCCESS\nid=${serverResult.serverId || realisasi.localId}`);
+
           // Mark Realisasi as SYNCED in Dexie
           await dexieDb.realisasi.update(realisasi.localId, {
             syncStatus: 'SYNCED',

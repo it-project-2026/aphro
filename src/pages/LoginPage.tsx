@@ -83,9 +83,51 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [showGasModal, setShowGasModal] = useState(false);
   const [tempGasUrl, setTempGasUrl] = useState('');
 
-  // Load offline users from Dexie cache ONLY if offline
+  // Load users from HyperCloud (Online) or Dexie cache (Offline)
   const loadHyperCloudUsers = useCallback(async (showNotification = false) => {
-    if (!navigator.onLine) {
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+    const activeUnitId = activeInisiasi.unitId;
+
+    setIsFetchingSupabaseUsers(true);
+
+    if (isOnline) {
+      console.log(`[INIT USERS TRACE]\naction=${showNotification ? 'REFRESH' : 'FETCH'}\nsource=HYPERCLOUD\nendpoint=/api/users`);
+      try {
+        const res = await ApiService.fetchUsers(activeUnitId);
+        if (res && res.success && Array.isArray(res.data)) {
+          console.log(`[INIT USERS TRACE]\nstatus=SUCCESS\ncount=${res.data.length}\nsource=HYPERCLOUD`);
+          setMasterData({ users: res.data });
+
+          // Cache for offline usage
+          try {
+            if (res.data.length > 0) {
+              await dexieDb.users.clear();
+              await dexieDb.users.bulkPut(res.data);
+            }
+          } catch (cacheErr) {
+            console.warn('[USERS STATE] Cache to Dexie error:', cacheErr);
+          }
+
+          if (showNotification) {
+            showToast(`Berhasil memuat ${res.data.length} akun pengguna dari HyperCloud.`, 'success');
+          }
+        } else {
+          console.warn(`[INIT USERS TRACE]\nstatus=FAILED\nsource=HYPERCLOUD\nmessage=${res?.message || 'Gagal memuat'}`);
+          if (showNotification) {
+            showToast(res?.message || 'Gagal memuat daftar akun dari HyperCloud.', 'error');
+          }
+        }
+      } catch (err: any) {
+        console.warn('[INIT USERS TRACE] Error fetching users:', err);
+        if (showNotification) {
+          showToast('Tidak dapat terhubung ke server HyperCloud.', 'error');
+        }
+      } finally {
+        setIsFetchingSupabaseUsers(false);
+      }
+    } else {
+      // Offline fallback
       try {
         const dexieUsers = await dexieDb.users.toArray();
         if (dexieUsers && dexieUsers.length > 0) {
@@ -97,18 +139,14 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         }
       } catch {
         // Ignore
-      }
-    } else {
-      if (showNotification) {
-        showToast('Silakan login dengan Username dan Password Anda.', 'info');
+      } finally {
+        setIsFetchingSupabaseUsers(false);
       }
     }
   }, [setMasterData, showToast]);
 
   useEffect(() => {
-    if (!navigator.onLine) {
-      loadHyperCloudUsers(false);
-    }
+    loadHyperCloudUsers(false);
   }, [loadHyperCloudUsers]);
 
 

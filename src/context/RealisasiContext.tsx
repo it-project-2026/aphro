@@ -666,6 +666,7 @@ export function RealisasiProvider({
                 console.warn('[RealisasiContext] Dexie cache save error:', e);
               }
 
+              console.log(`[DATA FLOW]\nmode=ONLINE\nentity=REALISASI\naction=CREATE\nsource=HYPERCLOUD\nunitId=${newRelUI.unitId || activeUnitId}\nstatus=SUCCESS\nid=${saveRes.serverId || localId}`);
               showToast('✓ Data Realisasi berhasil disimpan ke HyperCloud.', 'success');
               
               // Immediate UI update
@@ -683,6 +684,7 @@ export function RealisasiProvider({
         }
 
         // 2. OFFLINE FALLBACK (Offline or API failed)
+        console.log(`[DATA FLOW]\nmode=OFFLINE\nentity=REALISASI\naction=CREATE\nsource=DEXIE\nstatus=QUEUED\nid=${localId}`);
         setRealisasiList((prev) => [newRelUI, ...prev]);
         await offlineSyncQueue.enqueueRealisasi(localRecord, localPhotos);
         
