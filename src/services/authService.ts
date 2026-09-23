@@ -66,15 +66,47 @@ export class AuthService {
           await this.saveLocalSession(normalized);
           return { success: true, user: normalized };
         } else {
-          return { success: false, error: apiRes.message || 'Gagal login ke HyperCloudHost.' };
+          const msg = apiRes.message || '';
+          const isConnectionError =
+            msg.includes('Tidak dapat terhubung') ||
+            msg.includes('Failed to fetch') ||
+            msg.includes('koneksi');
+
+          if (!isConnectionError) {
+            return { success: false, error: msg || 'Gagal login ke HyperCloudHost.' };
+          }
         }
       } catch (apiErr: any) {
         console.error('HyperCloudHost API login error:', apiErr);
-        return { success: false, error: `Gagal terhubung ke server HyperCloudHost: ${apiErr.message}` };
       }
     }
 
-    return { success: false, error: 'Mode offline tidak tersedia untuk login awal. Pastikan Anda online dan terhubung ke HyperCloudHost.' };
+    // 2. Offline / Local fallback check in Dexie local cache
+    try {
+      const localUsers = await dexieDb.users.toArray();
+      const matchedLocal = localUsers.find((u) => {
+        const matchName =
+          (u.userName || '').trim().toLowerCase() === cleanUsername ||
+          (u.nip || '').trim().toLowerCase() === cleanUsername ||
+          (u.id || '').trim().toLowerCase() === cleanUsername ||
+          (u.name || '').trim().toLowerCase() === cleanUsername;
+
+        if (!matchName) return false;
+        if (u.unitId) {
+          return InisiasiService.isUserMatchingUnit(u.unitId, targetUnitId);
+        }
+        return true;
+      });
+
+      if (matchedLocal) {
+        await this.saveLocalSession(matchedLocal);
+        return { success: true, user: matchedLocal };
+      }
+    } catch (dexieErr) {
+      console.warn('[AuthService] Dexie login fallback error:', dexieErr);
+    }
+
+    return { success: false, error: 'Tidak dapat terhubung ke API HyperCloudHost dan akun tidak ditemukan di penyimpanan lokal.' };
   }
 
   /**

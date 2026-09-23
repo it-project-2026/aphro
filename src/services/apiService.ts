@@ -200,25 +200,26 @@ export class ApiService {
 
     // Pada Domain Production APHRO (atau default), SELALU gunakan backend API utama: https://api.aphro-row.my.id
     // JANGAN PERNAH fallback ke frontend origin (www.aphro-row.my.id) saat server mengembalikan response HTTP (misal 401, 403, 404, 500).
-    if (isAphroProduction || import.meta.env.VITE_USE_LOCAL_API !== 'true') {
+    if (isAphroProduction) {
       console.log(`[ApiService] Production API request: ${externalUrl}`);
       return await fetch(externalUrl, finalOptions);
     }
 
-    // Local dev mode fallback (hanya jika VITE_USE_LOCAL_API === 'true' dan bukan domain production)
+    // In preview / dev mode: try primary API first, fallback to local server if network fetch fails
     const host = typeof window !== 'undefined' && window.location ? window.location.origin : '';
     const localUrl = `${host}${apiPath}`;
 
     try {
-      console.log(`[ApiService] Local API request: ${localUrl}`);
-      const res = await fetch(localUrl, finalOptions);
-      if (res.ok) return res;
-
-      console.warn(`[ApiService] Local API returned HTTP ${res.status}. Trying HyperCloudHost: ${externalUrl}`);
+      console.log(`[ApiService] Production API request: ${externalUrl}`);
       return await fetch(externalUrl, finalOptions);
-    } catch (localErr) {
-      console.warn(`[ApiService] Local API network error (${localUrl}), trying HyperCloudHost (${externalUrl}):`, localErr);
-      return await fetch(externalUrl, finalOptions);
+    } catch (extErr: any) {
+      console.warn(`[ApiService] Primary API network error (${externalUrl}). Trying local endpoint (${localUrl}):`, extErr?.message || extErr);
+      try {
+        return await fetch(localUrl, finalOptions);
+      } catch (localErr) {
+        console.error(`[ApiService] Both primary and local API requests failed:`, localErr);
+        throw extErr;
+      }
     }
   }
 
@@ -1279,12 +1280,11 @@ export class ApiService {
             },
             body:
               JSON.stringify({
-                Username:
-                  cleanUsername,
-                Password:
-                  cleanPassword,
-                unitId:
-                  cleanUnitId,
+                Username: cleanUsername,
+                Password: cleanPassword,
+                username: cleanUsername,
+                password: cleanPassword,
+                unitId: cleanUnitId,
               }),
           }
         );
