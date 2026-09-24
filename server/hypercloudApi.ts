@@ -97,7 +97,7 @@ function toNullableTimestamp(val: any): string | null {
  * Helper to handle Work Order upserts
  */
 async function handleUpsertWorkOrder(w: any) {
-  const woId = w.WO_ID || w.id || `WO-${Date.now()}`;
+  const woId = w.WO_ID || w.woId || w.id || `WO-${Date.now()}`;
   
   const sql = `
     INSERT INTO public."WORK_ORDER" (
@@ -140,9 +140,9 @@ async function handleUpsertWorkOrder(w: any) {
     w.Nomor_WO || w.nomorWO || woId,
     w.PEKERJAAN || w.pekerjaan || 'NORMAL',
     tanggalVal,
-    w.ULP || w.ulpName || '',
-    w.PENYULANG || w.penyulangName || '',
-    w.REGU_ROW || w.reguName || '',
+    w.ULP || w.ulpName || w.ulp || '',
+    w.PENYULANG || w.penyulangName || w.penyulang || '',
+    w.REGU_ROW || w.reguRow || w.reguName || w.regu || '',
     w.VOLUME || w.volumePekerjaan || 0,
     w.SATUAN || w.satuan || 'Pohon',
     w.TOTAL_REALISASI || w.totalRealisasi || 0,
@@ -1468,6 +1468,7 @@ router.delete(
   async (req: Request, res: Response) => {
     const woId = req.params.id;
 
+    console.log(`[API DELETE]\nentity=WORK_ORDER\nid=${woId}`);
     logApiCall(
       'DELETE',
       `/api/work-orders/${woId}`
@@ -1483,20 +1484,21 @@ router.delete(
         logApiRoute('DELETE', `/api/work-orders/${woId}`, 404);
         return res.status(404).json({
           success: false,
-          status: 'error',
           error: 'WORK_ORDER_NOT_FOUND',
           message: `Work Order ${woId} tidak ditemukan atau sudah terhapus.`,
         });
       }
 
-      // Unit isolation check
+      // Unit isolation & authorization check
       const recordUnit = String(check.rows[0]?.unitId || '').toUpperCase();
-      const userUnit = String(req.query.unitId || (req as any).user?.unitId || '').toUpperCase();
-      if (userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
+      const userUnit = String((req as any).user?.unitId || req.query.unitId || '').toUpperCase();
+      const userRole = String((req as any).user?.role || req.query.role || '').toUpperCase();
+      const isAdmin = userRole === 'ADMIN' || userRole === 'ADM' || userRole === 'SUPERADMIN' || userUnit === 'ALL';
+
+      if (userUnit && recordUnit && !isAdmin && userUnit !== 'ALL' && recordUnit !== userUnit) {
         logApiRoute('DELETE', `/api/work-orders/${woId}`, 403);
         return res.status(403).json({
           success: false,
-          status: 'error',
           error: 'FORBIDDEN',
           message: `Akses ditolak: Work Order ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`,
         });
@@ -1512,15 +1514,15 @@ router.delete(
         [woId]
       );
 
+      console.log(`[DB DELETE]\ntable=WORK_ORDER\nid=${woId}\nunitId=${recordUnit}\nstatus=SUCCESS`);
       logDbOperation('WORK_ORDER', 'DELETE', woId, recordUnit);
       logSyncOperation('WORK_ORDER', woId, 'DELETED', 200);
       logApiRoute('DELETE', `/api/work-orders/${woId}`, 200);
 
-      return res.json({
+      return res.status(200).json({
         success: true,
-        status: 'success',
-        deleted: true,
         id: woId,
+        deleted: true,
         deletedCount: resDb.rowCount,
         message: 'Work Order berhasil dihapus.',
       });
@@ -1528,8 +1530,8 @@ router.delete(
       console.error('[BACKEND ERROR] DELETE /api/work-orders:', err.message);
       logApiRoute('DELETE', `/api/work-orders/${woId}`, 500);
       return res.status(500).json({
-        status: 'error',
         success: false,
+        error: 'DATABASE_ERROR',
         message: err.message,
       });
     }
@@ -2046,6 +2048,7 @@ router.delete(
   async (req: Request, res: Response) => {
     const relId = req.params.id;
 
+    console.log(`[API DELETE]\nentity=REALISASI\nid=${relId}`);
     logApiCall(
       'DELETE',
       `/api/realisasi/${relId}`
@@ -2061,20 +2064,21 @@ router.delete(
         logApiRoute('DELETE', `/api/realisasi/${relId}`, 404);
         return res.status(404).json({
           success: false,
-          status: 'error',
           error: 'REALISASI_NOT_FOUND',
           message: `Realisasi dengan ID ${relId} tidak ditemukan atau sudah terhapus.`,
         });
       }
 
-      // Unit isolation check
+      // Unit isolation & authorization check
       const recordUnit = String(check.rows[0]?.unitId || '').toUpperCase();
-      const userUnit = String(req.query.unitId || (req as any).user?.unitId || '').toUpperCase();
-      if (userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
+      const userUnit = String((req as any).user?.unitId || req.query.unitId || '').toUpperCase();
+      const userRole = String((req as any).user?.role || req.query.role || '').toUpperCase();
+      const isAdmin = userRole === 'ADMIN' || userRole === 'ADM' || userRole === 'SUPERADMIN' || userUnit === 'ALL';
+
+      if (userUnit && recordUnit && !isAdmin && userUnit !== 'ALL' && recordUnit !== userUnit) {
         logApiRoute('DELETE', `/api/realisasi/${relId}`, 403);
         return res.status(403).json({
           success: false,
-          status: 'error',
           error: 'FORBIDDEN',
           message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`,
         });
@@ -2084,22 +2088,21 @@ router.delete(
         `
         DELETE FROM public."REALISASI"
         WHERE "ID" = $1
-        RETURNING *
+        RETURNING "ID"
         `,
         [relId]
       );
 
+      console.log(`[DB DELETE]\ntable=REALISASI\nid=${relId}\nunitId=${recordUnit}\nstatus=SUCCESS`);
       logDbOperation('REALISASI', 'DELETE', relId, recordUnit);
       logSyncOperation('REALISASI', relId, 'DELETED', 200);
       logApiRoute('DELETE', `/api/realisasi/${relId}`, 200);
 
-      return res.json({
+      return res.status(200).json({
         success: true,
-        status: 'success',
-        deleted: true,
         id: relId,
+        deleted: true,
         deletedCount: resDb.rowCount,
-        data: resDb.rows[0],
         message: 'Realisasi berhasil dihapus.',
       });
     } catch (err: any) {
@@ -2107,7 +2110,7 @@ router.delete(
       logApiRoute('DELETE', `/api/realisasi/${relId}`, 500);
       return res.status(500).json({
         success: false,
-        status: 'error',
+        error: 'DATABASE_ERROR',
         message: err.message,
       });
     }
@@ -2405,6 +2408,7 @@ router.delete(
   async (req: Request, res: Response) => {
     const absId = req.params.id;
 
+    console.log(`[API DELETE]\nentity=ABSENSI\nid=${absId}`);
     logApiCall(
       'DELETE',
       `/api/absensi/${absId}`
@@ -2422,21 +2426,22 @@ router.delete(
         logApiRoute('DELETE', `/api/absensi/${absId}`, 404);
         return res.status(404).json({
           success: false,
-          status: 'error',
           error: 'ABSENSI_NOT_FOUND',
-          message: `Data absensi dengan ID ${absId} tidak ditemukan.`,
+          message: `Data absensi dengan ID ${absId} tidak ditemukan atau sudah terhapus.`,
         });
       }
 
-      // Unit Isolation check
+      // Unit Isolation & authorization check
       const recordUnit = String(checkRes.rows[0]?.unitId || '').toUpperCase();
-      const userUnit = String(req.query.unitId || (req as any).user?.unitId || '').toUpperCase();
-      if (userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
+      const userUnit = String((req as any).user?.unitId || req.query.unitId || '').toUpperCase();
+      const userRole = String((req as any).user?.role || req.query.role || '').toUpperCase();
+      const isAdmin = userRole === 'ADMIN' || userRole === 'ADM' || userRole === 'SUPERADMIN' || userUnit === 'ALL';
+
+      if (userUnit && recordUnit && !isAdmin && userUnit !== 'ALL' && recordUnit !== userUnit) {
         console.warn(`[ABSENSI TRACE 3] FORBIDDEN: User unit ${userUnit} tried to delete record unit ${recordUnit}`);
         logApiRoute('DELETE', `/api/absensi/${absId}`, 403);
         return res.status(403).json({
           success: false,
-          status: 'error',
           error: 'FORBIDDEN',
           message: `Akses ditolak: Absensi ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`,
         });
@@ -2447,31 +2452,29 @@ router.delete(
         `
         DELETE FROM public."ABSENSI"
         WHERE "ID" = $1
-        RETURNING *
+        RETURNING "ID"
         `,
         [absId]
       );
 
+      console.log(`[DB DELETE]\ntable=ABSENSI\nid=${absId}\nunitId=${recordUnit}\nstatus=SUCCESS`);
       logDbOperation('ABSENSI', 'DELETE', absId, recordUnit);
       logSyncOperation('ABSENSI', absId, 'DELETED', 200);
       logApiRoute('DELETE', `/api/absensi/${absId}`, 200);
 
-      return res.json({
+      return res.status(200).json({
         success: true,
-        deleted: true,
         id: absId,
-        status: 'success',
+        deleted: true,
         deletedCount: resDb.rowCount,
         message: 'Data absensi berhasil dihapus.',
-        data: resDb.rows[0],
       });
     } catch (err: any) {
       console.error('[ABSENSI DELETE] Error:', err.message);
       logApiRoute('DELETE', `/api/absensi/${absId}`, 500);
       return res.status(500).json({
         success: false,
-        status: 'error',
-        error: 'SERVER_ERROR',
+        error: 'DATABASE_ERROR',
         message: err.message,
       });
     }
@@ -2495,6 +2498,18 @@ router.post('/send-notification', async (req: Request, res: Response) => {
     reguName: reguName || '',
     woId: woData?.id || '',
     delivered: true,
+  });
+});
+
+/**
+ * 404 Fallback for unhandled API routes under /api
+ */
+router.all('*', (req: Request, res: Response) => {
+  logApiRoute(req.method, req.originalUrl, 404);
+  return res.status(404).json({
+    success: false,
+    error: 'ROUTE_NOT_FOUND',
+    message: `API endpoint ${req.method} ${req.originalUrl} tidak ditemukan`,
   });
 });
 

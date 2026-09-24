@@ -92,6 +92,26 @@
       "LOKASI_FINISH": "",
       "STATUS": "DRAFT",
       "Created_At": "2026-09-24T02:13:18.390Z"
+    },
+    {
+      "WO_ID": "WO-1790216869705",
+      "unitId": "UL1",
+      "Nomor_WO": "TEST-WO-DELETE/001",
+      "PEKERJAAN": "Pemangkasan Pohon",
+      "Tanggal": "2026-09-24",
+      "ULP": "",
+      "PENYULANG": "",
+      "REGU_ROW": "",
+      "VOLUME": 0,
+      "SATUAN": "Pohon",
+      "TOTAL_REALISASI": 0,
+      "SATUAN_TOTAL_REALISASI": "Pohon",
+      "WO_AWAL": "",
+      "WO_AKHIR": "",
+      "LOKASI_START": "",
+      "LOKASI_FINISH": "",
+      "STATUS": "TERKIRIM",
+      "Created_At": "2026-09-24T02:27:49.705Z"
     }
   ],
   "ABSENSI": [],
