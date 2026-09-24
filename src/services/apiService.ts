@@ -1433,14 +1433,15 @@ export class ApiService {
         : '';
 
     try {
-      console.log(`[INIT USERS TRACE] action=FETCH source=HYPERCLOUD endpoint=/api/users${query}`);
+      console.log(`[INIT USERS TRACE] action=FETCH source=HYPERCLOUD endpoint=/api/users${query} unitId=${unitId || 'ALL'}`);
 
       const res = await this.executeFetch(`/api/users${query}`, {
         method: 'GET',
         headers,
+        cache: 'no-store',
       });
 
-      if (!res.ok) {
+      if (!res.ok && res.status !== 304) {
         let serverMsg: string | undefined;
         try {
           const errJson = await res.json();
@@ -1492,13 +1493,21 @@ export class ApiService {
         };
       }
 
-      const json = await res.json();
+      let json: any = {};
+      try {
+        if (res.status !== 304) {
+          json = await res.json();
+        }
+      } catch {
+        // Ignore JSON parse error on 304
+      }
+
       const rawList = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
       const list = rawList.map(normalizeUser);
       const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
       console.log(`[INIT USERS TRACE]\nrequestId=${requestId}\nunitId=${unitId || 'ALL'}\nsource=HYPERCLOUD\nstatus=SUCCESS\ncount=${list.length}`);
-      console.log('[USERS STATE] Received from HyperCloud:', list.length, 'users');
+      console.log(`[USERS STATE] source=HYPERCLOUD count=${list.length}`);
 
       return {
         success: true,
@@ -1694,15 +1703,19 @@ export class ApiService {
       petugasQuery += `&regu=${encodeURIComponent(filters.regu)}`;
     }
 
-    const safeFetch = async (url: string) => {
+    const safeFetch = async (url: string, options?: RequestInit) => {
       try {
-        const r = await this.executeFetch(url, { headers });
+        const r = await this.executeFetch(url, { headers, ...options });
         if (r.status === 401 || r.status === 403) {
           return { data: [], isAuthError: true, status: r.status };
         }
-        if (r.ok) {
-          const json = await r.json();
-          return { data: Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [], status: 200 };
+        if (r.ok || r.status === 304) {
+          try {
+            const json = r.status === 304 ? {} : await r.json();
+            return { data: Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [], status: r.status };
+          } catch {
+            return { data: [], status: r.status };
+          }
         }
         return { data: [], status: r.status };
       } catch {
@@ -1715,7 +1728,7 @@ export class ApiService {
       safeFetch(`/api/penyulang${masterQuery}`),
       safeFetch(`/api/regu-row${masterQuery}`),
       safeFetch(`/api/petugas${petugasQuery}`),
-      safeFetch(`/api/users${masterQuery}`),
+      safeFetch(`/api/users${masterQuery}`, { cache: 'no-store' }),
     ]);
 
     const isAuthError =
