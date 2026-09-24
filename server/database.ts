@@ -96,15 +96,27 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
         rows = rows.filter(r => String(r.unitId || r.UnitId || r.unitid || '').toUpperCase() === String(targetUnitId).toUpperCase());
       }
     }
-    // 2. Filter by UserID
-    const userIdIndex = text.indexOf('"UserID" = $');
-    if (userIdIndex !== -1) {
-      const match = text.slice(userIdIndex).match(/"UserID"\s*=\s*\$(\d+)/);
-      if (match) {
-        const paramIdx = parseInt(match[1], 10) - 1;
-        const targetUserId = params[paramIdx];
-        if (targetUserId) {
-          rows = rows.filter(r => String(r.UserID || r.userId || r.id || '').toUpperCase() === String(targetUserId).toUpperCase());
+    // 2. Filter by Username / UserID / Nama_Regu
+    if (tableName === 'USERS' && params && params.length > 0) {
+      const userParam = String(params[0] || '').trim().toLowerCase();
+      if (userParam && !userParam.startsWith('ul')) {
+        rows = rows.filter(r => {
+          const uName = String(r.Username || r.username || '').toLowerCase();
+          const uId = String(r.UserID || r.userId || r.id || '').toLowerCase();
+          const uRegu = String(r.Nama_Regu || r.reguName || '').toLowerCase();
+          return uName === userParam || uId === userParam || uRegu === userParam || uName.includes(userParam);
+        });
+      }
+    } else {
+      const userIdIndex = text.indexOf('"UserID" = $');
+      if (userIdIndex !== -1) {
+        const match = text.slice(userIdIndex).match(/"UserID"\s*=\s*\$(\d+)/);
+        if (match) {
+          const paramIdx = parseInt(match[1], 10) - 1;
+          const targetUserId = params[paramIdx];
+          if (targetUserId) {
+            rows = rows.filter(r => String(r.UserID || r.userId || r.id || '').toUpperCase() === String(targetUserId).toUpperCase());
+          }
         }
       }
     }

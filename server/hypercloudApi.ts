@@ -332,28 +332,53 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 
   try {
-    const sql = `
+    // 1. First try matching user in the selected unit (by Username, UserID, or Nama_Regu)
+    let sql = `
       SELECT *
       FROM public."USERS"
-      WHERE LOWER("Username") = LOWER($1)
-        AND UPPER("unitId") = UPPER($2)
+      WHERE (
+        LOWER(TRIM("Username")) = LOWER($1)
+        OR LOWER(TRIM("UserID")) = LOWER($1)
+        OR LOWER(TRIM("Nama_Regu")) = LOWER($1)
+      )
+      AND (
+        UPPER(TRIM("unitId")) = UPPER($2)
+        OR UPPER(TRIM("unitId")) = 'ALL'
+        OR $2 = 'ALL'
+        OR $2 = ''
+      )
       LIMIT 1
     `;
 
-    const userRes = await query(sql, [
+    let userRes = await query(sql, [
       cleanUsername,
       cleanUnitId,
     ]);
 
+    // 2. If not found in current unit, search across all units
+    if (userRes.rows.length === 0) {
+      const fallbackSql = `
+        SELECT *
+        FROM public."USERS"
+        WHERE (
+          LOWER(TRIM("Username")) = LOWER($1)
+          OR LOWER(TRIM("UserID")) = LOWER($1)
+          OR LOWER(TRIM("Nama_Regu")) = LOWER($1)
+        )
+        LIMIT 1
+      `;
+      userRes = await query(fallbackSql, [cleanUsername]);
+    }
+
     if (userRes.rows.length === 0) {
       console.log(
-        `[AUTH] Login failed: User '${cleanUsername}' not found in unit '${cleanUnitId}'`
+        `[AUTH] Login failed: User '${cleanUsername}' not found`
       );
 
       return res.status(401).json({
         status: 'error',
         message:
-          'Username tidak terdaftar pada Unit/Inisiasi yang dipilih.',
+          'Username atau NIP tidak terdaftar.',
       });
     }
 
@@ -363,7 +388,8 @@ router.post('/login', async (req: Request, res: Response) => {
       matchedUser.Password ||
         matchedUser.password ||
         matchedUser.KataSandi ||
-        'admin123'
+        matchedUser.katasandi ||
+        ''
     ).trim();
 
     const userStatus =
@@ -381,11 +407,11 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    if (
-      cleanPassword &&
-      cleanPassword !== serverPass &&
-      cleanPassword !== 'admin123'
-    ) {
+    const isPasswordValid =
+      (serverPass && cleanPassword.toLowerCase() === serverPass.toLowerCase()) ||
+      (!serverPass && cleanPassword.toLowerCase() === 'admin123');
+
+    if (!isPasswordValid) {
       console.log(
         `[AUTH] Password mismatch for '${cleanUsername}'`
       );
@@ -411,7 +437,6 @@ router.post('/login', async (req: Request, res: Response) => {
       token,
 
       user: {
-        // DATABASE USERS menggunakan "Id", BUKAN "ID"
         id:
           matchedUser.Id ||
           matchedUser.ID ||

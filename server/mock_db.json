@@ -43,11 +43,56 @@
       "Status": "Aktif"
     },
     {
+      "id": "usr-3",
+      "UserID": "admin",
+      "Username": "admin",
+      "Password": "admin123",
+      "name": "Administrator",
+      "role": "Admin",
+      "Role": "Admin",
+      "unitId": "UL2",
+      "Status": "Aktif"
+    },
+    {
+      "id": "usr-4",
+      "UserID": "adminkuranji",
+      "Username": "adminkuranji",
+      "Password": "admin123",
+      "name": "Admin Kuranji",
+      "role": "Admin",
+      "Role": "Admin",
+      "unitId": "UL1",
+      "Status": "Aktif"
+    },
+    {
       "id": "usr-5",
       "UserID": "petugasrow",
       "Username": "petugasrow",
       "Password": "row123",
       "name": "Budi Santoso",
+      "role": "User",
+      "Role": "User",
+      "unitId": "UL2",
+      "Status": "Aktif"
+    },
+    {
+      "id": "usr-6",
+      "UserID": "user",
+      "Username": "user",
+      "Password": "user123",
+      "name": "Petugas Lapangan",
+      "role": "User",
+      "Role": "User",
+      "unitId": "UL2",
+      "Status": "Aktif"
+    },
+    {
+      "id": "usr-7",
+      "UserID": "row1",
+      "Username": "row1",
+      "Password": "row123",
+      "name": "REGU ROW 1",
+      "Nama_Regu": "REGU ROW 1",
       "role": "User",
       "Role": "User",
       "unitId": "UL2",
