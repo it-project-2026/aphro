@@ -132,6 +132,26 @@
       "LOKASI_FINISH": "",
       "STATUS": "BELUM SELESAI",
       "Created_At": "2026-09-24T02:53:15.995Z"
+    },
+    {
+      "WO_ID": "WO-AUDIT-99",
+      "unitId": "UL1",
+      "Nomor_WO": "M4/AUDIT",
+      "PEKERJAAN": "NORMAL",
+      "Tanggal": "2026-09-24",
+      "ULP": "",
+      "PENYULANG": "",
+      "REGU_ROW": "",
+      "VOLUME": "0",
+      "SATUAN": "KMS",
+      "TOTAL_REALISASI": "0",
+      "SATUAN_TOTAL_REALISASI": "KMS",
+      "WO_AWAL": "",
+      "WO_AKHIR": "",
+      "LOKASI_START": "",
+      "LOKASI_FINISH": "",
+      "STATUS": "BELUM SELESAI",
+      "Created_At": "2026-09-24T03:20:58.568Z"
     }
   ],
   "ABSENSI": [

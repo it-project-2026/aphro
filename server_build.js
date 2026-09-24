@@ -3458,6 +3458,22 @@ async function startServer() {
     next();
   });
   app.use("/api", hypercloudApi_default);
+  console.log(`[ROUTES]
+GET  /api/health
+POST /api/login
+GET  /api/inisiasi
+POST /api/work-orders
+GET  /api/work-orders
+PUT  /api/work-orders/:id
+DELETE /api/work-orders/:id
+GET  /api/absensi
+POST /api/absensi
+PUT  /api/absensi/:id
+DELETE /api/absensi/:id
+GET  /api/realisasi
+POST /api/realisasi
+PUT  /api/realisasi/:id
+DELETE /api/realisasi/:id`);
   const geoCache = /* @__PURE__ */ new Map();
   app.post("/api/send-notification", async (req, res) => {
     const { reguName, woData } = req.body;
