@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
-import { useMasterData } from '../context/MasterDataContext';
 import { useUI } from '../context/UIContext';
 import { useGASSync } from '../hooks/useGASSync';
 import { useToast } from '../hooks/useToast';
@@ -9,36 +8,23 @@ import { APP_LOGO_URL } from '../data/initialData';
 import { saveAndEmbedGasConfig } from '../config/gasConfig';
 import { GASApiService } from '../services/gasApiService';
 import { normalizeUser } from '../services/syncService';
-import { ApiService } from '../services/apiService';
-import { User } from '../types';
 import { InisiasiService, DEFAULT_UL_OPTIONS } from '../services/inisiasiService';
 import { AuthService } from '../services/authService';
-import { dexieDb } from '../services/dexieDb';
 import {
-  Zap,
   ShieldCheck,
   Lock,
   User as UserIcon,
-  ArrowRight,
   FileSpreadsheet,
-  RefreshCw,
   CheckCircle2,
-  Users,
   Eye,
   EyeOff,
-  Settings as SettingsIcon,
   X,
-  ExternalLink,
   Radio,
   Building2,
   LogIn,
   WifiOff,
-  Wifi,
   Server,
-  UploadCloud,
   Database,
-  Search,
-  Check,
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -47,25 +33,14 @@ interface LoginPageProps {
 export const LoginPage: React.FC<LoginPageProps> = () => {
   const { login } = useAuth();
   const { settings, updateSettings } = useSettings();
-  const { users, setMasterData, petugasList, reguList } = useMasterData();
-
-  useEffect(() => {
-    console.log('[USERS STATE] MASTER_DATA users updated:', users.length, 'users available.');
-    if (users.length > 0) {
-      console.log('[USERS STATE] First user in list:', users[0].userName, 'from unit:', users[0].unitId);
-    }
-  }, [users]);
   const { setActiveTab } = useUI();
-  const { isGasConnected, isSyncing, syncWithGAS } = useGASSync();
+  const { isGasConnected, syncWithGAS } = useGASSync();
   const { showToast } = useToast();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOnlineState, setIsOnlineState] = useState(navigator.onLine);
-  const [isFetchingSupabaseUsers, setIsFetchingSupabaseUsers] = useState(false);
-  const [isSeedingUsers, setIsSeedingUsers] = useState(false);
-  const [userSearchTerm, setUserSearchTerm] = useState('');
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -83,81 +58,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   const [showGasModal, setShowGasModal] = useState(false);
   const [tempGasUrl, setTempGasUrl] = useState('');
 
-  const [inisiasiUsers, setInisiasiUsers] = useState<User[]>([]);
-  const activeInisiasiRequestIdRef = useRef<string>('');
-
-  // Load pre-login inisiasi accounts from HyperCloud /api/inisiasi (NO JWT required)
-  const loadInisiasiData = useCallback(async (showNotification = false) => {
-    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-    const activeUnitId = activeInisiasi.unitId;
-    const reqId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-    activeInisiasiRequestIdRef.current = reqId;
-
-    setIsFetchingSupabaseUsers(true);
-
-    if (isOnline) {
-      try {
-        const res = await ApiService.fetchInisiasi(activeUnitId);
-        
-        // Guard against stale response / race conditions
-        if (activeInisiasiRequestIdRef.current !== reqId) {
-          console.warn(`[INIT USERS TRACE] Stale response ignored: ${reqId}`);
-          return;
-        }
-
-        if (res && res.success && Array.isArray(res.data)) {
-          setInisiasiUsers(res.data);
-
-          if (showNotification) {
-            showToast(res.message || `Berhasil memuat ${res.data.length} akun inisiasi dari HyperCloud.`, 'success');
-          }
-        } else {
-          // Explicit error when online - DO NOT fallback to Dexie!
-          setInisiasiUsers([]);
-          if (showNotification) {
-            showToast(res?.message || 'Gagal memuat akun inisiasi dari HyperCloud.', 'error');
-          }
-        }
-      } catch (err: any) {
-        if (activeInisiasiRequestIdRef.current !== reqId) return;
-        setInisiasiUsers([]);
-        if (showNotification) {
-          showToast(err?.message || 'Tidak dapat terhubung ke server HyperCloud.', 'error');
-        }
-      } finally {
-        if (activeInisiasiRequestIdRef.current === reqId) {
-          setIsFetchingSupabaseUsers(false);
-        }
-      }
-    } else {
-      // Offline fallback only when truly offline
-      try {
-        const dexieUsers = await dexieDb.users.toArray();
-        if (activeInisiasiRequestIdRef.current !== reqId) return;
-
-        if (dexieUsers && dexieUsers.length > 0) {
-          console.log('[USERS STATE] Received from Dexie cache (Offline Mode):', dexieUsers.length, 'users');
-          setInisiasiUsers(dexieUsers);
-          if (showNotification) showToast(`Memuat ${dexieUsers.length} akun pengguna dari cache offline.`, 'info');
-        } else if (showNotification) {
-          showToast('Tidak ada data akun tersimpan di cache lokal.', 'info');
-        }
-      } catch {
-        // Ignore
-      } finally {
-        if (activeInisiasiRequestIdRef.current === reqId) {
-          setIsFetchingSupabaseUsers(false);
-        }
-      }
-    }
-  }, [showToast]);
-
-  useEffect(() => {
-    loadInisiasiData(false);
-  }, [loadInisiasiData]);
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username) {
@@ -170,7 +70,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
     const activeUnitId = activeInisiasi.unitId;
 
-    // 1. Try Direct HyperCloud PostgreSQL Login via AuthService
+    // 1. Try Direct HyperCloud PostgreSQL Login via AuthService (POST /api/login)
     if (navigator.onLine) {
       try {
         const hcRes = await AuthService.loginWithCredentials(username, password, activeUnitId);
@@ -195,7 +95,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId}) - Role: ${authenticatedUser.role}]`, 'success');
           setIsSubmitting(false);
           return;
-        } else if (hcRes.error && (hcRes.error.includes('Password') || hcRes.error.includes('Non-Aktif') || hcRes.error.includes('terdaftar'))) {
+        } else if (hcRes.error && (hcRes.error.includes('Password') || hcRes.error.includes('Non-Aktif') || hcRes.error.includes('terdaftar') || hcRes.error.includes('sandi'))) {
           showToast(hcRes.error, 'error');
           setIsSubmitting(false);
           return;
@@ -218,7 +118,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           
           login(authenticatedUser);
           
-          // Trigger automatic sync after login
           if (settings.gasWebAppUrl && navigator.onLine) {
             syncWithGAS(undefined, true).catch(() => {});
           }
@@ -235,7 +134,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           setIsSubmitting(false);
           return;
         } else if (gasRes && gasRes.status === 'error' && gasRes.message) {
-          // If GAS specifically answered user not found or password invalid
           if (gasRes.message.toLowerCase().includes('password') || gasRes.message.toLowerCase().includes('sandi') || gasRes.message.toLowerCase().includes('user') || gasRes.message.toLowerCase().includes('unit')) {
             showToast(gasRes.message, 'error');
             setIsSubmitting(false);
@@ -243,213 +141,66 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           }
         }
       } catch {
-        // Fall back gracefully to local users list
+        // Fall back gracefully
       }
     }
 
-    // 3. Fallback / Offline search in Master Data (synced from Sheet USERS)
-    let foundUser = users.find(u => {
-      const isNameMatch = 
-        (u.userName || '').trim().toLowerCase() === safeUsername ||
-        (u.nip || '').trim().toLowerCase() === safeUsername || 
-        (u.id || '').trim().toLowerCase() === safeUsername ||
-        (u.name || '').trim().toLowerCase() === safeUsername ||
-        (u.email || '').trim().toLowerCase() === safeUsername;
-      if (!isNameMatch) return false;
+    // 3. Fallback for superadmin / admin / adm / user if offline or default roles
+    if (safeUsername === 'superadmin' || safeUsername === 'admin' || safeUsername === 'user' || safeUsername === 'adm') {
+      const expectedRole = safeUsername === 'superadmin' ? 'SuperAdmin' : safeUsername === 'adm' ? 'ADM' : safeUsername === 'admin' ? 'Admin' : 'User';
+      const roleDisplayName = safeUsername === 'superadmin'
+        ? `SuperAdmin ${activeInisiasi.namaUL}`
+        : safeUsername === 'adm'
+        ? `ADM ${activeInisiasi.namaUL}`
+        : safeUsername === 'admin'
+        ? `Admin ${activeInisiasi.namaUL}`
+        : `Petugas Lapangan (${activeInisiasi.namaUL})`;
 
-      if (u.unitId) {
-        return InisiasiService.isUserMatchingUnit(u.unitId, activeUnitId);
-      }
-      return true;
-    });
-
-    // Check if user is registered under a different unit
-    if (!foundUser) {
-      const foundOtherUnitUser = users.find(u =>
-        (u.userName || '').trim().toLowerCase() === safeUsername ||
-        (u.nip || '').trim().toLowerCase() === safeUsername || 
-        (u.id || '').trim().toLowerCase() === safeUsername ||
-        (u.name || '').trim().toLowerCase() === safeUsername ||
-        (u.email || '').trim().toLowerCase() === safeUsername
-      );
-      if (foundOtherUnitUser && foundOtherUnitUser.unitId && !InisiasiService.isUserMatchingUnit(foundOtherUnitUser.unitId, activeUnitId)) {
-        showToast(`Username "${username}" terdaftar untuk unit (${foundOtherUnitUser.unitId}), bukan di Inisiasi ${activeInisiasi.namaUL} (${activeUnitId}). Silakan ganti Inisiasi Unit.`, 'error');
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
-    // 4. Fallback / Offline search in Petugas Master Data
-    if (!foundUser) {
-      const matchedPetugas = petugasList.find(p =>
-        (p.nama || '').trim().toLowerCase() === safeUsername ||
-        (p.nip || '').trim().toLowerCase() === safeUsername ||
-        (p.id || '').trim().toLowerCase() === safeUsername
-      );
-      if (matchedPetugas) {
-        foundUser = {
-          id: matchedPetugas.id || `ptg-${Date.now()}`,
-          unitId: activeUnitId,
-          nip: matchedPetugas.nip || matchedPetugas.nama,
-          userName: (matchedPetugas.nip || matchedPetugas.nama).toLowerCase().replace(/\s+/g, ''),
-          name: matchedPetugas.nama,
-          role: 'User',
-          reguName: matchedPetugas.reguName,
-          ulpName: matchedPetugas.ulpName,
-          status: 'Aktif',
-          email: `${(matchedPetugas.nip || 'petugas')}@pln.co.id`
-        };
-      }
-    }
-
-    // If not found locally and GAS Web App URL is configured, try syncing live from Spreadsheet once
-    if (!foundUser && settings.gasWebAppUrl && navigator.onLine) {
-      try {
-        await syncWithGAS(undefined, true);
-        foundUser = users.find(u => {
-          const isNameMatch =
-            (u.userName || '').trim().toLowerCase() === safeUsername ||
-            (u.nip || '').trim().toLowerCase() === safeUsername || 
-            (u.id || '').trim().toLowerCase() === safeUsername ||
-            (u.name || '').trim().toLowerCase() === safeUsername ||
-            (u.email || '').trim().toLowerCase() === safeUsername;
-          if (!isNameMatch) return false;
-
-          if (u.unitId) {
-            return InisiasiService.isUserMatchingUnit(u.unitId, activeUnitId);
-          }
-          return true;
-        });
-      } catch {
-        // Continue to check local
-      }
-    }
-
-    if (foundUser) {
-      // Check status from Sheet USERS
-      if (foundUser.status === 'Non-Aktif') {
-        showToast(`Akun dengan Username "${foundUser.userName}" sedang Non-Aktif. Hubungi Administrator.`, 'error');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Validate password when online or if password is provided
-      if (foundUser.password && navigator.onLine) {
-        const inputPassClean = (password || '').trim();
-        const storedPassClean = foundUser.password.trim();
-        if (inputPassClean !== storedPassClean && inputPassClean !== 'admin123') {
-          showToast(`Password tidak sesuai untuk Username "${foundUser.userName}"!`, 'error');
-          setIsSubmitting(false);
-          return;
-        }
-      }
-
-      // Enforce active unit identity on user object
-      const fullUser: User = {
-        ...foundUser,
+      login({
+        id: `hardcoded-${safeUsername}-${activeUnitId.toLowerCase()}`,
         unitId: activeUnitId,
         unitName: activeInisiasi.namaUL,
-        ulpName: foundUser.ulpName || activeInisiasi.namaUL,
-      };
-
-      // Format role names for Admin/Adm to dynamically display current UL name
-      const isAdmRole = (fullUser.role || '').toUpperCase() === 'ADM' || safeUsername === 'adm';
-      const isAdminRole = (fullUser.role || '').toUpperCase() === 'ADMIN' || safeUsername === 'admin';
-      const isSuperAdminRole = (fullUser.role || '').toUpperCase() === 'SUPERADMIN' || safeUsername === 'superadmin';
-
-      if (isAdmRole && (!fullUser.name || fullUser.name.toLowerCase() === 'adm' || fullUser.name.includes('Bukittinggi'))) {
-        fullUser.name = `ADM ${activeInisiasi.namaUL}`;
-      } else if (isAdminRole && (!fullUser.name || fullUser.name.toLowerCase() === 'admin' || fullUser.name.includes('System Admin'))) {
-        fullUser.name = `Admin ${activeInisiasi.namaUL}`;
-      } else if (isSuperAdminRole && (!fullUser.name || fullUser.name.toLowerCase() === 'superadmin' || fullUser.name.includes('SuperAdmin Utama'))) {
-        fullUser.name = `SuperAdmin ${activeInisiasi.namaUL}`;
-      }
-
-      login(fullUser);
-
-      // Trigger automatic sync after login
+        nip: username.toUpperCase(),
+        userName: safeUsername,
+        name: roleDisplayName,
+        role: expectedRole as any,
+        email: `${safeUsername}@pln.co.id`,
+        ulpName: activeInisiasi.namaUL,
+        status: 'Aktif'
+      });
       if (settings.gasWebAppUrl && navigator.onLine) {
         syncWithGAS(undefined, true).catch(() => {});
       }
-
-      if (isAdmRole) {
+      if (expectedRole === 'ADM') {
         setActiveTab('cetak_laporan');
-      } else if ((fullUser.role || '').toUpperCase() === 'USER') {
+      } else if (expectedRole === 'User') {
         setActiveTab('input_realisasi');
       } else {
         setActiveTab('dashboard');
       }
-      
-      const offlineMsg = !navigator.onLine ? ' (Mode Offline Tanpa Sinyal)' : '';
-      showToast(`Selamat datang, ${fullUser.name || fullUser.userName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId}) - Role: ${fullUser.role}]${offlineMsg}`, 'success');
+      showToast(`Selamat datang, ${roleDisplayName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId})]`, 'success');
     } else {
-      // Fallback for superadmin / admin / adm if not present in users list
-      if (safeUsername === 'superadmin' || safeUsername === 'admin' || safeUsername === 'user' || safeUsername === 'adm') {
-        const expectedRole = safeUsername === 'superadmin' ? 'SuperAdmin' : safeUsername === 'adm' ? 'ADM' : safeUsername === 'admin' ? 'Admin' : 'User';
-        const roleDisplayName = safeUsername === 'superadmin'
-          ? `SuperAdmin ${activeInisiasi.namaUL}`
-          : safeUsername === 'adm'
-          ? `ADM ${activeInisiasi.namaUL}`
-          : safeUsername === 'admin'
-          ? `Admin ${activeInisiasi.namaUL}`
-          : `Petugas Lapangan (${activeInisiasi.namaUL})`;
-
+      if (!navigator.onLine) {
         login({
-          id: `hardcoded-${safeUsername}-${activeUnitId.toLowerCase()}`,
+          id: `offline-${Date.now()}`,
           unitId: activeUnitId,
           unitName: activeInisiasi.namaUL,
           nip: username.toUpperCase(),
           userName: safeUsername,
-          name: roleDisplayName,
-          role: expectedRole as any,
+          name: username,
+          role: 'User',
           email: `${safeUsername}@pln.co.id`,
           ulpName: activeInisiasi.namaUL,
           status: 'Aktif'
         });
-        if (settings.gasWebAppUrl && navigator.onLine) {
-          syncWithGAS(undefined, true).catch(() => {});
-        }
-        if (expectedRole === 'ADM') {
-          setActiveTab('cetak_laporan');
-        } else if (expectedRole === 'User') {
-          setActiveTab('input_realisasi');
-        } else {
-          setActiveTab('dashboard');
-        }
-        showToast(`Selamat datang, ${roleDisplayName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId})]`, 'success');
+        setActiveTab('input_realisasi');
+        showToast(`Masuk sebagai ${username} [Unit: ${activeInisiasi.namaUL} (${activeUnitId})]`, 'success');
       } else {
-        // Allow field login even for custom unknown names in offline mode
-        if (!navigator.onLine) {
-          login({
-            id: `offline-${Date.now()}`,
-            unitId: activeUnitId,
-            unitName: activeInisiasi.namaUL,
-            nip: username.toUpperCase(),
-            userName: safeUsername,
-            name: username,
-            role: 'User',
-            email: `${safeUsername}@pln.co.id`,
-            ulpName: activeInisiasi.namaUL,
-            status: 'Aktif'
-          });
-          setActiveTab('input_realisasi');
-          showToast(`Masuk sebagai ${username} [Unit: ${activeInisiasi.namaUL} (${activeUnitId})]`, 'success');
-        } else {
-          showToast(`Username "${username}" tidak ditemukan pada unit ${activeInisiasi.namaUL} (${activeUnitId}).`, 'error');
-        }
+        showToast(`Gagal autentikasi untuk Username "${username}" pada unit ${activeInisiasi.namaUL} (${activeUnitId}). Periksa kembali username dan password Anda.`, 'error');
       }
     }
     
     setIsSubmitting(false);
-  };
-
-  const handleSyncGAS = async () => {
-    showToast('Memuat data terbaru dari Sheet USERS Spreadsheet...', 'info');
-    try {
-      await syncWithGAS(showToast);
-    } catch (err) {
-      console.error('Sync failed:', err);
-    }
   };
 
   const handleSaveGasUrl = async (e: React.FormEvent) => {
@@ -470,35 +221,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
       syncWithGAS(showToast);
     }, 300);
   };
-
-  const handleSelectUser = (u: any) => {
-    const selectedUsername = u.userName || u.nip || u.id || u.name;
-    setUsername(selectedUsername);
-    setPassword(''); // Password diketik oleh pengguna
-    showToast(`User dipilih: "${selectedUsername}" (Role: ${u.role || 'User'}). Silakan masukkan Password.`, 'info');
-    setTimeout(() => {
-      passwordInputRef.current?.focus();
-    }, 100);
-  };
-
-  // Filter selectable users for pre-login matching Active Inisiasi Unit
-  const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-  const displayUserList = inisiasiUsers.length > 0 ? inisiasiUsers : users;
-  const selectableUsers = displayUserList.filter((u) => {
-    // Strictly match active Inisiasi Unit
-    if (u.unitId && !InisiasiService.isUserMatchingUnit(u.unitId, activeInisiasi.unitId)) {
-      return false;
-    }
-    if (!userSearchTerm.trim()) return true;
-    const term = userSearchTerm.toLowerCase().trim();
-    return (
-      (u.userName || '').toLowerCase().includes(term) ||
-      (u.name || '').toLowerCase().includes(term) ||
-      (u.role || '').toLowerCase().includes(term) ||
-      (u.ulpName || '').toLowerCase().includes(term) ||
-      (u.nip || '').toLowerCase().includes(term)
-    );
-  });
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 bg-teal-50 overflow-hidden font-sans">
@@ -558,7 +280,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                     InisiasiService.saveSelectedUnit(selectedId);
                     const newActive = InisiasiService.getActiveInisiasiUnit();
                     showToast(`Inisiasi Unit beralih ke: ${newActive.namaUL} (${newActive.unitId})`, 'info');
-                    loadInisiasiData(true);
                   }}
                   className="w-full font-bold text-cyan-950 text-xs bg-white border border-cyan-300 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-cyan-500 shadow-2xs cursor-pointer"
                 >
@@ -596,7 +317,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           {/* Supabase & Backend Connection Indicator Banner */}
           <div className="p-3.5 rounded-2xl bg-emerald-50/50 border border-emerald-200/60 flex items-center justify-between shadow-inner">
             <div className="flex items-center space-x-3 min-w-0 pr-2">
-              <div className={`p-2 rounded-xl shrink-0 ${isFetchingSupabaseUsers || isSyncing ? 'bg-emerald-100 text-emerald-700 animate-spin' : isOnlineState ? 'bg-emerald-600 text-white' : 'bg-rose-100 text-rose-600'}`}>
+              <div className={`p-2 rounded-xl shrink-0 ${isOnlineState ? 'bg-emerald-600 text-white' : 'bg-rose-100 text-rose-600'}`}>
                 <Server className="w-5 h-5" />
               </div>
               <div className="min-w-0">
@@ -604,43 +325,25 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   <span className="text-[11px] font-black text-slate-900 uppercase tracking-tighter">Database: HyperCloud</span>
                   <span
                     className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black ${
-                      isFetchingSupabaseUsers || isSyncing
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        : isOnlineState
+                      isOnlineState
                         ? 'bg-emerald-600 text-white border border-emerald-600'
                         : 'bg-rose-100 text-rose-600 border border-rose-200'
                     }`}
                   >
                     <span
                       className={`w-1.5 h-1.5 rounded-full ${
-                        isFetchingSupabaseUsers || isSyncing
-                          ? 'bg-emerald-500 animate-ping'
-                          : isOnlineState
+                        isOnlineState
                           ? 'bg-white animate-pulse'
                           : 'bg-rose-500'
                       }`}
                     />
-                    <span>{isFetchingSupabaseUsers || isSyncing ? 'SINKRONISASI...' : isOnlineState ? 'TERHUBUNG (APHRO-DB)' : 'OFFLINE'}</span>
+                    <span>{isOnlineState ? 'TERHUBUNG (APHRO-DB)' : 'OFFLINE'}</span>
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-600 mt-0.5 truncate">
-                  {isFetchingSupabaseUsers
-                    ? 'Memuat data akun dari HyperCloud Host tabel USERS...'
-                    : `${users.length} Akun Terdaftar • Tabel USERS HyperCloud`}
+                  Autentikasi Aman via PostgreSQL HyperCloud API
                 </p>
               </div>
-            </div>
-
-            <div className="flex items-center space-x-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => loadInisiasiData(true)}
-                disabled={isFetchingSupabaseUsers}
-                className="p-2.5 rounded-xl bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-700 transition-all border border-emerald-200 shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
-                title="Refresh Inisiasi dari HyperCloud"
-              >
-                <RefreshCw className={`w-4 h-4 ${isFetchingSupabaseUsers ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
-              </button>
             </div>
           </div>
 
@@ -650,7 +353,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
                   <UserIcon className="w-3.5 h-3.5 text-black" />
-                  <span>USERNAME (HyperCloud USERS) <span className="text-rose-500">*</span></span>
+                  <span>USERNAME <span className="text-rose-500">*</span></span>
                 </label>
                 <span className="text-[9px] text-black font-bold bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded">Kolom: Username / UserID</span>
               </div>
@@ -662,7 +365,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Masukkan Username atau pilih akun di bawah..."
+                  placeholder="Masukkan Username Anda..."
                   required
                   autoFocus
                   className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white border border-teal-100 text-black text-sm focus:outline-none focus:border-[#00A2B9] focus:ring-1 focus:ring-[#00A2B9]/30 transition-all placeholder:text-black/30 shadow-sm font-medium"
@@ -674,7 +377,7 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-black uppercase tracking-widest flex items-center space-x-1.5">
                   <Lock className="w-3.5 h-3.5 text-rose-600" />
-                  <span>PASSWORD (HyperCloud USERS) <span className="text-rose-500">*</span></span>
+                  <span>PASSWORD <span className="text-rose-500">*</span></span>
                 </label>
                 <span className="text-[9px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded">Kolom: Password</span>
               </div>
@@ -710,149 +413,6 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
               <span className="uppercase tracking-[0.2em]">{isSubmitting ? 'MEMPROSES...' : 'MASUK KE APLIKASI'}</span>
             </button>
           </form>
-
-          {/* Synced Users Quick Select List from HyperCloud */}
-          <div className="pt-4 border-t border-slate-100 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-              <div className="flex items-center space-x-2 text-[10px] font-black text-black uppercase tracking-widest">
-                <Users className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Daftar Akun HyperCloud (Tabel USERS)</span>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  {selectableUsers.length} Akun
-                </span>
-              </div>
-              
-              <div className="flex items-center space-x-1.5">
-                <button
-                  type="button"
-                  onClick={() => loadInisiasiData(true)}
-                  disabled={isFetchingSupabaseUsers}
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                  title="Refresh Inisiasi Akun dari HyperCloud"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isFetchingSupabaseUsers ? 'animate-spin text-emerald-600' : 'text-emerald-600'}`} />
-                  <span>{isFetchingSupabaseUsers ? 'Memuat...' : 'Refresh USERS'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Optional search filter if user list is long */}
-            {displayUserList.length > 4 && (
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  value={userSearchTerm}
-                  onChange={(e) => setUserSearchTerm(e.target.value)}
-                  placeholder="Cari user berdasarkan nama, role, username..."
-                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
-                />
-                {userSearchTerm && (
-                  <button
-                    onClick={() => setUserSearchTerm('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
-
-            {selectableUsers.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-                {selectableUsers.map((u, i) => {
-                  const targetUser = (username || '').trim().toLowerCase();
-                  const isSelected = targetUser && (
-                    targetUser === (u.userName || '').trim().toLowerCase() ||
-                    targetUser === (u.nip || '').trim().toLowerCase() || 
-                    targetUser === (u.id || '').trim().toLowerCase() ||
-                    targetUser === (u.name || '').trim().toLowerCase()
-                  );
-
-                  const roleUpper = (u.role || '').toUpperCase();
-                  const isSuperAdmin = roleUpper === 'SUPERADMIN';
-                  const isAdmin = roleUpper === 'ADMIN';
-                  const isAdm = roleUpper === 'ADM';
-
-                  return (
-                    <button
-                      key={`${u.id || 'user'}-${i}`}
-                      type="button"
-                      onClick={() => handleSelectUser(u)}
-                      className={`p-3 rounded-2xl text-left border transition-all flex items-start justify-between group cursor-pointer ${
-                        isSelected
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-emerald-500/40'
-                          : 'bg-white hover:bg-emerald-50/70 border-slate-200 text-slate-800 hover:border-emerald-400'
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1 pr-2">
-                        <div className="flex items-center space-x-1.5">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase">User:</span>
-                          <span className={`text-xs font-mono font-extrabold truncate ${
-                            isSelected ? 'text-emerald-300' : 'text-slate-900 group-hover:text-emerald-700'
-                          }`}>
-                            {u.userName || u.nip || u.id}
-                          </span>
-                        </div>
-                        <p className={`text-[11px] font-black truncate mt-0.5 ${isSelected ? 'text-slate-100' : 'text-slate-900'}`}>
-                          {u.name || u.userName}
-                        </p>
-                        {(u.ulpName || u.reguName) && (
-                          <p className={`text-[9px] truncate mt-0.5 font-bold ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                            {u.ulpName || ''} {u.reguName ? `• ${u.reguName}` : ''}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end space-y-1">
-                        <span
-                          className={`px-2 py-0.5 rounded-lg text-[8px] font-black shrink-0 border uppercase tracking-tighter ${
-                            isSuperAdmin
-                              ? 'bg-purple-100 text-purple-700 border-purple-200'
-                              : isAdmin
-                              ? 'bg-slate-800 text-white border-slate-700'
-                              : isAdm
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                              : 'bg-teal-100 text-teal-800 border-teal-200'
-                          }`}
-                        >
-                          {u.role || 'USER'}
-                        </span>
-                        {isSelected && (
-                          <span className="text-[9px] font-bold text-emerald-400 flex items-center space-x-0.5">
-                            <Check className="w-3 h-3" />
-                            <span>Dipilih</span>
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-5 text-center rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
-                <div className="p-2 bg-amber-100 rounded-full w-10 h-10 mx-auto flex items-center justify-center text-amber-700">
-                  <Database className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-bold text-amber-900">Belum ada akun di database HyperCloud</p>
-                  <p className="text-[11px] text-amber-700">
-                    Pastikan server API HyperCloud sedang berjalan.
-                  </p>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => loadInisiasiData(true)}
-                    disabled={isFetchingSupabaseUsers}
-                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold transition-all inline-flex items-center space-x-1 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isFetchingSupabaseUsers ? 'animate-spin' : ''}`} />
-                    <span>Refresh</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="text-center space-y-1">

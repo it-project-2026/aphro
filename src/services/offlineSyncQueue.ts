@@ -35,6 +35,18 @@ class OfflineSyncQueueEngine {
     }
   }
 
+  public async clearLocalData(): Promise<void> {
+    try {
+      await dexieDb.realisasi.clear();
+      await dexieDb.work_orders.clear();
+      await dexieDb.photos.clear();
+      await dexieDb.sync_queue.clear();
+      console.log('[SyncQueueEngine] Cleared all data held in local storage (Dexie).');
+    } catch (e) {
+      console.warn('Error clearing local storage data:', e);
+    }
+  }
+
   public subscribe(listener: SyncListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -250,28 +262,49 @@ class OfflineSyncQueueEngine {
       await dexieDb.sync_queue.put(item);
 
       if (item.tableName === 'REALISASI') {
-        const { realisasi, photos } = item.payload;
+        if (item.type === 'DELETE') {
+          const id = item.payload?.id || item.payload?.realisasi?.id || item.payload?.realisasi?.localId;
+          const serverResult = await ApiService.deleteRealisasi(id);
+          if (serverResult.success || serverResult.message?.includes('tidak ditemukan')) {
+            await dexieDb.sync_queue.delete(item.idempotencyKey);
+            return true;
+          } else {
+            throw new Error(serverResult.message || 'Server menolak penghapusan Realisasi.');
+          }
+        }
 
-        // Update Dexie status to SYNCING
-        await dexieDb.realisasi.update(realisasi.localId, { syncStatus: 'SYNCING' });
+        const realisasi = item.payload?.realisasi || item.payload;
+        const photos = item.payload?.photos;
 
-        const serverResult = await ApiService.saveRealisasi(realisasi);
+        // Update Dexie status to SYNCING if record exists
+        if (realisasi?.localId) {
+          await dexieDb.realisasi.update(realisasi.localId, { syncStatus: 'SYNCING' }).catch(() => {});
+        }
+
+        const serverResult = item.type === 'UPDATE'
+          ? await ApiService.updateRealisasi(realisasi.id || realisasi.localId, realisasi)
+          : await ApiService.saveRealisasi(realisasi);
 
         if (serverResult.success) {
-          console.log(`[DATA FLOW]\nmode=ONLINE\nentity=REALISASI\naction=SYNC\nsource=DEXIE_QUEUE\ntarget=HYPERCLOUD\nstatus=SUCCESS\nid=${serverResult.serverId || realisasi.localId}`);
+          const finalServerId = (serverResult as any).serverId || realisasi?.localId || realisasi?.id;
+          console.log(`[DATA FLOW]\nmode=ONLINE\nentity=REALISASI\naction=SYNC\nsource=DEXIE_QUEUE\ntarget=HYPERCLOUD\nstatus=SUCCESS\nid=${finalServerId}`);
 
           // Mark Realisasi as SYNCED in Dexie
-          await dexieDb.realisasi.update(realisasi.localId, {
-            syncStatus: 'SYNCED',
-            serverId: serverResult.serverId || realisasi.localId,
-            syncError: undefined,
-            updatedAt: getLocalDateTimeString(),
-          });
+          if (realisasi?.localId) {
+            await dexieDb.realisasi.update(realisasi.localId, {
+              syncStatus: 'SYNCED',
+              serverId: finalServerId,
+              syncError: undefined,
+              updatedAt: getLocalDateTimeString(),
+            }).catch(() => {});
+          }
 
           // Update photos sync status
           if (photos && Array.isArray(photos)) {
             for (const p of photos) {
-              await dexieDb.photos.update(p.id, { syncStatus: 'SYNCED' });
+              if (p?.id) {
+                await dexieDb.photos.update(p.id, { syncStatus: 'SYNCED' }).catch(() => {});
+              }
             }
           }
 
@@ -282,15 +315,39 @@ class OfflineSyncQueueEngine {
           throw new Error(serverResult.message || 'Server database menolak transaksi Realisasi.');
         }
       } else if (item.tableName === 'WORK_ORDER') {
-        const serverResult = await ApiService.saveWorkOrder(item.payload);
-        if (serverResult.success) {
-          if (item.payload.id) {
-            await dexieDb.work_orders.update(item.payload.id, { syncStatus: 'SYNCED' });
+        let serverResult;
+        if (item.type === 'DELETE') {
+          serverResult = await ApiService.deleteWorkOrder(item.payload?.id || item.payload);
+        } else if (item.type === 'UPDATE') {
+          serverResult = await ApiService.updateWorkOrder(item.payload?.id, item.payload);
+        } else {
+          serverResult = await ApiService.saveWorkOrder(item.payload);
+        }
+
+        if (serverResult.success || (item.type === 'DELETE' && serverResult.message?.includes('tidak ditemukan'))) {
+          if (item.payload?.id && item.type !== 'DELETE') {
+            await dexieDb.work_orders.update(item.payload.id, { syncStatus: 'SYNCED' }).catch(() => {});
           }
           await dexieDb.sync_queue.delete(item.idempotencyKey);
           return true;
         } else {
           throw new Error(serverResult.message || 'Server database menolak transaksi Work Order.');
+        }
+      } else if (item.tableName === 'ABSENSI') {
+        let serverResult;
+        if (item.type === 'DELETE') {
+          serverResult = await ApiService.deleteAbsensi(item.payload?.id || item.payload);
+        } else if (item.type === 'UPDATE') {
+          serverResult = await ApiService.updateAbsensi(item.payload?.id, item.payload);
+        } else {
+          serverResult = await ApiService.saveAbsensi(item.payload);
+        }
+
+        if (serverResult.success || (item.type === 'DELETE' && serverResult.message?.includes('tidak ditemukan'))) {
+          await dexieDb.sync_queue.delete(item.idempotencyKey);
+          return true;
+        } else {
+          throw new Error(serverResult.message || 'Server database menolak transaksi Absensi.');
         }
       } else {
         // Fallback for other tables

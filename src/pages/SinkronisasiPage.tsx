@@ -134,6 +134,19 @@ export const SinkronisasiPage: React.FC = () => {
     }
   };
 
+  const handleClearLocalData = async () => {
+    if (window.confirm('Hapus semua data antrean dan cache lokal yang masih tertahan di perangkat?')) {
+      try {
+        await offlineSyncQueue.clearLocalData();
+        await idbService.clearAll();
+        showToast('Semua data tertahan di penyimpanan lokal berhasil dihapus.', 'success');
+        loadStats();
+      } catch (err: any) {
+        showToast('Gagal membersihkan data lokal: ' + err.message, 'error');
+      }
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       {/* Header Banner */}
@@ -269,15 +282,28 @@ export const SinkronisasiPage: React.FC = () => {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleManualSync}
-            disabled={isSyncing || !isOnline}
-            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-teal-700 via-teal-600 to-teal-600 hover:from-teal-800 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-lg shadow-teal-600/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Menyinkronkan Data...' : 'Sinkronkan Sekarang'}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleClearLocalData}
+              disabled={isSyncing}
+              className="px-4 py-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 font-bold text-xs sm:text-sm rounded-2xl border border-rose-200 dark:border-rose-800 transition-all flex items-center justify-center space-x-2"
+              title="Hapus data antrean dan cache lokal yang tertahan di browser"
+            >
+              <RotateCcw className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+              <span>Hapus Data Lokal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={isSyncing || !isOnline}
+              className="px-6 py-3 bg-gradient-to-r from-teal-700 via-teal-600 to-teal-600 hover:from-teal-800 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-lg shadow-teal-600/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Menyinkronkan Data...' : 'Sinkronkan Sekarang'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Sync Progress Status Banner */}

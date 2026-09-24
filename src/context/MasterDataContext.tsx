@@ -58,9 +58,12 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
 
   const activeRequestIdRef = React.useRef<string>('');
 
+  const authUserId = user?.id || '';
+  const authUserUnit = user?.unitId || '';
+
   const refreshMasterData = React.useCallback(async (forceRefresh = false, filters: { ulp?: string; regu?: string } = {}) => {
     // GUARD #1: Do not execute fetchMasterData if user is not authenticated or token is missing!
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !authUserId) {
       console.log('[MasterDataContext] Skipping refreshMasterData: User not authenticated.');
       return;
     }
@@ -71,9 +74,11 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    const unitId = user.unitId ? InisiasiService.getStandardUnitId(user.unitId) : InisiasiService.getSelectedUnitId();
+    const unitId = authUserUnit ? InisiasiService.getStandardUnitId(authUserUnit) : InisiasiService.getSelectedUnitId();
     const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     activeRequestIdRef.current = requestId;
+
+    console.log(`[MASTER DATA TRACE]\naction=REFRESH_START\nunitId=${unitId}`);
 
     try {
       console.log(`[AUTH TRACE] authenticated=true tokenPresent=true unitId=${unitId}`);
@@ -83,37 +88,53 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
 
       // Check if this request is still the active one (prevent race condition / stale overwrites)
       if (activeRequestIdRef.current !== requestId) {
+        console.warn(`[MASTER DATA TRACE]\naction=STALE_RESPONSE_IGNORED\nunitId=${unitId}`);
         console.warn(`[MASTER DATA STALE RESPONSE IGNORED]\nrequestId=${requestId}`);
         return;
       }
 
-      if (res.isAuthError || res.status === 401) {
+      if (res.isAuthError || res.status === 401 || res.status === 403) {
+        console.warn(`[MASTER DATA TRACE]\naction=REFRESH_FAILED\nsource=HYPERCLOUD\nunitId=${unitId}\nstatus=${res.status || 401}`);
         console.warn(`[DB SOURCE] entity=MASTER_DATA source=AUTH_ERROR unitId=${unitId}`);
         return;
       }
 
-      if (res) {
-        const totalCounts = (res.ulp?.length || 0) + (res.penyulang?.length || 0) + (res.regu?.length || 0) + (res.petugas?.length || 0) + (res.users?.length || 0);
+      if (res && res.status !== 500 && res.status !== 502 && res.status !== 503 && res.status !== 404) {
+        const hasValidUsers = Array.isArray(res.users);
+        const usersArray = hasValidUsers ? res.users : [];
+        const totalCounts = (res.ulp?.length || 0) + (res.penyulang?.length || 0) + (res.regu?.length || 0) + (res.petugas?.length || 0) + usersArray.length;
+        
+        console.log(`[MASTER DATA TRACE]\naction=REFRESH_SUCCESS\nsource=HYPERCLOUD\nunitId=${unitId}\nusersCount=${usersArray.length}`);
         console.log(`[MASTER DATA RESPONSE]\nrequestId=${requestId}\ncount=${totalCounts}`);
 
-        setUlpList(Array.isArray(res.ulp) ? res.ulp : []);
-        setPenyulangList(Array.isArray(res.penyulang) ? res.penyulang : []);
-        setReguList(Array.isArray(res.regu) ? res.regu : []);
-        setPetugasList(Array.isArray(res.petugas) ? res.petugas : []);
-        setUsers(Array.isArray(res.users) ? res.users : []);
+        if (Array.isArray(res.ulp)) setUlpList(res.ulp);
+        if (Array.isArray(res.penyulang)) setPenyulangList(res.penyulang);
+        if (Array.isArray(res.regu)) setReguList(res.regu);
+        if (Array.isArray(res.petugas)) setPetugasList(res.petugas);
+        
+        // Only update users if valid array is returned, preserving existing valid users if response is malformed
+        if (hasValidUsers) {
+          setUsers(usersArray);
+          console.log(`[USERS STATE]\nsource=HYPERCLOUD\ncount=${usersArray.length}`);
+        } else {
+          console.log(`[MASTER DATA TRACE]\naction=REFRESH_INVALID_RESPONSE\nsource=HYPERCLOUD\nunitId=${unitId}`);
+        }
 
         console.log(`[MASTER DATA STATE APPLY]\nrequestId=${requestId}`);
         const sourceLabel = totalCounts > 0 ? 'HYPERCLOUD_SUCCESS' : 'HYPERCLOUD_EMPTY';
 
-        console.log(`[DB SOURCE] entity=MASTER_DATA source=${sourceLabel} unitId=${unitId} counts: ULP=${res.ulp?.length || 0}, Penyulang=${res.penyulang?.length || 0}, Regu=${res.regu?.length || 0}, Petugas=${res.petugas?.length || 0}, Users=${res.users?.length || 0}`);
+        console.log(`[DB SOURCE] entity=MASTER_DATA source=${sourceLabel} unitId=${unitId} counts: ULP=${res.ulp?.length || 0}, Penyulang=${res.penyulang?.length || 0}, Regu=${res.regu?.length || 0}, Petugas=${res.petugas?.length || 0}, Users=${usersArray.length}`);
+      } else {
+        console.warn(`[MASTER DATA TRACE]\naction=REFRESH_FAILED\nsource=HYPERCLOUD\nunitId=${unitId}\nstatus=${res?.status || 500}`);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.warn(`[MASTER DATA TRACE]\naction=REFRESH_FAILED\nsource=HYPERCLOUD\nunitId=${unitId}\nstatus=500`);
       console.warn('Error loading Master Data from HyperCloud:', err);
     }
-  }, [isAuthenticated, user, setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
+  }, [isAuthenticated, authUserId, authUserUnit]);
 
   React.useEffect(() => {
-    if (isAuthenticated && user && user.unitId) {
+    if (isAuthenticated && authUserId && authUserUnit) {
       refreshMasterData(true);
     } else {
       setUlpList([]);
@@ -122,7 +143,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
       setPetugasList([]);
       setUsers([]);
     }
-  }, [refreshMasterData, isAuthenticated, user, settings.namaUnitLayanan, activeUnitId]);
+  }, [refreshMasterData, isAuthenticated, authUserId, authUserUnit, settings.namaUnitLayanan, activeUnitId]);
 
   const setMasterData = React.useCallback((data: {
     ulp?: ULP[];
@@ -135,8 +156,8 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     if (data.penyulang) setPenyulangList(data.penyulang);
     if (data.regu) setReguList(data.regu);
     if (data.petugas) setPetugasList(data.petugas);
-    if (data.users) setUsers(data.users);
-  }, [setUlpList, setPenyulangList, setReguList, setPetugasList, setUsers]);
+    if (Array.isArray(data.users)) setUsers(data.users);
+  }, []);
 
   const addULP = React.useCallback((data: Omit<ULP, 'id'>) => {
     const newId = 'ULP-' + Date.now();
