@@ -101,8 +101,8 @@ async function handleUpsertWorkOrder(w: any) {
   
   const sql = `
     INSERT INTO public."WORK_ORDER" (
-      "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "PENYULANG",
-      "REGU_ROW", "VOLUME", "SATUAN", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI",
+      "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "Penyulang",
+      "Regu_ROW", "VOLUME", "SATUAN", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI",
       "WO_AWAL", "WO_AKHIR", "LOKASI_START", "LOKASI_FINISH", "STATUS", "Created_At"
     )
     VALUES (
@@ -116,8 +116,8 @@ async function handleUpsertWorkOrder(w: any) {
       "PEKERJAAN" = EXCLUDED."PEKERJAAN",
       "Tanggal" = EXCLUDED."Tanggal",
       "ULP" = EXCLUDED."ULP",
-      "PENYULANG" = EXCLUDED."PENYULANG",
-      "REGU_ROW" = EXCLUDED."REGU_ROW",
+      "Penyulang" = EXCLUDED."Penyulang",
+      "Regu_ROW" = EXCLUDED."Regu_ROW",
       "VOLUME" = EXCLUDED."VOLUME",
       "SATUAN" = EXCLUDED."SATUAN",
       "TOTAL_REALISASI" = EXCLUDED."TOTAL_REALISASI",
@@ -141,17 +141,17 @@ async function handleUpsertWorkOrder(w: any) {
     w.PEKERJAAN || w.pekerjaan || 'NORMAL',
     tanggalVal,
     w.ULP || w.ulpName || w.ulp || '',
-    w.PENYULANG || w.penyulangName || w.penyulang || '',
-    w.REGU_ROW || w.reguRow || w.reguName || w.regu || '',
-    w.VOLUME || w.volumePekerjaan || 0,
-    w.SATUAN || w.satuan || 'Pohon',
-    w.TOTAL_REALISASI || w.totalRealisasi || 0,
-    w.SATUAN_TOTAL_REALISASI || 'Pohon',
-    w.WO_AWAL || w.woAwal || '',
+    w.Penyulang || w.penyulang || w.PENYULANG || w.penyulangName || '',
+    w.Regu_ROW || w.reguRow || w.REGU_ROW || w.reguName || w.regu || '',
+    w.VOLUME !== undefined ? String(w.VOLUME) : (w.volumePekerjaan !== undefined ? String(w.volumePekerjaan) : (w.volume !== undefined ? String(w.volume) : '0')),
+    w.SATUAN || w.satuan || 'KMS',
+    w.TOTAL_REALISASI !== undefined ? String(w.TOTAL_REALISASI) : (w.totalRealisasi !== undefined ? String(w.totalRealisasi) : '0'),
+    w.SATUAN_TOTAL_REALISASI || w.satuanTotalRealisasi || 'KMS',
+    w.WO_AWAL || w.woAwal || w.woMulai || '',
     w.WO_AKHIR || w.woAkhir || '',
     w.LOKASI_START || w.lokasiStart || '',
     w.LOKASI_FINISH || w.lokasiFinish || '',
-    w.STATUS || w.status || 'DRAFT',
+    w.STATUS || w.status || 'BELUM SELESAI',
     createdAtVal,
   ];
 
@@ -504,6 +504,16 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
       status: 'error',
       message: 'Token tidak valid.',
     });
+  }
+
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payloadJson = Buffer.from(parts[1], 'base64').toString('utf-8');
+      (req as any).user = JSON.parse(payloadJson);
+    }
+  } catch {
+    // Ignore parse errors, user remains undefined
   }
 
   next();
@@ -1372,31 +1382,66 @@ router.post('/work-orders', requireAuth, async (req: Request, res: Response) => 
   logApiCall('POST', '/api/work-orders', req.body);
   const w = req.body || {};
   const woId = w.WO_ID || w.woId || w.id || `WO-${Date.now()}`;
-  const unitId = w.unitId || 'UL2';
-  const userId = (req as any).user?.userId || w.userId || w.UserID || 'system';
+  const unitId = (w.unitId || (req as any).user?.unitId || 'UL1').toString().trim().toUpperCase();
+  const userId = (req as any).user?.userId || (req as any).user?.UserID || w.userId || w.UserID || 'system';
+  const userRole = String((req as any).user?.Role || (req as any).user?.role || '').toLowerCase();
+  const userUnit = String((req as any).user?.unitId || '').toUpperCase();
 
-  console.log(`[WORK ORDER API]\naction=CREATE\nsource=HYPERCLOUD\nunitId=${unitId}\nuserId=${userId}\nwoId=${woId}\nstatus=START`);
+  // Unit Access validation:
+  // User cannot create Work Order for another unit unless Role is Admin / Adm / Superadmin / cross-unit
+  if (userUnit && userUnit !== 'ALL' && unitId && unitId !== userUnit) {
+    const isAdmin = userRole.includes('admin') || userRole.includes('adm') || userRole.includes('super');
+    if (!isAdmin) {
+      return res.status(403).json({
+        success: false,
+        status: 'error',
+        error: 'FORBIDDEN_UNIT_ACCESS',
+        message: `User unit ${userUnit} tidak memiliki izin membuat Work Order untuk unit ${unitId}.`
+      });
+    }
+  }
+
+  // Field validation
+  if (!w.Nomor_WO && !w.nomorWO && !w.woId && !w.WO_ID && !w.id) {
+    return res.status(400).json({
+      success: false,
+      status: 'error',
+      error: 'INVALID_PAYLOAD',
+      message: 'Nomor_WO atau woId wajib diisi.'
+    });
+  }
+
+  console.log(`[API POST WORK_ORDER]\npath=/api/work-orders\n\n[WORK_ORDER REQUEST]\nwoId=${woId}\nunitId=${unitId}\nuserId=${userId}`);
 
   try {
-    const resDb = await handleUpsertWorkOrder(w);
+    const resDb = await handleUpsertWorkOrder({ ...w, woId, unitId });
 
+    console.log(`[WORK_ORDER DB]\noperation=INSERT\nwoId=${woId}\nunitId=${unitId}`);
     logDbOperation('WORK_ORDER', 'INSERT_UPSERT', woId, unitId);
     logSyncOperation('WORK_ORDER', woId, 'SUCCESS', 201);
     logApiRoute('POST', '/api/work-orders', 201);
 
-    console.log(`[WORK ORDER API]\naction=CREATE\nsource=HYPERCLOUD\nunitId=${unitId}\nwoId=${woId}\nstatus=SUCCESS\nhttp=201`);
+    const savedData = resDb?.rows?.[0] || {
+      WO_ID: woId,
+      unitId,
+      Nomor_WO: w.Nomor_WO || w.nomorWO || woId,
+      STATUS: w.STATUS || w.status || 'BELUM SELESAI'
+    };
 
     return res.status(201).json({
       status: 'success',
       success: true,
-      data: resDb.rows[0],
+      id: woId,
+      message: 'Work Order berhasil disimpan',
+      data: savedData,
     });
   } catch (err: any) {
-    console.error(`[WORK ORDER API]\naction=CREATE\nsource=HYPERCLOUD\nunitId=${unitId}\nwoId=${woId}\nstatus=FAILED\nhttp=500\nerror=${err.message}`);
+    console.error(`[WORK_ORDER DB]\noperation=INSERT\nwoId=${woId}\nunitId=${unitId}\nstatus=FAILED\nhttp=500\nerror=${err.message}`);
     logApiRoute('POST', '/api/work-orders', 500);
     return res.status(500).json({
       status: 'error',
       success: false,
+      error: 'DATABASE_ERROR',
       message: err.message,
     });
   }

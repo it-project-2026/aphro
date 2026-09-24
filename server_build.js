@@ -424,11 +424,11 @@ function toNullableTimestamp(val) {
   return null;
 }
 async function handleUpsertWorkOrder(w) {
-  const woId = w.WO_ID || w.id || `WO-${Date.now()}`;
+  const woId = w.WO_ID || w.woId || w.id || `WO-${Date.now()}`;
   const sql = `
     INSERT INTO public."WORK_ORDER" (
-      "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "PENYULANG",
-      "REGU_ROW", "VOLUME", "SATUAN", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI",
+      "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "Penyulang",
+      "Regu_ROW", "VOLUME", "SATUAN", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI",
       "WO_AWAL", "WO_AKHIR", "LOKASI_START", "LOKASI_FINISH", "STATUS", "Created_At"
     )
     VALUES (
@@ -442,8 +442,8 @@ async function handleUpsertWorkOrder(w) {
       "PEKERJAAN" = EXCLUDED."PEKERJAAN",
       "Tanggal" = EXCLUDED."Tanggal",
       "ULP" = EXCLUDED."ULP",
-      "PENYULANG" = EXCLUDED."PENYULANG",
-      "REGU_ROW" = EXCLUDED."REGU_ROW",
+      "Penyulang" = EXCLUDED."Penyulang",
+      "Regu_ROW" = EXCLUDED."Regu_ROW",
       "VOLUME" = EXCLUDED."VOLUME",
       "SATUAN" = EXCLUDED."SATUAN",
       "TOTAL_REALISASI" = EXCLUDED."TOTAL_REALISASI",
@@ -464,18 +464,18 @@ async function handleUpsertWorkOrder(w) {
     w.Nomor_WO || w.nomorWO || woId,
     w.PEKERJAAN || w.pekerjaan || "NORMAL",
     tanggalVal,
-    w.ULP || w.ulpName || "",
-    w.PENYULANG || w.penyulangName || "",
-    w.REGU_ROW || w.reguName || "",
-    w.VOLUME || w.volumePekerjaan || 0,
-    w.SATUAN || w.satuan || "Pohon",
-    w.TOTAL_REALISASI || w.totalRealisasi || 0,
-    w.SATUAN_TOTAL_REALISASI || "Pohon",
-    w.WO_AWAL || w.woAwal || "",
+    w.ULP || w.ulpName || w.ulp || "",
+    w.Penyulang || w.penyulang || w.PENYULANG || w.penyulangName || "",
+    w.Regu_ROW || w.reguRow || w.REGU_ROW || w.reguName || w.regu || "",
+    w.VOLUME !== void 0 ? String(w.VOLUME) : w.volumePekerjaan !== void 0 ? String(w.volumePekerjaan) : w.volume !== void 0 ? String(w.volume) : "0",
+    w.SATUAN || w.satuan || "KMS",
+    w.TOTAL_REALISASI !== void 0 ? String(w.TOTAL_REALISASI) : w.totalRealisasi !== void 0 ? String(w.totalRealisasi) : "0",
+    w.SATUAN_TOTAL_REALISASI || w.satuanTotalRealisasi || "KMS",
+    w.WO_AWAL || w.woAwal || w.woMulai || "",
     w.WO_AKHIR || w.woAkhir || "",
     w.LOKASI_START || w.lokasiStart || "",
     w.LOKASI_FINISH || w.lokasiFinish || "",
-    w.STATUS || w.status || "DRAFT",
+    w.STATUS || w.status || "BELUM SELESAI",
     createdAtVal
   ];
   return await query(sql, params);
@@ -703,6 +703,14 @@ function requireAuth(req, res, next) {
       status: "error",
       message: "Token tidak valid."
     });
+  }
+  try {
+    const parts = token.split(".");
+    if (parts.length === 3) {
+      const payloadJson = Buffer.from(parts[1], "base64").toString("utf-8");
+      req.user = JSON.parse(payloadJson);
+    }
+  } catch {
   }
   next();
 }
@@ -1349,38 +1357,63 @@ router.post("/work-orders", requireAuth, async (req, res) => {
   logApiCall("POST", "/api/work-orders", req.body);
   const w = req.body || {};
   const woId = w.WO_ID || w.woId || w.id || `WO-${Date.now()}`;
-  const unitId = w.unitId || "UL2";
-  const userId = req.user?.userId || w.userId || w.UserID || "system";
-  console.log(`[WORK ORDER API]
-action=CREATE
-source=HYPERCLOUD
-unitId=${unitId}
-userId=${userId}
+  const unitId = (w.unitId || req.user?.unitId || "UL1").toString().trim().toUpperCase();
+  const userId = req.user?.userId || req.user?.UserID || w.userId || w.UserID || "system";
+  const userRole = String(req.user?.Role || req.user?.role || "").toLowerCase();
+  const userUnit = String(req.user?.unitId || "").toUpperCase();
+  if (userUnit && userUnit !== "ALL" && unitId && unitId !== userUnit) {
+    const isAdmin = userRole.includes("admin") || userRole.includes("adm") || userRole.includes("super");
+    if (!isAdmin) {
+      return res.status(403).json({
+        success: false,
+        status: "error",
+        error: "FORBIDDEN_UNIT_ACCESS",
+        message: `User unit ${userUnit} tidak memiliki izin membuat Work Order untuk unit ${unitId}.`
+      });
+    }
+  }
+  if (!w.Nomor_WO && !w.nomorWO && !w.woId && !w.WO_ID && !w.id) {
+    return res.status(400).json({
+      success: false,
+      status: "error",
+      error: "INVALID_PAYLOAD",
+      message: "Nomor_WO atau woId wajib diisi."
+    });
+  }
+  console.log(`[API POST WORK_ORDER]
+path=/api/work-orders
+
+[WORK_ORDER REQUEST]
 woId=${woId}
-status=START`);
+unitId=${unitId}
+userId=${userId}`);
   try {
-    const resDb = await handleUpsertWorkOrder(w);
+    const resDb = await handleUpsertWorkOrder({ ...w, woId, unitId });
+    console.log(`[WORK_ORDER DB]
+operation=INSERT
+woId=${woId}
+unitId=${unitId}`);
     logDbOperation("WORK_ORDER", "INSERT_UPSERT", woId, unitId);
     logSyncOperation("WORK_ORDER", woId, "SUCCESS", 201);
     logApiRoute("POST", "/api/work-orders", 201);
-    console.log(`[WORK ORDER API]
-action=CREATE
-source=HYPERCLOUD
-unitId=${unitId}
-woId=${woId}
-status=SUCCESS
-http=201`);
+    const savedData = resDb?.rows?.[0] || {
+      WO_ID: woId,
+      unitId,
+      Nomor_WO: w.Nomor_WO || w.nomorWO || woId,
+      STATUS: w.STATUS || w.status || "BELUM SELESAI"
+    };
     return res.status(201).json({
       status: "success",
       success: true,
-      data: resDb.rows[0]
+      id: woId,
+      message: "Work Order berhasil disimpan",
+      data: savedData
     });
   } catch (err) {
-    console.error(`[WORK ORDER API]
-action=CREATE
-source=HYPERCLOUD
-unitId=${unitId}
+    console.error(`[WORK_ORDER DB]
+operation=INSERT
 woId=${woId}
+unitId=${unitId}
 status=FAILED
 http=500
 error=${err.message}`);
@@ -1388,6 +1421,7 @@ error=${err.message}`);
     return res.status(500).json({
       status: "error",
       success: false,
+      error: "DATABASE_ERROR",
       message: err.message
     });
   }
@@ -1444,6 +1478,9 @@ router.delete(
   requireAuth,
   async (req, res) => {
     const woId = req.params.id;
+    console.log(`[API DELETE]
+entity=WORK_ORDER
+id=${woId}`);
     logApiCall(
       "DELETE",
       `/api/work-orders/${woId}`
@@ -1457,18 +1494,18 @@ router.delete(
         logApiRoute("DELETE", `/api/work-orders/${woId}`, 404);
         return res.status(404).json({
           success: false,
-          status: "error",
           error: "WORK_ORDER_NOT_FOUND",
           message: `Work Order ${woId} tidak ditemukan atau sudah terhapus.`
         });
       }
       const recordUnit = String(check.rows[0]?.unitId || "").toUpperCase();
-      const userUnit = String(req.query.unitId || req.user?.unitId || "").toUpperCase();
-      if (userUnit && recordUnit && userUnit !== "ALL" && recordUnit !== userUnit) {
+      const userUnit = String(req.user?.unitId || req.query.unitId || "").toUpperCase();
+      const userRole = String(req.user?.role || req.query.role || "").toUpperCase();
+      const isAdmin = userRole === "ADMIN" || userRole === "ADM" || userRole === "SUPERADMIN" || userUnit === "ALL";
+      if (userUnit && recordUnit && !isAdmin && userUnit !== "ALL" && recordUnit !== userUnit) {
         logApiRoute("DELETE", `/api/work-orders/${woId}`, 403);
         return res.status(403).json({
           success: false,
-          status: "error",
           error: "FORBIDDEN",
           message: `Akses ditolak: Work Order ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`
         });
@@ -1482,14 +1519,18 @@ router.delete(
         `,
         [woId]
       );
+      console.log(`[DB DELETE]
+table=WORK_ORDER
+id=${woId}
+unitId=${recordUnit}
+status=SUCCESS`);
       logDbOperation("WORK_ORDER", "DELETE", woId, recordUnit);
       logSyncOperation("WORK_ORDER", woId, "DELETED", 200);
       logApiRoute("DELETE", `/api/work-orders/${woId}`, 200);
-      return res.json({
+      return res.status(200).json({
         success: true,
-        status: "success",
-        deleted: true,
         id: woId,
+        deleted: true,
         deletedCount: resDb.rowCount,
         message: "Work Order berhasil dihapus."
       });
@@ -1497,8 +1538,8 @@ router.delete(
       console.error("[BACKEND ERROR] DELETE /api/work-orders:", err.message);
       logApiRoute("DELETE", `/api/work-orders/${woId}`, 500);
       return res.status(500).json({
-        status: "error",
         success: false,
+        error: "DATABASE_ERROR",
         message: err.message
       });
     }
@@ -1853,6 +1894,9 @@ router.delete(
   requireAuth,
   async (req, res) => {
     const relId = req.params.id;
+    console.log(`[API DELETE]
+entity=REALISASI
+id=${relId}`);
     logApiCall(
       "DELETE",
       `/api/realisasi/${relId}`
@@ -1866,18 +1910,18 @@ router.delete(
         logApiRoute("DELETE", `/api/realisasi/${relId}`, 404);
         return res.status(404).json({
           success: false,
-          status: "error",
           error: "REALISASI_NOT_FOUND",
           message: `Realisasi dengan ID ${relId} tidak ditemukan atau sudah terhapus.`
         });
       }
       const recordUnit = String(check.rows[0]?.unitId || "").toUpperCase();
-      const userUnit = String(req.query.unitId || req.user?.unitId || "").toUpperCase();
-      if (userUnit && recordUnit && userUnit !== "ALL" && recordUnit !== userUnit) {
+      const userUnit = String(req.user?.unitId || req.query.unitId || "").toUpperCase();
+      const userRole = String(req.user?.role || req.query.role || "").toUpperCase();
+      const isAdmin = userRole === "ADMIN" || userRole === "ADM" || userRole === "SUPERADMIN" || userUnit === "ALL";
+      if (userUnit && recordUnit && !isAdmin && userUnit !== "ALL" && recordUnit !== userUnit) {
         logApiRoute("DELETE", `/api/realisasi/${relId}`, 403);
         return res.status(403).json({
           success: false,
-          status: "error",
           error: "FORBIDDEN",
           message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`
         });
@@ -1886,20 +1930,23 @@ router.delete(
         `
         DELETE FROM public."REALISASI"
         WHERE "ID" = $1
-        RETURNING *
+        RETURNING "ID"
         `,
         [relId]
       );
+      console.log(`[DB DELETE]
+table=REALISASI
+id=${relId}
+unitId=${recordUnit}
+status=SUCCESS`);
       logDbOperation("REALISASI", "DELETE", relId, recordUnit);
       logSyncOperation("REALISASI", relId, "DELETED", 200);
       logApiRoute("DELETE", `/api/realisasi/${relId}`, 200);
-      return res.json({
+      return res.status(200).json({
         success: true,
-        status: "success",
-        deleted: true,
         id: relId,
+        deleted: true,
         deletedCount: resDb.rowCount,
-        data: resDb.rows[0],
         message: "Realisasi berhasil dihapus."
       });
     } catch (err) {
@@ -1907,7 +1954,7 @@ router.delete(
       logApiRoute("DELETE", `/api/realisasi/${relId}`, 500);
       return res.status(500).json({
         success: false,
-        status: "error",
+        error: "DATABASE_ERROR",
         message: err.message
       });
     }
@@ -2152,6 +2199,9 @@ router.delete(
   requireAuth,
   async (req, res) => {
     const absId = req.params.id;
+    console.log(`[API DELETE]
+entity=ABSENSI
+id=${absId}`);
     logApiCall(
       "DELETE",
       `/api/absensi/${absId}`
@@ -2167,19 +2217,19 @@ router.delete(
         logApiRoute("DELETE", `/api/absensi/${absId}`, 404);
         return res.status(404).json({
           success: false,
-          status: "error",
           error: "ABSENSI_NOT_FOUND",
-          message: `Data absensi dengan ID ${absId} tidak ditemukan.`
+          message: `Data absensi dengan ID ${absId} tidak ditemukan atau sudah terhapus.`
         });
       }
       const recordUnit = String(checkRes.rows[0]?.unitId || "").toUpperCase();
-      const userUnit = String(req.query.unitId || req.user?.unitId || "").toUpperCase();
-      if (userUnit && recordUnit && userUnit !== "ALL" && recordUnit !== userUnit) {
+      const userUnit = String(req.user?.unitId || req.query.unitId || "").toUpperCase();
+      const userRole = String(req.user?.role || req.query.role || "").toUpperCase();
+      const isAdmin = userRole === "ADMIN" || userRole === "ADM" || userRole === "SUPERADMIN" || userUnit === "ALL";
+      if (userUnit && recordUnit && !isAdmin && userUnit !== "ALL" && recordUnit !== userUnit) {
         console.warn(`[ABSENSI TRACE 3] FORBIDDEN: User unit ${userUnit} tried to delete record unit ${recordUnit}`);
         logApiRoute("DELETE", `/api/absensi/${absId}`, 403);
         return res.status(403).json({
           success: false,
-          status: "error",
           error: "FORBIDDEN",
           message: `Akses ditolak: Absensi ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`
         });
@@ -2189,29 +2239,31 @@ router.delete(
         `
         DELETE FROM public."ABSENSI"
         WHERE "ID" = $1
-        RETURNING *
+        RETURNING "ID"
         `,
         [absId]
       );
+      console.log(`[DB DELETE]
+table=ABSENSI
+id=${absId}
+unitId=${recordUnit}
+status=SUCCESS`);
       logDbOperation("ABSENSI", "DELETE", absId, recordUnit);
       logSyncOperation("ABSENSI", absId, "DELETED", 200);
       logApiRoute("DELETE", `/api/absensi/${absId}`, 200);
-      return res.json({
+      return res.status(200).json({
         success: true,
-        deleted: true,
         id: absId,
-        status: "success",
+        deleted: true,
         deletedCount: resDb.rowCount,
-        message: "Data absensi berhasil dihapus.",
-        data: resDb.rows[0]
+        message: "Data absensi berhasil dihapus."
       });
     } catch (err) {
       console.error("[ABSENSI DELETE] Error:", err.message);
       logApiRoute("DELETE", `/api/absensi/${absId}`, 500);
       return res.status(500).json({
         success: false,
-        status: "error",
-        error: "SERVER_ERROR",
+        error: "DATABASE_ERROR",
         message: err.message
       });
     }
@@ -2228,6 +2280,14 @@ router.post("/send-notification", async (req, res) => {
     reguName: reguName || "",
     woId: woData?.id || "",
     delivered: true
+  });
+});
+router.all("*", (req, res) => {
+  logApiRoute(req.method, req.originalUrl, 404);
+  return res.status(404).json({
+    success: false,
+    error: "ROUTE_NOT_FOUND",
+    message: `API endpoint ${req.method} ${req.originalUrl} tidak ditemukan`
   });
 });
 var hypercloudApi_default = router;
