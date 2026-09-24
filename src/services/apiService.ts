@@ -221,20 +221,25 @@ export class ApiService {
     const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
     const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
 
-    // Pada Domain Production APHRO (atau default), SELALU gunakan backend API utama: https://api.aphro-row.my.id
-    // JANGAN PERNAH fallback ke frontend origin (www.aphro-row.my.id) saat server mengembalikan response HTTP (misal 401, 403, 404, 500).
-    if (isAphroProduction) {
-      console.log(`[ApiService] Production API request: ${externalUrl}`);
-      return await fetch(externalUrl, finalOptions);
-    }
-
-    // In preview / dev mode: try primary API first, fallback to local server if network fetch fails
+    // In preview / dev / production mode: try primary API first, fallback to local server if network fetch fails or returns 404
     const host = typeof window !== 'undefined' && window.location ? window.location.origin : '';
     const localUrl = `${host}${apiPath}`;
 
     try {
-      console.log(`[ApiService] Production API request: ${externalUrl}`);
-      return await fetch(externalUrl, finalOptions);
+      console.log(`[ApiService] API request: ${externalUrl}`);
+      const res = await fetch(externalUrl, finalOptions);
+      if (res.status === 404 && localUrl && localUrl !== externalUrl) {
+        console.warn(`[ApiService] Primary endpoint 404 for ${externalUrl}. Retrying on application backend (${localUrl})...`);
+        try {
+          const localRes = await fetch(localUrl, finalOptions);
+          if (localRes.ok || localRes.status !== 404) {
+            return localRes;
+          }
+        } catch (localErr) {
+          console.warn(`[ApiService] Local retry error:`, localErr);
+        }
+      }
+      return res;
     } catch (extErr: any) {
       console.warn(`[ApiService] Primary API network error (${externalUrl}). Trying local endpoint (${localUrl}):`, extErr?.message || extErr);
       try {
