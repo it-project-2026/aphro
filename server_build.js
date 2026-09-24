@@ -94,15 +94,15 @@ function saveMockStore() {
 }
 function getMockQueryResult(text, params) {
   const upper = text.trim().toUpperCase();
-  let tableName = "WORK_ORDER";
-  if (upper.includes('"INISIASI"') || upper.includes(" INISIASI ")) tableName = "INISIASI";
-  else if (upper.includes('"USERS"') || upper.includes(" USERS ")) tableName = "USERS";
-  else if (upper.includes('"ABSENSI"') || upper.includes(" ABSENSI ")) tableName = "ABSENSI";
-  else if (upper.includes('"REALISASI"') || upper.includes(" REALISASI ")) tableName = "REALISASI";
-  else if (upper.includes('"ULP"') || upper.includes(" ULP ")) tableName = "ULP";
-  else if (upper.includes('"PENYULANG"') || upper.includes(" PENYULANG ")) tableName = "PENYULANG";
-  else if (upper.includes('"PETUGAS"') || upper.includes(" PETUGAS ")) tableName = "PETUGAS";
-  else if (upper.includes('"REGU_ROW"') || upper.includes(" REGU_ROW ")) tableName = "REGU_ROW";
+  const tableMatch = text.match(/(?:FROM|INTO|UPDATE)\s+(?:public\.)?"?([A-Za-z0-9_]+)"?/i);
+  let tableName = tableMatch ? tableMatch[1].toUpperCase() : "WORK_ORDER";
+  if (!mockStore[tableName]) {
+    if (upper.includes('"WORK_ORDER"')) tableName = "WORK_ORDER";
+    else if (upper.includes('"REALISASI"')) tableName = "REALISASI";
+    else if (upper.includes('"ABSENSI"')) tableName = "ABSENSI";
+    else if (upper.includes('"INISIASI"')) tableName = "INISIASI";
+    else if (upper.includes('"USERS"')) tableName = "USERS";
+  }
   let rows = mockStore[tableName] || [];
   if (upper.startsWith("SELECT")) {
     const unitMatch = text.match(/(?:UPPER\()?"unitId"(?:\))?\s*=\s*(?:UPPER\()?\s*\$(\d+)/i);
@@ -124,14 +124,16 @@ function getMockQueryResult(text, params) {
         }
       }
     }
-    const idIndex = text.indexOf('"ID" = $') !== -1 ? text.indexOf('"ID" = $') : text.indexOf('"WO_ID" = $');
-    if (idIndex !== -1) {
-      const match = text.slice(idIndex).match(/"(?:ID|WO_ID)"\s*=\s*\$(\d+)/);
+    if (text.includes('"ID" = $') || text.includes('"WO_ID" = $') || text.includes('"Nomor_WO" = $')) {
+      const match = text.match(/"(?:ID|WO_ID|Nomor_WO)"\s*=\s*\$(\d+)/);
       if (match) {
         const paramIdx = parseInt(match[1], 10) - 1;
         const targetId = params[paramIdx];
         if (targetId) {
-          rows = rows.filter((r) => String(r.ID || r.id || r.WO_ID || "").toUpperCase() === String(targetId).toUpperCase());
+          const tUpper = String(targetId).toUpperCase();
+          rows = rows.filter(
+            (r) => String(r.ID || r.id || "").toUpperCase() === tUpper || String(r.WO_ID || "").toUpperCase() === tUpper || String(r.Nomor_WO || "").toUpperCase() === tUpper
+          );
         }
       }
     }
@@ -232,6 +234,7 @@ function getMockQueryResult(text, params) {
       }
       affectedRows = [obj];
     }
+    mockStore[tableName] = rows;
     saveMockStore();
   } else if (upper.startsWith("DELETE") && params && params.length > 0) {
     isMutation = true;
@@ -365,6 +368,26 @@ function logApiCall(method, path3, params) {
     Object.keys(safeParams).length > 0 ? safeParams : ""
   );
 }
+function logApiRoute(method, path3, status = 200) {
+  console.log(`[API ROUTE]
+method=${method}
+path=${path3}
+status=${status}`);
+}
+function logDbOperation(table, operation, id, unitId = "") {
+  console.log(`[DB]
+table=${table}
+operation=${operation}
+id=${id}
+unitId=${unitId}`);
+}
+function logSyncOperation(entity, id, status, http) {
+  console.log(`[SYNC]
+entity=${entity}
+id=${id}
+status=${status}
+http=${http}`);
+}
 function parseUnitFilter(req) {
   const reqUnit = (req.query.unitId || req.query.unit_id || req.body?.unitId || "").toString().trim().toUpperCase();
   if (!reqUnit || reqUnit === "ALL") {
@@ -461,21 +484,25 @@ router.get("/health", async (req, res) => {
   logApiCall("GET", "/api/health");
   const connResult = await testConnection();
   if (connResult.connected) {
+    logApiRoute("GET", "/api/health", 200);
     return res.status(200).json({
+      ok: true,
+      service: "aphro-api",
+      database: "connected",
       success: true,
       status: "ok",
-      service: "APHRO API",
-      database: "HYPERCLOUD",
       connected: true,
       latencyMs: connResult.latencyMs,
       timestamp: connResult.timestamp
     });
   }
+  logApiRoute("GET", "/api/health", 503);
   return res.status(503).json({
+    ok: false,
+    service: "aphro-api",
+    database: "disconnected",
     success: false,
     status: "error",
-    service: "APHRO API",
-    database: "HYPERCLOUD",
     connected: false,
     message: connResult.message
   });
@@ -1257,18 +1284,64 @@ router.get("/work-orders", async (req, res) => {
     });
   }
 });
+router.get("/work-orders/:id", async (req, res) => {
+  const id = req.params.id;
+  const { unitId, isAll } = parseUnitFilter(req);
+  logApiCall("GET", `/api/work-orders/${id}`);
+  try {
+    let sql = `
+      SELECT *
+      FROM public."WORK_ORDER"
+      WHERE ("WO_ID" = $1 OR "Nomor_WO" = $1)
+    `;
+    const params = [id];
+    if (!isAll && unitId) {
+      params.push(unitId);
+      sql += ` AND "unitId" = $${params.length}`;
+    }
+    const resDb = await query(sql, params);
+    if (resDb.rowCount === 0) {
+      logApiRoute("GET", `/api/work-orders/${id}`, 404);
+      return res.status(404).json({
+        success: false,
+        status: "error",
+        error: "WORK_ORDER_NOT_FOUND",
+        message: `Work Order dengan ID/Nomor ${id} tidak ditemukan.`
+      });
+    }
+    logApiRoute("GET", `/api/work-orders/${id}`, 200);
+    return res.json({
+      success: true,
+      status: "success",
+      data: resDb.rows[0]
+    });
+  } catch (err) {
+    logApiRoute("GET", `/api/work-orders/${id}`, 500);
+    return res.status(500).json({
+      success: false,
+      status: "error",
+      message: err.message
+    });
+  }
+});
 router.get("/routes-check", async (req, res) => {
   return res.json({
     success: true,
     service: "APHRO API",
-    version: "1.3.0-hypercloud",
+    version: "1.4.0-hypercloud",
     hasInisiasiRoute: true,
     hasWorkOrdersRoute: true,
+    hasWorkOrdersIdRoute: true,
     hasAbsensiRoute: true,
     hasRealisasiRoute: true,
+    hasRealisasiIdRoute: true,
     hasNotificationRoute: true,
     hasUsersRoute: true,
     hasMasterDataRoute: true,
+    hasUlpRoute: true,
+    hasPenyulangRoute: true,
+    hasReguRowRoute: true,
+    hasPetugasRoute: true,
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
@@ -1287,6 +1360,9 @@ woId=${woId}
 status=START`);
   try {
     const resDb = await handleUpsertWorkOrder(w);
+    logDbOperation("WORK_ORDER", "INSERT_UPSERT", woId, unitId);
+    logSyncOperation("WORK_ORDER", woId, "SUCCESS", 201);
+    logApiRoute("POST", "/api/work-orders", 201);
     console.log(`[WORK ORDER API]
 action=CREATE
 source=HYPERCLOUD
@@ -1308,6 +1384,7 @@ woId=${woId}
 status=FAILED
 http=500
 error=${err.message}`);
+    logApiRoute("POST", "/api/work-orders", 500);
     return res.status(500).json({
       status: "error",
       success: false,
@@ -1315,16 +1392,38 @@ error=${err.message}`);
     });
   }
 });
-router.put("/work-orders/:id", async (req, res) => {
+router.put("/work-orders/:id", requireAuth, async (req, res) => {
   const id = req.params.id;
   logApiCall("PUT", `/api/work-orders/${id}`, req.body);
   try {
+    const check = await query(
+      `SELECT "WO_ID", "unitId" FROM public."WORK_ORDER" WHERE "WO_ID" = $1 OR "Nomor_WO" = $1`,
+      [id]
+    );
+    if (check.rowCount === 0) {
+      logApiRoute("PUT", `/api/work-orders/${id}`, 404);
+      return res.status(404).json({
+        success: false,
+        status: "error",
+        error: "WORK_ORDER_NOT_FOUND",
+        message: `Work Order ${id} tidak ditemukan.`
+      });
+    }
+    const recordUnit = String(check.rows[0]?.unitId || "").toUpperCase();
+    const userUnit = String(req.query.unitId || req.user?.unitId || "").toUpperCase();
+    if (userUnit && recordUnit && userUnit !== "ALL" && recordUnit !== userUnit) {
+      logApiRoute("PUT", `/api/work-orders/${id}`, 403);
+      return res.status(403).json({
+        success: false,
+        status: "error",
+        error: "FORBIDDEN",
+        message: `Akses ditolak: Work Order ini milik unit ${recordUnit}, tidak dapat diubah oleh unit ${userUnit}.`
+      });
+    }
     const w = { ...req.body, WO_ID: id };
     const resDb = await handleUpsertWorkOrder(w);
-    const check = await query('SELECT "WO_ID" FROM public."WORK_ORDER" WHERE "WO_ID" = $1', [id]);
-    if (check.rowCount === 0) {
-      throw new Error("Verifikasi gagal: Work Order tidak ditemukan setelah UPDATE");
-    }
+    logDbOperation("WORK_ORDER", "UPDATE", id, recordUnit);
+    logApiRoute("PUT", `/api/work-orders/${id}`, 200);
     return res.json({
       status: "success",
       success: true,
@@ -1332,6 +1431,7 @@ router.put("/work-orders/:id", async (req, res) => {
     });
   } catch (err) {
     console.error("[BACKEND ERROR] PUT /api/work-orders:", err.message);
+    logApiRoute("PUT", `/api/work-orders/${id}`, 500);
     return res.status(500).json({
       status: "error",
       success: false,
@@ -1341,6 +1441,7 @@ router.put("/work-orders/:id", async (req, res) => {
 });
 router.delete(
   "/work-orders/:id",
+  requireAuth,
   async (req, res) => {
     const woId = req.params.id;
     logApiCall(
@@ -1348,6 +1449,30 @@ router.delete(
       `/api/work-orders/${woId}`
     );
     try {
+      const check = await query(
+        `SELECT "WO_ID", "unitId" FROM public."WORK_ORDER" WHERE "WO_ID" = $1 OR "Nomor_WO" = $1`,
+        [woId]
+      );
+      if (check.rowCount === 0) {
+        logApiRoute("DELETE", `/api/work-orders/${woId}`, 404);
+        return res.status(404).json({
+          success: false,
+          status: "error",
+          error: "WORK_ORDER_NOT_FOUND",
+          message: `Work Order ${woId} tidak ditemukan atau sudah terhapus.`
+        });
+      }
+      const recordUnit = String(check.rows[0]?.unitId || "").toUpperCase();
+      const userUnit = String(req.query.unitId || req.user?.unitId || "").toUpperCase();
+      if (userUnit && recordUnit && userUnit !== "ALL" && recordUnit !== userUnit) {
+        logApiRoute("DELETE", `/api/work-orders/${woId}`, 403);
+        return res.status(403).json({
+          success: false,
+          status: "error",
+          error: "FORBIDDEN",
+          message: `Akses ditolak: Work Order ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`
+        });
+      }
       const resDb = await query(
         `
         DELETE FROM public."WORK_ORDER"
@@ -1357,17 +1482,20 @@ router.delete(
         `,
         [woId]
       );
-      const check = await query('SELECT "WO_ID" FROM public."WORK_ORDER" WHERE "WO_ID" = $1', [woId]);
-      if (check.rowCount > 0) {
-        throw new Error("Verifikasi gagal: Work Order masih ada setelah DELETE");
-      }
+      logDbOperation("WORK_ORDER", "DELETE", woId, recordUnit);
+      logSyncOperation("WORK_ORDER", woId, "DELETED", 200);
+      logApiRoute("DELETE", `/api/work-orders/${woId}`, 200);
       return res.json({
-        status: "success",
         success: true,
-        deletedCount: resDb.rowCount
+        status: "success",
+        deleted: true,
+        id: woId,
+        deletedCount: resDb.rowCount,
+        message: "Work Order berhasil dihapus."
       });
     } catch (err) {
       console.error("[BACKEND ERROR] DELETE /api/work-orders:", err.message);
+      logApiRoute("DELETE", `/api/work-orders/${woId}`, 500);
       return res.status(500).json({
         status: "error",
         success: false,
@@ -1678,10 +1806,51 @@ var handleUpsertRealisasi = async (req, res) => {
     });
   }
 };
+router.get("/realisasi/:id", async (req, res) => {
+  const relId = req.params.id;
+  const { unitId, isAll } = parseUnitFilter(req);
+  logApiCall("GET", `/api/realisasi/${relId}`);
+  try {
+    let sql = `
+      SELECT *
+      FROM public."REALISASI"
+      WHERE "ID" = $1
+    `;
+    const params = [relId];
+    if (!isAll && unitId) {
+      params.push(unitId);
+      sql += ` AND "unitId" = $${params.length}`;
+    }
+    const resDb = await query(sql, params);
+    if (resDb.rowCount === 0) {
+      logApiRoute("GET", `/api/realisasi/${relId}`, 404);
+      return res.status(404).json({
+        success: false,
+        status: "error",
+        error: "REALISASI_NOT_FOUND",
+        message: `Data realisasi dengan ID ${relId} tidak ditemukan.`
+      });
+    }
+    logApiRoute("GET", `/api/realisasi/${relId}`, 200);
+    return res.json({
+      success: true,
+      status: "success",
+      data: resDb.rows[0]
+    });
+  } catch (err) {
+    logApiRoute("GET", `/api/realisasi/${relId}`, 500);
+    return res.status(500).json({
+      success: false,
+      status: "error",
+      message: err.message
+    });
+  }
+});
 router.post("/realisasi", handleUpsertRealisasi);
 router.put("/realisasi/:id", handleUpsertRealisasi);
 router.delete(
   "/realisasi/:id",
+  requireAuth,
   async (req, res) => {
     const relId = req.params.id;
     logApiCall(
@@ -1689,6 +1858,30 @@ router.delete(
       `/api/realisasi/${relId}`
     );
     try {
+      const check = await query(
+        `SELECT "ID", "unitId" FROM public."REALISASI" WHERE "ID" = $1`,
+        [relId]
+      );
+      if (check.rowCount === 0) {
+        logApiRoute("DELETE", `/api/realisasi/${relId}`, 404);
+        return res.status(404).json({
+          success: false,
+          status: "error",
+          error: "REALISASI_NOT_FOUND",
+          message: `Realisasi dengan ID ${relId} tidak ditemukan atau sudah terhapus.`
+        });
+      }
+      const recordUnit = String(check.rows[0]?.unitId || "").toUpperCase();
+      const userUnit = String(req.query.unitId || req.user?.unitId || "").toUpperCase();
+      if (userUnit && recordUnit && userUnit !== "ALL" && recordUnit !== userUnit) {
+        logApiRoute("DELETE", `/api/realisasi/${relId}`, 403);
+        return res.status(403).json({
+          success: false,
+          status: "error",
+          error: "FORBIDDEN",
+          message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`
+        });
+      }
       const resDb = await query(
         `
         DELETE FROM public."REALISASI"
@@ -1697,20 +1890,23 @@ router.delete(
         `,
         [relId]
       );
-      if (resDb.rowCount === 0) {
-        return res.status(404).json({
-          status: "error",
-          message: "Realisasi tidak ditemukan atau sudah terhapus."
-        });
-      }
+      logDbOperation("REALISASI", "DELETE", relId, recordUnit);
+      logSyncOperation("REALISASI", relId, "DELETED", 200);
+      logApiRoute("DELETE", `/api/realisasi/${relId}`, 200);
       return res.json({
+        success: true,
         status: "success",
+        deleted: true,
+        id: relId,
         deletedCount: resDb.rowCount,
-        data: resDb.rows[0]
+        data: resDb.rows[0],
+        message: "Realisasi berhasil dihapus."
       });
     } catch (err) {
       console.error("[REALISASI DELETE] Error:", err.message);
+      logApiRoute("DELETE", `/api/realisasi/${relId}`, 500);
       return res.status(500).json({
+        success: false,
         status: "error",
         message: err.message
       });
@@ -1968,6 +2164,7 @@ router.delete(
       );
       if (checkRes.rowCount === 0) {
         console.warn(`[ABSENSI TRACE 3] DELETE target not found. ID: ${absId}`);
+        logApiRoute("DELETE", `/api/absensi/${absId}`, 404);
         return res.status(404).json({
           success: false,
           status: "error",
@@ -1979,6 +2176,7 @@ router.delete(
       const userUnit = String(req.query.unitId || req.user?.unitId || "").toUpperCase();
       if (userUnit && recordUnit && userUnit !== "ALL" && recordUnit !== userUnit) {
         console.warn(`[ABSENSI TRACE 3] FORBIDDEN: User unit ${userUnit} tried to delete record unit ${recordUnit}`);
+        logApiRoute("DELETE", `/api/absensi/${absId}`, 403);
         return res.status(403).json({
           success: false,
           status: "error",
@@ -1995,6 +2193,9 @@ router.delete(
         `,
         [absId]
       );
+      logDbOperation("ABSENSI", "DELETE", absId, recordUnit);
+      logSyncOperation("ABSENSI", absId, "DELETED", 200);
+      logApiRoute("DELETE", `/api/absensi/${absId}`, 200);
       return res.json({
         success: true,
         deleted: true,
@@ -2006,6 +2207,7 @@ router.delete(
       });
     } catch (err) {
       console.error("[ABSENSI DELETE] Error:", err.message);
+      logApiRoute("DELETE", `/api/absensi/${absId}`, 500);
       return res.status(500).json({
         success: false,
         status: "error",

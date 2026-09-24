@@ -759,7 +759,8 @@ export function AbsensiProvider({
           try {
             const result =
               await ApiService.deleteAbsensi(
-                id
+                id,
+                activeUnitId
               );
 
             if (result.success) {
@@ -803,13 +804,14 @@ export function AbsensiProvider({
           await syncManager.executeMutation({
             type: 'DELETE',
             tableName: 'ABSENSI',
-            payload: { id },
+            payload: { id, unitId: activeUnitId },
 
             apiCall:
               async () => {
                 const result =
                   await ApiService.deleteAbsensi(
-                    id
+                    id,
+                    activeUnitId
                   );
 
                 return {

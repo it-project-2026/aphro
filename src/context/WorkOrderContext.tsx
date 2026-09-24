@@ -457,7 +457,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         tableName: 'WORK_ORDER',
         payload: { id: cleanId, nomorWO: cleanNomor },
         apiCall: async () => {
-          const result = await ApiService.deleteWorkOrder(cleanId || cleanNomor);
+          const result = await ApiService.deleteWorkOrder(cleanId || cleanNomor, unitId);
           return { status: result.success ? 'success' : 'error', message: result.message };
         },
       });

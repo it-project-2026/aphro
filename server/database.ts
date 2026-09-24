@@ -72,15 +72,16 @@ function saveMockStore() {
 
 function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
   const upper = text.trim().toUpperCase();
-  let tableName = 'WORK_ORDER';
-  if (upper.includes('"INISIASI"') || upper.includes(' INISIASI ')) tableName = 'INISIASI';
-  else if (upper.includes('"USERS"') || upper.includes(' USERS ')) tableName = 'USERS';
-  else if (upper.includes('"ABSENSI"') || upper.includes(' ABSENSI ')) tableName = 'ABSENSI';
-  else if (upper.includes('"REALISASI"') || upper.includes(' REALISASI ')) tableName = 'REALISASI';
-  else if (upper.includes('"ULP"') || upper.includes(' ULP ')) tableName = 'ULP';
-  else if (upper.includes('"PENYULANG"') || upper.includes(' PENYULANG ')) tableName = 'PENYULANG';
-  else if (upper.includes('"PETUGAS"') || upper.includes(' PETUGAS ')) tableName = 'PETUGAS';
-  else if (upper.includes('"REGU_ROW"') || upper.includes(' REGU_ROW ')) tableName = 'REGU_ROW';
+  const tableMatch = text.match(/(?:FROM|INTO|UPDATE)\s+(?:public\.)?"?([A-Za-z0-9_]+)"?/i);
+  let tableName = tableMatch ? tableMatch[1].toUpperCase() : 'WORK_ORDER';
+  if (!mockStore[tableName]) {
+    // fallback if table name not in standard keys
+    if (upper.includes('"WORK_ORDER"')) tableName = 'WORK_ORDER';
+    else if (upper.includes('"REALISASI"')) tableName = 'REALISASI';
+    else if (upper.includes('"ABSENSI"')) tableName = 'ABSENSI';
+    else if (upper.includes('"INISIASI"')) tableName = 'INISIASI';
+    else if (upper.includes('"USERS"')) tableName = 'USERS';
+  }
 
   let rows = mockStore[tableName] || [];
 
@@ -107,15 +108,19 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
         }
       }
     }
-    // 3. Filter by ID / WO_ID
-    const idIndex = text.indexOf('"ID" = $') !== -1 ? text.indexOf('"ID" = $') : text.indexOf('"WO_ID" = $');
-    if (idIndex !== -1) {
-      const match = text.slice(idIndex).match(/"(?:ID|WO_ID)"\s*=\s*\$(\d+)/);
+    // 3. Filter by ID / WO_ID / Nomor_WO
+    if (text.includes('"ID" = $') || text.includes('"WO_ID" = $') || text.includes('"Nomor_WO" = $')) {
+      const match = text.match(/"(?:ID|WO_ID|Nomor_WO)"\s*=\s*\$(\d+)/);
       if (match) {
         const paramIdx = parseInt(match[1], 10) - 1;
         const targetId = params[paramIdx];
         if (targetId) {
-          rows = rows.filter(r => String(r.ID || r.id || r.WO_ID || '').toUpperCase() === String(targetId).toUpperCase());
+          const tUpper = String(targetId).toUpperCase();
+          rows = rows.filter(r => 
+            String(r.ID || r.id || '').toUpperCase() === tUpper ||
+            String(r.WO_ID || '').toUpperCase() === tUpper ||
+            String(r.Nomor_WO || '').toUpperCase() === tUpper
+          );
         }
       }
     }
@@ -222,6 +227,7 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
       affectedRows = [obj];
     }
     
+    mockStore[tableName] = rows;
     saveMockStore();
   } else if (upper.startsWith('DELETE') && params && params.length > 0) {
     isMutation = true;

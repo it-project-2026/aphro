@@ -1740,38 +1740,53 @@ export class ApiService {
    */
 
   static async deleteWorkOrder(
-    id: string
+    id: string,
+    unitId?: string
   ): Promise<{
     success: boolean;
     message?: string;
   }> {
+    const token = this.getAuthToken();
+    const query = unitId ? `?unitId=${encodeURIComponent(unitId)}` : '';
+    console.log(`[SYNC] Sending DELETE WORK_ORDER to HyperCloud: DELETE /api/work-orders/${id}`);
+
     try {
-      const res =
-        await this.executeFetch(
-          `/api/work-orders/${encodeURIComponent(id)}`,
-          {
-            method: 'DELETE',
-          }
-        );
+      const res = await this.executeFetch(
+        `/api/work-orders/${encodeURIComponent(id)}${query}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
 
       if (!res.ok) {
+        let serverMsg: string | undefined;
+        try {
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
+        } catch {
+          // ignore
+        }
+        const errReason = ApiService.classifyErrorReason(res.status);
+        console.warn(`[SYNC] FAILED endpoint=/api/work-orders/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'}`);
         return {
           success: false,
-          message:
-            this.formatErrorMessage(
-              res.status
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
+      console.log(`[SYNC] HTTP ${res.status} - WORK_ORDER deleted from HyperCloud (ID: ${id})`);
       return {
         success: true,
       };
     } catch (err: any) {
+      console.warn(`[SYNC] FAILED endpoint=/api/work-orders/${id} reason=${err.message}`);
       return {
         success: false,
-        message:
-          err.message,
+        message: err.message,
       };
     }
   }
@@ -1783,38 +1798,53 @@ export class ApiService {
    */
 
   static async deleteAbsensi(
-    id: string
+    id: string,
+    unitId?: string
   ): Promise<{
     success: boolean;
     message?: string;
   }> {
+    const token = this.getAuthToken();
+    const query = unitId ? `?unitId=${encodeURIComponent(unitId)}` : '';
+    console.log(`[SYNC] Sending DELETE ABSENSI to HyperCloud: DELETE /api/absensi/${id}`);
+
     try {
-      const res =
-        await this.executeFetch(
-          `/api/absensi/${encodeURIComponent(id)}`,
-          {
-            method: 'DELETE',
-          }
-        );
+      const res = await this.executeFetch(
+        `/api/absensi/${encodeURIComponent(id)}${query}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
 
       if (!res.ok) {
+        let serverMsg: string | undefined;
+        try {
+          const errJson = await res.json();
+          serverMsg = errJson?.message;
+        } catch {
+          // ignore
+        }
+        const errReason = ApiService.classifyErrorReason(res.status);
+        console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'}`);
         return {
           success: false,
-          message:
-            this.formatErrorMessage(
-              res.status
-            ),
+          message: this.formatErrorMessage(res.status, serverMsg),
         };
       }
 
+      console.log(`[SYNC] HTTP ${res.status} - ABSENSI deleted from HyperCloud (ID: ${id})`);
       return {
         success: true,
       };
     } catch (err: any) {
+      console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} reason=${err.message}`);
       return {
         success: false,
-        message:
-          err.message,
+        message: err.message,
       };
     }
   }
