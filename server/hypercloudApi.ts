@@ -222,6 +222,8 @@ router.get('/version', async (req: Request, res: Response) => {
       '/api/work-orders',
       '/api/absensi',
       '/api/realisasi',
+      '/api/log-activity',
+      '/api/logs',
       '/api/dashboard',
       '/api/send-notification',
     ],
@@ -355,19 +357,26 @@ router.post('/login', async (req: Request, res: Response) => {
       cleanUnitId,
     ]);
 
-    // 2. If not found in current unit, search across all units
+    // 2. If not found, try normalized variations (e.g., row01 <-> row1, petugasrow <-> row)
     if (userRes.rows.length === 0) {
+      const normUsername = cleanUsername.replace(/[^a-z0-9]/g, '');
+      const unpadded = normUsername.replace(/0+(\d+)/g, '$1'); // row01 -> row1
+      const padded = normUsername.replace(/(\D+)(\d)$/g, '$10$2'); // row1 -> row01
+
       const fallbackSql = `
         SELECT *
         FROM public."USERS"
         WHERE (
-          LOWER(TRIM("Username")) = LOWER($1)
-          OR LOWER(TRIM("UserID")) = LOWER($1)
-          OR LOWER(TRIM("Nama_Regu")) = LOWER($1)
+          LOWER(TRIM("Username")) IN (LOWER($1), LOWER($2), LOWER($3))
+          OR LOWER(TRIM("UserID")) IN (LOWER($1), LOWER($2), LOWER($3))
+          OR LOWER(TRIM("Nama_Regu")) IN (LOWER($1), LOWER($2), LOWER($3))
+          OR LOWER(REPLACE(REPLACE("Username", ' ', ''), '-', '')) IN (LOWER($1), LOWER($2), LOWER($3))
+          OR LOWER(REPLACE(REPLACE("UserID", ' ', ''), '-', '')) IN (LOWER($1), LOWER($2), LOWER($3))
+          OR LOWER(REPLACE(REPLACE("Nama_Regu", ' ', ''), '-', '')) IN (LOWER($1), LOWER($2), LOWER($3))
         )
         LIMIT 1
       `;
-      userRes = await query(fallbackSql, [cleanUsername]);
+      userRes = await query(fallbackSql, [cleanUsername, unpadded, padded]);
     }
 
     if (userRes.rows.length === 0) {
@@ -2569,6 +2578,78 @@ router.post('/send-notification', async (req: Request, res: Response) => {
     woId: woData?.id || '',
     delivered: true,
   });
+});
+
+/**
+ * GET /api/log-activity & /api/logs
+ */
+router.get(['/log-activity', '/logs'], async (req: Request, res: Response) => {
+  const { unitId, limit = 100 } = req.query;
+  logApiCall('GET', req.path, req.query);
+  try {
+    let sql = `SELECT * FROM public."LOG_ACTIVITY"`;
+    const params: any[] = [];
+    if (unitId && String(unitId).toUpperCase() !== 'ALL') {
+      sql += ` WHERE UPPER("unitId") = UPPER($1)`;
+      params.push(unitId);
+    }
+    sql += ` ORDER BY "Timestamp" DESC LIMIT $${params.length + 1}`;
+    params.push(Number(limit) || 100);
+
+    const result = await query(sql, params);
+    return res.json({
+      success: true,
+      status: 'success',
+      source: 'hypercloud',
+      data: result.rows,
+      count: result.rowCount
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      status: 'error',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/log-activity & /api/logs
+ */
+router.post(['/log-activity', '/logs'], async (req: Request, res: Response) => {
+  const { unitId, action, details, userId, userName, ipAddress } = req.body || {};
+  logApiCall('POST', req.path, req.body);
+  try {
+    const id = `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const timestamp = new Date().toISOString();
+    const sql = `
+      INSERT INTO public."LOG_ACTIVITY" ("ID", "unitId", "Action", "Details", "UserID", "UserName", "Timestamp", "IP_Address")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `;
+    const result = await query(sql, [
+      id,
+      unitId || 'ALL',
+      action || 'ACTIVITY',
+      typeof details === 'object' ? JSON.stringify(details) : String(details || ''),
+      userId || '',
+      userName || '',
+      timestamp,
+      ipAddress || ''
+    ]);
+    return res.json({
+      success: true,
+      status: 'success',
+      source: 'hypercloud',
+      data: result.rows[0]
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      status: 'error',
+      message: err.message
+    });
+  }
 });
 
 /**

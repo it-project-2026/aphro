@@ -105,7 +105,7 @@ export class AuthService {
       console.warn('[AuthService] Dexie login fallback error:', dexieErr);
     }
 
-    return { success: false, error: 'Tidak dapat terhubung ke API HyperCloudHost dan akun tidak ditemukan di penyimpanan lokal.' };
+    return { success: false, error: 'Username atau password tidak sesuai pada Database HyperCloudHost.' };
   }
 
   /**

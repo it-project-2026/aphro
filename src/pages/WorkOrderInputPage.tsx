@@ -350,19 +350,22 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
         updateWorkOrder(initialData.id, woData);
         showToast(`Work Order "${nomorWO}" Berhasil Diperbarui!`, 'success');
       } else {
-        // addWorkOrder already handles both local state and GAS API synchronization
+        // addWorkOrder already handles both local state and database synchronization
         const newWo = await addWorkOrder(woData);
         
-        // Trigger push notification for the targeted regu
+        // Trigger push notification for the targeted regu if supported
         try {
-          await ApiService.executeFetch('/api/send-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              reguName: woData.reguName,
-              woData: { ...woData, id: newWo?.id || '' }
-            })
-          });
+          const isProd = typeof window !== 'undefined' && (window.location.hostname === 'www.aphro-row.my.id' || window.location.hostname === 'aphro-row.my.id');
+          if (!isProd) {
+            await ApiService.executeFetch('/api/send-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                reguName: woData.reguName,
+                woData: { ...woData, id: newWo?.id || '' }
+              })
+            }).catch(() => {});
+          }
         } catch {
           // Push notification is optional, continue normally
         }

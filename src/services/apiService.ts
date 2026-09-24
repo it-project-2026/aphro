@@ -221,9 +221,9 @@ export class ApiService {
     const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
     const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
 
-    // In preview / dev / production mode: try primary API first, fallback to local server if network fetch fails or returns 404
+    // In preview / dev mode with fullstack Express server: fallback to local server if network fetch fails or returns 404
     const host = typeof window !== 'undefined' && window.location ? window.location.origin : '';
-    const localUrl = `${host}${apiPath}`;
+    const localUrl = !isAphroProduction && host ? `${host}${apiPath}` : '';
 
     try {
       console.log(`[ApiService] API request: ${externalUrl}`);
@@ -241,13 +241,16 @@ export class ApiService {
       }
       return res;
     } catch (extErr: any) {
-      console.warn(`[ApiService] Primary API network error (${externalUrl}). Trying local endpoint (${localUrl}):`, extErr?.message || extErr);
-      try {
-        return await fetch(localUrl, finalOptions);
-      } catch (localErr) {
-        console.error(`[ApiService] Both primary and local API requests failed:`, localErr);
-        throw extErr;
+      if (localUrl && localUrl !== externalUrl) {
+        console.warn(`[ApiService] Primary API network error (${externalUrl}). Trying local endpoint (${localUrl}):`, extErr?.message || extErr);
+        try {
+          return await fetch(localUrl, finalOptions);
+        } catch (localErr) {
+          console.error(`[ApiService] Both primary and local API requests failed:`, localErr);
+          throw extErr;
+        }
       }
+      throw extErr;
     }
   }
 

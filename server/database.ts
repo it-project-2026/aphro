@@ -99,12 +99,25 @@ function getMockQueryResult(text: string, params: any[]): pg.QueryResult {
     // 2. Filter by Username / UserID / Nama_Regu
     if (tableName === 'USERS' && params && params.length > 0) {
       const userParam = String(params[0] || '').trim().toLowerCase();
+      const normParam = userParam.replace(/[^a-z0-9]/g, '').replace(/0+(\d+)/g, '$1');
       if (userParam && !userParam.startsWith('ul')) {
         rows = rows.filter(r => {
           const uName = String(r.Username || r.username || '').toLowerCase();
           const uId = String(r.UserID || r.userId || r.id || '').toLowerCase();
           const uRegu = String(r.Nama_Regu || r.reguName || '').toLowerCase();
-          return uName === userParam || uId === userParam || uRegu === userParam || uName.includes(userParam);
+          const normUName = uName.replace(/[^a-z0-9]/g, '').replace(/0+(\d+)/g, '$1');
+          const normUId = uId.replace(/[^a-z0-9]/g, '').replace(/0+(\d+)/g, '$1');
+          const normURegu = uRegu.replace(/[^a-z0-9]/g, '').replace(/0+(\d+)/g, '$1');
+
+          return (
+            uName === userParam ||
+            uId === userParam ||
+            uRegu === userParam ||
+            normUName === normParam ||
+            normUId === normParam ||
+            normURegu === normParam ||
+            (normParam.length > 2 && (normUName.includes(normParam) || normParam.includes(normUName) || normURegu.includes(normParam)))
+          );
         });
       }
     } else {
