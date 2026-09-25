@@ -591,6 +591,28 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       return;
     }
 
+    const targetUnitId =
+      selectedWO.unitId ||
+      currentUser?.unitId ||
+      InisiasiService.getSelectedUnitId() ||
+      'UL2';
+
+    console.log('[REALISASI STEP 1]', {
+      id: '(NEW)',
+      unitId: targetUnitId,
+      WO_ID: resolvedWoId,
+      Nomor_WO: resolvedNomorWo,
+      workOrderId: resolvedWoId,
+      woId: resolvedWoId,
+      nomorWO: resolvedNomorWo,
+      selectedWO_id: selectedWO.id,
+      selectedWO_WO_ID: selectedWO.WO_ID,
+      selectedWO_nomorWO: selectedWO.nomorWO,
+      selectedWO_Nomor_WO: selectedWO.Nomor_WO,
+      resolvedWoId,
+      resolvedNomorWo,
+    });
+
     if (!noTiang.trim()) {
       showToast('Nomor Tiang tidak boleh kosong!', 'warning');
       return;

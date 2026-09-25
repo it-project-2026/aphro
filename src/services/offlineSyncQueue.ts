@@ -288,8 +288,41 @@ class OfflineSyncQueueEngine {
         const photos = item.payload?.photos;
 
         // Ensure WO_ID and Nomor_WO are carried through in case item was queued in earlier format
-        const resolvedWoId = String(realisasi?.WO_ID || realisasi?.workOrderId || realisasi?.woId || '').trim();
-        const resolvedNomorWo = String(realisasi?.Nomor_WO || realisasi?.nomorWO || realisasi?.nomor_wo || '').trim();
+        let resolvedWoId = String(realisasi?.WO_ID || realisasi?.workOrderId || realisasi?.woId || '').trim();
+        let resolvedNomorWo = String(realisasi?.Nomor_WO || realisasi?.nomorWO || realisasi?.nomor_wo || '').trim();
+
+        // If WO_ID and Nomor_WO are both missing (e.g. from a legacy pending record enqueued before the fix),
+        // recover from photos or matching work orders in Dexie so it does not fail with 400
+        if (!resolvedWoId && !resolvedNomorWo) {
+          if (photos && Array.isArray(photos)) {
+            for (const p of photos) {
+              if (p?.woId && p.woId.trim()) {
+                resolvedWoId = p.woId.trim();
+                break;
+              }
+            }
+          }
+
+          try {
+            const cachedWos = await dexieDb.work_orders.toArray();
+            if (cachedWos.length > 0) {
+              const matchedWo =
+                cachedWos.find((w) => {
+                  if (realisasi.penyulangName && w.penyulangName && realisasi.penyulangName === w.penyulangName) return true;
+                  if (realisasi.ulpName && w.ulpName && realisasi.ulpName === w.ulpName) return true;
+                  return false;
+                }) || cachedWos[0];
+
+              if (matchedWo) {
+                resolvedWoId = String(matchedWo.WO_ID || matchedWo.id || '').trim();
+                resolvedNomorWo = String(matchedWo.Nomor_WO || matchedWo.nomorWO || '').trim();
+                console.log(`[RECOVERY] Recovered WO_ID="${resolvedWoId}" Nomor_WO="${resolvedNomorWo}" for pending record ${item.idempotencyKey}`);
+              }
+            }
+          } catch (recErr) {
+            console.warn('[RECOVERY] Failed to recover work order for pending item:', recErr);
+          }
+        }
 
         const enrichedRealisasi = {
           ...realisasi,
@@ -299,6 +332,16 @@ class OfflineSyncQueueEngine {
           Nomor_WO: resolvedNomorWo,
           nomorWO: resolvedNomorWo,
         };
+
+        console.log('[REALISASI STEP 3]', {
+          id: enrichedRealisasi.id || enrichedRealisasi.localId,
+          unitId: enrichedRealisasi.unitId,
+          WO_ID: enrichedRealisasi.WO_ID,
+          Nomor_WO: enrichedRealisasi.Nomor_WO,
+          workOrderId: enrichedRealisasi.workOrderId,
+          woId: enrichedRealisasi.woId,
+          nomorWO: enrichedRealisasi.nomorWO,
+        });
 
         // Update Dexie status to SYNCING if record exists
         if (enrichedRealisasi?.localId) {

@@ -689,6 +689,16 @@ export function RealisasiProvider({
               false,
           };
 
+        console.log('[REALISASI STEP 2]', {
+          id: newRelUI.id,
+          unitId: newRelUI.unitId,
+          WO_ID: newRelUI.WO_ID,
+          Nomor_WO: newRelUI.Nomor_WO,
+          workOrderId: newRelUI.workOrderId,
+          woId: newRelUI.woId,
+          nomorWO: newRelUI.nomorWO,
+        });
+
         // 1. ONLINE-FIRST logic
         if (typeof navigator !== 'undefined' && navigator.onLine) {
           try {

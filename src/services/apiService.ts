@@ -501,11 +501,14 @@ export class ApiService {
       status: 'Selesai',
     };
 
-    console.log('[REALISASI PAYLOAD CHECK]', {
+    console.log('[REALISASI FINAL PAYLOAD]', {
       id: payload.ID || payload.id,
       unitId: payload.unitId,
       WO_ID: payload.WO_ID,
-      Nomor_WO: payload.Nomor_WO
+      Nomor_WO: payload.Nomor_WO,
+      workOrderId: payload.workOrderId,
+      woId: payload.woId,
+      nomorWO: payload.nomorWO,
     });
 
     console.log('[SYNC] ONLINE');
