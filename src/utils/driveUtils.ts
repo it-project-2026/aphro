@@ -11,6 +11,12 @@ export function isBase64Image(str: string | undefined | null): boolean {
   return s.startsWith('data:image') || (s.length > 500 && !s.startsWith('http'));
 }
 
+export function extractDriveFileId(url: string | undefined | null): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/id=([a-zA-Z0-9_-]+)/) || url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match && match[1] ? match[1] : null;
+}
+
 /**
  * Converts any Google Drive URL (export=view, uc?id=, etc.) to the official Drive view link
  * which opens the photo preview page directly in the browser.

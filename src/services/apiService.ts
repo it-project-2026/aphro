@@ -1430,6 +1430,15 @@ export class ApiService {
     return await res.json();
   }
 
+  static async getDatabaseStatus(): Promise<{ connected: boolean; status: string; message?: string }> {
+    try {
+      const h = await this.checkHealth();
+      return { connected: h.status === 'OK' || h.status === 'success', status: h.status, message: h.database || h.databaseName };
+    } catch (e: any) {
+      return { connected: false, status: 'error', message: e.message };
+    }
+  }
+
   /**
    * =========================================================
    * LOGIN
@@ -2341,10 +2350,11 @@ export class ApiService {
       });
 
       const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
-      const rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
+      const rawRel: Realisasi[] = Array.isArray(relRes?.data) ? relRes.data : [];
 
       const workOrders = rawWo.map((row: any) => normalizeWorkOrderRow(row));
-      const realisasiList = rawRel.map((row: any) => normalizeRealisasiRow(row));
+      // fetchRealisasi() sudah mengembalikan array Realisasi yang telah dinormalisasi
+      const realisasiList = rawRel;
 
       console.log(`[DB SOURCE] entity=REKAP_PERIOD source=HYPERCLOUD unitId=${stdId} woCount=${workOrders.length} relCount=${realisasiList.length}`);
 
@@ -2388,10 +2398,10 @@ export class ApiService {
       });
 
       const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
-      const rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
+      const rawRel: Realisasi[] = Array.isArray(relRes?.data) ? relRes.data : [];
 
       let workOrders = rawWo.map((row: any) => normalizeWorkOrderRow(row));
-      let realisasiList = rawRel.map((row: any) => normalizeRealisasiRow(row));
+      let realisasiList: Realisasi[] = rawRel;
 
       if (nomorWO && nomorWO !== 'ALL') {
         const targetWO = nomorWO.toLowerCase().trim();
@@ -2427,12 +2437,12 @@ export class ApiService {
     const relRes = await this.fetchRealisasi({ unitId: stdId, limit: 1000 });
 
     const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
-    const rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
+    const rawRel: Realisasi[] = Array.isArray(relRes?.data) ? relRes.data : [];
 
     return {
       masterData,
       workOrders: rawWo.map((row: any) => normalizeWorkOrderRow(row)),
-      realisasi: rawRel.map((row: any) => normalizeRealisasiRow(row)),
+      realisasi: rawRel,
     };
   }
 }

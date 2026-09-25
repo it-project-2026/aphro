@@ -54,9 +54,20 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
         logging: false,
         backgroundColor: '#f8fafc',
         onclone: (clonedDoc) => {
+          // 1. Remove Tailwind bundle stylesheets from cloned document so html2canvas doesn't crash on oklch()
+          const links = clonedDoc.querySelectorAll('link[rel="stylesheet"]');
+          links.forEach((link) => {
+            const href = link.getAttribute('href') || '';
+            // Only keep Leaflet and Google Fonts stylesheets; remove Tailwind bundle
+            if (!href.includes('leaflet') && !href.includes('fonts.googleapis')) {
+              link.remove();
+            }
+          });
+
+          // 2. Sanitize any style tags
           const styles = clonedDoc.querySelectorAll('style');
           styles.forEach((style) => {
-            if (style.textContent) {
+            if (style.textContent && /oklch|oklab|lch|lab/i.test(style.textContent)) {
               style.textContent = style.textContent
                 .replace(/oklch\([^)]+\)/gi, '#0f172a')
                 .replace(/oklab\([^)]+\)/gi, '#0f172a')
@@ -65,8 +76,20 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
             }
           });
 
-          // Also iterate over link stylesheets if possible, but do not remove them.
-          // We must keep <link rel="stylesheet"> so Tailwind and Leaflet CSS apply in production.
+          // 3. Inject safe styles for map container in cloned doc
+          const safeStyle = clonedDoc.createElement('style');
+          safeStyle.textContent = `
+            #${id}, .gis-map-container, div[class*="border-2"] {
+              border: 2px solid #0f172a !important;
+              border-radius: 12px !important;
+              overflow: hidden !important;
+              background-color: #f8fafc !important;
+              position: relative !important;
+            }
+          `;
+          clonedDoc.head.appendChild(safeStyle);
+
+          // 4. Sanitize inline styles on all elements
           const allEls = clonedDoc.querySelectorAll('*');
           allEls.forEach((el) => {
             const styleAttr = el.getAttribute('style');
@@ -76,6 +99,8 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
                 styleAttr
                   .replace(/oklch\([^)]+\)/gi, '#0f172a')
                   .replace(/oklab\([^)]+\)/gi, '#0f172a')
+                  .replace(/lab\([^)]+\)/gi, '#0f172a')
+                  .replace(/lch\([^)]+\)/gi, '#0f172a')
               );
             }
           });

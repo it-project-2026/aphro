@@ -8,6 +8,136 @@ import { Realisasi, ULP, ReguROW, WorkOrder, Penyulang } from '../types';
 import { getWOTargetKms, getWORealisasiKms, TARGET_KMS_PER_TIM_ROW } from '../utils/metricUtils';
 import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO } from '../utils/dateUtils';
 
+/**
+ * Helper canonical key untuk pencocokan REGU
+ * - collapse multiple whitespace into single space
+ * - trim, lowercase
+ * - buang prefiks tim/regu/team/kelompok/row
+ */
+export function getCanonicalReguKey(s?: string): string {
+  if (!s) return '';
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^(tim|regu|team|kelompok|regu_row|tim_row)\s+/gi, '')
+    .replace(/^(row)\s+/gi, '')
+    .replace(/\b0+(\d+)\b/g, '$1')
+    .trim();
+}
+
+/**
+ * Helper canonical key untuk pencocokan PENYULANG
+ * Toleran terhadap "F. Cingkariang", "F.Cingkariang", "Cingkariang", "CINGKARIANG"
+ */
+export function getCanonicalPenyulangKey(s?: string): string {
+  if (!s) return '';
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^(f\.\s*|f\s+|feeder\s+|penyulang\s+)/gi, '')
+    .replace(/[._-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Helper klasifikasi KETERANGAN (TEBANG vs PANGKAS)
+ * Toleran terhadap whitespace, lowercase, UPPERCASE
+ */
+export function classifyKeteranganPohon(s?: string): 'TEBANG' | 'PANGKAS' {
+  if (!s) return 'PANGKAS';
+  const clean = String(s).trim().toUpperCase().replace(/\s+/g, ' ');
+  if (
+    clean.includes('TEBANG') ||
+    clean.includes('TEB') ||
+    clean.includes('TBG') ||
+    clean === 'T' ||
+    clean.includes('TEBANGAN')
+  ) {
+    return 'TEBANG';
+  }
+  return 'PANGKAS';
+}
+
+/**
+ * Robust Action Classifier for Realisasi item
+ * Checks keterangan, Keterangan, jenisPekerjaan, PEKERJAAN, jenisTanaman, and pertumbuhanTanaman
+ */
+export function classifyRealisasiAction(rel: any): 'TEBANG' | 'PANGKAS' {
+  if (!rel) return 'PANGKAS';
+
+  // 1. Primary: Keterangan
+  const ket = String(
+    rel.keterangan ||
+    rel.Keterangan ||
+    rel.KETERANGAN ||
+    ''
+  ).trim().toUpperCase().replace(/\s+/g, ' ');
+
+  if (ket) {
+    if (ket.includes('TEBANG') || ket.includes('TBG') || ket === 'T' || ket.includes('TEBANGAN')) {
+      return 'TEBANG';
+    }
+    if (ket.includes('PANGKAS') || ket.includes('POTONG') || ket.includes('RABAS')) {
+      return 'PANGKAS';
+    }
+  }
+
+  // 2. Secondary: jenisPekerjaan / PEKERJAAN
+  const pek = String(
+    rel.jenisPekerjaan ||
+    rel.PEKERJAAN ||
+    rel.pekerjaan ||
+    ''
+  ).trim().toUpperCase().replace(/\s+/g, ' ');
+
+  if (pek) {
+    if (pek.includes('TEBANG') || pek.includes('TBG')) {
+      return 'TEBANG';
+    }
+    if (pek.includes('PANGKAS') || pek.includes('POTONG') || pek.includes('RABAS')) {
+      return 'PANGKAS';
+    }
+  }
+
+  // 3. Fallback for legacy shifted sheet records (where column values shifted into Jenis_Tanaman or Pertumbuhan_Tanaman)
+  const jenisTanaman = String(
+    rel.jenisTanaman ||
+    rel.Jenis_Tanaman ||
+    rel.jenis_tanaman ||
+    ''
+  ).trim().toUpperCase().replace(/\s+/g, ' ');
+
+  if (jenisTanaman) {
+    if (jenisTanaman.includes('TEBANG') || jenisTanaman.includes('TBG')) {
+      return 'TEBANG';
+    }
+    if (jenisTanaman.includes('PANGKAS') || jenisTanaman.includes('POTONG')) {
+      return 'PANGKAS';
+    }
+  }
+
+  const pertumbuhan = String(
+    rel.pertumbuhanTanaman ||
+    rel.Pertumbuhan_Tanaman ||
+    ''
+  ).trim().toUpperCase().replace(/\s+/g, ' ');
+
+  if (pertumbuhan) {
+    if (pertumbuhan.includes('TEBANG') || pertumbuhan.includes('TBG')) {
+      return 'TEBANG';
+    }
+    if (pertumbuhan.includes('PANGKAS')) {
+      return 'PANGKAS';
+    }
+  }
+
+  // 4. Default to PANGKAS if record exists
+  return 'PANGKAS';
+}
+
 export interface ULConfigPreset {
   kodeUL: string;
   namaUL: string;
@@ -352,9 +482,10 @@ export class RekapHarianService {
 
       const addRegu = (ulp?: string, regu?: string) => {
         if (!regu) return;
-        const cleanRegu = regu.trim().toUpperCase();
-        if (seenRegu.has(cleanRegu)) return;
-        seenRegu.add(cleanRegu);
+        const cleanRegu = regu.trim().replace(/\s+/g, ' ').toUpperCase();
+        const canonKey = getCanonicalReguKey(cleanRegu);
+        if (!canonKey || seenRegu.has(canonKey)) return;
+        seenRegu.add(canonKey);
         rows.push({
           id: `row-extracted-${seq}`,
           noUrut: seq,
@@ -500,9 +631,10 @@ export class RekapHarianService {
 
       const addPenyulang = (ulp?: string, penyulang?: string) => {
         if (!penyulang) return;
-        const clean = penyulang.trim().toUpperCase();
-        if (seenPenyulang.has(clean)) return;
-        seenPenyulang.add(clean);
+        const clean = penyulang.trim().replace(/\s+/g, ' ').toUpperCase();
+        const canonKey = getCanonicalPenyulangKey(clean);
+        if (!canonKey || seenPenyulang.has(canonKey)) return;
+        seenPenyulang.add(canonKey);
         rows.push({
           id: `row-penyulang-ext-${seq}`,
           noUrut: seq,
@@ -585,15 +717,15 @@ export class RekapHarianService {
   ): RekapItemData[] {
     const normalize = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 
-    // Ensure any penyulang found in realisasiList or workOrders that is missing from currentRows is added
-    const existingPenyulang = new Set(currentRows.map(r => normalize(r.timRow)));
+    const existingPenyulang = new Set(currentRows.map(r => getCanonicalPenyulangKey(r.timRow)));
     const dynamicRows = [...currentRows];
 
     const addMissingPenyulang = (ulp?: string, penyulang?: string) => {
       if (!penyulang) return;
-      const clean = normalize(penyulang);
-      if (!existingPenyulang.has(clean)) {
-        existingPenyulang.add(clean);
+      const cleanCanon = getCanonicalPenyulangKey(penyulang);
+      if (!cleanCanon) return;
+      if (!existingPenyulang.has(cleanCanon)) {
+        existingPenyulang.add(cleanCanon);
         dynamicRows.push({
           id: `row-peny-dyn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           noUrut: dynamicRows.length + 1,
@@ -642,7 +774,7 @@ export class RekapHarianService {
         };
       }
 
-      const rowPenyulangClean = normalize(row.timRow); // timRow is used as Nama Penyulang
+      const rowPenyulangCanon = getCanonicalPenyulangKey(row.timRow);
 
       // 1. Data Pohon
       if (Array.isArray(realisasiList)) {
@@ -652,16 +784,27 @@ export class RekapHarianService {
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            let relPenyulangRaw = rel.penyulangName || (rel as any).Penyulang || (rel as any).PENYULANG || (rel as any).Nama_Penyulang || (rel as any).NAMA_PENYULANG || (rel as any).feeder || (rel as any).FEEDER || '';
+            let relPenyulangRaw =
+              rel.penyulangName ||
+              (rel as any).PENYULANG ||
+              (rel as any).Penyulang ||
+              (rel as any).penyulang ||
+              (rel as any).Nama_Penyulang ||
+              (rel as any).feeder ||
+              (rel as any).FEEDER ||
+              '';
             if (!relPenyulangRaw || relPenyulangRaw === '-' || relPenyulangRaw === 'null') {
               const matchedWo = woMapById[rel.workOrderId] || woMapByNo[rel.nomorWO];
               if (matchedWo?.penyulangName) relPenyulangRaw = matchedWo.penyulangName;
             }
-            const relPenyulang = normalize(relPenyulangRaw);
+            const relPenyulangCanon = getCanonicalPenyulangKey(relPenyulangRaw);
             
             let matchPenyulang = false;
-            if (relPenyulang && rowPenyulangClean) {
-              matchPenyulang = relPenyulang === rowPenyulangClean || relPenyulang.includes(rowPenyulangClean) || rowPenyulangClean.includes(relPenyulang);
+            if (relPenyulangCanon && rowPenyulangCanon) {
+              matchPenyulang =
+                relPenyulangCanon === rowPenyulangCanon ||
+                relPenyulangCanon.includes(rowPenyulangCanon) ||
+                rowPenyulangCanon.includes(relPenyulangCanon);
             }
 
             if (matchPenyulang) {
@@ -670,14 +813,10 @@ export class RekapHarianService {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
-              const ketRaw = rel.keterangan || (rel as any).Keterangan || (rel as any).KETERANGAN || rel.jenisTanaman || '';
-              const ket = normalize(ketRaw);
-              if (ket.includes('TEBANG') || ket.includes('TEB') || ket.includes('TBG') || ket === 'T' || ket === 'TEBANGAN') {
+              const action = classifyRealisasiAction(rel);
+              if (action === 'TEBANG') {
                 updatedDaily[dayKey].tebang1++;
-              } else if (ket.includes('PANGKAS') || ket.includes('PNG') || ket.includes('PKS') || ket.includes('PK') || ket === 'P' || ket === 'PANGKASAN' || ket.includes('POTONG')) {
-                updatedDaily[dayKey].pangkas++;
               } else {
-                // Default fallback for any realization record
                 updatedDaily[dayKey].pangkas++;
               }
             }
@@ -693,9 +832,13 @@ export class RekapHarianService {
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const woPenyulang = normalize(wo.penyulangName || (wo as any).Penyulang || (wo as any).PENYULANG || '');
+            const woPenyulangCanon = getCanonicalPenyulangKey(wo.penyulangName || (wo as any).Penyulang || (wo as any).PENYULANG || '');
             
-            if (woPenyulang && rowPenyulangClean && (woPenyulang === rowPenyulangClean || woPenyulang.includes(rowPenyulangClean) || rowPenyulangClean.includes(woPenyulang))) {
+            if (woPenyulangCanon && rowPenyulangCanon && (
+              woPenyulangCanon === rowPenyulangCanon ||
+              woPenyulangCanon.includes(rowPenyulangCanon) ||
+              rowPenyulangCanon.includes(woPenyulangCanon)
+            )) {
               const dayKey = String(parts.d).padStart(2, '0');
               if (!updatedDaily[dayKey]) {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
@@ -708,7 +851,7 @@ export class RekapHarianService {
               updatedDaily[dayKey].realisasiKms += realisasiKms;
 
               // Also aggregate TEBANG and PANGKAS if defined on Work Order level
-              const normPekerjaan = normalize(wo.pekerjaan || (wo as any).PEKERJAAN || wo.jenisPekerjaan || '');
+              const normPekerjaan = String(wo.pekerjaan || (wo as any).PEKERJAAN || wo.jenisPekerjaan || '').trim().toUpperCase();
               if (normPekerjaan === 'TEBANG' || normPekerjaan.includes('TEBANG')) {
                 const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
                 updatedDaily[dayKey].tebang1 += (isNaN(vol) ? 1 : vol);
@@ -868,20 +1011,14 @@ export class RekapHarianService {
     realisasiList: Realisasi[],
     workOrders: WorkOrder[]
   ): RekapItemData[] {
-    const normalize = (s: string) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
-    const stripPrefix = (s: string) => normalize(s)
-      .replace(/^(TIM|REGU|TEAM|KELOMPOK|ULP|UP3|UP4|ROW|REGU_ROW|TIM_ROW)\s*/gi, '')
-      .replace(/^(TIM|REGU|TEAM|KELOMPOK|ULP|UP3|UP4|ROW|REGU_ROW|TIM_ROW)\s*/gi, '') // Double pass
-      .trim();
-    const normalizeNumbers = (s: string) => s.replace(/(\d+)/g, (m) => parseInt(m, 10).toString());
-
     // Dynamically include any teams from realisasi or workOrders that are not in currentRows
-    const existingTeams = new Set(currentRows.map(r => normalizeNumbers(stripPrefix(r.timRow))));
+    const existingTeams = new Set(currentRows.map(r => getCanonicalReguKey(r.timRow)));
     const dynamicRows = [...currentRows];
 
     const addMissingTeam = (ulp?: string, regu?: string) => {
       if (!regu) return;
-      const cleanKey = normalizeNumbers(stripPrefix(regu));
+      const cleanKey = getCanonicalReguKey(regu);
+      if (!cleanKey) return;
       if (!existingTeams.has(cleanKey)) {
         existingTeams.add(cleanKey);
         dynamicRows.push({
@@ -915,8 +1052,8 @@ export class RekapHarianService {
         };
       }
 
-      const rowUlpClean = normalizeNumbers(stripPrefix(row.namaUlp));
-      const rowTimClean = normalizeNumbers(stripPrefix(row.timRow));
+      const rowUlpCanon = getCanonicalReguKey(row.namaUlp);
+      const rowTimCanon = getCanonicalReguKey(row.timRow);
 
       // 1. Data Pohon from Realisasi (Process this first to get dates of activity)
       const activityDatesByPenyulang: Record<string, Set<string>> = {};
@@ -928,20 +1065,27 @@ export class RekapHarianService {
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const relUlp = normalizeNumbers(stripPrefix(rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || ''));
-            const relTimFull = normalizeNumbers(normalize(rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || ''));
-            const relTimClean = normalizeNumbers(stripPrefix(rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || ''));
+            const relUlpRaw = rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || '';
+            const relUlpCanon = getCanonicalReguKey(relUlpRaw);
+            const relReguRaw = rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || '';
+            const relTimCanon = getCanonicalReguKey(relReguRaw);
             
-            const rowNumMatch = rowTimClean.match(/\d+/);
-            const relNumMatch = relTimClean.match(/\d+/);
+            const rowNumMatch = rowTimCanon.match(/\d+/);
+            const relNumMatch = relTimCanon.match(/\d+/);
             
             let matchTim = false;
-            if (relTimFull.includes(rowTimClean) || relTimClean.includes(rowTimClean) || rowTimClean.includes(relTimClean)) {
-              matchTim = true;
-            } else if (rowNumMatch && relNumMatch) {
-              const matchUlp = !relUlp || !rowUlpClean || relUlp.includes(rowUlpClean) || rowUlpClean.includes(relUlp) || relTimFull.includes(rowUlpClean);
-              if (matchUlp) {
-                matchTim = rowNumMatch[0] === relNumMatch[0];
+            if (rowTimCanon && relTimCanon) {
+              if (
+                relTimCanon === rowTimCanon ||
+                relTimCanon.includes(rowTimCanon) ||
+                rowTimCanon.includes(relTimCanon)
+              ) {
+                matchTim = true;
+              } else if (rowNumMatch && relNumMatch) {
+                const matchUlp = !relUlpCanon || !rowUlpCanon || relUlpCanon.includes(rowUlpCanon) || rowUlpCanon.includes(relUlpCanon) || relTimCanon.includes(rowUlpCanon);
+                if (matchUlp) {
+                  matchTim = parseInt(rowNumMatch[0], 10) === parseInt(relNumMatch[0], 10);
+                }
               }
             }
 
@@ -951,19 +1095,15 @@ export class RekapHarianService {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
-              const ketRaw = rel.keterangan || (rel as any).Keterangan || (rel as any).KETERANGAN || rel.jenisTanaman || '';
-              const ket = normalize(ketRaw);
-              if (ket.includes('TEBANG') || ket.includes('TEB') || ket.includes('TBG') || ket === 'T' || ket === 'TEBANGAN') {
+              const action = classifyRealisasiAction(rel);
+              if (action === 'TEBANG') {
                 updatedDaily[dayKey].tebang1++;
-              } else if (ket.includes('PANGKAS') || ket.includes('PNG') || ket.includes('PKS') || ket.includes('PK') || ket === 'P' || ket === 'PANGKASAN' || ket.includes('POTONG')) {
-                updatedDaily[dayKey].pangkas++;
               } else {
-                // Default fallback for any realization record
                 updatedDaily[dayKey].pangkas++;
               }
 
               // Track dates of activity for each Penyulang to help align KMS
-              const penyClean = normalize(rel.penyulangName || (rel as any).Penyulang || 'GENERAL');
+              const penyClean = getCanonicalPenyulangKey(rel.penyulangName || (rel as any).Penyulang || 'GENERAL');
               if (!activityDatesByPenyulang[penyClean]) activityDatesByPenyulang[penyClean] = new Set();
               activityDatesByPenyulang[penyClean].add(dayKey);
             }
@@ -979,20 +1119,25 @@ export class RekapHarianService {
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const woUlp = normalizeNumbers(stripPrefix(wo.ulpName || (wo as any).ULP || ''));
-            const woTimFull = normalizeNumbers(normalize(wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || ''));
-            const woTimClean = normalizeNumbers(stripPrefix(wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || ''));
+            const woUlpCanon = getCanonicalReguKey(wo.ulpName || (wo as any).ULP || '');
+            const woTimCanon = getCanonicalReguKey(wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || '');
             
-            const rowNumMatch = rowTimClean.match(/\d+/);
-            const woNumMatch = woTimClean.match(/\d+/);
+            const rowNumMatch = rowTimCanon.match(/\d+/);
+            const woNumMatch = woTimCanon.match(/\d+/);
             
             let matchTim = false;
-            if (woTimFull.includes(rowTimClean) || rowTimClean.includes(woTimClean)) {
-              matchTim = true;
-            } else if (rowNumMatch && woNumMatch) {
-              const matchUlp = !woUlp || !rowUlpClean || woUlp.includes(rowUlpClean) || rowUlpClean.includes(woUlp) || woTimFull.includes(rowUlpClean);
-              if (matchUlp) {
-                matchTim = rowNumMatch[0] === woNumMatch[0];
+            if (rowTimCanon && woTimCanon) {
+              if (
+                woTimCanon === rowTimCanon ||
+                woTimCanon.includes(rowTimCanon) ||
+                rowTimCanon.includes(woTimCanon)
+              ) {
+                matchTim = true;
+              } else if (rowNumMatch && woNumMatch) {
+                const matchUlp = !woUlpCanon || !rowUlpCanon || woUlpCanon.includes(rowUlpCanon) || rowUlpCanon.includes(woUlpCanon) || woTimCanon.includes(rowUlpCanon);
+                if (matchUlp) {
+                  matchTim = parseInt(rowNumMatch[0], 10) === parseInt(woNumMatch[0], 10);
+                }
               }
             }
 
@@ -1010,7 +1155,7 @@ export class RekapHarianService {
               updatedDaily[targetDayKey].realisasiKms += realisasiKms;
 
               // Also aggregate TEBANG and PANGKAS if defined on Work Order level
-              const normPekerjaan = normalize(wo.pekerjaan || (wo as any).PEKERJAAN || wo.jenisPekerjaan || '');
+              const normPekerjaan = String(wo.pekerjaan || (wo as any).PEKERJAAN || wo.jenisPekerjaan || '').trim().toUpperCase();
               if (normPekerjaan === 'TEBANG' || normPekerjaan.includes('TEBANG')) {
                 const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
                 updatedDaily[targetDayKey].tebang1 += (isNaN(vol) ? 1 : vol);

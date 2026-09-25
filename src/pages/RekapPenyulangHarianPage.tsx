@@ -186,7 +186,7 @@ export const RekapPenyulangHarianPage: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, penyulangList]);
+  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, penyulangList, realisasiList, workOrders]);
 
   const availableUlps = useMemo(() => {
     const set = new Set<string>();

@@ -5,6 +5,7 @@ import ExcelJS from 'exceljs';
 import { WorkOrder, Realisasi, AppSettings } from '../types';
 import { formatDateTime, formatDateOnly, formatExecutionDateTime } from './dateFormatter';
 import { getWIBDateString } from './dateUtils';
+import { formatDriveImageUrl, extractDriveFileId } from './driveUtils';
 
 /**
  * Utility to convert an image URL or dataUrl into compressed base64 for ExcelJS/PDF embedding.
@@ -21,7 +22,10 @@ export async function urlToBase64Image(
 ): Promise<{ base64: string; extension: 'jpeg' | 'png' } | null> {
   if (!url || typeof url !== 'string') return null;
 
-  const cacheKey = `${url}_${maxWidth}x${maxHeight}_q${quality}`;
+  const targetUrl = formatDriveImageUrl(url) || url;
+  const fileId = extractDriveFileId(url);
+
+  const cacheKey = `${targetUrl}_${maxWidth}x${maxHeight}_q${quality}`;
   if (imageCache.has(cacheKey)) {
     return imageCache.get(cacheKey)!;
   }
@@ -29,6 +33,7 @@ export async function urlToBase64Image(
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
+    img.referrerPolicy = 'no-referrer';
 
     const cleanup = () => {
       img.onload = null;
@@ -85,8 +90,9 @@ export async function urlToBase64Image(
 
     img.onerror = () => {
       cleanup();
-      if (url.startsWith('http')) {
-        fetch(url)
+      const fallbackUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w800` : targetUrl;
+      if (fallbackUrl.startsWith('http')) {
+        fetch(fallbackUrl, { referrerPolicy: 'no-referrer' })
           .then((res) => res.blob())
           .then((blob) => {
             const reader = new FileReader();
@@ -139,7 +145,7 @@ export async function urlToBase64Image(
       }
     };
 
-    img.src = url;
+    img.src = targetUrl;
   });
 }
 

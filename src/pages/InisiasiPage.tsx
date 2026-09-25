@@ -203,20 +203,20 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
             <div className="space-y-1.5">
               <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#00A2B9]/10 border border-[#00A2B9]/20 text-[#00A2B9] text-xs font-black uppercase tracking-widest">
                 <Server className="w-3.5 h-3.5" />
-                <span>Supabase Database: {SUPABASE_DATABASE_NAME}</span>
+                <span>Database: meysxysd_aphro</span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight pt-1">
                 Pilih Unit Layanan (UL)
               </h1>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-                Sistem database tunggal terhubung ke Tabel Supabase <code className="text-teal-400 bg-teal-950/60 px-1.5 py-0.5 rounded border border-teal-800 font-mono text-xs font-bold">{SUPABASE_TABLES.INISIASI}</code> via <code className="text-teal-400 font-mono">unitId</code>.
+                Sistem database terhubung ke PostgreSQL HyperCloudHost via <code className="text-teal-400 font-mono">unitId</code>.
               </p>
 
-              {/* Supabase Host Info Badge */}
+              {/* Host Info Badge */}
               <div className="pt-1 flex items-center justify-center gap-2">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-950 border border-teal-900/40 text-[11px] text-teal-400 font-mono shadow-sm">
                   <Database className="w-3.5 h-3.5 text-[#00A2B9]" />
-                  <span>Host: {SUPABASE_URL.replace('https://', '')}</span>
+                  <span>Host: api.aphro-row.my.id</span>
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping ml-1" />
                 </div>
               </div>

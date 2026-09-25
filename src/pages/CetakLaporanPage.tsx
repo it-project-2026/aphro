@@ -9,6 +9,7 @@ import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { MapReportCapture, MapReportCaptureRef } from '../components/MapReportCapture';
 import { formatDateTime, formatDateOnly, formatExecutionDateTime } from '../utils/dateFormatter';
 import { formatDateDisplay } from '../utils/dateUtils';
+import { formatDriveImageUrl, extractDriveFileId } from '../utils/driveUtils';
 import {
   generateLaporanPetaPDF,
   exportWorkOrdersToExcel,
@@ -468,7 +469,15 @@ export const CetakLaporanPage: React.FC = () => {
           const lng = rel.longitude || wo?.longitude || 100.449261;
           const jenisTanaman = rel.jenisTanaman || wo?.jenisPekerjaan || 'PEMBANGKASAN POHON (ROW)';
           const noTiang = rel.noTiang || wo?.lokasi || `Tiang #${idx + 1}`;
-          const photoUrl = rel.photosSesudah?.[0]?.dataUrl || rel.photosSebelum?.[0]?.dataUrl || rel.fotoSesudahUrl || rel.fotoSebelumUrl || wo?.lampiranUrl;
+          const rawPhotoCandidate =
+            rel.photosSesudah?.[0]?.dataUrl ||
+            rel.photosSebelum?.[0]?.dataUrl ||
+            rel.fotoSesudahUrl ||
+            rel.fotoSebelumUrl ||
+            (rel as any).Foto_Sesudah ||
+            (rel as any).Foto_Sebelum ||
+            wo?.lampiranUrl;
+          const photoUrl = formatDriveImageUrl(rawPhotoCandidate) || rawPhotoCandidate;
           const feeder = resolvePenyulangName(rel, wo);
 
           return {
@@ -1149,31 +1158,117 @@ export const CetakLaporanPage: React.FC = () => {
                           </td>
                           {/* Foto Sebelum */}
                           <td className="p-1.5 border border-slate-200">
-                            {rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl ? (
-                              <img
-                                src={rel.photosSebelum?.[0]?.dataUrl || rel.fotoSebelumUrl}
-                                alt="Foto Sebelum"
-                                className="w-24 h-20 object-cover rounded-md mx-auto shadow-2xs border border-slate-200"
-                              />
-                            ) : (
-                              <div className="w-24 h-20 bg-slate-100 rounded-md mx-auto flex items-center justify-center text-[9px] text-slate-400">
-                                No Photo
-                              </div>
-                            )}
+                            {(() => {
+                              const rawUrl =
+                                rel.photosSebelum?.[0]?.dataUrl ||
+                                rel.photosSebelum?.[0]?.fileUrl ||
+                                rel.fotoSebelumUrl ||
+                                (rel as any).Foto_Sebelum ||
+                                (rel as any).foto_sebelum ||
+                                '';
+                              const imgUrl = formatDriveImageUrl(rawUrl) || rawUrl;
+                              const fileId = extractDriveFileId(rawUrl);
+                              return imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt="Foto Sebelum"
+                                  referrerPolicy="no-referrer"
+                                  crossOrigin="anonymous"
+                                  className="w-24 h-20 object-cover rounded-md mx-auto shadow-2xs border border-slate-200"
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    if (fileId && !target.dataset.triedThumbnail) {
+                                      target.dataset.triedThumbnail = 'true';
+                                      target.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+                                      return;
+                                    }
+                                    if (fileId && !target.dataset.triedUc) {
+                                      target.dataset.triedUc = 'true';
+                                      target.src = `https://docs.google.com/uc?export=view&id=${fileId}`;
+                                      return;
+                                    }
+                                    target.style.display = 'none';
+                                    const fallbackDiv = target.parentElement?.querySelector('.photo-fallback');
+                                    if (fallbackDiv) {
+                                      (fallbackDiv as HTMLElement).style.display = 'flex';
+                                    }
+                                  }}
+                                />
+                              ) : null;
+                            })()}
+                            <div
+                              className="photo-fallback w-24 h-20 bg-slate-100 rounded-md mx-auto flex items-center justify-center text-[9px] text-slate-400"
+                              style={{
+                                display:
+                                  rel.photosSebelum?.[0]?.dataUrl ||
+                                  rel.photosSebelum?.[0]?.fileUrl ||
+                                  rel.fotoSebelumUrl ||
+                                  (rel as any).Foto_Sebelum ||
+                                  (rel as any).foto_sebelum
+                                    ? 'none'
+                                    : 'flex',
+                              }}
+                            >
+                              No Photo
+                            </div>
                           </td>
                           {/* Foto Sesudah */}
                           <td className="p-1.5 border border-slate-200">
-                            {rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl ? (
-                              <img
-                                src={rel.photosSesudah?.[0]?.dataUrl || rel.fotoSesudahUrl}
-                                alt="Foto Sesudah"
-                                className="w-24 h-20 object-cover rounded-md mx-auto shadow-2xs border border-slate-200"
-                              />
-                            ) : (
-                              <div className="w-24 h-20 bg-slate-100 rounded-md mx-auto flex items-center justify-center text-[9px] text-slate-400">
-                                No Photo
-                              </div>
-                            )}
+                            {(() => {
+                              const rawUrl =
+                                rel.photosSesudah?.[0]?.dataUrl ||
+                                rel.photosSesudah?.[0]?.fileUrl ||
+                                rel.fotoSesudahUrl ||
+                                (rel as any).Foto_Sesudah ||
+                                (rel as any).Foto_Setelah ||
+                                (rel as any).foto_sesudah ||
+                                '';
+                              const imgUrl = formatDriveImageUrl(rawUrl) || rawUrl;
+                              const fileId = extractDriveFileId(rawUrl);
+                              return imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt="Foto Sesudah"
+                                  referrerPolicy="no-referrer"
+                                  crossOrigin="anonymous"
+                                  className="w-24 h-20 object-cover rounded-md mx-auto shadow-2xs border border-slate-200"
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    if (fileId && !target.dataset.triedThumbnail) {
+                                      target.dataset.triedThumbnail = 'true';
+                                      target.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+                                      return;
+                                    }
+                                    if (fileId && !target.dataset.triedUc) {
+                                      target.dataset.triedUc = 'true';
+                                      target.src = `https://docs.google.com/uc?export=view&id=${fileId}`;
+                                      return;
+                                    }
+                                    target.style.display = 'none';
+                                    const fallbackDiv = target.parentElement?.querySelector('.photo-fallback');
+                                    if (fallbackDiv) {
+                                      (fallbackDiv as HTMLElement).style.display = 'flex';
+                                    }
+                                  }}
+                                />
+                              ) : null;
+                            })()}
+                            <div
+                              className="photo-fallback w-24 h-20 bg-slate-100 rounded-md mx-auto flex items-center justify-center text-[9px] text-slate-400"
+                              style={{
+                                display:
+                                  rel.photosSesudah?.[0]?.dataUrl ||
+                                  rel.photosSesudah?.[0]?.fileUrl ||
+                                  rel.fotoSesudahUrl ||
+                                  (rel as any).Foto_Sesudah ||
+                                  (rel as any).Foto_Setelah ||
+                                  (rel as any).foto_sesudah
+                                    ? 'none'
+                                    : 'flex',
+                              }}
+                            >
+                              No Photo
+                            </div>
                           </td>
                           <td className="p-2 border border-slate-200 uppercase font-semibold text-[10px]">
                             {rel.jenisTanaman || wo?.jenisPekerjaan || 'PEMBANGKASAN POHON (ROW)'}

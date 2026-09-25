@@ -81,7 +81,7 @@ export const SettingAplikasiPage: React.FC = () => {
       const res = await ApiService.getDatabaseStatus();
       setHypercloudTestResults(res);
       if (res.connected || res.status === 'success') {
-        showToast(`Koneksi Database Berhasil! Latency: ${res.latencyMs || 0}ms`, 'success');
+        showToast(`Koneksi Database Berhasil! ${res.message || 'Database aktif'}`, 'success');
       } else {
         showToast('Status database: ' + (res.message || 'Periksa koneksi'), 'warning');
       }
@@ -90,13 +90,6 @@ export const SettingAplikasiPage: React.FC = () => {
     } finally {
       setIsTestingHypercloud(false);
     }
-  };
-
-  const handleCopySqlScript = () => {
-    navigator.clipboard.writeText(SUPABASE_SETUP_SQL);
-    setIsCopiedSql(true);
-    showToast('Script SQL Supabase berhasil disalin ke clipboard!', 'success');
-    setTimeout(() => setIsCopiedSql(false), 3000);
   };
 
   const handleManualSyncAll = async () => {

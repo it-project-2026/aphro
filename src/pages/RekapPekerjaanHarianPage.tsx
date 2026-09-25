@@ -231,7 +231,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, reguList]);
+  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, reguList, realisasiList, workOrders]);
 
   // Save changes to localStorage
   const handleSaveData = (updated: RekapItemData[]) => {
