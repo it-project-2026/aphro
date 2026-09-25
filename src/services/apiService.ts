@@ -1776,19 +1776,17 @@ export class ApiService {
    */
 
   static async deleteWorkOrder(
-    id: string,
-    unitId?: string
+    id: string
   ): Promise<{
     success: boolean;
     message?: string;
   }> {
     const token = this.getAuthToken();
-    const query = unitId ? `?unitId=${encodeURIComponent(unitId)}` : '';
     console.log(`[SYNC] Sending DELETE WORK_ORDER to HyperCloud: DELETE /api/work-orders/${id}`);
 
     try {
       const res = await this.executeFetch(
-        `/api/work-orders/${encodeURIComponent(id)}${query}`,
+        `/api/work-orders/${encodeURIComponent(id)}`,
         {
           method: 'DELETE',
           headers: {

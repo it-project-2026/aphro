@@ -7,7 +7,6 @@ import { ApiService } from '../services/apiService';
 import { InisiasiService } from '../services/inisiasiService';
 import { dexieDb } from '../services/dexieDb';
 import { idbService } from '../services/indexedDbService';
-import { INITIAL_WORK_ORDERS } from '../data/initialData';
 import { syncManager } from '../services/syncManager';
 import { getLocalDateTimeString, getWIBDateString, parseDateFromNomorWO } from '../utils/dateUtils';
 import { UL_PRESETS, RekapHarianService, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
@@ -57,7 +56,11 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     try {
       if (page === 0) setIsLoading(true);
 
-      const unitId = user.unitId ? InisiasiService.getStandardUnitId(user.unitId) : InisiasiService.getSelectedUnitId();
+      const unitId =
+        user?.unitId ||
+        localStorage.getItem('aphro_active_unit_id') ||
+        InisiasiService.getSelectedUnitId() ||
+        undefined;
 
       // 1. ONLINE-FIRST: Fetch from HyperCloud API
       const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
@@ -233,7 +236,6 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       cleanStr(user.name),
       cleanStr(user.nip),
       cleanStr(user.id),
-      // Add numeric extraction from reguName for broader matching
       (user.reguName || '').match(/\d+/)?.[0],
       (userTimInfo.reguName || '').match(/\d+/)?.[0]
     ].filter(Boolean);
@@ -316,30 +318,18 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     };
 
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    const unitId = (user && user.unitId)
-      ? InisiasiService.getStandardUnitId(user.unitId)
-      : (InisiasiService.getSelectedUnitId() || 'UL2');
+    const unitId =
+      user?.unitId ||
+      localStorage.getItem('aphro_active_unit_id') ||
+      InisiasiService.getSelectedUnitId() ||
+      undefined;
 
-    // 1. ONLINE-FIRST: Try direct save to HyperCloud
+    // 1. ONLINE-FIRST: Direct save to HyperCloud via ApiService
     if (isOnline) {
       try {
         const payload = {
-          WO_ID: newWo.id,
-          unitId: unitId,
-          PEKERJAAN: newWo.pekerjaan || 'NORMAL',
-          Nomor_WO: newWo.nomorWO || '',
-          Tanggal: newWo.tanggal || getWIBDateString(),
-          ULP: newWo.ulpName || '',
-          Penyulang: newWo.penyulangName || '',
-          Regu_ROW: newWo.reguName || '',
-          VOLUME: String(newWo.volumePekerjaan || 0),
-          SATUAN: newWo.satuan || 'KMS',
-          WO_AWAL: newWo.woMulai || null,
-          WO_AKHIR: newWo.woAkhir || null,
-          STATUS: (newWo.status || 'Belum Dikerjakan').toUpperCase(),
-          TOTAL_REALISASI: String(newWo.totalRealisasi || 0),
-          SATUAN_TOTAL_REALISASI: newWo.satuanTotalRealisasi || 'KMS',
-          Created_At: newWo.createdAt || getLocalDateTimeString(),
+          ...newWo,
+          unitId,
         };
 
         const result = await ApiService.saveWorkOrder(payload);
@@ -395,33 +385,13 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       updatedAt: nowStr,
     });
 
-    const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
     try {
       const res = await syncManager.executeMutation({
         type: 'UPDATE',
         tableName: 'WORK_ORDER',
         payload: updatedWo,
         apiCall: async () => {
-          const dbUpdates: any = {
-            WO_ID: id,
-            unitId: unitId,
-          };
-          if (updates.status) dbUpdates.STATUS = updates.status.toUpperCase();
-          if (updates.totalRealisasi !== undefined) dbUpdates.TOTAL_REALISASI = String(updates.totalRealisasi);
-          if (updates.satuanTotalRealisasi) dbUpdates.SATUAN_TOTAL_REALISASI = updates.satuanTotalRealisasi;
-          if (updates.pekerjaan) dbUpdates.PEKERJAAN = updates.pekerjaan;
-          if (updates.nomorWO) dbUpdates.Nomor_WO = updates.nomorWO;
-          if (updates.volumePekerjaan !== undefined) dbUpdates.VOLUME = String(updates.volumePekerjaan);
-          if (updates.satuan) dbUpdates.SATUAN = updates.satuan;
-          if (updates.woMulai !== undefined) dbUpdates.WO_AWAL = updates.woMulai;
-          if (updates.woAkhir !== undefined) dbUpdates.WO_AKHIR = updates.woAkhir;
-          if (updates.tanggal) dbUpdates.Tanggal = updates.tanggal;
-          if (updates.ulpName) dbUpdates.ULP = updates.ulpName;
-          if (updates.penyulangName) dbUpdates.Penyulang = updates.penyulangName;
-          if (updates.reguName) dbUpdates.Regu_ROW = updates.reguName;
-          if (updates.lokasi) dbUpdates.LOKASI_START = updates.lokasi;
-
-          const result = await ApiService.saveWorkOrder(dbUpdates);
+          const result = await ApiService.updateWorkOrder(id, updatedWo);
           return { status: result.success ? 'success' : 'error', message: result.message };
         },
       });
@@ -450,14 +420,13 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       console.warn('Delete Dexie WO error:', e);
     }
 
-    const unitId = InisiasiService.getSelectedUnitId() || 'UL2';
     try {
       await syncManager.executeMutation({
         type: 'DELETE',
         tableName: 'WORK_ORDER',
         payload: { id: cleanId, nomorWO: cleanNomor },
         apiCall: async () => {
-          const result = await ApiService.deleteWorkOrder(cleanId || cleanNomor, unitId);
+          const result = await ApiService.deleteWorkOrder(cleanId);
           return { status: result.success ? 'success' : 'error', message: result.message };
         },
       });
