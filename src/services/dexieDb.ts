@@ -24,6 +24,8 @@ export interface LocalRealisasi extends Realisasi {
   syncError?: string;
   retryCount?: number;
   updatedAt: string;
+  WO_ID?: string;
+  Nomor_WO?: string;
 }
 
 export interface LocalPhoto {

@@ -444,6 +444,20 @@ export function RealisasiProvider({
         const localId =
           idempotencyKey;
 
+        const resolvedWoId = String(
+          relData.WO_ID ||
+          relData.workOrderId ||
+          (relData as any).woId ||
+          ''
+        ).trim();
+
+        const resolvedNomorWo = String(
+          relData.Nomor_WO ||
+          relData.nomorWO ||
+          (relData as any).nomor_wo ||
+          ''
+        ).trim();
+
         const localPhotos: LocalPhoto[] =
           [];
 
@@ -464,8 +478,7 @@ export function RealisasiProvider({
                   localId,
 
                 woId:
-                  relData.workOrderId ||
-                  '',
+                  resolvedWoId,
 
                 type:
                   'sebelum',
@@ -534,8 +547,7 @@ export function RealisasiProvider({
                   localId,
 
                 woId:
-                  relData.workOrderId ||
-                  '',
+                  resolvedWoId,
 
                 type:
                   'sesudah',
@@ -598,6 +610,21 @@ export function RealisasiProvider({
             unitId:
               targetUnitId,
 
+            workOrderId:
+              resolvedWoId,
+
+            WO_ID:
+              resolvedWoId,
+
+            woId:
+              resolvedWoId,
+
+            nomorWO:
+              resolvedNomorWo,
+
+            Nomor_WO:
+              resolvedNomorWo,
+
             localId,
 
             idempotencyKey,
@@ -614,6 +641,9 @@ export function RealisasiProvider({
             id:
               localId,
 
+            ID:
+              localId,
+
             progressPercent:
               100,
 
@@ -628,7 +658,25 @@ export function RealisasiProvider({
             unitId:
               targetUnitId,
 
+            workOrderId:
+              resolvedWoId,
+
+            WO_ID:
+              resolvedWoId,
+
+            woId:
+              resolvedWoId,
+
+            nomorWO:
+              resolvedNomorWo,
+
+            Nomor_WO:
+              resolvedNomorWo,
+
             id:
+              localId,
+
+            ID:
               localId,
 
             createdAt:
@@ -854,26 +902,44 @@ export function RealisasiProvider({
             }
           );
 
+        const resolvedAdminWoId = (
+          relData.WO_ID ||
+          relData.workOrderId ||
+          relData.nomorWO ||
+          ''
+        ).trim();
+
+        const resolvedAdminNomorWo = (
+          relData.Nomor_WO ||
+          relData.nomorWO ||
+          ''
+        ).trim();
+
         const fullRealisasi: Realisasi =
           {
             id:
+              targetId,
+
+            ID:
               targetId,
 
             unitId:
               targetUnitId,
 
             workOrderId:
-              (
-                relData.workOrderId ||
-                relData.nomorWO ||
-                ''
-              ).trim(),
+              resolvedAdminWoId,
+
+            WO_ID:
+              resolvedAdminWoId,
+
+            woId:
+              resolvedAdminWoId,
 
             nomorWO:
-              (
-                relData.nomorWO ||
-                ''
-              ).trim(),
+              resolvedAdminNomorWo,
+
+            Nomor_WO:
+              resolvedAdminNomorWo,
 
             ulpName:
               (

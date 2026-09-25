@@ -102,9 +102,13 @@ export function normalizeRealisasiRow(row: any): Realisasi {
 
   return {
     id: relId,
+    ID: relId,
     unitId: String(row.unitId || ''),
     workOrderId: cleanWoId,
+    WO_ID: cleanWoId,
+    woId: cleanWoId,
     nomorWO: rawNoWo,
+    Nomor_WO: rawNoWo,
     ulpName,
     reguName,
     penyulangName,

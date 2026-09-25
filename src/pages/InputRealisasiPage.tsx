@@ -242,7 +242,24 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     return defaultWo?.id || '';
   });
 
-  const selectedWO = availableWorkOrders.find((w) => w.id === selectedWoId);
+  const selectedWO = React.useMemo(() => {
+    if (!selectedWoId) return null;
+    return (
+      availableWorkOrders.find((w) => w.id === selectedWoId || (w as any).WO_ID === selectedWoId || w.nomorWO === selectedWoId) ||
+      displayedWorkOrders.find((w) => w.id === selectedWoId || (w as any).WO_ID === selectedWoId || w.nomorWO === selectedWoId) ||
+      workOrders.find((w) => w.id === selectedWoId || (w as any).WO_ID === selectedWoId || w.nomorWO === selectedWoId) ||
+      null
+    );
+  }, [availableWorkOrders, displayedWorkOrders, workOrders, selectedWoId]);
+
+  React.useEffect(() => {
+    if (!selectedWoId && availableWorkOrders.length > 0) {
+      const defaultWo = availableWorkOrders.find((w) => !isFinishedWO(w)) || availableWorkOrders[0];
+      if (defaultWo?.id) {
+        setSelectedWoId(defaultWo.id);
+      }
+    }
+  }, [availableWorkOrders, selectedWoId]);
 
   const [tanggalRealisasi, setTanggalRealisasi] = React.useState(
     editMode && initialData ? initialData.tanggalRealisasi : getWIBDateString()
@@ -549,7 +566,28 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     e.preventDefault();
 
     if (!selectedWO) {
-      showToast('Silakan pilih Work Order', 'warning');
+      showToast('Silakan pilih Work Order terlebih dahulu', 'warning');
+      return;
+    }
+
+    const resolvedWoId = String(
+      selectedWO.WO_ID ||
+      selectedWO.id ||
+      (selectedWO as any).workOrderId ||
+      (selectedWO as any).woId ||
+      selectedWoId ||
+      ''
+    ).trim();
+
+    const resolvedNomorWo = String(
+      selectedWO.Nomor_WO ||
+      selectedWO.nomorWO ||
+      (selectedWO as any).nomor_wo ||
+      ''
+    ).trim();
+
+    if (!resolvedWoId && !resolvedNomorWo) {
+      showToast('Work Order yang dipilih tidak memiliki WO_ID atau Nomor_WO yang valid!', 'error');
       return;
     }
 
@@ -586,7 +624,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       const finalSebUrl = await ensureGoogleDrivePhotoUrl(
         photosSebelum[0]?.fileUrl || photosSebelum[0]?.dataUrl || '',
         {
-          nomorWO: selectedWO.nomorWO,
+          nomorWO: resolvedNomorWo || selectedWO.nomorWO,
           reguName: selectedWO.reguName,
           photoType: 'Realisasi_Sebelum',
         }
@@ -595,7 +633,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       const finalSesUrl = await ensureGoogleDrivePhotoUrl(
         photosSesudah[0]?.fileUrl || photosSesudah[0]?.dataUrl || '',
         {
-          nomorWO: selectedWO.nomorWO,
+          nomorWO: resolvedNomorWo || selectedWO.nomorWO,
           reguName: selectedWO.reguName,
           photoType: 'Realisasi_Sesudah',
         }
@@ -603,8 +641,11 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
       if (editMode && initialData) {
         await updateRealisasi(initialData.id, {
-          workOrderId: selectedWO.id,
-          nomorWO: selectedWO.nomorWO,
+          workOrderId: resolvedWoId,
+          WO_ID: resolvedWoId,
+          woId: resolvedWoId,
+          nomorWO: resolvedNomorWo,
+          Nomor_WO: resolvedNomorWo,
           ulpName: selectedWO.ulpName,
           reguName: selectedWO.reguName,
           penyulangName: selectedWO.penyulangName,
@@ -628,18 +669,22 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         if (onSuccess) onSuccess();
       } else {
         await addRealisasi({
-          workOrderId: selectedWO.id,
+          workOrderId: resolvedWoId,
+          WO_ID: resolvedWoId,
+          woId: resolvedWoId,
+          nomorWO: resolvedNomorWo,
+          Nomor_WO: resolvedNomorWo,
           unitId:
             selectedWO.unitId ||
             currentUser?.unitId ||
-            InisiasiService.getSelectedUnitId(),
-          nomorWO: selectedWO.nomorWO,
+            InisiasiService.getSelectedUnitId() ||
+            'UL2',
           ulpName: selectedWO.ulpName,
           reguName: selectedWO.reguName,
           penyulangName: selectedWO.penyulangName,
           noTiang,
           tanggalRealisasi,
-          petugasId: currentUser?.id || 'usr-3',
+          petugasId: currentUser?.id || currentUser?.userName || 'usr-3',
           fotoSebelumUrl: finalSebUrl,
           fotoSesudahUrl: finalSesUrl,
           photosSebelum,

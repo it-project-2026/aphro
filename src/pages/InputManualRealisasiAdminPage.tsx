@@ -464,9 +464,13 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
 
       const payload = {
         id: generatedId,
+        ID: generatedId,
         unitId: unitId.trim(),
         workOrderId: (woId || nomorWO).trim(),
+        WO_ID: (woId || nomorWO).trim(),
+        woId: (woId || nomorWO).trim(),
         nomorWO: nomorWO.trim(),
+        Nomor_WO: nomorWO.trim(),
         ulpName: ulpName.trim(),
         reguName: reguName.trim(),
         penyulangName: penyulangName.trim(),

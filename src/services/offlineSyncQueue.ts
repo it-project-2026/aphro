@@ -68,17 +68,28 @@ class OfflineSyncQueueEngine {
   public async enqueueRealisasi(realisasiData: LocalRealisasi, photos: LocalPhoto[]): Promise<void> {
     const timestamp = getLocalDateTimeString();
 
-    // 1. Save Realisasi record locally in Dexie with status PENDING
-    await dexieDb.realisasi.put({
+    const resolvedWoId = String(realisasiData.WO_ID || realisasiData.workOrderId || (realisasiData as any).woId || '').trim();
+    const resolvedNomorWo = String(realisasiData.Nomor_WO || realisasiData.nomorWO || (realisasiData as any).nomor_wo || '').trim();
+
+    const enrichedRealisasi: LocalRealisasi = {
       ...realisasiData,
+      WO_ID: resolvedWoId,
+      workOrderId: resolvedWoId,
+      woId: resolvedWoId,
+      Nomor_WO: resolvedNomorWo,
+      nomorWO: resolvedNomorWo,
       syncStatus: 'PENDING',
       updatedAt: timestamp,
-    });
+    };
+
+    // 1. Save Realisasi record locally in Dexie with status PENDING
+    await dexieDb.realisasi.put(enrichedRealisasi);
 
     // 2. Save photos locally in Dexie
     for (const photo of photos) {
       await dexieDb.photos.put({
         ...photo,
+        woId: resolvedWoId || photo.woId,
         syncStatus: 'PENDING',
         createdAt: photo.createdAt || timestamp,
       });
@@ -90,7 +101,7 @@ class OfflineSyncQueueEngine {
       type: 'CREATE',
       tableName: 'REALISASI',
       payload: {
-        realisasi: realisasiData,
+        realisasi: enrichedRealisasi,
         photos: photos,
       },
       timestamp,
@@ -276,22 +287,35 @@ class OfflineSyncQueueEngine {
         const realisasi = item.payload?.realisasi || item.payload;
         const photos = item.payload?.photos;
 
+        // Ensure WO_ID and Nomor_WO are carried through in case item was queued in earlier format
+        const resolvedWoId = String(realisasi?.WO_ID || realisasi?.workOrderId || realisasi?.woId || '').trim();
+        const resolvedNomorWo = String(realisasi?.Nomor_WO || realisasi?.nomorWO || realisasi?.nomor_wo || '').trim();
+
+        const enrichedRealisasi = {
+          ...realisasi,
+          WO_ID: resolvedWoId,
+          workOrderId: resolvedWoId,
+          woId: resolvedWoId,
+          Nomor_WO: resolvedNomorWo,
+          nomorWO: resolvedNomorWo,
+        };
+
         // Update Dexie status to SYNCING if record exists
-        if (realisasi?.localId) {
-          await dexieDb.realisasi.update(realisasi.localId, { syncStatus: 'SYNCING' }).catch(() => {});
+        if (enrichedRealisasi?.localId) {
+          await dexieDb.realisasi.update(enrichedRealisasi.localId, { syncStatus: 'SYNCING' }).catch(() => {});
         }
 
         const serverResult = item.type === 'UPDATE'
-          ? await ApiService.updateRealisasi(realisasi.id || realisasi.localId, realisasi)
-          : await ApiService.saveRealisasi(realisasi);
+          ? await ApiService.updateRealisasi(enrichedRealisasi.id || enrichedRealisasi.localId, enrichedRealisasi)
+          : await ApiService.saveRealisasi(enrichedRealisasi);
 
         if (serverResult.success) {
-          const finalServerId = (serverResult as any).serverId || realisasi?.localId || realisasi?.id;
+          const finalServerId = (serverResult as any).serverId || enrichedRealisasi?.localId || enrichedRealisasi?.id;
           console.log(`[DATA FLOW]\nmode=ONLINE\nentity=REALISASI\naction=SYNC\nsource=DEXIE_QUEUE\ntarget=HYPERCLOUD\nstatus=SUCCESS\nid=${finalServerId}`);
 
           // Mark Realisasi as SYNCED in Dexie
-          if (realisasi?.localId) {
-            await dexieDb.realisasi.update(realisasi.localId, {
+          if (enrichedRealisasi?.localId) {
+            await dexieDb.realisasi.update(enrichedRealisasi.localId, {
               syncStatus: 'SYNCED',
               serverId: finalServerId,
               syncError: undefined,

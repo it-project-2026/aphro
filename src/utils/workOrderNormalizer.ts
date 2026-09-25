@@ -48,11 +48,14 @@ export function normalizeWorkOrderRow(row: any): WorkOrder {
     tanggalStr = '';
   }
 
-  return {
-    id: String(row.WO_ID || row.id || ''),
+  const woId = String(row.WO_ID || row.id || row.woId || row.workOrderId || '').trim();
 
+  return {
+    id: woId,
+    WO_ID: woId,
     unitId: String(row.unitId || ''),
     nomorWO: rawNomorWo,
+    Nomor_WO: rawNomorWo,
     pekerjaan: (row.PEKERJAAN || row.pekerjaan || 'NORMAL') as 'NORMAL' | 'GOROW',
     tanggal: tanggalStr,
     ulpId: String(row.ulpId || row.ULP_ID || ''),

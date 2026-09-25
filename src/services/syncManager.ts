@@ -592,12 +592,22 @@ export class SyncManager {
               errorMessage = res.message || '';
             }
           } else if (item.tableName === 'REALISASI') {
+            const woId = String(updatedPayload.WO_ID || updatedPayload.workOrderId || updatedPayload.woId || '').trim();
+            const nomorWo = String(updatedPayload.Nomor_WO || updatedPayload.nomorWO || updatedPayload.nomor_wo || '').trim();
+            const relPayload = {
+              ...updatedPayload,
+              WO_ID: woId,
+              woId: woId,
+              workOrderId: woId,
+              Nomor_WO: nomorWo,
+              nomorWO: nomorWo,
+            };
             if (item.type === 'CREATE') {
-              const res = await ApiService.saveRealisasi(updatedPayload);
+              const res = await ApiService.saveRealisasi(relPayload);
               isSuccess = res.success;
               errorMessage = res.message || '';
             } else if (item.type === 'UPDATE') {
-              const res = await ApiService.updateRealisasi(updatedPayload.id, updatedPayload);
+              const res = await ApiService.updateRealisasi(relPayload.id, relPayload);
               isSuccess = res.success;
               errorMessage = res.message || '';
             } else if (item.type === 'DELETE') {

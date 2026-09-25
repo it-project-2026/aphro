@@ -461,12 +461,19 @@ export class ApiService {
     }
 
     const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    const woId = String(data.WO_ID || data.workOrderId || data.woId || '').trim();
+    const nomorWo = String(data.Nomor_WO || data.nomorWO || data.nomor_wo || '').trim();
+
     const payload = {
-      id: data.id || data.realisasiId,
-      realisasiId: data.id || data.realisasiId,
-      woId: data.workOrderId || data.woId || '',
-      workOrderId: data.workOrderId || data.woId || '',
-      nomorWO: data.nomorWO || '',
+      id: data.id || data.ID || data.realisasiId,
+      ID: data.ID || data.id || data.realisasiId,
+      realisasiId: data.id || data.ID || data.realisasiId,
+      WO_ID: woId,
+      woId: woId,
+      workOrderId: woId,
+      Nomor_WO: nomorWo,
+      nomorWO: nomorWo,
+      nomor_wo: nomorWo,
       unitId: unitId,
       ULP: data.ulpName || data.ULP || '',
       ulpName: data.ulpName || data.ULP || '',
@@ -493,6 +500,13 @@ export class ApiService {
       progressPercent: 100,
       status: 'Selesai',
     };
+
+    console.log('[REALISASI PAYLOAD CHECK]', {
+      id: payload.ID || payload.id,
+      unitId: payload.unitId,
+      WO_ID: payload.WO_ID,
+      Nomor_WO: payload.Nomor_WO
+    });
 
     console.log('[SYNC] ONLINE');
     console.log(`[SYNC] Sending REALISASI to HyperCloud: POST /api/realisasi (unitId=${unitId}, JWT=AVAILABLE, id=${payload.id})`);
@@ -564,9 +578,14 @@ export class ApiService {
     }
 
     const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    const woId = String(data.WO_ID || data.workOrderId || data.woId || '').trim();
+    const nomorWo = String(data.Nomor_WO || data.nomorWO || data.nomor_wo || '').trim();
+
     const payload = {
       ...data,
       unitId,
+      ...(woId ? { WO_ID: woId, woId: woId, workOrderId: woId } : {}),
+      ...(nomorWo ? { Nomor_WO: nomorWo, nomorWO: nomorWo, nomor_wo: nomorWo } : {}),
     };
 
     console.log('[SYNC] ONLINE');
