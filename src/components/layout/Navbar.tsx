@@ -242,7 +242,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                     <div className="flex items-start space-x-2 text-[#008396] dark:text-teal-300 text-[11px] bg-teal-50/80 dark:bg-teal-950/40 p-2.5 rounded-xl border border-teal-200 dark:border-teal-800">
                       <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[#008396]" />
                       <span>
-                        Aplikasi terhubung langsung ke Database Supabase PostgreSQL. Tekan tombol di bawah kapan saja untuk memperbarui data secara manual.
+                        Aplikasi terhubung langsung ke Database HyperCloudHost PostgreSQL. Tekan tombol di bawah kapan saja untuk memperbarui data secara manual.
                       </span>
                     </div>
                   ) : (

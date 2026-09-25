@@ -374,11 +374,11 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                       {wo.nomorWO}
                     </span>
                     {pendingIds.includes(wo.id) ? (
-                      <span title="Menunggu Sinkronisasi ke Supabase Database" className="flex items-center text-amber-500">
+                      <span title="Menunggu Sinkronisasi ke HyperCloud Database" className="flex items-center text-amber-500">
                         <CloudOff className="w-3.5 h-3.5" />
                       </span>
                     ) : (
-                      <span title="Sudah Tersinkron ke Supabase Database" className="flex items-center text-teal-500">
+                      <span title="Sudah Tersinkron ke HyperCloud Database" className="flex items-center text-teal-500">
                         <Cloud className="w-3.5 h-3.5" />
                       </span>
                     )}
@@ -547,14 +547,14 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                           <div className="group relative">
                             <CloudOff className="w-3.5 h-3.5 text-amber-500 cursor-help" />
                             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-slate-800 text-white text-[10px] p-1.5 rounded shadow-lg z-10 whitespace-nowrap">
-                              Menunggu Sinkronisasi ke Supabase Database
+                              Menunggu Sinkronisasi ke HyperCloud Database
                             </div>
                           </div>
                         ) : (
                           <div className="group relative">
                             <Cloud className="w-3.5 h-3.5 text-teal-500 cursor-help" />
                             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-slate-800 text-white text-[10px] p-1.5 rounded shadow-lg z-10 whitespace-nowrap">
-                              Sudah Tersinkron ke Supabase Database
+                              Sudah Tersinkron ke HyperCloud Database
                             </div>
                           </div>
                         )}
@@ -843,7 +843,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
                   Hapus Work Order?
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Data ini akan dihapus dari database Supabase.
+                  Data ini akan dihapus dari database HyperCloudHost.
                 </p>
               </div>
             </div>

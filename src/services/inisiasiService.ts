@@ -572,7 +572,7 @@ export function getUnitName(
 export const DEFAULT_OPERATIONAL_UNITS = DEFAULT_UL_OPTIONS;
 export const FALLBACK_INISIASI_UNITS = DEFAULT_UL_OPTIONS;
 export const DEFAULT_INISIASI_SPREADSHEET_ID = '1ETeUidNrx1JqbBPkZLemJodXVTi23gHTZ2UC2SIQwss';
-export const DEFAULT_INISIASI_SPREADSHEET_URL = 'https://npeeobcpffmlyiknszhh.supabase.co';
+export const DEFAULT_INISIASI_SPREADSHEET_URL = '';
 export const DEFAULT_INISIASI_SHEET_NAME = 'INISIASI';
 
 export class InisiasiService {

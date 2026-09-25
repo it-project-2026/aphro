@@ -289,7 +289,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                 </span>
               </div>
               <p className="text-[10px] text-teal-800 dark:text-teal-300/80 font-medium line-clamp-1">
-                Supabase APHRO Database
+                HyperCloudHost PostgreSQL
               </p>
               <button
                 type="button"

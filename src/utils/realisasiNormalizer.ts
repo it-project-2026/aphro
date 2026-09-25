@@ -91,7 +91,10 @@ export function normalizeRealisasiRow(row: any): Realisasi {
   const fotoSebelumImg = formatDriveImageUrl(rawFotoSebelum);
   const fotoSesudahImg = formatDriveImageUrl(rawFotoSesudah);
 
-  const relId = String(row.ID || row.id || `REL-${Date.now()}`);
+  const relId = String(row.ID || row.id || '');
+  if (!relId) {
+    throw new Error('REALISASI dari HyperCloud tidak memiliki ID yang valid.');
+  }
   let cleanWoId = String(row.WO_ID || row.wo_id || row.workOrderId || '').trim();
   if (cleanWoId === relId || cleanWoId.startsWith('REL-')) {
     cleanWoId = '';
@@ -107,8 +110,12 @@ export function normalizeRealisasiRow(row: any): Realisasi {
     penyulangName,
     noTiang: String(row.NO_TIANG || row.No_Tiang || row.no_tiang || ''),
     tanggalRealisasi: tanggalStr,
-    petugasId: 'usr-1',
-    petugasName: String(row.PETUGAS || row.Petugas || row.petugas || reguName),
+    petugasId: String(
+      row.PETUGAS_ID || row.petugasId || row.Petugas_ID || row.NIP || row.nip || ''
+    ),
+    petugasName: String(
+      row.PETUGAS || row.Petugas || row.petugas || row.NAMA_PETUGAS || row.Nama_Petugas || reguName
+    ),
     jenisTanaman: String(jenisTanaman || row.TIPE_POHON || row.tipe_pohon || ''),
     pertumbuhanTanaman: String(pertumbuhanTanaman),
     kendala: String(kendala),

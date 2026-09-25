@@ -62,7 +62,7 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
     return m ? parseInt(m[1], 10) : null;
   };
 
-  // Find matching user record in MasterData users table (from Supabase USERS)
+  // Find matching user record in MasterData users table (from HyperCloudHost USERS)
   const matchedMasterUser = useMemo(() => {
     if (!currentUser) return null;
     const userIdentifier = (currentUser.userName || currentUser.nip || currentUser.id || '').toLowerCase().trim();

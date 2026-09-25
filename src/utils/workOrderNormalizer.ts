@@ -34,7 +34,7 @@ export function normalizeWorkOrderRow(row: any): WorkOrder {
     row.NAMA_REGU ??
     '';
 
-  const rawNomorWo = String(row.Nomor_WO || row.nomorWO || row.WO_ID || 'WO-001');
+  const rawNomorWo = String(row.Nomor_WO || row.nomorWO || row.WO_ID || '').trim();
   const dateFromWo = parseDateFromNomorWO(rawNomorWo);
   const rawTanggal = row.Tanggal ?? row.tanggal;
   let tanggalStr = '';
@@ -45,20 +45,21 @@ export function normalizeWorkOrderRow(row: any): WorkOrder {
     tanggalStr = dateFromWo;
   }
   if (!tanggalStr) {
-    tanggalStr = getWIBDateString();
+    tanggalStr = '';
   }
 
   return {
-    id: String(row.WO_ID || row.id || `WO-${Date.now()}`),
+    id: String(row.WO_ID || row.id || ''),
+
     unitId: String(row.unitId || ''),
     nomorWO: rawNomorWo,
     pekerjaan: (row.PEKERJAAN || row.pekerjaan || 'NORMAL') as 'NORMAL' | 'GOROW',
     tanggal: tanggalStr,
-    ulpId: String(row.unitId || 'UL1'),
+    ulpId: String(row.ulpId || row.ULP_ID || ''),
     ulpName: String(row.ULP || row.ulpName || ''),
-    penyulangId: String(row.penyulangId || 'PYL-1'),
+    penyulangId: String(row.penyulangId || row.PENYULANG_ID || ''),
     penyulangName: String(rawPenyulang || '').trim(),
-    reguId: String(row.reguId || 'REG-1'),
+    reguId: String(row.reguId || row.REGU_ID || ''),
     reguName: String(rawRegu || '').trim(),
     petugasId: String(row.petugasId || ''),
     petugasName: String(row.petugasName || row.PETUGAS || ''),

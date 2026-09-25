@@ -2,7 +2,7 @@
  * AuthService - Centralized Authentication Service for APHRO
  * 
  * Architecture:
- * AuthService -> Supabase (USERS table) + Dexie (Local fallback for offline login)
+ * AuthService -> HyperCloudHost Node.js API -> PostgreSQL
  */
 
 import { dexieDb, LocalUser } from './dexieDb';
@@ -15,8 +15,7 @@ export class AuthService {
   /**
    * Authenticate user with Username, Password, and target UnitId.
    * 1. Primary: Authenticates against HyperCloudHost Node.js API (/api/login).
-   * 2. Secondary fallback: Authenticates against Supabase "USERS" table if needed.
-   * 3. Offline fallback: Dexie local database for the unit.
+   * No client-side database fallback is allowed for credential authentication.
    */
   static async loginWithCredentials(
     username: string, 
@@ -80,32 +79,10 @@ export class AuthService {
       }
     }
 
-    // 2. Offline / Local fallback check in Dexie local cache
-    try {
-      const localUsers = await dexieDb.users.toArray();
-      const matchedLocal = localUsers.find((u) => {
-        const matchName =
-          (u.userName || '').trim().toLowerCase() === cleanUsername ||
-          (u.nip || '').trim().toLowerCase() === cleanUsername ||
-          (u.id || '').trim().toLowerCase() === cleanUsername ||
-          (u.name || '').trim().toLowerCase() === cleanUsername;
+    // Credential authentication must be authoritative: HyperCloud is the only source of truth.
+    // Dexie is still used for cached profile/session data, but it must never authenticate a password.
+    return { success: false, error: 'Tidak dapat memverifikasi akun pada Database HyperCloudHost.' };
 
-        if (!matchName) return false;
-        if (u.unitId) {
-          return InisiasiService.isUserMatchingUnit(u.unitId, targetUnitId);
-        }
-        return true;
-      });
-
-      if (matchedLocal) {
-        await this.saveLocalSession(matchedLocal);
-        return { success: true, user: matchedLocal };
-      }
-    } catch (dexieErr) {
-      console.warn('[AuthService] Dexie login fallback error:', dexieErr);
-    }
-
-    return { success: false, error: 'Username atau password tidak sesuai pada Database HyperCloudHost.' };
   }
 
   /**

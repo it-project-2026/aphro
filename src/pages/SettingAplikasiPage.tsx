@@ -12,9 +12,7 @@ import { GAS_BACKEND_CODE } from '../utils/gasBackendCode';
 import { GASApiService } from '../services/gasApiService';
 import { AutoSpreadsheetWizardModal } from '../components/common/AutoSpreadsheetWizardModal';
 import { saveAndEmbedGasConfig } from '../config/gasConfig';
-import { SupabaseService } from '../services/supabaseService';
 import { ApiService, API_BASE_URL } from '../services/apiService';
-import { SUPABASE_SETUP_SQL, DEFAULT_SUPABASE_URL } from '../services/supabaseClient';
 import {
   Settings,
   Save,
@@ -54,12 +52,9 @@ export const SettingAplikasiPage: React.FC = () => {
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiHealthResult, setApiHealthResult] = useState<any>(null);
 
-  // Supabase State & Diagnostics (Backup)
-  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
-  const [supabaseTestResults, setSupabaseTestResults] = useState<any>(null);
-  const [isSeedingSupabase, setIsSeedingSupabase] = useState(false);
-  const [isCopiedSql, setIsCopiedSql] = useState(false);
-  const [showSqlModal, setShowSqlModal] = useState(false);
+  // HyperCloud Diagnostics State
+  const [isTestingHypercloud, setIsTestingHypercloud] = useState(false);
+  const [hypercloudTestResults, setHypercloudTestResults] = useState<any>(null);
 
   const handleTestApi = async () => {
     setIsTestingApi(true);
@@ -68,7 +63,7 @@ export const SettingAplikasiPage: React.FC = () => {
       const res = await ApiService.checkHealth();
       setApiHealthResult(res);
       if (res.status === 'ok' || res.status === 'success') {
-        showToast(`API Node.js & Database PostgreSQL Terhubung! Database: ${res.databaseName || res.database || 'PostgreSQL'}`, 'success');
+        showToast(`API Node.js & Database PostgreSQL Terhubung! Database: ${res.databaseName || res.database || 'meysxysd_aphro'}`, 'success');
       } else {
         showToast(`API merespons status: ${res.status}`, 'warning');
       }
@@ -79,41 +74,21 @@ export const SettingAplikasiPage: React.FC = () => {
     }
   };
 
-  const handleTestSupabase = async () => {
-    setIsTestingSupabase(true);
-    showToast('Memeriksa koneksi 9 tabel di Supabase APHRO-Database...', 'info');
+  const handleTestHypercloudTables = async () => {
+    setIsTestingHypercloud(true);
+    showToast('Memeriksa 10 tabel di PostgreSQL HyperCloudHost...', 'info');
     try {
-      const res = await SupabaseService.testAllTables();
-      setSupabaseTestResults(res);
-      if (res.isOnline) {
-        showToast(`Koneksi Supabase Berhasil! ${res.totalRows} baris ditemukan.`, 'success');
-        syncWithGAS();
+      const res = await ApiService.getDatabaseStatus();
+      setHypercloudTestResults(res);
+      if (res.connected || res.status === 'success') {
+        showToast(`Koneksi Database Berhasil! Latency: ${res.latencyMs || 0}ms`, 'success');
       } else {
-        showToast('Tabel Supabase belum siap atau izin RLS aktif.', 'warning');
+        showToast('Status database: ' + (res.message || 'Periksa koneksi'), 'warning');
       }
     } catch (err: any) {
-      showToast(`Error Supabase: ${err.message}`, 'error');
+      showToast(`Error Database: ${err.message}`, 'error');
     } finally {
-      setIsTestingSupabase(false);
-    }
-  };
-
-  const handleSeedSupabase = async () => {
-    setIsSeedingSupabase(true);
-    showToast('Mengunggah master data ke tabel Supabase...', 'info');
-    try {
-      const res = await SupabaseService.seedDatabaseToSupabase();
-      if (res.success) {
-        const countSummary = Object.entries(res.inserted).map(([tbl, c]) => `${tbl}: ${c}`).join(', ');
-        showToast(`Master data berhasil diupload ke Supabase! (${countSummary})`, 'success');
-        handleTestSupabase();
-      } else {
-        showToast(`Beberapa tabel gagal diupload: ${Object.values(res.errors).join(', ')}`, 'warning');
-      }
-    } catch (err: any) {
-      showToast(`Gagal seeding: ${err.message}`, 'error');
-    } finally {
-      setIsSeedingSupabase(false);
+      setIsTestingHypercloud(false);
     }
   };
 
@@ -346,24 +321,24 @@ export const SettingAplikasiPage: React.FC = () => {
           )}
         </div>
 
-        {/* Supabase Backup Database Card */}
+        {/* HyperCloudHost Database Diagnostics Card */}
         <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-5 relative overflow-hidden">
           <div className="flex flex-wrap items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4 gap-3">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
                 <Database className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center space-x-2">
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Database Cadangan: Supabase (Backup Sementara)
+                    Database: PostgreSQL HyperCloudHost
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600">
-                    Backup / Fallback
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                    Primary DB
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Database Supabase dipertahankan sebagai cadangan sementara (failover) sesuai kebijakan migrasi database.
+                  Status 10 tabel utama PostgreSQL HyperCloudHost (USERS, INISIASI, ULP, REGU_ROW, PETUGAS, PENYULANG, WORK_ORDER, REALISASI, ABSENSI, LOG_ACTIVITY).
                 </p>
               </div>
             </div>
@@ -371,111 +346,69 @@ export const SettingAplikasiPage: React.FC = () => {
             <div className="flex items-center space-x-2">
               <button
                 type="button"
-                onClick={handleTestSupabase}
-                disabled={isTestingSupabase}
-                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl transition-colors shadow-xs"
+                onClick={handleTestHypercloudTables}
+                disabled={isTestingHypercloud}
+                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl transition-colors shadow-xs cursor-pointer"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isTestingSupabase ? 'animate-spin' : ''}`} />
-                <span>Tes 9 Tabel</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSeedSupabase}
-                disabled={isSeedingSupabase}
-                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-800 rounded-xl transition-colors shadow-xs"
-              >
-                <UploadCloud className={`w-3.5 h-3.5 ${isSeedingSupabase ? 'animate-bounce' : ''}`} />
-                <span>Upload Data Master</span>
-              </button>
-
-              <a
-                href="/sync_supabase_to_hypercloud_18sept.sql"
-                download="sync_supabase_to_hypercloud_18sept.sql"
-                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-950/60 dark:hover:bg-cyan-900/60 border border-cyan-300 dark:border-cyan-800 rounded-xl transition-colors shadow-xs"
-                title="Download SQL INSERT 18 Sept untuk PostgreSQL HyperCloudHost"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Unduh SQL Sync (18 Sept+)</span>
-              </a>
-
-              <button
-                type="button"
-                onClick={handleCopySqlScript}
-                className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-xl transition-colors shadow-xs"
-              >
-                {isCopiedSql ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
-                <span>{isCopiedSql ? 'SQL Tersalin' : 'Salin SQL Schema'}</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${isTestingHypercloud ? 'animate-spin' : ''}`} />
+                <span>Tes 10 Tabel HyperCloud</span>
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Supabase Endpoint</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">API Gateway Endpoint</span>
               <p className="font-mono font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
-                {DEFAULT_SUPABASE_URL}
+                {API_BASE_URL}
               </p>
             </div>
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Database Name</span>
               <p className="font-mono font-bold text-xs text-slate-600 dark:text-slate-300">
-                APHRO-Database (Backup)
+                meysxysd_aphro
               </p>
             </div>
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</span>
-              <p className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400">
-                Backup Pasif
+              <p className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                Primary Database
               </p>
             </div>
           </div>
 
           {/* Diagnostic results if available */}
-          {supabaseTestResults && (
+          {hypercloudTestResults && (
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
                   <CheckCircle className="w-4 h-4 text-emerald-500" />
-                  <span>Status Real-Time 9 Tabel Supabase:</span>
+                  <span>Status Real-Time 10 Tabel HyperCloudHost:</span>
                 </span>
                 <span className="text-xs font-mono font-bold text-slate-500">
-                  {supabaseTestResults.totalRows} baris terdeteksi
+                  Latency: {hypercloudTestResults.latencyMs || 0}ms
                 </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-xs">
-                {supabaseTestResults.tables.map((t: any) => (
-                  <div
-                    key={t.name}
-                    className={`p-2.5 rounded-xl border flex flex-col justify-between ${
-                      t.status === 'OK'
-                        ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
-                        : t.status === 'EMPTY'
-                        ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
-                        : 'bg-rose-50/50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-extrabold text-[11px] text-slate-800 dark:text-slate-200">
-                        {t.name}
-                      </span>
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          t.status === 'OK'
-                            ? 'bg-emerald-500'
-                            : t.status === 'EMPTY'
-                            ? 'bg-amber-400'
-                            : 'bg-rose-500'
-                        }`}
-                      />
+                {hypercloudTestResults.tables &&
+                  Object.entries(hypercloudTestResults.tables).map(([tblName, count]: [string, any]) => (
+                    <div
+                      key={tblName}
+                      className="p-2.5 rounded-xl border flex flex-col justify-between bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-extrabold text-[11px] text-slate-800 dark:text-slate-200">
+                          {tblName}
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      </div>
+                      <div className="flex items-center justify-between mt-1 text-[10px] text-slate-500">
+                        <span>{count} baris</span>
+                        <span>Aktif</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between mt-1 text-[10px] text-slate-500">
-                      <span>{t.count} baris</span>
-                      <span>{t.latencyMs}ms</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           )}
@@ -487,7 +420,7 @@ export const SettingAplikasiPage: React.FC = () => {
             <div className="flex items-center space-x-2 text-teal-600 font-bold">
               <Database className="w-5 h-5 text-teal-600" />
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                1. Database Supabase APHRO & Storage Foto Drive
+                1. Database HyperCloudHost APHRO & Storage Foto Drive
               </h3>
             </div>
             <div className="flex items-center space-x-2">
@@ -505,17 +438,17 @@ export const SettingAplikasiPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Featured Auto Spreadsheet Banner */}
+          {/* Featured Auto Wizard Banner */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-600 text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center space-x-2">
                 <Sparkles className="w-5 h-5 text-amber-300" />
                 <h4 className="font-extrabold text-sm font-display">
-                  Inisialisasi & Pengujian Database Supabase APHRO
+                  Inisialisasi & Pengujian Database PostgreSQL HyperCloudHost
                 </h4>
               </div>
               <p className="text-xs text-teal-100">
-                Pemeriksaan status 9 tabel utama (USERS, WORK_ORDER, REALISASI, ABSENSI, ULP, dll) & seeding master data otomatis ke Supabase.
+                Pemeriksaan status 10 tabel utama (USERS, WORK_ORDER, REALISASI, ABSENSI, ULP, REGU_ROW, PETUGAS, PENYULANG, INISIASI, LOG_ACTIVITY).
               </p>
             </div>
             <button
@@ -655,7 +588,7 @@ export const SettingAplikasiPage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center space-x-2 text-xs font-bold text-slate-800 dark:text-slate-200">
                 <Database className="w-4 h-4 text-teal-600" />
-                <span>Sinkronisasi Data Supabase Database (Mode Manual):</span>
+                <span>Sinkronisasi Data Database (Mode Manual):</span>
               </div>
               <div className="flex items-center space-x-2">
                 {pendingCount > 0 && (

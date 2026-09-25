@@ -1,7 +1,53 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { query, testConnection, getDatabaseUrl } from './database';
+import crypto from 'crypto';
+import axios from 'axios';
+import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl } from './database';
 
 const router = Router();
+
+/**
+ * Proxy an API request to HyperCloudHost Remote Gateway
+ */
+async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?: string): Promise<boolean> {
+  const endpoint = targetPath || req.path;
+  const url = `${HYPERCLOUD_API_URL}/api${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+
+  const headers: Record<string, string> = {};
+  if (req.headers.authorization) {
+    headers['authorization'] = req.headers.authorization;
+  }
+  if (req.headers['content-type']) {
+    headers['content-type'] = req.headers['content-type'] as string;
+  }
+
+  let bodyData = req.body;
+  if ((endpoint === '/login' || endpoint.endsWith('/login')) && req.body) {
+    bodyData = {
+      ...req.body,
+      Username: req.body.Username || req.body.username || req.body.UserID || req.body.userId,
+      Password: req.body.Password || req.body.password,
+      unitId: req.body.unitId || req.body.UnitID || 'UL2',
+    };
+  }
+
+  try {
+    const remoteRes = await axios({
+      method: req.method as any,
+      url,
+      params: req.query,
+      data: req.method !== 'GET' ? bodyData : undefined,
+      headers,
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+
+    res.status(remoteRes.status).json(remoteRes.data);
+    return true;
+  } catch (err: any) {
+    console.warn(`[HYPERCLOUD PROXY] Error proxying ${req.method} ${endpoint}:`, err.message);
+    return false;
+  }
+}
 
 /**
  * Log API requests with sanitized details
@@ -33,28 +79,31 @@ function logSyncOperation(entity: string, id: string, status: string, http: numb
 /**
  * Standardize unitId filtering
  */
-function parseUnitFilter(req: Request): {
-  unitId?: string;
-  isAll: boolean;
-} {
-  const reqUnit = (
-    req.query.unitId ||
-    req.query.unit_id ||
-    req.body?.unitId ||
-    ''
-  )
-    .toString()
-    .trim()
-    .toUpperCase();
+function parseUnitFilter(req: Request): { unitId?: string; isAll: boolean } {
+  const user = (req as any).user || {};
+  const role = String(user.role || user.Role || '').trim().toUpperCase();
+  const requested = String(req.query.unitId || req.query.unit_id || req.body?.unitId || '').trim().toUpperCase();
+  const userUnit = String(user.unitId || user.UnitID || '').trim().toUpperCase();
+  const privileged = role === 'SUPERADMIN' || role === 'ADMIN' || role === 'ADM' || userUnit === 'ALL';
 
-  if (!reqUnit || reqUnit === 'ALL') {
-    return { isAll: true };
+  // Authenticated users are never allowed to override their unit unless privileged.
+  if (userUnit && userUnit !== 'ALL' && !privileged) return { unitId: userUnit, isAll: false };
+  if (privileged && requested && requested !== 'ALL') return { unitId: requested, isAll: false };
+  if (privileged && (requested === 'ALL' || userUnit === 'ALL')) return { isAll: true };
+  return { unitId: requested || userUnit || undefined, isAll: !requested && !userUnit };
+}
+
+function assertUnitWriteAccess(req: Request, targetUnitId: string): string | null {
+  const user = (req as any).user || {};
+  const userUnit = String(user.unitId || '').trim().toUpperCase();
+  const role = String(user.role || '').trim().toUpperCase();
+  const target = String(targetUnitId || userUnit).trim().toUpperCase();
+  const privileged = role === 'SUPERADMIN' || role === 'ADMIN' || role === 'ADM' || userUnit === 'ALL';
+  if (!target) return 'UnitId wajib diisi.';
+  if (!privileged && userUnit !== target) {
+    return `Akses ditolak: akun Anda berada pada unit ${userUnit}, bukan ${target}.`;
   }
-
-  return {
-    unitId: reqUnit,
-    isAll: false,
-  };
+  return null;
 }
 
 /**
@@ -157,6 +206,26 @@ async function handleUpsertWorkOrder(w: any) {
 
   return await query(sql, params);
 }
+
+/**
+ * Transparent Gateway Proxy Middleware for HyperCloudHost
+ * When direct PostgreSQL is not listening locally, all requests seamlessly proxy to HyperCloudHost Remote API
+ */
+router.use(async (req: Request, res: Response, next: NextFunction) => {
+  const path = req.path;
+  // Health, version, routes-check, database-status can be handled directly
+  if (path === '/health' || path === '/version' || path === '/routes-check' || path === '/admin/database-status') {
+    return next();
+  }
+
+  // If local DB is not accessible, forward directly to HyperCloudHost Gateway
+  if (isLocalhostDbUrl(getDatabaseUrl())) {
+    const handled = await proxyToHypercloudGateway(req, res);
+    if (handled) return;
+  }
+
+  next();
+});
 
 // ==========================================
 // 1. HEALTH CHECK & DIAGNOSTICS
@@ -374,9 +443,14 @@ router.post('/login', async (req: Request, res: Response) => {
           OR LOWER(REPLACE(REPLACE("UserID", ' ', ''), '-', '')) IN (LOWER($1), LOWER($2), LOWER($3))
           OR LOWER(REPLACE(REPLACE("Nama_Regu", ' ', ''), '-', '')) IN (LOWER($1), LOWER($2), LOWER($3))
         )
+        AND (
+          UPPER(TRIM("unitId")) = UPPER($4)
+          OR UPPER(TRIM("unitId")) = 'ALL'
+          OR $4 = 'ALL'
+        )
         LIMIT 1
       `;
-      userRes = await query(fallbackSql, [cleanUsername, unpadded, padded]);
+      userRes = await query(fallbackSql, [cleanUsername, unpadded, padded, cleanUnitId]);
     }
 
     if (userRes.rows.length === 0) {
@@ -417,8 +491,8 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const isPasswordValid =
-      (serverPass && cleanPassword.toLowerCase() === serverPass.toLowerCase()) ||
-      (!serverPass && cleanPassword.toLowerCase() === 'admin123');
+      Boolean(serverPass) && cleanPassword.length > 0 &&
+      cleanPassword.toLowerCase() === serverPass.toLowerCase();
 
     if (!isPasswordValid) {
       console.log(
@@ -435,9 +509,12 @@ router.post('/login', async (req: Request, res: Response) => {
       `[AUTH] Login successful: '${cleanUsername}'`
     );
 
-    const token =
-      `hc-jwt-${Date.now()}-` +
-      Buffer.from(cleanUsername).toString('hex');
+    const token = createJwt({
+      userId: String(matchedUser.Id || matchedUser.ID || matchedUser.id || ''),
+      username: String(matchedUser.Username || matchedUser.UserID || cleanUsername),
+      unitId: String(matchedUser.unitId || cleanUnitId).toUpperCase(),
+      role: String(matchedUser.Role || matchedUser.role || 'User'),
+    });
 
     return res.json({
       status: 'success',
@@ -494,8 +571,12 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (err: any) {
+    // If direct PG query failed, proxy to HyperCloudHost remote API gateway
+    const proxied = await proxyToHypercloudGateway(req, res, '/login');
+    if (proxied) return;
+
     console.error(
-      `[AUTH] Database error during login: ${err.message}`
+      `[AUTH] Error during login: ${err.message}`
     );
 
     return res.status(500).json({
@@ -521,36 +602,46 @@ router.post('/login', async (req: Request, res: Response) => {
  * Last Login
  * Created At
  */
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      success: false,
-      status: 'error',
-      message: 'Token tidak ditemukan atau tidak valid. Silakan login terlebih dahulu.',
-    });
-  }
-
-  const token = authHeader.substring(7).trim();
-  if (!token) {
-    return res.status(401).json({
-      success: false,
-      status: 'error',
-      message: 'Token tidak valid.',
-    });
-  }
-
+function getJwtSecret(): string {
+  const secret = String(process.env.JWT_SECRET || 'aphro-hypercloud-jwt-secure-secret-key-2026-production-32char').trim();
+  return secret;
+}
+function base64url(value: string): string {
+  return Buffer.from(value).toString('base64url');
+}
+function createJwt(payload: Record<string, any>, expiresInSeconds = 43200): string {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const body = { ...payload, iat: now, exp: now + expiresInSeconds };
+  const h = base64url(JSON.stringify(header));
+  const b = base64url(JSON.stringify(body));
+  const data = `${h}.${b}`;
+  const sig = crypto.createHmac('sha256', getJwtSecret()).update(data).digest('base64url');
+  return `${data}.${sig}`;
+}
+function verifyJwt(token: string): Record<string, any> | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [h, b, sig] = parts;
+  const expected = crypto.createHmac('sha256', getJwtSecret()).update(`${h}.${b}`).digest('base64url');
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
-    const parts = token.split('.');
-    if (parts.length === 3) {
-      const payloadJson = Buffer.from(parts[1], 'base64').toString('utf-8');
-      (req as any).user = JSON.parse(payloadJson);
-    }
-  } catch {
-    // Ignore parse errors, user remains undefined
+    const payload = JSON.parse(Buffer.from(b, 'base64url').toString('utf8'));
+    return payload.exp > Math.floor(Date.now() / 1000) ? payload : null;
+  } catch { return null; }
+}
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) return res.status(401).json({ success: false, status: 'error', message: 'Token login tidak ditemukan.' });
+  try {
+    const payload = verifyJwt(authHeader.substring(7).trim());
+    if (!payload) return res.status(401).json({ success: false, status: 'error', message: 'Token login tidak valid atau sudah kedaluwarsa.' });
+    (req as any).user = payload;
+    next();
+  } catch (err: any) {
+    console.error('[AUTH] JWT verification failed:', err.message);
+    return res.status(500).json({ success: false, status: 'error', message: 'Konfigurasi JWT server belum benar.' });
   }
-
-  next();
 }
 
 router.get('/users', requireAuth, async (req: Request, res: Response) => {
@@ -1273,7 +1364,7 @@ router.get('/penyulang', async (req: Request, res: Response) => {
 /**
  * GET /api/work-orders
  */
-router.get('/work-orders', async (req: Request, res: Response) => {
+router.get('/work-orders', requireAuth, async (req: Request, res: Response) => {
   logApiCall('GET', '/api/work-orders', req.query);
 
   const { unitId, isAll } = parseUnitFilter(req);
@@ -1337,7 +1428,7 @@ router.get('/work-orders', async (req: Request, res: Response) => {
 /**
  * GET /api/work-orders/:id
  */
-router.get('/work-orders/:id', async (req: Request, res: Response) => {
+router.get('/work-orders/:id', requireAuth, async (req: Request, res: Response) => {
   const id = req.params.id;
   const { unitId, isAll } = parseUnitFilter(req);
   logApiCall('GET', `/api/work-orders/${id}`);
@@ -1626,7 +1717,7 @@ router.delete(
  *
  * Endpoint paginated untuk halaman data REALISASI.
  */
-router.get('/realisasi', async (req: Request, res: Response) => {
+router.get('/realisasi', requireAuth, async (req: Request, res: Response) => {
   logApiCall('GET', '/api/realisasi', req.query);
 
   const page = Math.max(
@@ -1806,6 +1897,7 @@ router.get('/realisasi', async (req: Request, res: Response) => {
  */
 router.get(
   '/realisasi/dashboard',
+  requireAuth,
   async (req: Request, res: Response) => {
     logApiCall(
       'GET',
@@ -1962,6 +2054,9 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
   logApiCall(req.method, req.path, req.body);
   const r = req.body || {};
   const id = req.params.id || r.ID || r.id || `REL-${Date.now()}`;
+  const targetUnitId = String(r.unitId || (req as any).user?.unitId || '').trim().toUpperCase();
+  const accessError = assertUnitWriteAccess(req, targetUnitId);
+  if (accessError) return res.status(403).json({ success: false, status: 'error', error: 'FORBIDDEN_UNIT_ACCESS', message: accessError });
 
   try {
     const sql = `
@@ -2062,7 +2157,7 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
 /**
  * GET /api/realisasi/:id
  */
-router.get('/realisasi/:id', async (req: Request, res: Response) => {
+router.get('/realisasi/:id', requireAuth, async (req: Request, res: Response) => {
   const relId = req.params.id;
   const { unitId, isAll } = parseUnitFilter(req);
   logApiCall('GET', `/api/realisasi/${relId}`);
@@ -2111,12 +2206,12 @@ router.get('/realisasi/:id', async (req: Request, res: Response) => {
 /**
  * POST /api/realisasi
  */
-router.post('/realisasi', handleUpsertRealisasi);
+router.post('/realisasi', requireAuth, handleUpsertRealisasi);
 
 /**
  * PUT /api/realisasi/:id
  */
-router.put('/realisasi/:id', handleUpsertRealisasi);
+router.put('/realisasi/:id', requireAuth, handleUpsertRealisasi);
 
 /**
  * DELETE /api/realisasi/:id
@@ -2224,7 +2319,7 @@ async function ensureAbsensiSchema() {
 /**
  * GET /api/absensi
  */
-router.get('/absensi', async (req: Request, res: Response) => {
+router.get('/absensi', requireAuth, async (req: Request, res: Response) => {
   logApiCall(
     'GET',
     '/api/absensi',
@@ -2285,6 +2380,9 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
   const method = req.method;
   logApiCall(req.method, req.path, req.body);
   const a = req.body || {};
+  const targetUnitId = String(a.unitId || (req as any).user?.unitId || '').trim().toUpperCase();
+  const accessError = assertUnitWriteAccess(req, targetUnitId);
+  if (accessError) return res.status(403).json({ success: false, status: 'error', error: 'FORBIDDEN_UNIT_ACCESS', message: accessError });
   let targetId = req.params.id || a.ID || a.id;
 
   // Extract from petugasList if present
@@ -2470,12 +2568,12 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
 /**
  * POST /api/absensi
  */
-router.post('/absensi', handleUpsertAbsensi);
+router.post('/absensi', requireAuth, handleUpsertAbsensi);
 
 /**
  * PUT /api/absensi/:id
  */
-router.put('/absensi/:id', handleUpsertAbsensi);
+router.put('/absensi/:id', requireAuth, handleUpsertAbsensi);
 
 /**
  * DELETE /api/absensi/:id

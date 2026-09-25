@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
-import { useSettings } from '../../context/SettingsContext';
-import { useGASSync } from '../../hooks/useGASSync';
 import { useToast } from '../../hooks/useToast';
-import { SupabaseService } from '../../services/supabaseService';
+import { ApiService, API_BASE_URL } from '../../services/apiService';
 import {
   Database,
   Check,
-  Copy,
-  ExternalLink,
   X,
   Play,
-  Folder,
   CheckCircle2,
   AlertCircle,
   RefreshCw,
@@ -26,49 +21,27 @@ interface AutoSpreadsheetWizardModalProps {
 
 export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProps> = ({ isOpen, onClose }) => {
   const { showToast } = useToast();
-  const { syncWithGAS } = useGASSync();
 
-  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
-  const [supabaseTestResults, setSupabaseTestResults] = useState<any>(null);
-  const [isSeedingSupabase, setIsSeedingSupabase] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResults, setTestResults] = useState<any>(null);
 
   if (!isOpen) return null;
 
-  const handleTestSupabase = async () => {
-    setIsTestingSupabase(true);
-    showToast('Memeriksa koneksi 9 tabel di Supabase APHRO-Database...', 'info');
+  const handleTestDatabase = async () => {
+    setIsTesting(true);
+    showToast('Memeriksa koneksi 10 tabel di PostgreSQL HyperCloudHost...', 'info');
     try {
-      const res = await SupabaseService.testAllTables();
-      setSupabaseTestResults(res);
-      if (res.isOnline) {
-        showToast(`Koneksi Supabase Berhasil! Total ${res.totalRows} baris ditemukan.`, 'success');
-        syncWithGAS();
+      const res = await ApiService.getDatabaseStatus();
+      setTestResults(res);
+      if (res.connected || res.status === 'success') {
+        showToast(`Koneksi Database Berhasil! Database meysxysd_aphro aktif.`, 'success');
       } else {
-        showToast('Tabel Supabase belum terinisialisasi.', 'warning');
+        showToast('Tabel database merespons: ' + (res.message || 'Periksa koneksi'), 'warning');
       }
     } catch (err: any) {
-      showToast(`Error Supabase: ${err.message}`, 'error');
+      showToast(`Error Database: ${err.message}`, 'error');
     } finally {
-      setIsTestingSupabase(false);
-    }
-  };
-
-  const handleSeedSupabase = async () => {
-    setIsSeedingSupabase(true);
-    showToast('Mengunggah master data awal ke tabel Supabase...', 'info');
-    try {
-      const res = await SupabaseService.seedDatabaseToSupabase();
-      if (res.success) {
-        const countSummary = Object.entries(res.inserted).map(([tbl, c]) => `${tbl}: ${c}`).join(', ');
-        showToast(`Master data berhasil diunggah ke Supabase! (${countSummary})`, 'success');
-        await handleTestSupabase();
-      } else {
-        showToast(`Beberapa tabel gagal diisi: ${Object.values(res.errors).join(', ')}`, 'warning');
-      }
-    } catch (err: any) {
-      showToast(`Gagal seeding Supabase: ${err.message}`, 'error');
-    } finally {
-      setIsSeedingSupabase(false);
+      setIsTesting(false);
     }
   };
 
@@ -83,10 +56,10 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
             </div>
             <div>
               <h2 className="text-xl font-black font-display tracking-tight">
-                Wizard Database Supabase APHRO
+                Wizard Database PostgreSQL HyperCloudHost
               </h2>
               <p className="text-xs text-teal-100">
-                Pemeriksaan & Inisialisasi 9 Tabel Utama Database Supabase
+                Pemeriksaan Status 10 Tabel Utama Database HyperCloudHost
               </p>
             </div>
           </div>
@@ -100,26 +73,26 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
 
         {/* Content Body */}
         <div className="p-6 space-y-6 overflow-y-auto">
-          {/* Supabase Status Box */}
+          {/* Status Box */}
           <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 space-y-2">
             <div className="flex items-center justify-between font-bold text-teal-900 dark:text-teal-200 text-xs">
               <span className="flex items-center space-x-2">
                 <Database className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <span>Supabase Database Endpoint</span>
+                <span>Database HyperCloudHost Endpoint</span>
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-teal-500/20 text-teal-700 dark:text-teal-300">
                 PostgreSQL Engine
               </span>
             </div>
             <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono">
-              URL: https://...supabase.co
+              Gateway: {API_BASE_URL}
             </p>
           </div>
 
           {/* Action Steps */}
           <div className="space-y-4">
             <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-              Pengujian & Inisialisasi Data:
+              Pengujian Status Database:
             </h3>
 
             {/* Step 1: Test Connection */}
@@ -128,64 +101,36 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Server className="w-4 h-4 text-teal-600" />
-                    <span>1. Uji Koneksi 9 Tabel Supabase</span>
+                    <span>Uji Status 10 Tabel HyperCloudHost</span>
                   </h4>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Mengecek status ketersediaan tabel: USERS, WORK_ORDER, REALISASI, ABSENSI, ULP, PENYULANG, REGU_ROW, PETUGAS, INISIASI_UNIT.
+                    Mengecek status ketersediaan tabel: USERS, WORK_ORDER, REALISASI, ABSENSI, ULP, PENYULANG, REGU_ROW, PETUGAS, INISIASI, LOG_ACTIVITY.
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={handleTestSupabase}
-                  disabled={isTestingSupabase}
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50 flex items-center space-x-1.5"
+                  onClick={handleTestDatabase}
+                  disabled={isTesting}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
                 >
-                  {isTestingSupabase ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                  {isTesting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
                   <span>Uji Koneksi</span>
                 </button>
               </div>
 
-              {supabaseTestResults && (
+              {testResults && testResults.tables && (
                 <div className="pt-2 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
-                  {Object.entries(supabaseTestResults.tables || {}).map(([table, details]: [string, any]) => (
+                  {Object.entries(testResults.tables || {}).map(([table, count]: [string, any]) => (
                     <div
                       key={table}
-                      className={`p-2 rounded-xl border flex items-center justify-between ${
-                        details.ok
-                          ? 'bg-teal-50 dark:bg-teal-950/30 border-teal-200 text-teal-800 dark:text-teal-300'
-                          : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 text-rose-800 dark:text-rose-300'
-                      }`}
+                      className="p-2 rounded-xl border flex items-center justify-between bg-teal-50 dark:bg-teal-950/30 border-teal-200 text-teal-800 dark:text-teal-300"
                     >
                       <span className="font-bold">{table}</span>
-                      <span>{details.ok ? `${details.count} baris` : 'Error'}</span>
+                      <span>{count} baris</span>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* Step 2: Seed Initial Data */}
-            <div className="p-4 rounded-2xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-300 dark:border-teal-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-teal-950 dark:text-teal-200 flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-teal-600" />
-                    <span>2. Tanamkan Master Data Awal (Seeding)</span>
-                  </h4>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                    Mengisi data awal unit ULP, Penyulang, Regu, User default, dan Work Order awal ke dalam Supabase.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSeedSupabase}
-                  disabled={isSeedingSupabase}
-                  className="px-4 py-2 bg-gradient-to-r from-teal-600 to-[#00A2B9] hover:from-teal-700 hover:to-[#008396] text-white rounded-xl text-xs font-black transition-all shadow-md disabled:opacity-50 flex items-center space-x-1.5"
-                >
-                  {isSeedingSupabase ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                  <span>Seed Supabase Data</span>
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -195,12 +140,12 @@ export const AutoSpreadsheetWizardModal: React.FC<AutoSpreadsheetWizardModalProp
           <div className="flex items-center space-x-2">
             <span className="flex items-center space-x-1 text-teal-600 font-bold">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Database Status: Supabase Active</span>
+              <span>Database Status: HyperCloudHost Active</span>
             </span>
           </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 font-bold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 rounded-xl transition-colors"
+            className="px-5 py-2 font-bold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 rounded-xl transition-colors cursor-pointer"
           >
             Selesai / Tutup
           </button>

@@ -396,7 +396,7 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
         {isGasConnected ? (
           <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-bold rounded-full">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#00A2B9]" />
-            <span>Tersinkron ke Supabase Database</span>
+            <span>Tersinkron ke HyperCloud Database</span>
           </span>
         ) : (
           <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold rounded-full">

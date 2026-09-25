@@ -140,7 +140,7 @@ export interface RealisasiPreviewResult {
   sourceOnlyRecords: RealisasiPreviewItem[];
 }
 
-const DEFAULT_HYPERCLOUD_URL = "postgresql://meysxysd:Aphro)51074Db@api.aphro-row.my.id:5432/meysxysd_aphro";
+const DEFAULT_HYPERCLOUD_URL = "";
 
 const SUPPORTED_TABLES: Record<string, { primaryKey: string; order: number; columns: string[]; ddl: string }> = {
   WORK_ORDER: {

@@ -43,7 +43,7 @@ export const MigrasiDatabasePage: React.FC = () => {
   // Connection states
   const [isTestingConn, setIsTestingConn] = useState(false);
   const [connStatus, setConnStatus] = useState<ConnectionStatusResponse | null>(null);
-  const [targetDbUrl, setTargetDbUrl] = useState<string>("postgresql://meysxysd:Aphro)51074Db@127.0.0.1:5432/meysxysd_aphro");
+  const [targetDbUrl, setTargetDbUrl] = useState<string>("postgresql://meysxysd:DB_PASSWORD@127.0.0.1:5432/meysxysd_aphro");
   const [showConfigPanel, setShowConfigPanel] = useState<boolean>(false);
   const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
 
@@ -515,7 +515,7 @@ export const MigrasiDatabasePage: React.FC = () => {
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    <strong>Default:</strong> <code className="bg-slate-200 dark:bg-slate-900 px-1 py-0.5 rounded text-slate-800 dark:text-slate-200">postgresql://meysxysd:Aphro)51074Db@127.0.0.1:5432/meysxysd_aphro</code>.
+                    <strong>Default:</strong> <code className="bg-slate-200 dark:bg-slate-900 px-1 py-0.5 rounded text-slate-800 dark:text-slate-200">postgresql://meysxysd:DB_PASSWORD@127.0.0.1:5432/meysxysd_aphro</code>.
                     Karakter password seperti kurung tutup <code className="bg-slate-200 dark:bg-slate-900 px-1 rounded font-mono">)</code> ditangani secara aman oleh engine migrasi.
                   </p>
                 </div>

@@ -188,7 +188,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     setIsRefreshing(true);
     try {
       await refreshAbsensi();
-      showToast('Data absensi berhasil disegarkan dari Supabase', 'success');
+      showToast('Data absensi berhasil disegarkan dari HyperCloudHost', 'success');
     } catch {
       showToast('Gagal menyegarkan data absensi', 'error');
     } finally {
@@ -444,7 +444,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
         fotoKeluar: finalDriveFotoKeluar,
       });
 
-      showToast('Absensi Pulang (Foto Pulang) berhasil disimpan ke Google Drive & Supabase!', 'success');
+      showToast('Absensi Pulang (Foto Pulang) berhasil disimpan ke Google Drive & HyperCloudHost!', 'success');
       setFotoKeluar('');
       
       // Auto redirect to Monitoring Absensi after checkout
@@ -1153,7 +1153,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                 onClick={handleRefresh}
                 disabled={isRefreshing}
                 className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer disabled:opacity-50"
-                title="Segarkan data absensi dari Supabase"
+                title="Segarkan data absensi dari HyperCloudHost"
               >
                 <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#00A2B9]' : ''}`} />
                 <span>{isRefreshing ? 'Memuat...' : 'Segarkan'}</span>
@@ -1455,7 +1455,7 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
                             </button>
                             <button 
                               onClick={async () => {
-                                if (window.confirm('Hapus data absensi ini? Perubahan akan langsung sinkron ke Supabase Database.')) {
+                                if (window.confirm('Hapus data absensi ini? Perubahan akan langsung sinkron ke HyperCloudHost Database.')) {
                                   await deleteAbsensi(item.id);
                                 }
                               }}

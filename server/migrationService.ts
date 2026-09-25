@@ -7,7 +7,7 @@ const { Pool } = pg;
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://npeeobcpffmlyiknszhh.supabase.co";
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZWVvYmNwZmZtbHlpa25zemhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MzQ0MzAsImV4cCI6MjEwNDQxMDQzMH0.-48iDwqMfKHBfVcJx6A_McxWl2StzFjzyHFPaKMZq98";
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL || "";
-export let HYPERCLOUD_DATABASE_URL = process.env.HYPERCLOUD_DATABASE_URL || process.env.DATABASE_URL || "postgresql://meysxysd:Aphro)51074Db@127.0.0.1:5432/meysxysd_aphro";
+export let HYPERCLOUD_DATABASE_URL = process.env.HYPERCLOUD_DATABASE_URL || process.env.DATABASE_URL || "postgresql://meysxysd:DB_PASSWORD@127.0.0.1:5432/meysxysd_aphro";
 
 export function setHypercloudDatabaseUrl(url: string) {
   if (url && typeof url === "string") {

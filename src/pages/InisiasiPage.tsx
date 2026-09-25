@@ -4,12 +4,8 @@ import { useUI } from '../context/UIContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../hooks/useToast';
 import { InisiasiUnit } from '../types';
-import {
-  InisiasiService,
-  DEFAULT_UL_OPTIONS,
-} from '../services/inisiasiService';
+import { InisiasiService, DEFAULT_UL_OPTIONS } from '../services/inisiasiService';
 import { getPrimaryTimRowForUnit } from '../services/rekapHarianService';
-import { SUPABASE_URL, SUPABASE_DATABASE_NAME, SUPABASE_TABLES } from '../services/supabaseClient';
 import { APP_LOGO_URL } from '../data/initialData';
 import {
   Building2,
@@ -53,7 +49,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
 
   const loadInisiasiData = async () => {
     setIsLoading(true);
-    setStatusMessage('Menghubungkan ke Supabase APHRO-Database (Tabel INISIASI)...');
+    setStatusMessage('Menghubungkan ke Database HyperCloudHost (Tabel INISIASI)...');
     try {
       const res = await InisiasiService.fetchInisiasiUnits();
 
@@ -62,7 +58,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
         const finalOptions = filteredUL.length > 0 ? filteredUL : DEFAULT_UL_OPTIONS;
 
         setUlOptions(finalOptions);
-        setStatusMessage(res.message || 'Data Unit Layanan siap dari database Supabase.');
+        setStatusMessage(res.message || 'Data Unit Layanan siap dari database HyperCloudHost.');
 
         const currentNama = settings.namaUnitLayanan || '';
         const match = finalOptions.find(
@@ -277,7 +273,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
               </div>
 
               <p className="text-[11px] text-slate-500 italic">
-                * Data terisolasi otomatis menggunakan filter kolom <span className="text-teal-400 font-mono">unitId</span> di semua tabel Supabase.
+                * Data terisolasi otomatis menggunakan filter kolom <span className="text-teal-400 font-mono">unitId</span> di semua tabel HyperCloudHost.
               </p>
             </div>
 
@@ -306,7 +302,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
                   <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                     <span className="text-slate-400 flex items-center gap-1.5">
                       <Zap className="w-3.5 h-3.5 text-teal-400" />
-                      Status Database Supabase:
+                      Status Database HyperCloud:
                     </span>
                     <span className="text-teal-400 font-bold flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" />
@@ -366,7 +362,7 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
         <p className="font-bold tracking-widest uppercase text-slate-400">
           APHRO - Asset Protection & Hazard Response Operations
         </p>
-        <p>© 13307BKT- 2026 PLN ES UP4 Sumatera Barat. Supabase Database: APHRO-Database.</p>
+        <p>© 13307BKT- 2026 PLN ES UP4 Sumatera Barat. Database: PostgreSQL HyperCloudHost.</p>
       </div>
     </div>
   );
