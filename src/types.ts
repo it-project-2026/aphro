@@ -55,8 +55,10 @@ export interface WorkOrder {
   petugasId?: string;
   petugasName?: string;
   volumePekerjaan?: number;
+  VOLUME?: string;
   satuan?: 'KMS' | 'GAWANG';
   totalRealisasi?: number;
+  TOTAL_REALISASI?: string;
   satuanTotalRealisasi?: 'KMS' | 'GAWANG';
   lokasiStart?: string;
   lokasiFinish?: string;

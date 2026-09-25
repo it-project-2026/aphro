@@ -965,10 +965,121 @@ export class ApiService {
     }
 
     const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
-    const payload = {
+    const woId = String(id || data.WO_ID || data.id || data.woId || '').trim();
+
+    // Helper konversi string aman sesuai kebutuhan schema Prisma
+    const toSafeStringOrNull = (val: any): string | null => {
+      if (val === undefined || val === null) return null;
+      const str = String(val).trim();
+      return str === '' || str === 'null' || str === 'undefined' ? null : str;
+    };
+
+    const toSafeString = (val: any, fallback = ''): string => {
+      if (val === undefined || val === null) return fallback;
+      return String(val);
+    };
+
+    // Ambil nilai mentah dari field UPPER_CASE maupun camelCase
+    const rawTotalRealisasi = data.TOTAL_REALISASI !== undefined ? data.TOTAL_REALISASI : data.totalRealisasi;
+    const rawVolume = data.VOLUME !== undefined ? data.VOLUME : data.volumePekerjaan;
+    const rawPekerjaan = data.PEKERJAAN !== undefined ? data.PEKERJAAN : data.pekerjaan;
+    const rawNomorWo = data.Nomor_WO !== undefined ? data.Nomor_WO : data.nomorWO;
+    const rawUlp = data.ULP !== undefined ? data.ULP : data.ulpName;
+    const rawPenyulang = data.Penyulang !== undefined ? data.Penyulang : (data.penyulangName || data.penyulang);
+    const rawRegu = data.Regu_ROW !== undefined ? data.Regu_ROW : (data.reguName || data.regu);
+    const rawSatuan = data.SATUAN !== undefined ? data.SATUAN : data.satuan;
+    const rawWoAwal = data.WO_AWAL !== undefined ? data.WO_AWAL : data.woMulai;
+    const rawWoAkhir = data.WO_AKHIR !== undefined ? data.WO_AKHIR : data.woAkhir;
+    const rawStatus = data.STATUS !== undefined ? data.STATUS : data.status;
+    const rawLokasiStart = data.LOKASI_START !== undefined ? data.LOKASI_START : data.lokasiStart;
+    const rawLokasiFinish = data.LOKASI_FINISH !== undefined ? data.LOKASI_FINISH : data.lokasiFinish;
+    const rawSatuanTotalRel = data.SATUAN_TOTAL_REALISASI !== undefined ? data.SATUAN_TOTAL_REALISASI : data.satuanTotalRealisasi;
+
+    const payload: Record<string, any> = {
       ...data,
+      WO_ID: woId,
       unitId,
     };
+
+    // Normalisasi field yang bertipe String di schema.prisma
+    if (rawTotalRealisasi !== undefined) {
+      payload.TOTAL_REALISASI = rawTotalRealisasi === null ? null : String(rawTotalRealisasi);
+    }
+    if (rawVolume !== undefined) {
+      payload.VOLUME = rawVolume === null ? null : String(rawVolume);
+    }
+    if (rawPekerjaan !== undefined) {
+      payload.PEKERJAAN = toSafeString(rawPekerjaan, 'NORMAL');
+    }
+    if (rawNomorWo !== undefined) {
+      payload.Nomor_WO = toSafeString(rawNomorWo);
+    }
+    if (rawUlp !== undefined) {
+      payload.ULP = toSafeString(rawUlp);
+    }
+    if (rawPenyulang !== undefined) {
+      payload.Penyulang = toSafeString(rawPenyulang);
+    }
+    if (rawRegu !== undefined) {
+      payload.Regu_ROW = toSafeString(rawRegu);
+    }
+    if (rawSatuan !== undefined) {
+      payload.SATUAN = toSafeString(rawSatuan, 'KMS');
+    }
+    if (rawWoAwal !== undefined) {
+      payload.WO_AWAL = toSafeStringOrNull(rawWoAwal);
+    }
+    if (rawWoAkhir !== undefined) {
+      payload.WO_AKHIR = toSafeStringOrNull(rawWoAkhir);
+    }
+    if (rawStatus !== undefined) {
+      payload.STATUS = toSafeString(rawStatus, 'BELUM SELESAI');
+    }
+    if (rawLokasiStart !== undefined) {
+      payload.LOKASI_START = toSafeStringOrNull(rawLokasiStart);
+    }
+    if (rawLokasiFinish !== undefined) {
+      payload.LOKASI_FINISH = toSafeStringOrNull(rawLokasiFinish);
+    }
+    if (rawSatuanTotalRel !== undefined) {
+      payload.SATUAN_TOTAL_REALISASI = toSafeString(rawSatuanTotalRel, 'KMS');
+    }
+
+    // Tanggal dan Created_At tetap DateTime/date sesuai kebutuhan backend
+    if (data.Tanggal !== undefined || data.tanggal !== undefined) {
+      payload.Tanggal = data.Tanggal || data.tanggal;
+    }
+    if (data.Created_At !== undefined || data.createdAt !== undefined) {
+      payload.Created_At = data.Created_At || data.createdAt;
+    }
+
+    // Bersihkan field camelCase frontend agar payload murni sesuai model WORK_ORDER Prisma
+    delete payload.totalRealisasi;
+    delete payload.volumePekerjaan;
+    delete payload.woMulai;
+    delete payload.woAkhir;
+    delete payload.lokasiStart;
+    delete payload.lokasiFinish;
+    delete payload.satuanTotalRealisasi;
+    delete payload.nomorWO;
+    delete payload.ulpName;
+    delete payload.penyulangName;
+    delete payload.reguName;
+    delete payload.status;
+    delete payload.satuan;
+    delete payload.pekerjaan;
+    delete payload.createdAt;
+    delete payload.updatedAt;
+    delete payload.progressPercent;
+    delete payload.syncStatus;
+
+    console.log('[WORK ORDER UPDATE PAYLOAD CHECK]', {
+      WO_ID: payload.WO_ID,
+      TOTAL_REALISASI: payload.TOTAL_REALISASI,
+      TOTAL_REALISASI_TYPE: typeof payload.TOTAL_REALISASI,
+      VOLUME: payload.VOLUME,
+      VOLUME_TYPE: typeof payload.VOLUME,
+    });
 
     console.log('[SYNC] ONLINE');
     console.log(`[SYNC] Updating WORK_ORDER to HyperCloud: PUT /api/work-orders/${id} (unitId=${unitId}, JWT=AVAILABLE)`);
