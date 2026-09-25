@@ -6,6 +6,7 @@
  */
 
 import { idbService, AuditLogRecord, PendingOperation } from './indexedDbService';
+import { dexieDb } from './dexieDb';
 import { GASApiService, GASApiResponse } from './gasApiService';
 import { ApiService, API_BASE_URL } from './apiService';
 import { InisiasiService } from './inisiasiService';
@@ -592,26 +593,158 @@ export class SyncManager {
               errorMessage = res.message || '';
             }
           } else if (item.tableName === 'REALISASI') {
-            const woId = String(updatedPayload.WO_ID || updatedPayload.workOrderId || updatedPayload.woId || '').trim();
-            const nomorWo = String(updatedPayload.Nomor_WO || updatedPayload.nomorWO || updatedPayload.nomor_wo || '').trim();
-            const relPayload = {
-              ...updatedPayload,
-              WO_ID: woId,
-              woId: woId,
-              workOrderId: woId,
-              Nomor_WO: nomorWo,
-              nomorWO: nomorWo,
+            const realisasiPayload = item.payload?.realisasi ?? item.payload;
+
+            // 1. Resolve WO_ID dengan prioritas: WO_ID, workOrderId, woId
+            let resolvedWoId = String(
+              realisasiPayload.WO_ID ||
+              realisasiPayload.workOrderId ||
+              realisasiPayload.woId ||
+              ''
+            ).trim();
+
+            // Hindari penggunaan ID REALISASI (seperti REL-...) sebagai WO_ID
+            const relId = String(realisasiPayload.id || realisasiPayload.ID || item.idempotencyKey || '').trim();
+            if (resolvedWoId.startsWith('REL-') || (relId && resolvedWoId === relId)) {
+              resolvedWoId = '';
+            }
+
+            // 2. Resolve Nomor_WO dengan prioritas: Nomor_WO, nomorWO, nomor_wo
+            let resolvedNomorWo = String(
+              realisasiPayload.Nomor_WO ||
+              realisasiPayload.nomorWO ||
+              realisasiPayload.nomor_wo ||
+              ''
+            ).trim();
+
+            if (resolvedNomorWo.startsWith('REL-')) {
+              resolvedNomorWo = '';
+            }
+
+            // 3. Jika kosong, gunakan recovery Work Order
+            if (!resolvedWoId || !resolvedNomorWo) {
+              const photos = item.payload?.photos || realisasiPayload?.photos;
+              if (photos && Array.isArray(photos)) {
+                for (const p of photos) {
+                  if (p?.woId && p.woId.trim() && !p.woId.startsWith('REL-')) {
+                    if (!resolvedWoId) resolvedWoId = p.woId.trim();
+                    break;
+                  }
+                }
+              }
+
+              try {
+                const cachedWos = await dexieDb.work_orders.toArray();
+                if (cachedWos.length > 0) {
+                  const targetUnit = String(realisasiPayload.unitId || unitId || 'UL2').trim().toUpperCase();
+                  const targetUlp = String(realisasiPayload.ulpName || realisasiPayload.ULP || '').trim().toLowerCase();
+                  const targetPenyulang = String(realisasiPayload.penyulangName || realisasiPayload.penyulang || realisasiPayload.PENYULANG || '').trim().toLowerCase();
+
+                  // Prioritas 1: Cocok ULP, Penyulang, dan BELUM SELESAI
+                  let matchedWo = cachedWos.find((w) => {
+                    const wUnit = String(w.unitId || '').trim().toUpperCase();
+                    const wUlp = String(w.ulpName || (w as any).ULP || '').trim().toLowerCase();
+                    const wPenyulang = String(w.penyulangName || (w as any).Penyulang || '').trim().toLowerCase();
+                    const isBelumSelesai = String(w.status || (w as any).STATUS || '').toUpperCase().includes('BELUM');
+
+                    const unitMatches = !targetUnit || wUnit === targetUnit;
+                    const ulpMatches = !targetUlp || wUlp.includes(targetUlp.replace('ulp ', '')) || targetUlp.includes(wUlp.replace('ulp ', ''));
+                    const penyulangMatches = !targetPenyulang || wPenyulang.includes(targetPenyulang) || targetPenyulang.includes(wPenyulang);
+
+                    return isBelumSelesai && unitMatches && ulpMatches && penyulangMatches;
+                  });
+
+                  // Prioritas 2: Cocok Penyulang & BELUM SELESAI
+                  if (!matchedWo) {
+                    matchedWo = cachedWos.find((w) => {
+                      const wPenyulang = String(w.penyulangName || (w as any).Penyulang || '').trim().toLowerCase();
+                      const isBelumSelesai = String(w.status || (w as any).STATUS || '').toUpperCase().includes('BELUM');
+                      return isBelumSelesai && targetPenyulang && (wPenyulang.includes(targetPenyulang) || targetPenyulang.includes(wPenyulang));
+                    });
+                  }
+
+                  // Prioritas 3: Cocok Penyulang (status apapun)
+                  if (!matchedWo) {
+                    matchedWo = cachedWos.find((w) => {
+                      const wPenyulang = String(w.penyulangName || (w as any).Penyulang || '').trim().toLowerCase();
+                      return targetPenyulang && (wPenyulang.includes(targetPenyulang) || targetPenyulang.includes(wPenyulang));
+                    });
+                  }
+
+                  // Prioritas 4: Work order pertama yang BELUM SELESAI
+                  if (!matchedWo) {
+                    matchedWo = cachedWos.find((w) => String(w.status || (w as any).STATUS || '').toUpperCase().includes('BELUM'));
+                  }
+
+                  if (matchedWo) {
+                    if (!resolvedWoId) {
+                      resolvedWoId = String((matchedWo as any).WO_ID || matchedWo.id || '').trim();
+                    }
+                    if (!resolvedNomorWo) {
+                      resolvedNomorWo = String((matchedWo as any).Nomor_WO || matchedWo.nomorWO || '').trim();
+                    }
+                    console.log(`[RECOVERY syncManager] Matched Work Order: WO_ID="${resolvedWoId}" Nomor_WO="${resolvedNomorWo}" for item ${item.idempotencyKey}`);
+                  }
+                }
+              } catch (recErr) {
+                console.warn('[RECOVERY syncManager] Failed to query cached work orders:', recErr);
+              }
+            }
+
+            // 6. Masukkan kembali hasilnya ke objek REALISASI nested
+            updatedPayload.realisasi = {
+              ...realisasiPayload,
+              WO_ID: resolvedWoId,
+              Nomor_WO: resolvedNomorWo,
+              workOrderId: resolvedWoId,
+              woId: resolvedWoId,
+              nomorWO: resolvedNomorWo,
             };
+
+            // 8. Pastikan objek yang akhirnya diberikan ke ApiService.saveRealisasi() adalah objek REALISASI lengkap
+            const relPayload = {
+              ...realisasiPayload,
+              id: realisasiPayload.id || realisasiPayload.ID || item.idempotencyKey,
+              ID: realisasiPayload.ID || realisasiPayload.id || item.idempotencyKey,
+              unitId: realisasiPayload.unitId || unitId || 'UL2',
+              WO_ID: resolvedWoId,
+              Nomor_WO: resolvedNomorWo,
+              workOrderId: resolvedWoId,
+              woId: resolvedWoId,
+              nomorWO: resolvedNomorWo,
+            };
+
+            // 9. Debug aman tepat sebelum saveRealisasi()
+            console.log('[REALISASI PENDING RESOLVED]', {
+              id: realisasiPayload.id || realisasiPayload.ID || item.idempotencyKey,
+              unitId: realisasiPayload.unitId || unitId || 'UL2',
+              WO_ID: resolvedWoId,
+              Nomor_WO: resolvedNomorWo,
+              workOrderId: resolvedWoId,
+              woId: resolvedWoId,
+              nomorWO: resolvedNomorWo,
+            });
+
             if (item.type === 'CREATE') {
               const res = await ApiService.saveRealisasi(relPayload);
               isSuccess = res.success;
               errorMessage = res.message || '';
+              if (isSuccess && relPayload.id) {
+                await dexieDb.realisasi.update(relPayload.id, {
+                  WO_ID: resolvedWoId,
+                  Nomor_WO: resolvedNomorWo,
+                  workOrderId: resolvedWoId,
+                  nomorWO: resolvedNomorWo,
+                  syncStatus: 'SYNCED',
+                  updatedAt: getLocalDateTimeString(),
+                }).catch(() => {});
+              }
             } else if (item.type === 'UPDATE') {
               const res = await ApiService.updateRealisasi(relPayload.id, relPayload);
               isSuccess = res.success;
               errorMessage = res.message || '';
             } else if (item.type === 'DELETE') {
-              const res = await ApiService.deleteRealisasi(updatedPayload.id);
+              const res = await ApiService.deleteRealisasi(realisasiPayload.id || updatedPayload.id);
               isSuccess = res.success;
               errorMessage = res.message || '';
             }
