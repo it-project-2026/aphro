@@ -2255,7 +2255,7 @@ export class ApiService {
    * =========================================================
    */
 
-  static async fetchInisiasiUnits(): Promise<{
+  static async fetchInisiasiUnits(unitId?: string): Promise<{
     success: boolean;
     data: any[];
     source:
@@ -2264,11 +2264,16 @@ export class ApiService {
       | 'default';
     message?: string;
   }> {
+    const stdUnit = unitId ? InisiasiService.getStandardUnitId(unitId) : '';
+    let units = DEFAULT_UL_OPTIONS;
+    if (stdUnit && stdUnit !== 'ALL') {
+      units = DEFAULT_UL_OPTIONS.filter((u) => u.id === stdUnit);
+    }
     return {
       success: true,
-      data: DEFAULT_UL_OPTIONS,
+      data: units,
       source: 'hypercloud',
-      message: `Berhasil memuat ${DEFAULT_UL_OPTIONS.length} Unit Layanan PLN.`,
+      message: `Berhasil memuat ${units.length} Unit Layanan PLN.`,
     };
   }
 

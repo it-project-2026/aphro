@@ -127,7 +127,14 @@ export function formatDateOnly(dateInput?: string | Date): string {
 export function formatExecutionDateTime(rel?: any, wo?: any): string {
   if (!rel && !wo) return '-';
 
-  // 1. Check real timestamp fields on Realisasi FIRST (with hours, minutes, seconds)
+  // 1. Check explicit date fields on REALISASI FIRST (tanggalRealisasi, TANGGAL, Tanggal, tanggal)
+  const explicitRelDate =
+    rel?.tanggalRealisasi ||
+    rel?.TANGGAL ||
+    rel?.Tanggal ||
+    rel?.tanggal;
+
+  // 2. Check real timestamp fields on REALISASI (with hours, minutes, seconds)
   const relTime =
     rel?.timestamp ||
     rel?.Timestamp ||
@@ -137,19 +144,20 @@ export function formatExecutionDateTime(rel?: any, wo?: any): string {
     rel?.WAKTU ||
     rel?.waktu;
 
+  // 3. Check photo timestamps
+  const photoTs =
+    rel?.photosSebelum?.[0]?.timestamp ||
+    rel?.photosSesudah?.[0]?.timestamp ||
+    rel?.fotoSebelumTimestamp ||
+    rel?.fotoSesudahTimestamp;
+
+  // If real timestamp on realisasi exists with time (hh:mm:ss), prefer it
   if (relTime) {
     const formatted = formatDateTime(relTime);
     if (formatted !== '-' && formatted.includes(':') && !formatted.endsWith('00:00:00')) {
       return formatted;
     }
   }
-
-  // 2. Check photo timestamps
-  const photoTs =
-    rel?.photosSebelum?.[0]?.timestamp ||
-    rel?.photosSesudah?.[0]?.timestamp ||
-    rel?.fotoSebelumTimestamp ||
-    rel?.fotoSesudahTimestamp;
 
   if (photoTs) {
     const formatted = formatDateTime(photoTs);
@@ -158,28 +166,34 @@ export function formatExecutionDateTime(rel?: any, wo?: any): string {
     }
   }
 
-  // 3. Check wo timestamps
-  const woTime = wo?.createdAt || wo?.CREATED_AT || wo?.Created_At;
-  if (woTime) {
-    const formatted = formatDateTime(woTime);
-    if (formatted !== '-' && formatted.includes(':') && !formatted.endsWith('00:00:00')) {
-      return formatted;
-    }
-  }
-
-  // 4. If explicit date exists, format date cleanly
-  const explicitDate = rel?.tanggalRealisasi || rel?.TANGGAL || rel?.Tanggal || wo?.tanggal || wo?.TANGGAL;
-  if (explicitDate) {
-    const formatted = formatDateTime(explicitDate);
+  // Next, if explicit date on Realisasi exists, format it cleanly
+  if (explicitRelDate) {
+    const formatted = formatDateTime(explicitRelDate);
     if (formatted !== '-') {
       return formatted.replace(/\s+00:00:00$/, '');
     }
   }
 
-  // 5. Fallback
+  // Fallback to relTime if it was just date (or 00:00:00)
   if (relTime) {
     const formatted = formatDateTime(relTime);
-    return formatted !== '-' ? formatted.replace(/\s+00:00:00$/, '') : '-';
+    if (formatted !== '-') {
+      return formatted.replace(/\s+00:00:00$/, '');
+    }
+  }
+
+  // Only if no Realisasi date/time exists at all, fallback to Work Order
+  if (wo) {
+    const woDate = wo?.tanggal || wo?.TANGGAL || wo?.Tanggal;
+    if (woDate) {
+      const formatted = formatDateTime(woDate);
+      if (formatted !== '-') return formatted.replace(/\s+00:00:00$/, '');
+    }
+    const woTime = wo?.createdAt || wo?.CREATED_AT || wo?.Created_At;
+    if (woTime) {
+      const formatted = formatDateTime(woTime);
+      if (formatted !== '-') return formatted;
+    }
   }
 
   return '-';

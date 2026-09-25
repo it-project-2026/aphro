@@ -138,14 +138,17 @@ export function getStandardUnitId(
  * Endpoint:
  * GET /api/inisiasi
  */
-export async function fetchInisiasiUnits(): Promise<{
+export async function fetchInisiasiUnits(
+  targetUnitId?: string
+): Promise<{
   success: boolean;
   data: InisiasiUnit[];
   source: 'hypercloud' | 'default';
   message?: string;
 }> {
   try {
-    const result = await ApiService.fetchInisiasiUnits();
+    const stdTarget = targetUnitId ? getStandardUnitId(targetUnitId) : '';
+    const result = await ApiService.fetchInisiasiUnits(stdTarget);
 
     if (
       !result.success ||
@@ -609,11 +612,11 @@ export class InisiasiService {
   }
 
   static async fetchInisiasiUnits(
-    _spreadsheetInput?: string,
+    unitIdOrSpreadsheet?: string,
     _sheetName?: string,
     _gasUrl?: string
   ) {
-    return await fetchInisiasiUnits();
+    return await fetchInisiasiUnits(unitIdOrSpreadsheet);
   }
 
   static generateKodeUL(namaUL: string): string {

@@ -51,11 +51,19 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
     setIsLoading(true);
     setStatusMessage('Menghubungkan ke Database HyperCloudHost (Tabel INISIASI)...');
     try {
-      const res = await InisiasiService.fetchInisiasiUnits();
+      const loggedInUnitId = currentUser?.unitId ? InisiasiService.getStandardUnitId(currentUser.unitId) : null;
+      const res = await InisiasiService.fetchInisiasiUnits(loggedInUnitId || undefined);
 
       if (res.success && res.data.length > 0) {
-        const filteredUL = res.data.filter(u => InisiasiService.isValidUL(u.namaUL));
-        const finalOptions = filteredUL.length > 0 ? filteredUL : DEFAULT_UL_OPTIONS;
+        let filteredUL = res.data.filter(u => InisiasiService.isValidUL(u.namaUL));
+
+        // Enforce strict unit isolation: UL1 only sees UL1, UL2 only sees UL2, etc.
+        if (loggedInUnitId) {
+          filteredUL = filteredUL.filter(u => InisiasiService.getStandardUnitId(u.id) === loggedInUnitId);
+        }
+
+        const fallback = loggedInUnitId ? DEFAULT_UL_OPTIONS.filter(u => u.id === loggedInUnitId) : DEFAULT_UL_OPTIONS;
+        const finalOptions = filteredUL.length > 0 ? filteredUL : fallback;
 
         setUlOptions(finalOptions);
         setStatusMessage(res.message || 'Data Unit Layanan siap dari database HyperCloudHost.');
@@ -63,21 +71,25 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
         const currentNama = settings.namaUnitLayanan || '';
         const match = finalOptions.find(
           u => u.namaUL.toLowerCase() === currentNama.toLowerCase() ||
-               currentNama.toLowerCase().includes(u.namaUL.toLowerCase())
+               currentNama.toLowerCase().includes(u.namaUL.toLowerCase()) ||
+               (loggedInUnitId && InisiasiService.getStandardUnitId(u.id) === loggedInUnitId)
         );
 
         if (match) {
           setSelectedULName(match.namaUL);
         } else {
-          setSelectedULName(finalOptions[0].namaUL);
+          setSelectedULName(finalOptions[0]?.namaUL || DEFAULT_UL_OPTIONS[0].namaUL);
         }
       } else {
-        setUlOptions(DEFAULT_UL_OPTIONS);
-        setSelectedULName(DEFAULT_UL_OPTIONS[0].namaUL);
+        const fallback = loggedInUnitId ? DEFAULT_UL_OPTIONS.filter(u => u.id === loggedInUnitId) : DEFAULT_UL_OPTIONS;
+        setUlOptions(fallback);
+        setSelectedULName(fallback[0]?.namaUL || DEFAULT_UL_OPTIONS[0].namaUL);
       }
     } catch {
-      setUlOptions(DEFAULT_UL_OPTIONS);
-      setSelectedULName(DEFAULT_UL_OPTIONS[0].namaUL);
+      const loggedInUnitId = currentUser?.unitId ? InisiasiService.getStandardUnitId(currentUser.unitId) : null;
+      const fallback = loggedInUnitId ? DEFAULT_UL_OPTIONS.filter(u => u.id === loggedInUnitId) : DEFAULT_UL_OPTIONS;
+      setUlOptions(fallback);
+      setSelectedULName(fallback[0]?.namaUL || DEFAULT_UL_OPTIONS[0].namaUL);
       setStatusMessage('Menggunakan data Unit Layanan lokal.');
     } finally {
       setIsLoading(false);
