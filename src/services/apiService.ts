@@ -2361,6 +2361,17 @@ export class ApiService {
       // fetchRealisasi() sudah mengembalikan array Realisasi yang telah dinormalisasi
       const realisasiList = rawRel;
 
+      const minDate = realisasiList.reduce((min, r) => (!min || (r.tanggalRealisasi && r.tanggalRealisasi < min) ? r.tanggalRealisasi : min), '');
+      const maxDate = realisasiList.reduce((max, r) => (!max || (r.tanggalRealisasi && r.tanggalRealisasi > max) ? r.tanggalRealisasi : max), '');
+
+      console.log('[REKAP DATE RANGE]', {
+        startDate,
+        endDate,
+        totalRows: realisasiList.length,
+        minDate,
+        maxDate
+      });
+
       console.log(`[DB SOURCE] entity=REKAP_PERIOD source=HYPERCLOUD unitId=${stdId} woCount=${workOrders.length} relCount=${realisasiList.length}`);
 
       return {
@@ -2390,48 +2401,158 @@ export class ApiService {
     reguName?: string;
     nomorWO?: string;
   }) {
-    const { unitId, nomorWO, startDate, endDate } = params;
+    const { jenisLaporan, unitId, ulpName, startDate, endDate, penyulangName, reguName, nomorWO } = params;
     const stdId = InisiasiService.getStandardUnitId(unitId || '') || 'UL1';
+    const cleanNomorWO = (nomorWO && nomorWO !== 'ALL') ? nomorWO.trim() : undefined;
+    const cleanULP = (ulpName && ulpName !== 'ALL') ? ulpName.trim() : undefined;
+
+    console.log('[CETAK DEBUG] Starting fetchTargetedReportData with parameters:', {
+      jenisLaporan,
+      unitId: stdId,
+      nomorWO: cleanNomorWO || 'ALL',
+      startDate: startDate || 'ALL',
+      endDate: endDate || 'ALL',
+      ulpName: cleanULP || 'ALL',
+      penyulangName: penyulangName || 'ALL',
+      reguName: reguName || 'ALL',
+    });
 
     try {
+      // 1. Fetch Work Orders for this unit
       const woRes = await this.fetchWorkOrders(stdId);
-      const relRes = await this.fetchRealisasi({
-        unitId: stdId,
-        limit: 1000,
-        tanggalDari: startDate,
-        tanggalSampai: endDate,
-      });
-
       const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
-      const rawRel: Realisasi[] = Array.isArray(relRes?.data) ? relRes.data : [];
-
       let workOrders = rawWo.map((row: any) => normalizeWorkOrderRow(row));
-      let realisasiList: Realisasi[] = rawRel;
 
-      if (nomorWO && nomorWO !== 'ALL') {
-        const targetWO = nomorWO.toLowerCase().trim();
-        workOrders = workOrders.filter((w: any) => (w.nomorWO || '').toLowerCase().includes(targetWO));
-        realisasiList = realisasiList.filter((r: any) => (r.nomorWO || '').toLowerCase().includes(targetWO));
+      // 2. Fetch all pages of Realisasi from HyperCloud API
+      let allRawRel: Realisasi[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      let totalApiRecords = 0;
+
+      do {
+        const relRes = await this.fetchRealisasi({
+          unitId: stdId,
+          page: currentPage,
+          limit: 100,
+          Nomor_WO: cleanNomorWO,
+          ULP: cleanULP,
+          tanggalDari: startDate ? startDate.trim() : undefined,
+          tanggalSampai: endDate ? endDate.trim() : undefined,
+        });
+
+        const pageItems: Realisasi[] = Array.isArray(relRes?.data) ? relRes.data : [];
+        allRawRel = allRawRel.concat(pageItems);
+
+        if (relRes?.pagination) {
+          totalPages = relRes.pagination.totalPages || 1;
+          totalApiRecords = relRes.pagination.total || allRawRel.length;
+        }
+
+        console.log(`[CETAK DEBUG] Page ${currentPage}/${totalPages} loaded: ${pageItems.length} records. Cumulative: ${allRawRel.length}`);
+        currentPage++;
+      } while (currentPage <= totalPages);
+
+      console.log('[CETAK DEBUG] Total API records returned:', totalApiRecords, '(Fetched array length:', allRawRel.length, ')');
+
+      let realisasiList: Realisasi[] = allRawRel;
+
+      console.log('[CETAK DEBUG] Jumlah data sebelum filter frontend:', realisasiList.length);
+
+      // Additional frontend safety filter
+      if (cleanNomorWO) {
+        const targetWO = cleanNomorWO.toLowerCase();
+        workOrders = workOrders.filter((w: any) => {
+          const woNum = (w.nomorWO || w.Nomor_WO || '').toLowerCase();
+          return woNum.includes(targetWO) || targetWO.includes(woNum);
+        });
+
+        realisasiList = realisasiList.filter((r: any) => {
+          const rWo = (r.nomorWO || (r as any).Nomor_WO || r.workOrderId || (r as any).WO_ID || '').toLowerCase();
+          return rWo.includes(targetWO) || targetWO.includes(rWo);
+        });
       }
 
-      console.log(`[DB SOURCE] entity=TARGETED_REPORT source=HYPERCLOUD unitId=${stdId} woCount=${workOrders.length} relCount=${realisasiList.length}`);
+      if (cleanULP) {
+        const targetUlp = cleanULP.toLowerCase();
+        realisasiList = realisasiList.filter((r: any) => {
+          const rUlp = (r.ulpName || (r as any).ULP || '').toLowerCase();
+          return rUlp.includes(targetUlp) || targetUlp.includes(rUlp);
+        });
+      }
+
+      if (penyulangName && penyulangName !== 'ALL') {
+        const targetPen = penyulangName.toLowerCase();
+        realisasiList = realisasiList.filter((r: any) => {
+          const rPen = (r.penyulangName || (r as any).PENYULANG || '').toLowerCase();
+          return rPen.includes(targetPen) || targetPen.includes(rPen);
+        });
+      }
+
+      if (reguName && reguName !== 'ALL') {
+        const targetReg = reguName.toLowerCase();
+        realisasiList = realisasiList.filter((r: any) => {
+          const rReg = (r.reguName || (r as any).REGU_ROW || '').toLowerCase();
+          return rReg.includes(targetReg) || targetReg.includes(rReg);
+        });
+      }
+
+      console.log('[CETAK DEBUG] Jumlah data setelah filter frontend:', realisasiList.length);
+
+      if (realisasiList.length > 0) {
+        console.log('[CETAK DEBUG] Contoh object REALISASI setelah normalisasi:', realisasiList[0]);
+      } else {
+        console.warn('[CETAK DEBUG] WARNING: realisasiList is 0 after filtering! Input nomorWO:', cleanNomorWO);
+      }
+
+      const totalCount = params.jenisLaporan === 'work_order' ? workOrders.length : realisasiList.length;
+
+      console.log(`[DB SOURCE] entity=TARGETED_REPORT source=HYPERCLOUD unitId=${stdId} woCount=${workOrders.length} relCount=${realisasiList.length} totalCount=${totalCount}`);
 
       return {
         success: true,
         realisasi: realisasiList,
         workOrders,
-        totalCount: params.jenisLaporan === 'work_order' ? workOrders.length : realisasiList.length,
+        totalCount,
         source: 'hypercloud' as const,
       };
     } catch (err: any) {
-      console.warn('fetchTargetedReportData exception:', err);
-      return {
-        success: false,
-        realisasi: [],
-        workOrders: [],
-        totalCount: 0,
-        source: 'dexie' as const,
-      };
+      console.warn('[CETAK DEBUG] HyperCloud fetch error, falling back to Dexie:', err);
+
+      try {
+        const { dexieDb } = await import('./dexieDb');
+        let allRels = await dexieDb.realisasi.toArray();
+        let allWOs = await dexieDb.work_orders.toArray();
+
+        let filteredRel = allRels;
+        if (cleanNomorWO) {
+          const targetWO = cleanNomorWO.toLowerCase();
+          filteredRel = filteredRel.filter((r) => {
+            const rWo = (r.nomorWO || (r as any).Nomor_WO || r.workOrderId || (r as any).WO_ID || '').toLowerCase();
+            return rWo.includes(targetWO) || targetWO.includes(rWo);
+          });
+        }
+
+        console.log('[CETAK DEBUG] Dexie fallback loaded count:', filteredRel.length);
+
+        const totalCount = params.jenisLaporan === 'work_order' ? allWOs.length : filteredRel.length;
+
+        return {
+          success: true,
+          realisasi: filteredRel,
+          workOrders: allWOs,
+          totalCount,
+          source: 'dexie' as const,
+        };
+      } catch (dexErr: any) {
+        console.error('[CETAK DEBUG] Dexie fallback error:', dexErr);
+        return {
+          success: false,
+          realisasi: [],
+          workOrders: [],
+          totalCount: 0,
+          source: 'dexie' as const,
+        };
+      }
     }
   }
 

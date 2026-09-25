@@ -1810,7 +1810,14 @@ router.get('/realisasi', requireAuth, async (req: Request, res: Response) => {
       params.push(tanggalDari);
 
       whereClause += `
-        AND "TANGGAL" >= $${params.length}
+        AND (
+          CASE
+            WHEN "TANGGAL" LIKE '____-__-__%' THEN SUBSTRING("TANGGAL" FROM 1 FOR 10)
+            WHEN "TANGGAL" LIKE '__-__-____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
+            WHEN "TANGGAL" LIKE '__/__/____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
+            ELSE SUBSTRING(COALESCE("TANGGAL", "Timestamp"::text, "Created_At"::text, ''), 1, 10)
+          END
+        ) >= $${params.length}
       `;
     }
 
@@ -1818,7 +1825,14 @@ router.get('/realisasi', requireAuth, async (req: Request, res: Response) => {
       params.push(tanggalSampai);
 
       whereClause += `
-        AND "TANGGAL" <= $${params.length}
+        AND (
+          CASE
+            WHEN "TANGGAL" LIKE '____-__-__%' THEN SUBSTRING("TANGGAL" FROM 1 FOR 10)
+            WHEN "TANGGAL" LIKE '__-__-____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
+            WHEN "TANGGAL" LIKE '__/__/____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
+            ELSE SUBSTRING(COALESCE("TANGGAL", "Timestamp"::text, "Created_At"::text, ''), 1, 10)
+          END
+        ) <= $${params.length}
       `;
     }
 
@@ -1975,7 +1989,14 @@ router.get(
         params.push(tanggalDari);
 
         whereClause += `
-          AND "TANGGAL" >= $${params.length}
+          AND (
+            CASE
+              WHEN "TANGGAL" LIKE '____-__-__%' THEN SUBSTRING("TANGGAL" FROM 1 FOR 10)
+              WHEN "TANGGAL" LIKE '__-__-____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
+              WHEN "TANGGAL" LIKE '__/__/____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
+              ELSE SUBSTRING(COALESCE("TANGGAL", "Timestamp"::text, "Created_At"::text, ''), 1, 10)
+            END
+          ) >= $${params.length}
         `;
       }
 
@@ -1983,7 +2004,14 @@ router.get(
         params.push(tanggalSampai);
 
         whereClause += `
-          AND "TANGGAL" <= $${params.length}
+          AND (
+            CASE
+              WHEN "TANGGAL" LIKE '____-__-__%' THEN SUBSTRING("TANGGAL" FROM 1 FOR 10)
+              WHEN "TANGGAL" LIKE '__-__-____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
+              WHEN "TANGGAL" LIKE '__/__/____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
+              ELSE SUBSTRING(COALESCE("TANGGAL", "Timestamp"::text, "Created_At"::text, ''), 1, 10)
+            END
+          ) <= $${params.length}
         `;
       }
 

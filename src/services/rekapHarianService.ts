@@ -780,7 +780,7 @@ export class RekapHarianService {
       if (Array.isArray(realisasiList)) {
         realisasiList.forEach((rel) => {
           if (!rel) return;
-          const parts = this.parseDateParts(rel.tanggalRealisasi || rel);
+          const parts = this.parseDateParts(rel);
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
@@ -819,6 +819,14 @@ export class RekapHarianService {
               } else {
                 updatedDaily[dayKey].pangkas++;
               }
+
+              console.log('[REKAP TEBANG PANGKAS]', {
+                type: 'penyulang',
+                tebang: updatedDaily[dayKey].tebang1,
+                pangkas: updatedDaily[dayKey].pangkas,
+                tanggal: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${dayKey}`,
+                relId: rel.id || rel.ID
+              });
             }
           }
         });
@@ -987,7 +995,19 @@ export class RekapHarianService {
     if (typeof dateInput === 'string' || typeof dateInput === 'number') {
       dateStr = String(dateInput);
     } else if (typeof dateInput === 'object') {
-      dateStr = dateInput.tanggalRealisasi || dateInput.tanggal || dateInput.Tanggal || dateInput.TANGGAL || dateInput.createdAt || dateInput.Created_At || dateInput.timestamp || '';
+      dateStr =
+        dateInput.TANGGAL ||
+        dateInput.Tanggal ||
+        dateInput.tanggal ||
+        dateInput.tanggalRealisasi ||
+        dateInput.TANGGAL_REALISASI ||
+        dateInput.tanggal_realisasi ||
+        dateInput.TANGGAL_EKSEKUSI ||
+        dateInput.tanggal_eksekusi ||
+        dateInput.createdAt ||
+        dateInput.Created_At ||
+        dateInput.timestamp ||
+        '';
       if (!dateStr && dateInput.nomorWO) {
         dateStr = parseDateFromNomorWO(dateInput.nomorWO) || '';
       }
@@ -1061,7 +1081,7 @@ export class RekapHarianService {
       if (Array.isArray(realisasiList)) {
         realisasiList.forEach((rel) => {
           if (!rel) return;
-          const parts = this.parseDateParts(rel.tanggalRealisasi || rel);
+          const parts = this.parseDateParts(rel);
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
@@ -1101,6 +1121,14 @@ export class RekapHarianService {
               } else {
                 updatedDaily[dayKey].pangkas++;
               }
+
+              console.log('[REKAP TEBANG PANGKAS]', {
+                type: 'pekerjaan_harian',
+                tebang: updatedDaily[dayKey].tebang1,
+                pangkas: updatedDaily[dayKey].pangkas,
+                tanggal: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${dayKey}`,
+                relId: rel.id || rel.ID
+              });
 
               // Track dates of activity for each Penyulang to help align KMS
               const penyClean = getCanonicalPenyulangKey(rel.penyulangName || (rel as any).Penyulang || 'GENERAL');

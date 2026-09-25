@@ -58,10 +58,10 @@ export function normalizeRealisasiRow(row: any): Realisasi {
   ).trim();
   let noTiang = String(row.noTiang || row.NO_TIANG || row.No_Tiang || row.no_tiang || '').trim();
   let rawTanggal =
-    row.tanggalRealisasi ??
     row.TANGGAL ??
     row.Tanggal ??
     row.tanggal ??
+    row.tanggalRealisasi ??
     row.TANGGAL_REALISASI ??
     row.tanggal_realisasi ??
     row.TANGGAL_EKSEKUSI ??
