@@ -47,8 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       unitName: userData.unitName || activeInisiasi.namaUL,
     };
 
-    setUser(fullUser);
+    // CRITICAL: Write session & token to localStorage BEFORE setting state so downstream
+    // context hooks (WorkOrders, Realisasi, MasterData, Absensi) find token immediately
     AuthService.saveLocalSession(fullUser);
+    setUser(fullUser);
   }, [setUser]);
 
   // Synchronize active inisiasi unit with current user unit on mount / user state update

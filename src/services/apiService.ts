@@ -1704,7 +1704,7 @@ export class ApiService {
    * Mengambil seluruh data REALISASI
    * untuk Dashboard.
    */
-  static async fetchRealisasiDashboard(): Promise<{
+  static async fetchRealisasiDashboard(unitId?: string): Promise<{
     status: string;
     data: Realisasi[];
     message?: string;
@@ -1721,10 +1721,13 @@ export class ApiService {
       };
     }
 
+    const targetUnitId = (unitId && unitId.trim() !== '' ? unitId : InisiasiService.getSelectedUnitId()).trim();
+    const query = targetUnitId && targetUnitId !== 'ALL' ? `?unitId=${encodeURIComponent(targetUnitId)}` : '';
+
     try {
       const res =
         await this.executeFetch(
-          '/api/realisasi/dashboard',
+          `/api/realisasi/dashboard${query}`,
           {
             method: 'GET',
             headers: {

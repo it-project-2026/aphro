@@ -125,8 +125,13 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     lastSyncRef.current = undefined;
-    refreshWorkOrders(0);
-  }, [refreshWorkOrders, settings.namaUnitLayanan, user]);
+    isFetchingRef.current = false;
+    if (user && (user.unitId || InisiasiService.getSelectedUnitId())) {
+      refreshWorkOrders(0);
+    } else {
+      setWorkOrders([]);
+    }
+  }, [refreshWorkOrders, settings.namaUnitLayanan, user, user?.unitId, user?.id]);
 
   const correctedWorkOrders = React.useMemo(() => {
     return workOrders.map((wo) => {

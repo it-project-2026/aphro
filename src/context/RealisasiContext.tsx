@@ -324,10 +324,23 @@ export function RealisasiProvider({
   // Tidak menggunakan pagination History.
   const fetchDashboardRealisasi =
     React.useCallback(
-      async () => {
+      async (overrideUnitId?: string) => {
+        if (!user || !user.unitId) {
+          console.log('[RealisasiContext] Skipping fetchDashboardRealisasi: User not authenticated.');
+          return;
+        }
+
+        const token = ApiService.getAuthToken();
+        if (!token) {
+          console.log('[RealisasiContext] Skipping fetchDashboardRealisasi: Token missing.');
+          return;
+        }
+
+        const unitIdToUse = overrideUnitId || user.unitId || activeUnitId;
+
         try {
           const res =
-            await ApiService.fetchRealisasiDashboard();
+            await ApiService.fetchRealisasiDashboard(unitIdToUse);
 
           if (
             res.status === 'success' &&
@@ -354,7 +367,7 @@ export function RealisasiProvider({
           );
         }
       },
-      []
+      [user, activeUnitId]
     );
 
   // ============================================================
@@ -387,6 +400,17 @@ export function RealisasiProvider({
       },
       [fetchRealisasiFromApi]
     );
+
+  // Auto-fetch Realisasi & Dashboard Realisasi on user login / session restore / unit change
+  React.useEffect(() => {
+    if (user && (user.unitId || InisiasiService.getSelectedUnitId())) {
+      refreshRealisasi(true);
+      fetchDashboardRealisasi();
+    } else {
+      setRealisasiList([]);
+      setDashboardRealisasiList([]);
+    }
+  }, [user, user?.unitId, user?.id, refreshRealisasi, fetchDashboardRealisasi]);
 
   // ============================================================
   // OFFLINE SYNC

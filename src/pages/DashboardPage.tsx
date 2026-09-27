@@ -89,11 +89,13 @@ export const DashboardPage: React.FC = () => {
   const { refreshRealisasi } = useRealisasi();
 
   React.useEffect(() => {
-    // Initial fetch for dashboard data
-    refreshWorkOrders();
-    refreshRealisasi(true);
-    fetchDashboardRealisasi();
-  }, []);
+    // Initial fetch for dashboard data when user is authenticated
+    if (currentUser) {
+      refreshWorkOrders();
+      refreshRealisasi(true);
+      fetchDashboardRealisasi();
+    }
+  }, [currentUser, currentUser?.unitId, currentUser?.id, refreshWorkOrders, refreshRealisasi, fetchDashboardRealisasi]);
 
   const [pendingIds, setPendingIds] = React.useState<string[]>([]);
 
