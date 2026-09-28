@@ -481,6 +481,24 @@ export class ApiService {
     const woId = String(data.WO_ID || data.workOrderId || data.woId || '').trim();
     const nomorWo = String(data.Nomor_WO || data.nomorWO || data.nomor_wo || '').trim();
 
+    // Priority for Foto Sebelum:
+    // 1. fotoSebelumUrl
+    // 2. fotoSebelum
+    // 3. Foto_Sebelum
+    // 4. photosSebelum[0].fileUrl / url
+    // Exclude raw base64 data:image strings to prevent bloat in PostgreSQL
+    const rawSeb = data.fotoSebelumUrl || data.fotoSebelum || data.Foto_Sebelum || data.photosSebelum?.[0]?.fileUrl || data.photosSebelum?.[0]?.url || '';
+    const fotoSebelumClean = typeof rawSeb === 'string' && !rawSeb.startsWith('data:image') && rawSeb !== 'N/A' && rawSeb !== 'null' ? rawSeb.trim() : '';
+
+    // Priority for Foto Sesudah:
+    // 1. fotoSesudahUrl
+    // 2. fotoSesudah
+    // 3. Foto_Sesudah
+    // 4. photosSesudah[0].fileUrl / url
+    // Exclude raw base64 data:image strings
+    const rawSes = data.fotoSesudahUrl || data.fotoSesudah || data.Foto_Sesudah || data.photosSesudah?.[0]?.fileUrl || data.photosSesudah?.[0]?.url || '';
+    const fotoSesudahClean = typeof rawSes === 'string' && !rawSes.startsWith('data:image') && rawSes !== 'N/A' && rawSes !== 'null' ? rawSes.trim() : '';
+
     const payload = {
       id: data.id || data.ID || data.realisasiId,
       ID: data.ID || data.id || data.realisasiId,
@@ -500,10 +518,12 @@ export class ApiService {
       penyulangName: data.penyulangName || data.penyulang || data.PENYULANG || '',
       noTiang: data.noTiang || data.NO_TIANG || '',
       tanggalRealisasi: data.tanggalRealisasi || data.tanggal || data.TANGGAL || getWIBDateString(),
-      fotoSebelum: data.fotoSebelumUrl || data.fotoSebelum || '',
-      fotoSesudah: data.fotoSesudahUrl || data.fotoSesudah || '',
-      fotoSebelumUrl: data.fotoSebelumUrl || data.fotoSebelum || '',
-      fotoSesudahUrl: data.fotoSesudahUrl || data.fotoSesudah || '',
+      Foto_Sebelum: fotoSebelumClean,
+      Foto_Sesudah: fotoSesudahClean,
+      fotoSebelum: fotoSebelumClean,
+      fotoSesudah: fotoSesudahClean,
+      fotoSebelumUrl: fotoSebelumClean,
+      fotoSesudahUrl: fotoSesudahClean,
       jenisTanaman: data.jenisTanaman || '',
       lokasiKerja: data.lokasiKerja || '',
       keterangan: data.keterangan || 'TEBANG',
@@ -518,14 +538,13 @@ export class ApiService {
       status: 'Selesai',
     };
 
-    console.log('[REALISASI FINAL PAYLOAD]', {
+    console.log('[REALISASI_CREATE_START]', {
       id: payload.ID || payload.id,
       unitId: payload.unitId,
       WO_ID: payload.WO_ID,
       Nomor_WO: payload.Nomor_WO,
-      workOrderId: payload.workOrderId,
-      woId: payload.woId,
-      nomorWO: payload.nomorWO,
+      hasFotoSebelum: !!fotoSebelumClean,
+      hasFotoSesudah: !!fotoSesudahClean,
     });
 
     console.log('[SYNC] ONLINE');
@@ -601,15 +620,31 @@ export class ApiService {
     const woId = String(data.WO_ID || data.workOrderId || data.woId || '').trim();
     const nomorWo = String(data.Nomor_WO || data.nomorWO || data.nomor_wo || '').trim();
 
+    // Priority for Foto Sebelum update
+    let fotoSebClean: string | undefined = undefined;
+    if (data.fotoSebelumUrl !== undefined || data.fotoSebelum !== undefined || data.Foto_Sebelum !== undefined || data.photosSebelum !== undefined) {
+      const rawSeb = data.fotoSebelumUrl ?? data.fotoSebelum ?? data.Foto_Sebelum ?? data.photosSebelum?.[0]?.fileUrl ?? data.photosSebelum?.[0]?.url ?? '';
+      fotoSebClean = typeof rawSeb === 'string' && !rawSeb.startsWith('data:image') && rawSeb !== 'N/A' && rawSeb !== 'null' ? rawSeb.trim() : '';
+    }
+
+    // Priority for Foto Sesudah update
+    let fotoSesClean: string | undefined = undefined;
+    if (data.fotoSesudahUrl !== undefined || data.fotoSesudah !== undefined || data.Foto_Sesudah !== undefined || data.photosSesudah !== undefined) {
+      const rawSes = data.fotoSesudahUrl ?? data.fotoSesudah ?? data.Foto_Sesudah ?? data.photosSesudah?.[0]?.fileUrl ?? data.photosSesudah?.[0]?.url ?? '';
+      fotoSesClean = typeof rawSes === 'string' && !rawSes.startsWith('data:image') && rawSes !== 'N/A' && rawSes !== 'null' ? rawSes.trim() : '';
+    }
+
     const payload = {
       ...data,
       unitId,
       ...(woId ? { WO_ID: woId, woId: woId, workOrderId: woId } : {}),
       ...(nomorWo ? { Nomor_WO: nomorWo, nomorWO: nomorWo, nomor_wo: nomorWo } : {}),
+      ...(fotoSebClean !== undefined ? { Foto_Sebelum: fotoSebClean, fotoSebelum: fotoSebClean, fotoSebelumUrl: fotoSebClean } : {}),
+      ...(fotoSesClean !== undefined ? { Foto_Sesudah: fotoSesClean, fotoSesudah: fotoSesClean, fotoSesudahUrl: fotoSesClean } : {}),
     };
 
     console.log('[SYNC] ONLINE');
-    console.log(`[SYNC] Updating REALISASI to HyperCloud: PUT /api/realisasi/${id} (unitId=${unitId}, JWT=AVAILABLE)`);
+    console.log(`[SYNC] Updating REALISASI to HyperCloud: PUT /api/realisasi/${id} (unitId=${unitId}, JWT=AVAILABLE, hasFotoSeb=${fotoSebClean !== undefined}, hasFotoSes=${fotoSesClean !== undefined})`);
 
     try {
       const res = await this.executeFetch(`/api/realisasi/${encodeURIComponent(id)}`, {

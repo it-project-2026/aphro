@@ -77,23 +77,34 @@ export async function ensureGoogleDrivePhotoUrl(
   // 2. If Base64 string, upload to Google Drive
   if (isBase64Image(clean)) {
     const gasUrl = options.gasUrl || (typeof localStorage !== 'undefined' ? localStorage.getItem('aphro_gas_url') || '' : '');
+    const photoType = options.photoType || 'Photo';
+    const nomorWO = options.nomorWO || options.reguName || 'REALISASI';
+
+    console.log(`[PHOTO_UPLOAD_START] type=${photoType} nomorWO=${nomorWO} online=${typeof navigator !== 'undefined' ? navigator.onLine : false}`);
+
     if (gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
         const { GASApiService } = await import('../services/gasApiService');
         const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
           base64Data: clean,
-          nomorWO: options.nomorWO || options.reguName || 'REALISASI',
+          nomorWO,
           reguName: options.reguName || 'ROW',
-          photoType: options.photoType || 'Photo',
+          photoType,
           folderId: options.folderId,
         });
 
         if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
-          return formatDriveViewUrl(uploadRes.fileUrl);
+          const finalUrl = formatDriveViewUrl(uploadRes.fileUrl);
+          console.log(`[PHOTO_UPLOAD_SUCCESS] type=${photoType} nomorWO=${nomorWO} url=${finalUrl}`);
+          return finalUrl;
+        } else {
+          console.warn(`[PHOTO_UPLOAD_FAILED] type=${photoType} nomorWO=${nomorWO} message=${uploadRes?.message || 'Unknown response'}`);
         }
-      } catch (e) {
-        console.warn('ensureGoogleDrivePhotoUrl upload error:', e);
+      } catch (e: any) {
+        console.warn(`[PHOTO_UPLOAD_FAILED] type=${photoType} nomorWO=${nomorWO} error=${e?.message || 'Upload exception'}`);
       }
+    } else {
+      console.warn(`[PHOTO_UPLOAD_FAILED] type=${photoType} nomorWO=${nomorWO} reason=${!gasUrl ? 'GAS URL not configured' : 'Device offline'}`);
     }
     // Never return base64 data to be written into Database
     return '';

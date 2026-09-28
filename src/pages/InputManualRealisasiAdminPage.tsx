@@ -35,7 +35,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
-import { formatDriveImageUrl, ensureGoogleDrivePhotoUrl } from '../utils/driveUtils';
+import { formatDriveImageUrl, ensureGoogleDrivePhotoUrl, isBase64Image } from '../utils/driveUtils';
 import { extractExifFromPhoto, ExifPhotoMetadata } from '../utils/exifReader';
 import { GASApiService } from '../services/gasApiService';
 import { RekapHarianService, UL_PRESETS, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
@@ -456,11 +456,24 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         reguName: reguName.trim(),
         photoType: 'Realisasi_Sebelum',
       });
+
+      if (fotoSebelumUrl.trim() && isBase64Image(fotoSebelumUrl.trim()) && !finalSebUrl) {
+        setErrorMessage('Foto sebelum belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const finalSesUrl = await ensureGoogleDrivePhotoUrl(fotoSesudahUrl.trim(), {
         nomorWO: nomorWO.trim(),
         reguName: reguName.trim(),
         photoType: 'Realisasi_Sesudah',
       });
+
+      if (fotoSesudahUrl.trim() && isBase64Image(fotoSesudahUrl.trim()) && !finalSesUrl) {
+        setErrorMessage('Foto sesudah belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
+        setIsSubmitting(false);
+        return;
+      }
 
       const payload = {
         id: generatedId,

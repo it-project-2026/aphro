@@ -2122,8 +2122,8 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
         "PENYULANG" = EXCLUDED."PENYULANG",
         "NO_TIANG" = EXCLUDED."NO_TIANG",
         "TANGGAL" = EXCLUDED."TANGGAL",
-        "Foto_Sebelum" = EXCLUDED."Foto_Sebelum",
-        "Foto_Sesudah" = EXCLUDED."Foto_Sesudah",
+        "Foto_Sebelum" = COALESCE(NULLIF(EXCLUDED."Foto_Sebelum", ''), "REALISASI"."Foto_Sebelum"),
+        "Foto_Sesudah" = COALESCE(NULLIF(EXCLUDED."Foto_Sesudah", ''), "REALISASI"."Foto_Sesudah"),
         "Jenis_Tanaman" = EXCLUDED."Jenis_Tanaman",
         "Keterangan" = EXCLUDED."Keterangan",
         "Pertumbuhan_Tanaman" = EXCLUDED."Pertumbuhan_Tanaman",
@@ -2137,6 +2137,9 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
     const tanggalVal = toNullableTimestamp(r.TANGGAL || r.tanggal) || new Date().toISOString().split('T')[0];
     const timestampVal = toNullableTimestamp(r.Timestamp || r.timestamp) || new Date().toISOString();
 
+    const fotoSebVal = (r.Foto_Sebelum || r.fotoSebelum || r.fotoSebelumUrl || '').toString().trim();
+    const fotoSesVal = (r.Foto_Sesudah || r.fotoSesudah || r.fotoSesudahUrl || '').toString().trim();
+
     const params = [
       id,
       r.unitId || 'UL1',
@@ -2147,8 +2150,8 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       r.PENYULANG || r.penyulangName || '',
       r.NO_TIANG || r.noTiang || '',
       tanggalVal,
-      r.Foto_Sebelum || r.fotoSebelum || '',
-      r.Foto_Sesudah || r.fotoSesudah || '',
+      fotoSebVal,
+      fotoSesVal,
       r.Jenis_Tanaman || r.jenisTanaman || '',
       r.Keterangan || r.keterangan || '',
       r.Pertumbuhan_Tanaman || r.pertumbuhanTanaman || '',

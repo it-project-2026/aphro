@@ -652,6 +652,13 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
       );
 
+      // Validate Foto Sebelum upload
+      if (photosSebelum.length > 0 && !finalSebUrl) {
+        setIsProcessing(false);
+        showToast('Foto sebelum belum berhasil diunggah ke Google Drive. Silakan periksa koneksi internet Anda dan coba lagi.', 'error');
+        return;
+      }
+
       const finalSesUrl = await ensureGoogleDrivePhotoUrl(
         photosSesudah[0]?.fileUrl || photosSesudah[0]?.dataUrl || '',
         {
@@ -660,6 +667,13 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           photoType: 'Realisasi_Sesudah',
         }
       );
+
+      // Validate Foto Sesudah upload
+      if (photosSesudah.length > 0 && !finalSesUrl) {
+        setIsProcessing(false);
+        showToast('Foto sesudah belum berhasil diunggah ke Google Drive. Silakan periksa koneksi internet Anda dan coba lagi.', 'error');
+        return;
+      }
 
       if (editMode && initialData) {
         await updateRealisasi(initialData.id, {
@@ -673,8 +687,8 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           penyulangName: selectedWO.penyulangName,
           noTiang,
           tanggalRealisasi,
-          fotoSebelumUrl: finalSebUrl,
-          fotoSesudahUrl: finalSesUrl,
+          fotoSebelumUrl: finalSebUrl || initialData.fotoSebelumUrl || '',
+          fotoSesudahUrl: finalSesUrl || initialData.fotoSesudahUrl || '',
           photosSebelum,
           photosSesudah,
           petugasName,
@@ -690,17 +704,22 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         showToast('Perubahan Realisasi berhasil disimpan.', 'success');
         if (onSuccess) onSuccess();
       } else {
+        if (!finalSebUrl) {
+          setIsProcessing(false);
+          showToast('Foto sebelum belum berhasil diunggah. Pastikan Google Apps Script / Drive terhubung dan coba lagi.', 'error');
+          return;
+        }
+
+        const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+        const activeUnitId = selectedWO.unitId || currentUser?.unitId || InisiasiService.getSelectedUnitId() || activeInisiasi.id;
+
         await addRealisasi({
           workOrderId: resolvedWoId,
           WO_ID: resolvedWoId,
           woId: resolvedWoId,
           nomorWO: resolvedNomorWo,
           Nomor_WO: resolvedNomorWo,
-          unitId:
-            selectedWO.unitId ||
-            currentUser?.unitId ||
-            InisiasiService.getSelectedUnitId() ||
-            'UL2',
+          unitId: activeUnitId,
           ulpName: selectedWO.ulpName,
           reguName: selectedWO.reguName,
           penyulangName: selectedWO.penyulangName,
@@ -740,6 +759,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
       }
     } catch (err: any) {
+      console.error('[REALISASI_CREATE_FAILED]', err);
       showToast(
         `Gagal menyimpan realisasi: ${err.message || 'Terjadi kesalahan'}`,
         'error'

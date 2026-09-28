@@ -299,16 +299,39 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      const finalSebUrl = await ensureGoogleDrivePhotoUrl(fotoSebelumUrl.trim(), {
-        nomorWO: nomorWO.trim(),
-        reguName: reguName.trim(),
-        photoType: 'Realisasi_Sebelum',
-      });
-      const finalSesUrl = await ensureGoogleDrivePhotoUrl(fotoSesudahUrl.trim(), {
-        nomorWO: nomorWO.trim(),
-        reguName: reguName.trim(),
-        photoType: 'Realisasi_Sesudah',
-      });
+      let finalSebUrl = fotoSebelumUrl.trim();
+      if (finalSebUrl.startsWith('data:image') || (finalSebUrl.length > 500 && !finalSebUrl.startsWith('http'))) {
+        finalSebUrl = await ensureGoogleDrivePhotoUrl(finalSebUrl, {
+          nomorWO: nomorWO.trim(),
+          reguName: reguName.trim(),
+          photoType: 'Realisasi_Sebelum',
+        });
+        if (!finalSebUrl) {
+          setErrorMsg('Foto sebelum baru belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
+          setIsSubmitting(false);
+          return;
+        }
+      } else if (!finalSebUrl && realisasi.fotoSebelumUrl) {
+        // Retain previous photo if not explicitly replaced
+        finalSebUrl = realisasi.fotoSebelumUrl;
+      }
+
+      let finalSesUrl = fotoSesudahUrl.trim();
+      if (finalSesUrl.startsWith('data:image') || (finalSesUrl.length > 500 && !finalSesUrl.startsWith('http'))) {
+        finalSesUrl = await ensureGoogleDrivePhotoUrl(finalSesUrl, {
+          nomorWO: nomorWO.trim(),
+          reguName: reguName.trim(),
+          photoType: 'Realisasi_Sesudah',
+        });
+        if (!finalSesUrl) {
+          setErrorMsg('Foto sesudah baru belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
+          setIsSubmitting(false);
+          return;
+        }
+      } else if (!finalSesUrl && realisasi.fotoSesudahUrl) {
+        // Retain previous photo if not explicitly replaced
+        finalSesUrl = realisasi.fotoSesudahUrl;
+      }
 
       const updatePayload = {
         tanggal: tanggal.trim(),
@@ -330,6 +353,8 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
         pertumbuhanTanaman: pertumbuhanTanaman.trim(),
         kendala: kendala.trim(),
         lokasiKerja: lokasiKerja.trim(),
+        Foto_Sebelum: finalSebUrl || undefined,
+        Foto_Sesudah: finalSesUrl || undefined,
         fotoSebelumUrl: finalSebUrl,
         fotoSesudahUrl: finalSesUrl,
       };

@@ -66,30 +66,72 @@ export function normalizeRealisasiRow(row: any): Realisasi {
     row.tanggal_realisasi ??
     row.TANGGAL_EKSEKUSI ??
     row.tanggal_eksekusi;
-  let rawFotoSebelum = String(
-    row.fotoSebelumUrl ||
-    row.fotoSebelum ||
+  const cleanPhotoField = (val: any): string => {
+    if (!val || typeof val !== 'string') return '';
+    const trimmed = val.trim();
+    if (trimmed === 'N/A' || trimmed === 'null' || trimmed === 'undefined' || trimmed === '-' || trimmed === '""') {
+      return '';
+    }
+    return trimmed;
+  };
+
+  let rawFotoSebelum = cleanPhotoField(
     row.Foto_Sebelum ||
+    row.fotoSebelum ||
+    row.fotoSebelumUrl ||
     row.foto_sebelum ||
     row.FOTO_SEBELUM ||
     row.FOTO_SEBELUM_URL ||
-    (Array.isArray(row.photosSebelum) && row.photosSebelum[0]?.dataUrl) ||
     (Array.isArray(row.photosSebelum) && row.photosSebelum[0]?.fileUrl) ||
-    ''
-  ).trim();
-  let rawFotoSesudah = String(
-    row.fotoSesudahUrl ||
-    row.fotoSesudah ||
+    (Array.isArray(row.photosSebelum) && row.photosSebelum[0]?.dataUrl)
+  );
+
+  let rawFotoSesudah = cleanPhotoField(
     row.Foto_Sesudah ||
+    row.fotoSesudah ||
+    row.fotoSesudahUrl ||
     row.Foto_Setelah ||
     row.foto_sesudah ||
     row.FOTO_SETELAH ||
     row.FOTO_PROSES ||
     row.FOTO_SETELAH_URL ||
-    (Array.isArray(row.photosSesudah) && row.photosSesudah[0]?.dataUrl) ||
     (Array.isArray(row.photosSesudah) && row.photosSesudah[0]?.fileUrl) ||
-    ''
-  ).trim();
+    (Array.isArray(row.photosSesudah) && row.photosSesudah[0]?.dataUrl)
+  );
+
+  // Safe fallback to legacy photos column if primary columns are empty
+  if (!rawFotoSebelum || !rawFotoSesudah) {
+    const legacyPhotosRaw = row.photos || row.Photos || row.PHOTOS || null;
+    let legacyPhotosArr: any[] | null = null;
+    if (Array.isArray(legacyPhotosRaw)) {
+      legacyPhotosArr = legacyPhotosRaw;
+    } else if (typeof legacyPhotosRaw === 'string' && legacyPhotosRaw.trim().startsWith('[')) {
+      try {
+        legacyPhotosArr = JSON.parse(legacyPhotosRaw);
+      } catch {
+        legacyPhotosArr = null;
+      }
+    }
+
+    if (Array.isArray(legacyPhotosArr)) {
+      for (const p of legacyPhotosArr) {
+        if (!p || typeof p !== 'object') continue;
+        const pUrl = cleanPhotoField(p.fileUrl || p.url || p.dataUrl || p.link);
+        if (!pUrl) continue;
+
+        const pType = String(p.type || p.category || '').toLowerCase();
+        if (!rawFotoSebelum && (pType.includes('sebelum') || pType.includes('before') || legacyPhotosArr.length === 1)) {
+          rawFotoSebelum = pUrl;
+        } else if (!rawFotoSesudah && (pType.includes('sesudah') || pType.includes('setelah') || pType.includes('after'))) {
+          rawFotoSesudah = pUrl;
+        } else if (!rawFotoSebelum) {
+          rawFotoSebelum = pUrl;
+        } else if (!rawFotoSesudah) {
+          rawFotoSesudah = pUrl;
+        }
+      }
+    }
+  }
   let jenisTanaman = String(
     row.jenisTanaman || row.Jenis_Tanaman || row.jenis_tanaman || row.TIPE_POHON || row.tipe_pohon || ''
   ).trim();
