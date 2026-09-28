@@ -51,6 +51,18 @@ export class AuthService {
 
           const activeUnitObj = InisiasiService.getActiveInisiasiUnit();
 
+          const rawRoleStr = String(rawUser.Role || rawUser.role || 'User').trim();
+          let userRole: UserRole = 'User';
+          if (/^super\s*admin$/i.test(rawRoleStr) || rawRoleStr.toLowerCase() === 'superadmin') {
+            userRole = 'SuperAdmin';
+          } else if (/^adm$/i.test(rawRoleStr) || rawRoleStr.toLowerCase() === 'adm') {
+            userRole = 'Adm';
+          } else if (/admin/i.test(rawRoleStr)) {
+            userRole = 'Admin';
+          } else {
+            userRole = 'User';
+          }
+
           const normalized: User = {
             id: String(rawUser.Id || rawUser.UserID || rawUser.id || `usr-${cleanUsername}`),
             unitId: userUnitId,
@@ -59,7 +71,7 @@ export class AuthService {
             name: String(rawUser.Nama_Regu || rawUser.Username || rawUser.name || cleanUsername),
             userName: String(rawUser.Username || cleanUsername),
             email: `${cleanUsername}@pln.co.id`,
-            role: (rawUser.Role || 'User') as UserRole,
+            role: userRole,
             reguName: String(rawUser.Nama_Regu || rawUser.reguName || rawUser.groupWO || rawUser.namaGroupWO || rawUser.Regu || ''),
             groupWO: String(rawUser.Nama_Regu || rawUser.reguName || rawUser.groupWO || rawUser.namaGroupWO || rawUser.Regu || ''),
             namaGroupWO: String(rawUser.Nama_Regu || rawUser.reguName || rawUser.groupWO || rawUser.namaGroupWO || rawUser.Regu || ''),
