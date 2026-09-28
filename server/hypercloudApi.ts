@@ -2377,6 +2377,159 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
 };
 
 /**
+ * PUT /api/realisasi/:id
+ * Dedicated endpoint for updating Realisasi records
+ */
+const handleUpdateRealisasi = async (req: Request, res: Response) => {
+  const id = req.params.id;
+  logApiCall('PUT', `/api/realisasi/${id}`, req.body);
+  const r = req.body || {};
+  const authUser = (req as any).user;
+  const userRole = String(authUser?.role || '').toUpperCase();
+  const isPrivileged = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADM' || authUser?.unitId === 'ALL';
+
+  console.log(`[REALISASI API] PUT /api/realisasi/${id}`);
+  console.log(`[REALISASI API] ID=${id}`);
+
+  try {
+    // 1. Check if record exists in public."REALISASI"
+    const check = await query(
+      `SELECT * FROM public."REALISASI" WHERE "ID" = $1`,
+      [id]
+    );
+
+    if (check.rowCount === 0) {
+      console.warn(`[REALISASI API] UPDATE FAILED ID=${id} reason=REALISASI_NOT_FOUND`);
+      logApiRoute('PUT', `/api/realisasi/${id}`, 404);
+      return res.status(404).json({
+        success: false,
+        status: 'error',
+        code: 'REALISASI_NOT_FOUND',
+        error: 'REALISASI_NOT_FOUND',
+        message: `Data realisasi dengan ID ${id} tidak ditemukan.`,
+      });
+    }
+
+    const existingRecord = check.rows[0];
+
+    // 2. Unit isolation & authorization check
+    const recordUnit = String(existingRecord.unitId || '').toUpperCase();
+    const userUnit = String(req.query.unitId || authUser?.unitId || r.unitId || '').toUpperCase();
+
+    if (!isPrivileged && userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
+      console.warn(`[REALISASI API] UPDATE FAILED ID=${id} reason=FORBIDDEN_UNIT_ACCESS recordUnit=${recordUnit} userUnit=${userUnit}`);
+      logApiRoute('PUT', `/api/realisasi/${id}`, 403);
+      return res.status(403).json({
+        success: false,
+        status: 'error',
+        error: 'FORBIDDEN',
+        message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat diubah oleh unit ${userUnit}.`,
+      });
+    }
+
+    // 3. Extract updated fields (safe merge preserving existing values)
+    const updatedUnitId = r.unitId ? String(r.unitId).trim().toUpperCase() : existingRecord.unitId;
+    const updatedWoId = r.WO_ID || r.woId || r.workOrderId || existingRecord.WO_ID || '';
+    const updatedNomorWo = r.Nomor_WO || r.nomorWO || existingRecord.Nomor_WO || '';
+    const updatedUlp = r.ULP || r.ulpName || existingRecord.ULP || '';
+    const updatedRegu = r.REGU_ROW || r.reguName || r.regu || existingRecord.REGU_ROW || '';
+    const updatedPenyulang = r.PENYULANG || r.penyulangName || existingRecord.PENYULANG || '';
+    const updatedNoTiang = r.NO_TIANG || r.noTiang || existingRecord.NO_TIANG || '';
+
+    const rawTanggal = r.TANGGAL || r.tanggal || r.tanggalRealisasi;
+    const updatedTanggal = rawTanggal ? toNullableTimestamp(rawTanggal) : existingRecord.TANGGAL;
+
+    const rawFotoSeb = r.Foto_Sebelum !== undefined ? r.Foto_Sebelum : (r.fotoSebelum !== undefined ? r.fotoSebelum : r.fotoSebelumUrl);
+    const updatedFotoSeb = rawFotoSeb ? String(rawFotoSeb).trim() : (existingRecord.Foto_Sebelum || '');
+
+    const rawFotoSes = r.Foto_Sesudah !== undefined ? r.Foto_Sesudah : (r.fotoSesudah !== undefined ? r.fotoSesudah : r.fotoSesudahUrl);
+    const updatedFotoSes = rawFotoSes ? String(rawFotoSes).trim() : (existingRecord.Foto_Sesudah || '');
+
+    const updatedJenisTanaman = r.Jenis_Tanaman !== undefined ? r.Jenis_Tanaman : (r.jenisTanaman !== undefined ? r.jenisTanaman : existingRecord.Jenis_Tanaman);
+    const updatedKeterangan = r.Keterangan !== undefined ? r.Keterangan : (r.keterangan !== undefined ? r.keterangan : existingRecord.Keterangan);
+    const updatedPertumbuhan = r.Pertumbuhan_Tanaman !== undefined ? r.Pertumbuhan_Tanaman : (r.pertumbuhanTanaman !== undefined ? r.pertumbuhanTanaman : existingRecord.Pertumbuhan_Tanaman);
+    const updatedKendala = r.Kendala !== undefined ? r.Kendala : (r.kendala !== undefined ? r.kendala : existingRecord.Kendala);
+
+    let updatedLatLong = existingRecord.Latitude_Longitude || '';
+    if (r.Latitude_Longitude) {
+      updatedLatLong = String(r.Latitude_Longitude).trim();
+    } else if (r.latitude !== undefined && r.longitude !== undefined) {
+      updatedLatLong = `${r.latitude}, ${r.longitude}`;
+    }
+
+    const updatedLokasi = r.Lokasi_kerja !== undefined ? r.Lokasi_kerja : (r.lokasiKerja !== undefined ? r.lokasiKerja : existingRecord.Lokasi_kerja);
+    const updatedTimestamp = toNullableTimestamp(r.Timestamp || r.timestamp) || existingRecord.Timestamp || new Date().toISOString();
+
+    const updateSql = `
+      UPDATE public."REALISASI"
+      SET
+        "unitId" = $2,
+        "WO_ID" = $3,
+        "Nomor_WO" = $4,
+        "ULP" = $5,
+        "REGU_ROW" = $6,
+        "PENYULANG" = $7,
+        "NO_TIANG" = $8,
+        "TANGGAL" = $9,
+        "Foto_Sebelum" = COALESCE(NULLIF($10, ''), "REALISASI"."Foto_Sebelum"),
+        "Foto_Sesudah" = COALESCE(NULLIF($11, ''), "REALISASI"."Foto_Sesudah"),
+        "Jenis_Tanaman" = $12,
+        "Keterangan" = $13,
+        "Pertumbuhan_Tanaman" = $14,
+        "Kendala" = $15,
+        "Latitude_Longitude" = $16,
+        "Lokasi_kerja" = $17,
+        "Timestamp" = $18
+      WHERE "ID" = $1
+      RETURNING *;
+    `;
+
+    const updateParams = [
+      existingRecord.ID,
+      updatedUnitId,
+      updatedWoId,
+      updatedNomorWo,
+      updatedUlp,
+      updatedRegu,
+      updatedPenyulang,
+      updatedNoTiang,
+      updatedTanggal,
+      updatedFotoSeb,
+      updatedFotoSes,
+      updatedJenisTanaman,
+      updatedKeterangan,
+      updatedPertumbuhan,
+      updatedKendala,
+      updatedLatLong,
+      updatedLokasi,
+      updatedTimestamp,
+    ];
+
+    const resDb = await query(updateSql, updateParams);
+
+    console.log(`[REALISASI API] unitId=${updatedUnitId}`);
+    console.log(`[REALISASI API] UPDATE SUCCESS`);
+    logDbOperation('REALISASI', 'UPDATE', existingRecord.ID, updatedUnitId);
+    logApiRoute('PUT', `/api/realisasi/${id}`, 200);
+
+    return res.json({
+      status: 'success',
+      success: true,
+      message: 'Realisasi berhasil diperbarui',
+      data: resDb.rows[0],
+    });
+  } catch (err: any) {
+    console.error(`[REALISASI API] UPDATE FAILED ID=${id} reason=${err.message}`);
+    logApiRoute('PUT', `/api/realisasi/${id}`, 500);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/**
  * GET /api/realisasi/:id
  */
 router.get('/realisasi/:id', requireAuth, async (req: Request, res: Response) => {
@@ -2404,6 +2557,7 @@ router.get('/realisasi/:id', requireAuth, async (req: Request, res: Response) =>
       return res.status(404).json({
         success: false,
         status: 'error',
+        code: 'REALISASI_NOT_FOUND',
         error: 'REALISASI_NOT_FOUND',
         message: `Data realisasi dengan ID ${relId} tidak ditemukan.`,
       });
@@ -2428,12 +2582,20 @@ router.get('/realisasi/:id', requireAuth, async (req: Request, res: Response) =>
 /**
  * POST /api/realisasi
  */
+router.post('/api/realisasi', requireAuth, handleUpsertRealisasi);
 router.post('/realisasi', requireAuth, handleUpsertRealisasi);
 
 /**
  * PUT /api/realisasi/:id
  */
-router.put('/realisasi/:id', requireAuth, handleUpsertRealisasi);
+router.put('/api/realisasi/:id', requireAuth, handleUpdateRealisasi);
+router.put('/realisasi/:id', requireAuth, handleUpdateRealisasi);
+
+/**
+ * PATCH /api/realisasi/:id
+ */
+router.patch('/api/realisasi/:id', requireAuth, handleUpdateRealisasi);
+router.patch('/realisasi/:id', requireAuth, handleUpdateRealisasi);
 
 /**
  * DELETE /api/realisasi/:id
