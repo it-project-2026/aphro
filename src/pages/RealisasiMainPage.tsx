@@ -254,12 +254,13 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     // Super Admin can access all units
     if (isSuperAdmin) return true;
 
+    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
     const activeUnitKey = RekapHarianService.normalizeUnitKey(
-      settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI'
+      settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || activeInisiasi.namaUL
     );
     const activeUnitId = currentUser.unitId 
       ? InisiasiService.getStandardUnitId(currentUser.unitId)
-      : InisiasiService.getSelectedUnitId();
+      : InisiasiService.getSelectedUnitId() || activeInisiasi.id;
 
     // 1. Strict Unit Isolation check: All Unit Admins & Officers only see their own Unit's data
     if (rel.unitId && activeUnitId) {

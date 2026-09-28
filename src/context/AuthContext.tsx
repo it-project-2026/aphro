@@ -29,11 +29,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [setUser]);
 
   const login = React.useCallback((userData: User) => {
-    const userUnitId = userData.unitId ? InisiasiService.getStandardUnitId(userData.unitId) : 'UL1';
+    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+    const fallbackUnitId = activeInisiasi.id || activeInisiasi.unitId || InisiasiService.getSelectedUnitId();
+    const userUnitId = InisiasiService.getStandardUnitId(userData.unitId || fallbackUnitId);
     
     // Always sync selected unit to logged-in user's unit
-    InisiasiService.saveSelectedUnit(userUnitId);
-    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+    if (userUnitId) {
+      InisiasiService.saveSelectedUnit(userUnitId);
+    }
+    const currentInisiasi = InisiasiService.getActiveInisiasiUnit();
 
     console.log("[APHRO LOGIN]", {
       userUnitId,
@@ -44,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fullUser: User = {
       ...userData,
       unitId: userUnitId,
-      unitName: userData.unitName || activeInisiasi.namaUL,
+      unitName: userData.unitName || currentInisiasi.namaUL,
     };
 
     // CRITICAL: Write session & token to localStorage BEFORE setting state so downstream
@@ -63,7 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithCredentials = React.useCallback(async (userid: string, password?: string) => {
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-    const res = await AuthService.loginWithCredentials(userid, password, activeInisiasi.unitId);
+    const activeUnitId = activeInisiasi.id || activeInisiasi.unitId || InisiasiService.getSelectedUnitId();
+    const res = await AuthService.loginWithCredentials(userid, password, activeUnitId);
     if (res.success && res.user) {
       login(res.user);
       return true;
@@ -73,21 +78,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginAsRole = React.useCallback((role: UserRole) => {
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+    const activeUnitId = activeInisiasi.id || activeInisiasi.unitId || InisiasiService.getSelectedUnitId();
     const safeRole = role || '';
     let name = `Demo ${role}`;
     let reguName: string | undefined = undefined;
     let ulpName: string | undefined = undefined;
 
     if (role === 'User') {
-      const primary = getPrimaryTimRowForUnit(activeInisiasi.namaUL || activeInisiasi.unitId);
+      const primary = getPrimaryTimRowForUnit(activeInisiasi.namaUL || activeUnitId);
       name = primary.name;
       reguName = primary.reguName;
       ulpName = primary.ulpName;
     }
 
     const mockUser: User = {
-      id: `usr-${safeRole.toLowerCase()}-${activeInisiasi.unitId.toLowerCase()}`,
-      unitId: activeInisiasi.unitId,
+      id: `usr-${safeRole.toLowerCase()}-${activeUnitId.toLowerCase()}`,
+      unitId: activeUnitId,
       unitName: activeInisiasi.namaUL,
       nip: (role || '').toUpperCase(),
       name,

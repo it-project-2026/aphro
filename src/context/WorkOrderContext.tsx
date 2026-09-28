@@ -167,9 +167,10 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   }, [workOrders]);
 
   const displayedWorkOrders = React.useMemo(() => {
-    const activeUnitName = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+    const activeUnitId = (user?.unitId ? InisiasiService.getStandardUnitId(user.unitId) : '') || InisiasiService.getSelectedUnitId() || activeInisiasi.id;
+    const activeUnitName = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || activeInisiasi.namaUL;
     const activeUnitKey = RekapHarianService.normalizeUnitKey(activeUnitName);
-    const activeUnitId = InisiasiService.getSelectedUnitId();
 
     const cleanStr = (s?: string | null) => {
       if (!s) return '';

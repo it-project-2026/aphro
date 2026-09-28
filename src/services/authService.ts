@@ -24,10 +24,16 @@ export class AuthService {
   ): Promise<{ success: boolean; user?: User; error?: string }> {
     const cleanUsername = (username || '').trim().toLowerCase();
     const cleanPassword = (password || '').trim();
-    const targetUnitId = InisiasiService.getStandardUnitId(unitId || InisiasiService.getActiveInisiasiUnit().unitId);
+    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
+    const resolvedUnitId = unitId || activeInisiasi.id || activeInisiasi.unitId || InisiasiService.getSelectedUnitId();
+    const targetUnitId = InisiasiService.getStandardUnitId(resolvedUnitId);
 
     if (!cleanUsername) {
       return { success: false, error: 'Username atau NIP wajib diisi.' };
+    }
+
+    if (!targetUnitId) {
+      return { success: false, error: 'Unit belum dipilih. Silakan pilih Unit Layanan terlebih dahulu.' };
     }
 
     // 1. Primary: HyperCloudHost Node.js API

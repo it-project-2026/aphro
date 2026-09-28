@@ -197,8 +197,8 @@ export const CetakLaporanPage: React.FC = () => {
   const { realisasiList = [] } = useRealisasi() || {};
 
   // Active Inisiasi Unit ID & Name
-  const activeUnitId = useMemo(() => InisiasiService.getSelectedUnitId(), [settings.namaUnitLayanan]);
-  const activeUnitName = useMemo(() => settings.namaUnitLayanan || 'UL BUKITTINGGI', [settings.namaUnitLayanan]);
+  const activeUnitId = useMemo(() => InisiasiService.getSelectedUnitId() || InisiasiService.getActiveInisiasiUnit().id, [settings.namaUnitLayanan]);
+  const activeUnitName = useMemo(() => settings.namaUnitLayanan || InisiasiService.getActiveInisiasiUnit().namaUL, [settings.namaUnitLayanan]);
 
   // Helper date generators
   const getTodayDateString = () => {

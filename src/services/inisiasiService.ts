@@ -657,9 +657,11 @@ export class InisiasiService {
     return getStandardUnitId(userUnitId) === getStandardUnitId(targetUnitId);
   }
 
-  static getActiveInisiasiUnit() {
+  static getActiveInisiasiUnit(): InisiasiUnit & { unitId: string; unitName: string } {
     const unit = getActiveInisiasiUnit();
     return {
+      ...unit,
+      id: unit.id,
       unitId: unit.id,
       namaUL: unit.namaUL,
       unitName: unit.namaUL,

@@ -13,6 +13,7 @@ import {
 import {
   RekapHarianService,
 } from '../services/rekapHarianService';
+import { InisiasiService } from '../services/inisiasiService';
 import { ApiService } from '../services/apiService';
 import {
   RekapItemData,
@@ -53,7 +54,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
   const [selectedUlpFilter, setSelectedUlpFilter] = useState<string>('ALL');
 
   const selectedULKey = useMemo(() => {
-    return RekapHarianService.normalizeUnitKey(settings.namaUnitLayanan || 'BUKITTINGGI');
+    return RekapHarianService.normalizeUnitKey(settings.namaUnitLayanan || InisiasiService.getActiveInisiasiUnit().namaUL);
   }, [settings.namaUnitLayanan]);
 
   // Date Selection State

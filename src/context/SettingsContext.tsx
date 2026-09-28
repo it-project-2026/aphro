@@ -3,6 +3,7 @@ import { usePersistState } from '../hooks/usePersistState';
 import { AppSettings } from '../types';
 import { SettingsContextData } from './contextConstants';
 import { getActiveGasConfig } from '../config/gasConfig';
+import { InisiasiService } from '../services/inisiasiService';
 
 interface SettingsContextType {
   settings: AppSettings;
@@ -55,17 +56,15 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Resolve active namaUnitLayanan:
-    // Prioritize initiated unit name if available; replace stale/hardcoded Padang defaults
+    // Prioritize initiated unit name if available; otherwise resolve from selected InisiasiUnit
     let resolvedNamaUnit = (rawSettings?.namaUnitLayanan || '').trim();
     if (initiatedNamaUL) {
       resolvedNamaUnit = initiatedNamaUL;
-    } else if (
-      !resolvedNamaUnit ||
-      resolvedNamaUnit === 'PLN ES UP4 Sumatera Barat UP3 Padang' ||
-      resolvedNamaUnit === 'PLN Electricity Services UP3 Padang' ||
-      resolvedNamaUnit.toUpperCase().includes('PADANG')
-    ) {
-      resolvedNamaUnit = 'UL BUKITTINGGI';
+    } else {
+      const activeUnit = InisiasiService.getActiveInisiasiUnit();
+      if (activeUnit?.namaUL) {
+        resolvedNamaUnit = activeUnit.namaUL;
+      }
     }
 
     return {

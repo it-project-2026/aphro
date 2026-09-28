@@ -68,9 +68,15 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
     
     const safeUsername = (username || '').trim().toLowerCase();
     const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-    const activeUnitId = activeInisiasi.unitId;
+    const activeUnitId = activeInisiasi.id || activeInisiasi.unitId || InisiasiService.getSelectedUnitId();
 
-    // 1. Try Direct HyperCloud PostgreSQL Login via AuthService (POST /api/login)
+    if (!activeUnitId) {
+      showToast('Unit belum dipilih.', 'warning');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // 1. Authoritative HyperCloud PostgreSQL Login via AuthService (POST /api/login)
     if (navigator.onLine) {
       try {
         const hcRes = await AuthService.loginWithCredentials(username, password, activeUnitId);
@@ -81,44 +87,8 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           }
           login(authenticatedUser);
 
-          // Trigger automatic background sync
-          syncWithGAS(undefined, true).catch(() => {});
-
-          const isAdm = (authenticatedUser.role || '').toUpperCase() === 'ADM' || (authenticatedUser.userName || authenticatedUser.nip || authenticatedUser.id || '').toLowerCase() === 'admbkt';
-          if (isAdm) {
-            setActiveTab('cetak_laporan');
-          } else if ((authenticatedUser.role || '').toUpperCase() === 'USER') {
-            setActiveTab('input_realisasi');
-          } else {
-            setActiveTab('dashboard');
-          }
-          showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId}) - Role: ${authenticatedUser.role}]`, 'success');
-          setIsSubmitting(false);
-          return;
-        } else if (hcRes.error && (hcRes.error.includes('Password') || hcRes.error.includes('Non-Aktif') || hcRes.error.includes('terdaftar') || hcRes.error.includes('sandi'))) {
-          showToast(hcRes.error, 'error');
-          setIsSubmitting(false);
-          return;
-        }
-      } catch {
-        // Fallback to next auth method
-      }
-    }
-
-    // 2. Try Direct GAS Login Endpoint if GAS URL is configured and online
-    if (settings.gasWebAppUrl && navigator.onLine) {
-      try {
-        const gasRes = await GASApiService.login(settings.gasWebAppUrl, username, password, activeUnitId);
-        if (gasRes && gasRes.status === 'success' && (gasRes.user || gasRes.data)) {
-          const rawUserObj = gasRes.user || gasRes.data;
-          const authenticatedUser = normalizeUser(rawUserObj);
-          if (!authenticatedUser.unitId) {
-            authenticatedUser.unitId = activeUnitId;
-          }
-          
-          login(authenticatedUser);
-          
-          if (settings.gasWebAppUrl && navigator.onLine) {
+          // Trigger background sync if needed
+          if (settings.gasWebAppUrl) {
             syncWithGAS(undefined, true).catch(() => {});
           }
 
@@ -133,73 +103,26 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
           showToast(`Selamat datang, ${authenticatedUser.name || authenticatedUser.userName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId}) - Role: ${authenticatedUser.role}]`, 'success');
           setIsSubmitting(false);
           return;
-        } else if (gasRes && gasRes.status === 'error' && gasRes.message) {
-          if (gasRes.message.toLowerCase().includes('password') || gasRes.message.toLowerCase().includes('sandi') || gasRes.message.toLowerCase().includes('user') || gasRes.message.toLowerCase().includes('unit')) {
-            showToast(gasRes.message, 'error');
-            setIsSubmitting(false);
-            return;
-          }
         }
-      } catch {
-        // Fall back gracefully
-      }
-    }
 
-    // 3. Fallback for superadmin / admin / adm / user if offline or default roles
-    if (safeUsername === 'superadmin' || safeUsername === 'admin' || safeUsername === 'user' || safeUsername === 'adm') {
-      const expectedRole = safeUsername === 'superadmin' ? 'SuperAdmin' : safeUsername === 'adm' ? 'ADM' : safeUsername === 'admin' ? 'Admin' : 'User';
-      const roleDisplayName = safeUsername === 'superadmin'
-        ? `SuperAdmin ${activeInisiasi.namaUL}`
-        : safeUsername === 'adm'
-        ? `ADM ${activeInisiasi.namaUL}`
-        : safeUsername === 'admin'
-        ? `Admin ${activeInisiasi.namaUL}`
-        : `Petugas Lapangan (${activeInisiasi.namaUL})`;
-
-      login({
-        id: `hardcoded-${safeUsername}-${activeUnitId.toLowerCase()}`,
-        unitId: activeUnitId,
-        unitName: activeInisiasi.namaUL,
-        nip: username.toUpperCase(),
-        userName: safeUsername,
-        name: roleDisplayName,
-        role: expectedRole as any,
-        email: `${safeUsername}@pln.co.id`,
-        ulpName: activeInisiasi.namaUL,
-        status: 'Aktif'
-      });
-      if (settings.gasWebAppUrl && navigator.onLine) {
-        syncWithGAS(undefined, true).catch(() => {});
+        // HyperCloud login returned an error: STOP IMMEDIATELY. Do not fall back to GAS or mock.
+        if (hcRes.error) {
+          showToast(hcRes.error, 'error');
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (err: any) {
+        showToast(err?.message || 'Gagal terhubung ke HyperCloudHost API.', 'error');
+        setIsSubmitting(false);
+        return;
       }
-      if (expectedRole === 'ADM') {
-        setActiveTab('cetak_laporan');
-      } else if (expectedRole === 'User') {
-        setActiveTab('input_realisasi');
-      } else {
-        setActiveTab('dashboard');
-      }
-      showToast(`Selamat datang, ${roleDisplayName}! [Unit: ${activeInisiasi.namaUL} (${activeUnitId})]`, 'success');
     } else {
-      if (!navigator.onLine) {
-        login({
-          id: `offline-${Date.now()}`,
-          unitId: activeUnitId,
-          unitName: activeInisiasi.namaUL,
-          nip: username.toUpperCase(),
-          userName: safeUsername,
-          name: username,
-          role: 'User',
-          email: `${safeUsername}@pln.co.id`,
-          ulpName: activeInisiasi.namaUL,
-          status: 'Aktif'
-        });
-        setActiveTab('input_realisasi');
-        showToast(`Masuk sebagai ${username} [Unit: ${activeInisiasi.namaUL} (${activeUnitId})]`, 'success');
-      } else {
-        showToast(`Gagal autentikasi untuk Username "${username}" pada unit ${activeInisiasi.namaUL} (${activeUnitId}). Periksa kembali username dan password Anda.`, 'error');
-      }
+      showToast('Perangkat dalam keadaan offline. Harap sambungkan ke internet untuk login pertama kali.', 'warning');
+      setIsSubmitting(false);
+      return;
     }
-    
+
+    showToast(`Gagal autentikasi untuk Username "${username}" pada unit ${activeInisiasi.namaUL} (${activeUnitId}). Periksa kembali username dan password Anda.`, 'error');
     setIsSubmitting(false);
   };
 

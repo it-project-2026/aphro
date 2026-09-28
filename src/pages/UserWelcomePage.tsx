@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useGASSync } from '../context/GASSyncContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { resolveUserTimRowAndUlp } from '../services/rekapHarianService';
+import { InisiasiService } from '../services/inisiasiService';
 import { useToast } from '../hooks/useToast';
 import { APP_LOGO_URL } from '../data/initialData';
 import { 
@@ -39,7 +40,7 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   const { showToast } = useToast();
 
   const userIdentity = useMemo(() => {
-    const activeUnit = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || 'UL BUKITTINGGI';
+    const activeUnit = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || InisiasiService.getActiveInisiasiUnit().namaUL;
     return resolveUserTimRowAndUlp(currentUser, activeUnit, users, ulpList, reguList);
   }, [currentUser, settings.namaUnitLayanan, users, ulpList, reguList]);
 
