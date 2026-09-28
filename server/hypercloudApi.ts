@@ -1812,11 +1812,11 @@ router.delete(
 // ==========================================
 
 /**
- * GET /api/realisasi
+ * GET /api/realisasi and /realisasi
  *
  * Endpoint paginated untuk halaman data REALISASI.
  */
-router.get('/realisasi', requireAuth, async (req: Request, res: Response) => {
+const handleGetRealisasiList = async (req: Request, res: Response) => {
   logApiCall('GET', '/api/realisasi', req.query);
 
   const page = Math.max(
@@ -2027,7 +2027,7 @@ router.get('/realisasi', requireAuth, async (req: Request, res: Response) => {
       message: err.message,
     });
   }
-});
+};
 
 /**
  * GET /api/realisasi/dashboard
@@ -2532,7 +2532,7 @@ const handleUpdateRealisasi = async (req: Request, res: Response) => {
 /**
  * GET /api/realisasi/:id
  */
-router.get('/realisasi/:id', requireAuth, async (req: Request, res: Response) => {
+const handleGetRealisasiById = async (req: Request, res: Response) => {
   const relId = req.params.id;
   const { unitId, isAll } = parseUnitFilter(req);
   logApiCall('GET', `/api/realisasi/${relId}`);
@@ -2577,103 +2577,106 @@ router.get('/realisasi/:id', requireAuth, async (req: Request, res: Response) =>
       message: err.message,
     });
   }
-});
-
-/**
- * POST /api/realisasi
- */
-router.post('/api/realisasi', requireAuth, handleUpsertRealisasi);
-router.post('/realisasi', requireAuth, handleUpsertRealisasi);
-
-/**
- * PUT /api/realisasi/:id
- */
-router.put('/api/realisasi/:id', requireAuth, handleUpdateRealisasi);
-router.put('/realisasi/:id', requireAuth, handleUpdateRealisasi);
-
-/**
- * PATCH /api/realisasi/:id
- */
-router.patch('/api/realisasi/:id', requireAuth, handleUpdateRealisasi);
-router.patch('/realisasi/:id', requireAuth, handleUpdateRealisasi);
+};
 
 /**
  * DELETE /api/realisasi/:id
  */
-router.delete(
-  '/realisasi/:id',
-  requireAuth,
-  async (req: Request, res: Response) => {
-    const relId = req.params.id;
+const handleDeleteRealisasi = async (req: Request, res: Response) => {
+  const relId = req.params.id;
 
-    console.log(`[API DELETE]\nentity=REALISASI\nid=${relId}`);
-    logApiCall(
-      'DELETE',
-      `/api/realisasi/${relId}`
+  console.log(`[API DELETE]\nentity=REALISASI\nid=${relId}`);
+  logApiCall(
+    'DELETE',
+    `/api/realisasi/${relId}`
+  );
+
+  try {
+    const check = await query(
+      `SELECT "ID", "unitId" FROM public."REALISASI" WHERE "ID" = $1`,
+      [relId]
     );
 
-    try {
-      const check = await query(
-        `SELECT "ID", "unitId" FROM public."REALISASI" WHERE "ID" = $1`,
-        [relId]
-      );
-
-      if (check.rowCount === 0) {
-        logApiRoute('DELETE', `/api/realisasi/${relId}`, 404);
-        return res.status(404).json({
-          success: false,
-          error: 'REALISASI_NOT_FOUND',
-          message: `Realisasi dengan ID ${relId} tidak ditemukan atau sudah terhapus.`,
-        });
-      }
-
-      // Unit isolation & authorization check
-      const recordUnit = String(check.rows[0]?.unitId || '').toUpperCase();
-      const userUnit = String((req as any).user?.unitId || req.query.unitId || '').toUpperCase();
-      const userRole = String((req as any).user?.role || req.query.role || '').toUpperCase();
-      const isAdmin = userRole === 'ADMIN' || userRole === 'ADM' || userRole === 'SUPERADMIN' || userUnit === 'ALL';
-
-      if (userUnit && recordUnit && !isAdmin && userUnit !== 'ALL' && recordUnit !== userUnit) {
-        logApiRoute('DELETE', `/api/realisasi/${relId}`, 403);
-        return res.status(403).json({
-          success: false,
-          error: 'FORBIDDEN',
-          message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`,
-        });
-      }
-
-      const resDb = await query(
-        `
-        DELETE FROM public."REALISASI"
-        WHERE "ID" = $1
-        RETURNING "ID"
-        `,
-        [relId]
-      );
-
-      console.log(`[DB DELETE]\ntable=REALISASI\nid=${relId}\nunitId=${recordUnit}\nstatus=SUCCESS`);
-      logDbOperation('REALISASI', 'DELETE', relId, recordUnit);
-      logSyncOperation('REALISASI', relId, 'DELETED', 200);
-      logApiRoute('DELETE', `/api/realisasi/${relId}`, 200);
-
-      return res.status(200).json({
-        success: true,
-        id: relId,
-        deleted: true,
-        deletedCount: resDb.rowCount,
-        message: 'Realisasi berhasil dihapus.',
-      });
-    } catch (err: any) {
-      console.error('[REALISASI DELETE] Error:', err.message);
-      logApiRoute('DELETE', `/api/realisasi/${relId}`, 500);
-      return res.status(500).json({
+    if (check.rowCount === 0) {
+      logApiRoute('DELETE', `/api/realisasi/${relId}`, 404);
+      return res.status(404).json({
         success: false,
-        error: 'DATABASE_ERROR',
-        message: err.message,
+        status: 'error',
+        code: 'REALISASI_NOT_FOUND',
+        error: 'REALISASI_NOT_FOUND',
+        message: `Realisasi dengan ID ${relId} tidak ditemukan atau sudah terhapus.`,
       });
     }
+
+    // Unit isolation & authorization check
+    const recordUnit = String(check.rows[0]?.unitId || '').toUpperCase();
+    const userUnit = String((req as any).user?.unitId || req.query.unitId || '').toUpperCase();
+    const userRole = String((req as any).user?.role || req.query.role || '').toUpperCase();
+    const isAdmin = userRole === 'ADMIN' || userRole === 'ADM' || userRole === 'SUPERADMIN' || userUnit === 'ALL';
+
+    if (userUnit && recordUnit && !isAdmin && userUnit !== 'ALL' && recordUnit !== userUnit) {
+      logApiRoute('DELETE', `/api/realisasi/${relId}`, 403);
+      return res.status(403).json({
+        success: false,
+        status: 'error',
+        error: 'FORBIDDEN',
+        message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat dihapus oleh unit ${userUnit}.`,
+      });
+    }
+
+    const resDb = await query(
+      `
+      DELETE FROM public."REALISASI"
+      WHERE "ID" = $1
+      RETURNING "ID"
+      `,
+      [relId]
+    );
+
+    console.log(`[DB DELETE]\ntable=REALISASI\nid=${relId}\nunitId=${recordUnit}\nstatus=SUCCESS`);
+    logDbOperation('REALISASI', 'DELETE', relId, recordUnit);
+    logSyncOperation('REALISASI', relId, 'DELETED', 200);
+    logApiRoute('DELETE', `/api/realisasi/${relId}`, 200);
+
+    return res.status(200).json({
+      success: true,
+      id: relId,
+      deleted: true,
+      deletedCount: resDb.rowCount,
+      message: 'Realisasi berhasil dihapus.',
+    });
+  } catch (err: any) {
+    console.error('[REALISASI DELETE] Error:', err.message);
+    logApiRoute('DELETE', `/api/realisasi/${relId}`, 500);
+    return res.status(500).json({
+      success: false,
+      status: 'error',
+      error: 'DATABASE_ERROR',
+      message: err.message,
+    });
   }
-);
+};
+
+/**
+ * REALISASI ROUTE BINDINGS
+ */
+router.get('/realisasi', requireAuth, handleGetRealisasiList);
+router.get('/api/realisasi', requireAuth, handleGetRealisasiList);
+
+router.get('/realisasi/:id', requireAuth, handleGetRealisasiById);
+router.get('/api/realisasi/:id', requireAuth, handleGetRealisasiById);
+
+router.post('/realisasi', requireAuth, handleUpsertRealisasi);
+router.post('/api/realisasi', requireAuth, handleUpsertRealisasi);
+
+router.put('/realisasi/:id', requireAuth, handleUpdateRealisasi);
+router.put('/api/realisasi/:id', requireAuth, handleUpdateRealisasi);
+
+router.patch('/realisasi/:id', requireAuth, handleUpdateRealisasi);
+router.patch('/api/realisasi/:id', requireAuth, handleUpdateRealisasi);
+
+router.delete('/realisasi/:id', requireAuth, handleDeleteRealisasi);
+router.delete('/api/realisasi/:id', requireAuth, handleDeleteRealisasi);
 
 // ==========================================
 // 6. ABSENSI
