@@ -3,9 +3,6 @@ import { GlobalProvider } from './context/index';
 import { useAuth } from './context/AuthContext';
 import { useSettings } from './context/SettingsContext';
 import { useAbsensi } from './context/AbsensiContext';
-import { useWorkOrders } from './context/WorkOrderContext';
-import { useRealisasi } from './context/RealisasiContext';
-import { useMasterData } from './context/MasterDataContext';
 import { useUI } from './context/UIContext';
 import { useToast } from './hooks/useToast';
 import { useGASSync } from './hooks/useGASSync';
@@ -60,10 +57,7 @@ const AppContent: React.FC = () => {
 
   const { settings } = useSettings();
 
-  const { hasCheckedInToday, refreshAbsensi } = useAbsensi();
-  const { refreshWorkOrders } = useWorkOrders();
-  const { refreshRealisasi, fetchDashboardRealisasi } = useRealisasi();
-  const { refreshMasterData } = useMasterData();
+  const { hasCheckedInToday } = useAbsensi();
 
   const {
     isSyncing,
@@ -131,24 +125,6 @@ const AppContent: React.FC = () => {
       (user.id || '')
         .toLowerCase() === 'admbkt'
     );
-
-  /*
-   * =========================================================
-   * OTOMATIS REFRESH DATABASE SAAT MASUK & PINDAH HALAMAN
-   * =========================================================
-   * Memastikan setiap perpindahan tab / halaman dan masuk aplikasi
-   * selalu memicu pembaruan data dari Database HyperCloud.
-   */
-  React.useEffect(() => {
-    if (user && isAuthenticated) {
-      console.log(`[AUTO DB REFRESH] Navigation to page/tab "${activeTab}". Triggering database refresh...`);
-      refreshWorkOrders();
-      refreshRealisasi(true);
-      fetchDashboardRealisasi();
-      refreshMasterData(true);
-      refreshAbsensi();
-    }
-  }, [activeTab, user?.id, user?.unitId, isAuthenticated, refreshWorkOrders, refreshRealisasi, fetchDashboardRealisasi, refreshMasterData, refreshAbsensi]);
 
   /*
    * =========================================================

@@ -21,7 +21,7 @@ export interface RealisasiContextType {
   // mengambil seluruh data REALISASI dari HyperCloud,
   // tidak terbatas pada pagination History.
   dashboardRealisasiList: Realisasi[];
-  fetchDashboardRealisasi: () => Promise<void>;
+  fetchDashboardRealisasi: (unitId?: string) => Promise<void>;
 
   pagination: PaginationMeta;
   isLoading: boolean;
@@ -325,7 +325,7 @@ export function RealisasiProvider({
   const fetchDashboardRealisasi =
     React.useCallback(
       async (overrideUnitId?: string) => {
-        if (!user || !user.unitId) {
+        if (!user) {
           console.log('[RealisasiContext] Skipping fetchDashboardRealisasi: User not authenticated.');
           return;
         }
@@ -336,7 +336,7 @@ export function RealisasiProvider({
           return;
         }
 
-        const unitIdToUse = overrideUnitId || user.unitId || activeUnitId;
+        const unitIdToUse = overrideUnitId || user.unitId || activeUnitId || InisiasiService.getSelectedUnitId() || 'UL1';
 
         try {
           const res =
@@ -386,7 +386,7 @@ export function RealisasiProvider({
           !force &&
           now -
             lastFetchTime.current <
-            2000
+            15000
         ) {
           return;
         }
@@ -410,7 +410,7 @@ export function RealisasiProvider({
       setRealisasiList([]);
       setDashboardRealisasiList([]);
     }
-  }, [user, user?.unitId, user?.id, refreshRealisasi, fetchDashboardRealisasi]);
+  }, [user, user?.unitId, user?.id, settings.namaUnitLayanan, refreshRealisasi, fetchDashboardRealisasi]);
 
   // ============================================================
   // OFFLINE SYNC

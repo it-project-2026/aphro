@@ -37,8 +37,11 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = React.useState(false);
   const isFetchingRef = React.useRef(false);
 
+  const lastFetchTimeRef = React.useRef<number>(0);
+  const lastUnitIdRef = React.useRef<string>('');
+
   // Auto-fetch Work Orders from HyperCloud / Dexie
-  const refreshWorkOrders = React.useCallback(async (page: number = 0) => {
+  const refreshWorkOrders = React.useCallback(async (page: number = 0, force: boolean = false) => {
     if (!user || !user.unitId) {
       console.log('[WorkOrderContext] Skipping refreshWorkOrders: User not authenticated.');
       return;
@@ -50,8 +53,22 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    const unitId =
+      user?.unitId ||
+      localStorage.getItem('aphro_active_unit_id') ||
+      InisiasiService.getSelectedUnitId() ||
+      undefined;
+
+    const now = Date.now();
+    const isUnitChanged = unitId !== lastUnitIdRef.current;
+    if (!force && !isUnitChanged && now - lastFetchTimeRef.current < 15000 && page === 0) {
+      return;
+    }
+
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
+    lastFetchTimeRef.current = now;
+    if (unitId) lastUnitIdRef.current = unitId;
 
     try {
       if (page === 0) setIsLoading(true);
@@ -292,7 +309,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
       return false;
     });
-  }, [correctedWorkOrders, user, settings.namaUnitLayanan]);
+  }, [correctedWorkOrders, user, user?.unitId, settings.namaUnitLayanan]);
 
   const addWorkOrder = React.useCallback(async (woData: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
     const cleanStr = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();

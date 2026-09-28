@@ -725,9 +725,9 @@ export class ApiService {
         success: true,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.deleteRealisasi Error]',
-        err
+      console.warn(
+        '[ApiService.deleteRealisasi Warning]',
+        err?.message || err
       );
 
       return {
@@ -1247,9 +1247,9 @@ export class ApiService {
         data: list,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.fetchAbsensi Error]',
-        err
+      console.warn(
+        '[ApiService.fetchAbsensi Warning]',
+        err?.message || err
       );
 
       return {
@@ -2585,7 +2585,7 @@ export class ApiService {
           source: 'dexie' as const,
         };
       } catch (dexErr: any) {
-        console.error('[CETAK DEBUG] Dexie fallback error:', dexErr);
+        console.warn('[CETAK DEBUG] Dexie fallback error:', dexErr?.message || dexErr);
         return {
           success: false,
           realisasi: [],

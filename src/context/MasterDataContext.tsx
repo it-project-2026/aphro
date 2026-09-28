@@ -57,6 +57,8 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
   const [users, setUsers] = React.useState<User[]>([]);
 
   const activeRequestIdRef = React.useRef<string>('');
+  const lastFetchTimeRef = React.useRef<number>(0);
+  const lastUnitIdRef = React.useRef<string>('');
 
   const authUserId = user?.id || '';
   const authUserUnit = user?.unitId || '';
@@ -75,6 +77,15 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     }
 
     const unitId = authUserUnit ? InisiasiService.getStandardUnitId(authUserUnit) : InisiasiService.getSelectedUnitId();
+
+    const now = Date.now();
+    const isUnitChanged = unitId !== lastUnitIdRef.current;
+    if (!forceRefresh && !isUnitChanged && now - lastFetchTimeRef.current < 15000 && ulpList.length > 0) {
+      return;
+    }
+
+    lastFetchTimeRef.current = now;
+    if (unitId) lastUnitIdRef.current = unitId;
     const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     activeRequestIdRef.current = requestId;
 

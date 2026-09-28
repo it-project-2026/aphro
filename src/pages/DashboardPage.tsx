@@ -21,6 +21,7 @@ import {
   calculateTimRowTargetKms,
 } from '../utils/metricUtils';
 import { normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
+import { InisiasiService } from '../services/inisiasiService';
 import { TopPerformersList } from '../components/dashboard/TopPerformersList';
 import { RecentWOTable } from '../components/dashboard/RecentWOTable';
 import { StatCard } from '../components/common/StatCard';
@@ -78,24 +79,21 @@ export const DashboardPage: React.FC = () => {
   const { showToast } = useToast();
   const draggable = useDraggableScroll();
   const { settings } = useSettings();
-  const { user: currentUser } = useAuth();
-  const { displayedWorkOrders } = useWorkOrders();
-  const { realisasiList, dashboardRealisasiList, fetchDashboardRealisasi } = useRealisasi();
-  const { ulpList, penyulangList, reguList, petugasList, users } = useMasterData();
+  const { user: currentUser, isAuthenticated } = useAuth();
+  const { displayedWorkOrders, isLoading: isWoLoading, refreshWorkOrders } = useWorkOrders();
+  const { realisasiList, dashboardRealisasiList, isLoading: isRelLoading, fetchDashboardRealisasi, refreshRealisasi } = useRealisasi();
+  const { ulpList, penyulangList, reguList, petugasList, users, refreshMasterData } = useMasterData();
   const { auditLogs } = useNotifications();
   const { setActiveTab, isDarkMode } = useUI();
   const { isGasConnected, syncWithGAS } = useGASSync();
-  const { refreshWorkOrders } = useWorkOrders();
-  const { refreshRealisasi } = useRealisasi();
 
+  const activeUnitId = currentUser?.unitId || InisiasiService.getSelectedUnitId() || 'UL1';
+
+  // Automatically reset filters when unit changes
   React.useEffect(() => {
-    // Initial fetch for dashboard data when user is authenticated
-    if (currentUser) {
-      refreshWorkOrders();
-      refreshRealisasi(true);
-      fetchDashboardRealisasi();
-    }
-  }, [currentUser, currentUser?.unitId, currentUser?.id, refreshWorkOrders, refreshRealisasi, fetchDashboardRealisasi]);
+    setFilterUlp('ALL');
+    setFilterPenyulang('ALL');
+  }, [activeUnitId, settings.namaUnitLayanan]);
 
   const [pendingIds, setPendingIds] = React.useState<string[]>([]);
 
@@ -158,8 +156,8 @@ export const DashboardPage: React.FC = () => {
     
     // If neither name nor id is provided, check if target matches current global unit or default
     if (!name && !id) {
-      const activeUnit = cleanStr(localStorage.getItem('aphro_nama_unit_layanan') || '');
-      if (activeUnit && activeUnit.includes(target)) return true;
+      const activeUnit = cleanStr(settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || '');
+      if (activeUnit && (activeUnit.includes(target) || target.includes(activeUnit))) return true;
       return false;
     }
 
@@ -167,7 +165,7 @@ export const DashboardPage: React.FC = () => {
     const idMatch = id && (id === target);
     
     return nameMatch || idMatch;
-  }, [filterUlp]);
+  }, [filterUlp, settings.namaUnitLayanan]);
 
   const matchesPenyulang = React.useCallback((itemPName?: string, itemPId?: string, targetFilter = filterPenyulang) => {
     if (!targetFilter || targetFilter === 'ALL') return true;
@@ -273,8 +271,13 @@ export const DashboardPage: React.FC = () => {
     }).length;
   }, [filteredWOs]);
 
-  const woProgress = filteredWOs.filter((w) => isWOInProgress(w.status)).length;
-  const woBelum = filteredWOs.filter((w) => !isWOSelesai(w.status) && !isWOInProgress(w.status)).length;
+  const woProgress = React.useMemo(() => {
+    return filteredWOs.filter((w) => isWOInProgress(w.status)).length;
+  }, [filteredWOs]);
+
+  const woBelum = React.useMemo(() => {
+    return filteredWOs.filter((w) => !isWOSelesai(w.status) && !isWOInProgress(w.status)).length;
+  }, [filteredWOs]);
 
   // ULP Performance Percentage Engine
   const ulpPerformanceList = React.useMemo(() => {
