@@ -39,25 +39,15 @@ export const MobileBottomNav: React.FC = () => {
   const mobileTabs = isAdmRole
     ? [
         {
-          id: 'input_realisasi_manual',
-          label: 'Input Manual',
-          icon: FilePlus2,
-          highlight: true,
-        },
-        {
           id: 'input_realisasi',
           label: 'Realisasi',
           icon: Camera,
+          highlight: true,
         },
         {
           id: 'cetak_laporan',
           label: 'Cetak Laporan',
           icon: Printer,
-        },
-        {
-          id: 'riwayat_realisasi',
-          label: 'Riwayat Realisasi',
-          icon: History,
         },
         {
           id: 'rekap_harian',

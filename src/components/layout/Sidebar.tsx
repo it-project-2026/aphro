@@ -96,18 +96,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
     },
     {
-      id: 'input_realisasi_manual',
-      label: 'Input Manual Realisasi',
-      icon: FilePlus2,
-      roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
-    },
-    {
-      id: 'riwayat_realisasi',
-      label: 'Riwayat Realisasi',
-      icon: History,
-      roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
-    },
-    {
       id: 'sinkronisasi',
       label: 'Pusat Sinkronisasi',
       icon: RefreshCw,
@@ -156,12 +144,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin'],
     },
     {
-      id: 'migrasi_database',
-      label: 'Migrasi Database',
-      icon: ArrowRightLeft,
-      roles: ['SuperAdmin', 'Admin', 'Adm'],
-    },
-    {
       id: 'inisiasi',
       label: 'Inisiasi Unit Layanan',
       icon: Building2,
@@ -182,7 +164,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
   ];
 
   const allowedItems = isAdmRole
-    ? navItems.filter((item) => ['input_realisasi_manual', 'input_realisasi', 'cetak_laporan', 'riwayat_realisasi', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi', 'migrasi_database'].includes(item.id))
+    ? navItems.filter((item) => ['input_realisasi', 'cetak_laporan', 'rekap_harian', 'rekap_penyulang', 'monitoring_absensi'].includes(item.id))
     : navItems.filter((item) => item.roles.some((r) => r.toLowerCase() === role.toLowerCase()));
 
   return (

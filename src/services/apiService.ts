@@ -245,8 +245,8 @@ export class ApiService {
         console.warn(`[ApiService] Primary API network error (${externalUrl}). Trying local endpoint (${localUrl}):`, extErr?.message || extErr);
         try {
           return await fetch(localUrl, finalOptions);
-        } catch (localErr) {
-          console.error(`[ApiService] Both primary and local API requests failed:`, localErr);
+        } catch (localErr: any) {
+          console.warn(`[ApiService] Both primary and local API requests failed:`, localErr?.message || localErr);
           throw extErr;
         }
       }
@@ -343,14 +343,31 @@ export class ApiService {
         }
       );
     } catch (networkError: any) {
-      console.error(
-        '[ApiService.fetchRealisasi Network Error]',
-        networkError
-      );
+      console.warn('[ApiService.fetchRealisasi Network Warning]', networkError?.message || networkError);
 
-      throw new Error(
-        'Tidak dapat terhubung ke API HyperCloudHost. Periksa koneksi internet atau server API.'
-      );
+      try {
+        const localRecords = await dexieDb.realisasi.toArray();
+        if (localRecords.length > 0) {
+          const normalized = localRecords.map(item => normalizeRealisasiRow(item));
+          return {
+            status: 'success',
+            unitId: targetUnitId,
+            pagination: { page: 1, limit: normalized.length, total: normalized.length, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+            data: normalized,
+            message: 'Memuat data realisasi dari cache lokal.',
+          };
+        }
+      } catch (dexErr) {
+        console.warn('Dexie fallback error:', dexErr);
+      }
+
+      return {
+        status: 'error',
+        unitId: targetUnitId,
+        pagination: { page, limit, total: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+        data: [],
+        message: 'Tidak dapat terhubung ke API HyperCloudHost.',
+      };
     }
 
     if (!response.ok) {
@@ -811,10 +828,20 @@ export class ApiService {
         data: list,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.fetchWorkOrders Error]',
-        err
-      );
+      console.warn('[ApiService.fetchWorkOrders Network Warning]', err?.message || err);
+
+      try {
+        const cachedLocals = await dexieDb.work_orders.toArray();
+        if (cachedLocals.length > 0) {
+          return {
+            success: true,
+            data: cachedLocals,
+            message: 'Memuat Work Orders dari cache lokal.',
+          };
+        }
+      } catch (dexErr) {
+        console.warn('Dexie fallback warning:', dexErr);
+      }
 
       return {
         success: false,
@@ -1776,10 +1803,21 @@ export class ApiService {
           json.message,
       };
     } catch (err: any) {
-      console.error(
-        '[ApiService.fetchRealisasiDashboard Error]',
-        err
-      );
+      console.warn('[ApiService.fetchRealisasiDashboard Network Warning]', err?.message || err);
+
+      try {
+        const cached = await dexieDb.realisasi.toArray();
+        if (cached.length > 0) {
+          const normalized = cached.map(item => normalizeRealisasiRow(item));
+          return {
+            status: 'success',
+            data: normalized,
+            message: 'Memuat data dashboard dari cache lokal.',
+          };
+        }
+      } catch (dexErr) {
+        console.warn('Dexie fallback warning:', dexErr);
+      }
 
       return {
         status: 'error',
