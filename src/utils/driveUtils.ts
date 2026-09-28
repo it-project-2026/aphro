@@ -50,6 +50,28 @@ export function formatDriveImageUrl(url: string): string {
 }
 
 /**
+ * Universal validator for photo URLs.
+ * Rejects null, undefined, '', ' ', 'N/A', 'null', 'undefined', '-', and data:image Base64 strings.
+ * Accepts valid HTTP/HTTPS URLs (including Google Drive URLs).
+ */
+export function isValidPhotoUrl(value: any): boolean {
+  if (!value || typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (
+    trimmed === '' ||
+    trimmed === 'N/A' ||
+    trimmed === 'null' ||
+    trimmed === 'undefined' ||
+    trimmed === '-' ||
+    trimmed.startsWith('data:image') ||
+    (trimmed.length > 500 && !trimmed.startsWith('http'))
+  ) {
+    return false;
+  }
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+}
+
+/**
  * Ensures photo string is converted to a Google Drive URL via GASApiService.uploadPhoto.
  * If photo is already an HTTP Google URL, returns formatted Google Drive link.
  * If photo is Base64, uploads it to Google Drive and returns the Google Drive URL.
@@ -71,7 +93,9 @@ export async function ensureGoogleDrivePhotoUrl(
 
   // 1. If already an HTTP/HTTPS URL
   if (clean.startsWith('http://') || clean.startsWith('https://')) {
-    return formatDriveViewUrl(clean);
+    const formatted = formatDriveViewUrl(clean);
+    console.log(`[REALISASI_PHOTO_DEBUG] ${options.photoType || 'Photo'} already URL: ${formatted}`);
+    return formatted;
   }
 
   // 2. If Base64 string, upload to Google Drive
@@ -80,7 +104,7 @@ export async function ensureGoogleDrivePhotoUrl(
     const photoType = options.photoType || 'Photo';
     const nomorWO = options.nomorWO || options.reguName || 'REALISASI';
 
-    console.log(`[PHOTO_UPLOAD_START] type=${photoType} nomorWO=${nomorWO} online=${typeof navigator !== 'undefined' ? navigator.onLine : false}`);
+    console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} upload START (nomorWO=${nomorWO}, isBase64=true, len=${clean.length}, online=${typeof navigator !== 'undefined' ? navigator.onLine : false})`);
 
     if (gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
@@ -95,16 +119,16 @@ export async function ensureGoogleDrivePhotoUrl(
 
         if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
           const finalUrl = formatDriveViewUrl(uploadRes.fileUrl);
-          console.log(`[PHOTO_UPLOAD_SUCCESS] type=${photoType} nomorWO=${nomorWO} url=${finalUrl}`);
+          console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} upload SUCCESS -> URL: ${finalUrl}`);
           return finalUrl;
         } else {
-          console.warn(`[PHOTO_UPLOAD_FAILED] type=${photoType} nomorWO=${nomorWO} message=${uploadRes?.message || 'Unknown response'}`);
+          console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} upload FAILED -> message: ${uploadRes?.message || 'Unknown response'}`);
         }
       } catch (e: any) {
-        console.warn(`[PHOTO_UPLOAD_FAILED] type=${photoType} nomorWO=${nomorWO} error=${e?.message || 'Upload exception'}`);
+        console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} upload FAILED -> exception: ${e?.message || 'Upload exception'}`);
       }
     } else {
-      console.warn(`[PHOTO_UPLOAD_FAILED] type=${photoType} nomorWO=${nomorWO} reason=${!gasUrl ? 'GAS URL not configured' : 'Device offline'}`);
+      console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} upload FAILED -> reason: ${!gasUrl ? 'GAS URL not configured' : 'Device offline'}`);
     }
     // Never return base64 data to be written into Database
     return '';

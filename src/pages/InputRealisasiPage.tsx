@@ -9,7 +9,7 @@ import { WatermarkedPhoto, WOStatus } from '../types';
 import { generateWatermarkedImage } from '../utils/watermark';
 import { GASApiService } from '../services/gasApiService';
 import { InisiasiService } from '../services/inisiasiService';
-import { ensureGoogleDrivePhotoUrl } from '../utils/driveUtils';
+import { ensureGoogleDrivePhotoUrl, isValidPhotoUrl } from '../utils/driveUtils';
 import { getWIBDateString } from '../utils/dateUtils';
 import {
   Camera,
@@ -630,7 +630,15 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
     if (photosSebelum.length === 0) {
       showToast(
-        'Mohon unggah minimal 1 foto kondisi Sebelum (Before)',
+        'Mohon ambil minimal 1 foto kondisi Sebelum (Before)',
+        'warning'
+      );
+      return;
+    }
+
+    if (photosSesudah.length === 0) {
+      showToast(
+        'Mohon ambil minimal 1 foto kondisi Sesudah (After)',
         'warning'
       );
       return;
@@ -643,6 +651,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     );
 
     try {
+      console.log('[REALISASI_PHOTO_DEBUG] Starting upload for Before photo...');
       const finalSebUrl = await ensureGoogleDrivePhotoUrl(
         photosSebelum[0]?.fileUrl || photosSebelum[0]?.dataUrl || '',
         {
@@ -652,13 +661,16 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
       );
 
+      console.log('[REALISASI_PHOTO_DEBUG] Foto Sebelum result URL:', finalSebUrl || '(EMPTY)');
+
       // Validate Foto Sebelum upload
-      if (photosSebelum.length > 0 && !finalSebUrl) {
+      if (!isValidPhotoUrl(finalSebUrl)) {
         setIsProcessing(false);
-        showToast('Foto sebelum belum berhasil diunggah ke Google Drive. Silakan periksa koneksi internet Anda dan coba lagi.', 'error');
+        showToast('Foto Sebelum belum berhasil diunggah ke Google Drive. Silakan periksa koneksi internet Anda dan coba lagi.', 'error');
         return;
       }
 
+      console.log('[REALISASI_PHOTO_DEBUG] Starting upload for After photo...');
       const finalSesUrl = await ensureGoogleDrivePhotoUrl(
         photosSesudah[0]?.fileUrl || photosSesudah[0]?.dataUrl || '',
         {
@@ -668,10 +680,12 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
       );
 
+      console.log('[REALISASI_PHOTO_DEBUG] Foto Sesudah result URL:', finalSesUrl || '(EMPTY)');
+
       // Validate Foto Sesudah upload
-      if (photosSesudah.length > 0 && !finalSesUrl) {
+      if (!isValidPhotoUrl(finalSesUrl)) {
         setIsProcessing(false);
-        showToast('Foto sesudah belum berhasil diunggah ke Google Drive. Silakan periksa koneksi internet Anda dan coba lagi.', 'error');
+        showToast('Foto Sesudah belum berhasil diunggah ke Google Drive. Silakan periksa koneksi internet Anda dan coba lagi.', 'error');
         return;
       }
 
@@ -687,8 +701,8 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           penyulangName: selectedWO.penyulangName,
           noTiang,
           tanggalRealisasi,
-          fotoSebelumUrl: finalSebUrl || initialData.fotoSebelumUrl || '',
-          fotoSesudahUrl: finalSesUrl || initialData.fotoSesudahUrl || '',
+          fotoSebelumUrl: finalSebUrl,
+          fotoSesudahUrl: finalSesUrl,
           photosSebelum,
           photosSesudah,
           petugasName,
@@ -704,14 +718,19 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         showToast('Perubahan Realisasi berhasil disimpan.', 'success');
         if (onSuccess) onSuccess();
       } else {
-        if (!finalSebUrl) {
+        if (!isValidPhotoUrl(finalSebUrl) || !isValidPhotoUrl(finalSesUrl)) {
           setIsProcessing(false);
-          showToast('Foto sebelum belum berhasil diunggah. Pastikan Google Apps Script / Drive terhubung dan coba lagi.', 'error');
+          showToast('Kedua foto (Sebelum & Sesudah) wajib berhasil diunggah ke Google Drive sebelum menyimpan.', 'error');
           return;
         }
 
         const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
         const activeUnitId = selectedWO.unitId || currentUser?.unitId || InisiasiService.getSelectedUnitId() || activeInisiasi.id;
+
+        console.log('[REALISASI_PHOTO_DEBUG] Calling addRealisasi with valid URLs:', {
+          finalSebUrl,
+          finalSesUrl,
+        });
 
         await addRealisasi({
           workOrderId: resolvedWoId,

@@ -35,7 +35,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
-import { formatDriveImageUrl, ensureGoogleDrivePhotoUrl, isBase64Image } from '../utils/driveUtils';
+import { formatDriveImageUrl, ensureGoogleDrivePhotoUrl, isBase64Image, isValidPhotoUrl } from '../utils/driveUtils';
 import { extractExifFromPhoto, ExifPhotoMetadata } from '../utils/exifReader';
 import { GASApiService } from '../services/gasApiService';
 import { RekapHarianService, UL_PRESETS, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
@@ -457,7 +457,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         photoType: 'Realisasi_Sebelum',
       });
 
-      if (fotoSebelumUrl.trim() && isBase64Image(fotoSebelumUrl.trim()) && !finalSebUrl) {
+      if (fotoSebelumUrl.trim() && isBase64Image(fotoSebelumUrl.trim()) && !isValidPhotoUrl(finalSebUrl)) {
         setErrorMessage('Foto sebelum belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
         setIsSubmitting(false);
         return;
@@ -469,7 +469,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         photoType: 'Realisasi_Sesudah',
       });
 
-      if (fotoSesudahUrl.trim() && isBase64Image(fotoSesudahUrl.trim()) && !finalSesUrl) {
+      if (fotoSesudahUrl.trim() && isBase64Image(fotoSesudahUrl.trim()) && !isValidPhotoUrl(finalSesUrl)) {
         setErrorMessage('Foto sesudah belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
         setIsSubmitting(false);
         return;
@@ -498,8 +498,10 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         lokasiKerja: lokasiKerja.trim(),
         latitude: latNum,
         longitude: lngNum,
-        fotoSebelumUrl: finalSebUrl,
-        fotoSesudahUrl: finalSesUrl,
+        Foto_Sebelum: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : undefined,
+        Foto_Sesudah: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : undefined,
+        fotoSebelumUrl: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : '',
+        fotoSesudahUrl: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : '',
         photosSebelum: fotoSebelumUrl
           ? [
               {

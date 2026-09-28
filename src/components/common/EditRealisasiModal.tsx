@@ -29,7 +29,7 @@ import { useWorkOrders } from '../../context/WorkOrderContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useToast } from '../../hooks/useToast';
 import { generateWatermarkedImage } from '../../utils/watermark';
-import { formatDriveViewUrl, formatDriveImageUrl, ensureGoogleDrivePhotoUrl } from '../../utils/driveUtils';
+import { formatDriveViewUrl, formatDriveImageUrl, ensureGoogleDrivePhotoUrl, isValidPhotoUrl } from '../../utils/driveUtils';
 import { GASApiService } from '../../services/gasApiService';
 import { ImagePreviewModal } from './ImagePreviewModal';
 
@@ -306,14 +306,14 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
           reguName: reguName.trim(),
           photoType: 'Realisasi_Sebelum',
         });
-        if (!finalSebUrl) {
+        if (!isValidPhotoUrl(finalSebUrl)) {
           setErrorMsg('Foto sebelum baru belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
           setIsSubmitting(false);
           return;
         }
-      } else if (!finalSebUrl && realisasi.fotoSebelumUrl) {
+      } else if (!isValidPhotoUrl(finalSebUrl) && isValidPhotoUrl(realisasi.fotoSebelumUrl)) {
         // Retain previous photo if not explicitly replaced
-        finalSebUrl = realisasi.fotoSebelumUrl;
+        finalSebUrl = realisasi.fotoSebelumUrl || '';
       }
 
       let finalSesUrl = fotoSesudahUrl.trim();
@@ -323,14 +323,14 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
           reguName: reguName.trim(),
           photoType: 'Realisasi_Sesudah',
         });
-        if (!finalSesUrl) {
+        if (!isValidPhotoUrl(finalSesUrl)) {
           setErrorMsg('Foto sesudah baru belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
           setIsSubmitting(false);
           return;
         }
-      } else if (!finalSesUrl && realisasi.fotoSesudahUrl) {
+      } else if (!isValidPhotoUrl(finalSesUrl) && isValidPhotoUrl(realisasi.fotoSesudahUrl)) {
         // Retain previous photo if not explicitly replaced
-        finalSesUrl = realisasi.fotoSesudahUrl;
+        finalSesUrl = realisasi.fotoSesudahUrl || '';
       }
 
       const updatePayload = {
@@ -353,10 +353,10 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
         pertumbuhanTanaman: pertumbuhanTanaman.trim(),
         kendala: kendala.trim(),
         lokasiKerja: lokasiKerja.trim(),
-        Foto_Sebelum: finalSebUrl || undefined,
-        Foto_Sesudah: finalSesUrl || undefined,
-        fotoSebelumUrl: finalSebUrl,
-        fotoSesudahUrl: finalSesUrl,
+        Foto_Sebelum: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : undefined,
+        Foto_Sesudah: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : undefined,
+        fotoSebelumUrl: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : '',
+        fotoSesudahUrl: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : '',
       };
 
       const res = await updateRealisasiAdmin(realisasi.id, updatePayload);

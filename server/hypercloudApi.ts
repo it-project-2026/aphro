@@ -2140,6 +2140,14 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
     const fotoSebVal = (r.Foto_Sebelum || r.fotoSebelum || r.fotoSebelumUrl || '').toString().trim();
     const fotoSesVal = (r.Foto_Sesudah || r.fotoSesudah || r.fotoSesudahUrl || '').toString().trim();
 
+    console.log('[REALISASI_PHOTO_DEBUG] backend upsert received:', {
+      id,
+      unitId: r.unitId || 'UL1',
+      nomorWO: r.Nomor_WO || r.nomorWO || '',
+      Foto_Sebelum: fotoSebVal ? (fotoSebVal.startsWith('http') ? fotoSebVal : `len:${fotoSebVal.length}`) : '(empty)',
+      Foto_Sesudah: fotoSesVal ? (fotoSesVal.startsWith('http') ? fotoSesVal : `len:${fotoSesVal.length}`) : '(empty)',
+    });
+
     const params = [
       id,
       r.unitId || 'UL1',
