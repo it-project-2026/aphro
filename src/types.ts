@@ -146,6 +146,10 @@ export interface Realisasi {
   photosSesudah: WatermarkedPhoto[];
   fotoSebelumUrl?: string;
   fotoSesudahUrl?: string;
+  Foto_Sebelum?: string;
+  Foto_Sesudah?: string;
+  fotoSebelum?: string;
+  fotoSesudah?: string;
   createdAt: string;
   isSynced?: boolean;
   syncId?: string;

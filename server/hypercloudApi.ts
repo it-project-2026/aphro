@@ -107,6 +107,29 @@ function assertUnitWriteAccess(req: Request, targetUnitId: string): string | nul
 }
 
 /**
+ * Universal photo URL validator on server side
+ */
+function isValidPhotoUrlServer(val: any): boolean {
+  if (!val || typeof val !== 'string') return false;
+  const trimmed = val.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    trimmed === '' ||
+    lower === 'n/a' ||
+    lower === 'null' ||
+    lower === 'undefined' ||
+    lower === '-' ||
+    lower === '""' ||
+    lower === "''" ||
+    trimmed.startsWith('data:image') ||
+    (trimmed.length > 500 && !trimmed.startsWith('http'))
+  ) {
+    return false;
+  }
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+}
+
+/**
  * Safely converts empty strings, null, undefined, or 'null'/'undefined' to null
  * so PostgreSQL DATE/TIMESTAMP columns don't fail with "invalid input syntax for type timestamp: \"\""
  */
@@ -2282,6 +2305,23 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
 
     const fotoSebVal = (r.Foto_Sebelum || r.fotoSebelum || r.fotoSebelumUrl || '').toString().trim();
     const fotoSesVal = (r.Foto_Sesudah || r.fotoSesudah || r.fotoSesudahUrl || '').toString().trim();
+
+    // STRICT VALIDATION FOR NORMAL PETUGAS REALISASI CREATE (POST)
+    // Both Foto Sebelum and Foto Sesudah must be valid URLs before saving
+    const isManualAdmin = Boolean(r.isManualAdmin || r.bypassPhotoValidation);
+    if (req.method === 'POST' && !isManualAdmin && !req.params.id) {
+      const isSebValid = isValidPhotoUrlServer(fotoSebVal);
+      const isSesValid = isValidPhotoUrlServer(fotoSesVal);
+
+      if (!isSebValid || !isSesValid) {
+        console.log(`[REALISASI_PHOTO_DEBUG] POST rejected by backend - missing/invalid photo URLs: beforeValid=${isSebValid}, afterValid=${isSesValid}`);
+        return res.status(400).json({
+          status: 'error',
+          error: 'INVALID_OR_MISSING_PHOTOS',
+          message: 'Foto Sebelum dan Foto Sesudah wajib tersedia sebelum Realisasi disimpan.',
+        });
+      }
+    }
 
     console.log('[REALISASI_PHOTO_DEBUG] backend upsert received:', {
       id,

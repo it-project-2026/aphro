@@ -353,10 +353,10 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
         pertumbuhanTanaman: pertumbuhanTanaman.trim(),
         kendala: kendala.trim(),
         lokasiKerja: lokasiKerja.trim(),
-        Foto_Sebelum: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : undefined,
-        Foto_Sesudah: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : undefined,
-        fotoSebelumUrl: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : '',
-        fotoSesudahUrl: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : '',
+        Foto_Sebelum: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : (isValidPhotoUrl(realisasi.fotoSebelumUrl) ? realisasi.fotoSebelumUrl : undefined),
+        Foto_Sesudah: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : (isValidPhotoUrl(realisasi.fotoSesudahUrl) ? realisasi.fotoSesudahUrl : undefined),
+        fotoSebelumUrl: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : (isValidPhotoUrl(realisasi.fotoSebelumUrl) ? realisasi.fotoSebelumUrl : ''),
+        fotoSesudahUrl: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : (isValidPhotoUrl(realisasi.fotoSesudahUrl) ? realisasi.fotoSesudahUrl : ''),
       };
 
       const res = await updateRealisasiAdmin(realisasi.id, updatePayload);

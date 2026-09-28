@@ -467,11 +467,13 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         };
 
         if (type === 'sebelum') {
+          console.log('[REALISASI_PHOTO_DEBUG] BEFORE_CAPTURE', { slotIndex, size: file.size, name: file.name });
           setPhotosSebelum((prev) => [
             ...prev.filter((p) => p.slotIndex !== slotIndex),
             photoObj,
           ]);
         } else {
+          console.log('[REALISASI_PHOTO_DEBUG] AFTER_CAPTURE', { slotIndex, size: file.size, name: file.name });
           setPhotosSesudah((prev) => [
             ...prev.filter((p) => p.slotIndex !== slotIndex),
             photoObj,
@@ -644,7 +646,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     );
 
     try {
-      console.log('[REALISASI_PHOTO_DEBUG] Starting upload for Before photo...');
+      console.log('[REALISASI_PHOTO_DEBUG] BEFORE_UPLOAD_START');
       const finalSebUrl = await ensureGoogleDrivePhotoUrl(
         photosSebelum[0]?.fileUrl || photosSebelum[0]?.dataUrl || '',
         {
@@ -654,16 +656,16 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
       );
 
-      console.log('[REALISASI_PHOTO_DEBUG] Foto Sebelum result URL:', finalSebUrl || '(EMPTY)');
-
       // Validate Foto Sebelum upload
       if (!isValidPhotoUrl(finalSebUrl)) {
+        console.warn('[REALISASI_PHOTO_DEBUG] BEFORE_UPLOAD_FAILED');
         setIsProcessing(false);
-        showToast('Foto Sebelum belum berhasil diunggah ke Google Drive. Silakan periksa koneksi internet Anda dan coba lagi.', 'error');
+        showToast('Foto Sebelum belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
         return;
       }
+      console.log('[REALISASI_PHOTO_DEBUG] BEFORE_UPLOAD_SUCCESS');
 
-      console.log('[REALISASI_PHOTO_DEBUG] Starting upload for After photo...');
+      console.log('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_START');
       const finalSesUrl = await ensureGoogleDrivePhotoUrl(
         photosSesudah[0]?.fileUrl || photosSesudah[0]?.dataUrl || '',
         {
@@ -673,12 +675,31 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
       );
 
-      console.log('[REALISASI_PHOTO_DEBUG] Foto Sesudah result URL:', finalSesUrl || '(EMPTY)');
-
       // Validate Foto Sesudah upload
       if (!isValidPhotoUrl(finalSesUrl)) {
+        console.warn('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_FAILED');
         setIsProcessing(false);
-        showToast('Foto Sesudah belum berhasil diunggah ke Google Drive. Silakan periksa koneksi internet Anda dan coba lagi.', 'error');
+        showToast('Foto Sesudah belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
+        return;
+      }
+      console.log('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_SUCCESS');
+
+      console.log('[REALISASI_PHOTO_DEBUG] FINAL_PHOTO_VALIDATION', {
+        beforeValid: isValidPhotoUrl(finalSebUrl),
+        afterValid: isValidPhotoUrl(finalSesUrl),
+        beforeUrlPresent: Boolean(finalSebUrl),
+        afterUrlPresent: Boolean(finalSesUrl),
+      });
+
+      if (!isValidPhotoUrl(finalSebUrl)) {
+        setIsProcessing(false);
+        showToast('Foto Sebelum belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
+        return;
+      }
+
+      if (!isValidPhotoUrl(finalSesUrl)) {
+        setIsProcessing(false);
+        showToast('Foto Sesudah belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
         return;
       }
 
@@ -711,12 +732,6 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         showToast('Perubahan Realisasi berhasil disimpan.', 'success');
         if (onSuccess) onSuccess();
       } else {
-        if (!isValidPhotoUrl(finalSebUrl) || !isValidPhotoUrl(finalSesUrl)) {
-          setIsProcessing(false);
-          showToast('Kedua foto (Sebelum & Sesudah) wajib berhasil diunggah ke Google Drive sebelum menyimpan.', 'error');
-          return;
-        }
-
         const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
         const activeUnitId = selectedWO.unitId || currentUser?.unitId || InisiasiService.getSelectedUnitId() || activeInisiasi.id;
 

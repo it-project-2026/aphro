@@ -10,7 +10,7 @@ import { GASApiService } from '../services/gasApiService';
 import { dexieDb, LocalRealisasi, LocalPhoto } from '../services/dexieDb';
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
-import { ensureGoogleDrivePhotoUrl, isBase64Image } from '../utils/driveUtils';
+import { ensureGoogleDrivePhotoUrl, isBase64Image, isValidPhotoUrl } from '../utils/driveUtils';
 import { auditRealisasiMutation } from '../utils/integrityLogger';
 
 export interface RealisasiContextType {
@@ -903,8 +903,8 @@ export function RealisasiProvider({
         const fotoSebDrive =
           await ensureGoogleDrivePhotoUrl(
             relData.fotoSebelumUrl ||
-              relData.photosSebelum?.[0]
-                ?.dataUrl,
+              relData.photosSebelum?.[0]?.fileUrl ||
+              relData.photosSebelum?.[0]?.dataUrl,
             {
               nomorWO:
                 relData.nomorWO,
@@ -921,8 +921,8 @@ export function RealisasiProvider({
         const fotoSesDrive =
           await ensureGoogleDrivePhotoUrl(
             relData.fotoSesudahUrl ||
-              relData.photosSesudah?.[0]
-                ?.dataUrl,
+              relData.photosSesudah?.[0]?.fileUrl ||
+              relData.photosSesudah?.[0]?.dataUrl,
             {
               nomorWO:
                 relData.nomorWO,
@@ -935,6 +935,14 @@ export function RealisasiProvider({
                 'Realisasi_Sesudah',
             }
           );
+
+        const finalFotoSebelum = isValidPhotoUrl(fotoSebDrive)
+          ? fotoSebDrive
+          : (isValidPhotoUrl(relData.fotoSebelumUrl) ? String(relData.fotoSebelumUrl).trim() : '');
+
+        const finalFotoSesudah = isValidPhotoUrl(fotoSesDrive)
+          ? fotoSesDrive
+          : (isValidPhotoUrl(relData.fotoSesudahUrl) ? String(relData.fotoSesudahUrl).trim() : '');
 
         const resolvedAdminWoId = (
           relData.WO_ID ||
@@ -1075,27 +1083,17 @@ export function RealisasiProvider({
               relData.photosSesudah ||
               [],
 
+            Foto_Sebelum:
+              finalFotoSebelum,
+
+            Foto_Sesudah:
+              finalFotoSesudah,
+
             fotoSebelumUrl:
-              fotoSebDrive ||
-              (
-                isBase64Image(
-                  relData.fotoSebelumUrl
-                )
-                  ? ''
-                  : relData.fotoSebelumUrl ||
-                    ''
-              ),
+              finalFotoSebelum,
 
             fotoSesudahUrl:
-              fotoSesDrive ||
-              (
-                isBase64Image(
-                  relData.fotoSesudahUrl
-                )
-                  ? ''
-                  : relData.fotoSesudahUrl ||
-                    ''
-              ),
+              finalFotoSesudah,
 
             createdAt:
               relData.createdAt ||
