@@ -2414,21 +2414,25 @@ const handleUpdateRealisasi = async (req: Request, res: Response) => {
 
     // 2. Unit isolation & authorization check
     const recordUnit = String(existingRecord.unitId || '').toUpperCase();
-    const userUnit = String(req.query.unitId || authUser?.unitId || r.unitId || '').toUpperCase();
+    const userUnit = String(authUser?.unitId || '').toUpperCase();
 
-    if (!isPrivileged && userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
-      console.warn(`[REALISASI API] UPDATE FAILED ID=${id} reason=FORBIDDEN_UNIT_ACCESS recordUnit=${recordUnit} userUnit=${userUnit}`);
-      logApiRoute('PUT', `/api/realisasi/${id}`, 403);
-      return res.status(403).json({
-        success: false,
-        status: 'error',
-        error: 'FORBIDDEN',
-        message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat diubah oleh unit ${userUnit}.`,
-      });
+    if (!isPrivileged) {
+      if (userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
+        console.warn(`[REALISASI API] UPDATE FAILED ID=${id} reason=FORBIDDEN_UNIT_ACCESS recordUnit=${recordUnit} userUnit=${userUnit}`);
+        logApiRoute('PUT', `/api/realisasi/${id}`, 403);
+        return res.status(403).json({
+          success: false,
+          status: 'error',
+          code: 'FORBIDDEN',
+          error: 'FORBIDDEN',
+          message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat diubah oleh unit ${userUnit}.`,
+        });
+      }
     }
 
     // 3. Extract updated fields (safe merge preserving existing values)
-    const updatedUnitId = r.unitId ? String(r.unitId).trim().toUpperCase() : existingRecord.unitId;
+    // For non-privileged users, maintain existing record unitId or JWT unitId, ignoring untrusted body unitId
+    const updatedUnitId = isPrivileged && r.unitId ? String(r.unitId).trim().toUpperCase() : (existingRecord.unitId || userUnit || 'UL1');
     const updatedWoId = r.WO_ID || r.woId || r.workOrderId || existingRecord.WO_ID || '';
     const updatedNomorWo = r.Nomor_WO || r.nomorWO || existingRecord.Nomor_WO || '';
     const updatedUlp = r.ULP || r.ulpName || existingRecord.ULP || '';
@@ -2661,22 +2665,11 @@ const handleDeleteRealisasi = async (req: Request, res: Response) => {
  * REALISASI ROUTE BINDINGS
  */
 router.get('/realisasi', requireAuth, handleGetRealisasiList);
-router.get('/api/realisasi', requireAuth, handleGetRealisasiList);
-
 router.get('/realisasi/:id', requireAuth, handleGetRealisasiById);
-router.get('/api/realisasi/:id', requireAuth, handleGetRealisasiById);
-
 router.post('/realisasi', requireAuth, handleUpsertRealisasi);
-router.post('/api/realisasi', requireAuth, handleUpsertRealisasi);
-
 router.put('/realisasi/:id', requireAuth, handleUpdateRealisasi);
-router.put('/api/realisasi/:id', requireAuth, handleUpdateRealisasi);
-
 router.patch('/realisasi/:id', requireAuth, handleUpdateRealisasi);
-router.patch('/api/realisasi/:id', requireAuth, handleUpdateRealisasi);
-
 router.delete('/realisasi/:id', requireAuth, handleDeleteRealisasi);
-router.delete('/api/realisasi/:id', requireAuth, handleDeleteRealisasi);
 
 // ==========================================
 // 6. ABSENSI
