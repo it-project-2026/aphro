@@ -179,6 +179,8 @@ class OfflineSyncQueueEngine {
         .equals('PENDING')
         .or('status')
         .equals('FAILED')
+        .or('status')
+        .equals('FAILED_ENDPOINT_NOT_FOUND')
         .toArray();
 
       if (pendingItems.length === 0) {
@@ -402,10 +404,11 @@ class OfflineSyncQueueEngine {
         }
       } else if (item.tableName === 'ABSENSI') {
         let serverResult;
+        const absId = item.payload?.id || item.payload?.ID || (typeof item.payload === 'string' ? item.payload : (item as any).id);
         if (item.type === 'DELETE') {
-          serverResult = await ApiService.deleteAbsensi(item.payload?.id || item.payload);
+          serverResult = await ApiService.deleteAbsensi(absId);
         } else if (item.type === 'UPDATE') {
-          serverResult = await ApiService.updateAbsensi(item.payload?.id, item.payload);
+          serverResult = await ApiService.updateAbsensi(absId, item.payload);
         } else {
           serverResult = await ApiService.saveAbsensi(item.payload);
         }

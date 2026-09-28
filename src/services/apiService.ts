@@ -1434,14 +1434,16 @@ export class ApiService {
 
       if (!res.ok) {
         let serverMsg: string | undefined;
+        let serverError: string | undefined;
         try {
           const errJson = await res.json();
           serverMsg = errJson?.message;
+          serverError = errJson?.error || errJson?.code;
         } catch {
           // ignore
         }
 
-        const errReason = ApiService.classifyErrorReason(res.status);
+        const errReason = ApiService.classifyErrorReason(res.status, serverError || serverMsg);
         console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'} record kept as PENDING`);
         return {
           success: false,

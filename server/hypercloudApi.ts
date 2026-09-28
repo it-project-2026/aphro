@@ -2595,7 +2595,242 @@ router.get('/absensi', requireAuth, async (req: Request, res: Response) => {
 });
 
 /**
- * Helper for POST/PUT Absensi (Upsert)
+ * GET /api/absensi/:id
+ */
+router.get('/absensi/:id', requireAuth, async (req: Request, res: Response) => {
+  const id = req.params.id;
+  await ensureAbsensiSchema();
+  const { unitId, isAll } = parseUnitFilter(req);
+  logApiCall('GET', `/api/absensi/${id}`);
+
+  try {
+    let sql = `SELECT * FROM public."ABSENSI" WHERE "ID" = $1`;
+    const params: any[] = [id];
+
+    if (!isAll && unitId) {
+      params.push(unitId);
+      sql += ` AND (UPPER("unitId") = UPPER($${params.length}) OR "unitId" IS NULL OR "unitId" = '')`;
+    }
+
+    const resDb = await query(sql, params);
+
+    if (resDb.rowCount === 0) {
+      logApiRoute('GET', `/api/absensi/${id}`, 404);
+      return res.status(404).json({
+        success: false,
+        status: 'error',
+        code: 'ABSENSI_NOT_FOUND',
+        error: 'ABSENSI_NOT_FOUND',
+        message: `Data absensi dengan ID ${id} tidak ditemukan.`,
+      });
+    }
+
+    logApiRoute('GET', `/api/absensi/${id}`, 200);
+    return res.json({
+      status: 'success',
+      success: true,
+      data: resDb.rows[0],
+    });
+  } catch (err: any) {
+    logApiRoute('GET', `/api/absensi/${id}`, 500);
+    return res.status(500).json({
+      success: false,
+      status: 'error',
+      message: err.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/absensi/:id
+ * Dedicated endpoint for updating attendance records
+ */
+const handleUpdateAbsensi = async (req: Request, res: Response) => {
+  const id = req.params.id;
+  await ensureAbsensiSchema();
+  logApiCall('PUT', `/api/absensi/${id}`, req.body);
+  const a = req.body || {};
+
+  try {
+    // 1. Check if record exists in public."ABSENSI"
+    const check = await query(
+      `SELECT * FROM public."ABSENSI" WHERE "ID" = $1`,
+      [id]
+    );
+
+    let existingRecord = check.rows[0];
+
+    // If not found by exact ID, try checking by (TANGGAL + REGU)
+    if (!existingRecord) {
+      const tanggalVal = toNullableTimestamp(a.TANGGAL || a.tanggal || a.Tanggal);
+      const reguNameVal = a.NAMA_REGU || a.namaRegu || a.reguName || a.Regu || '';
+      if (tanggalVal && reguNameVal) {
+        const altCheck = await query(
+          `SELECT * FROM public."ABSENSI" WHERE "TANGGAL"::text LIKE $1 AND "NAMA_REGU" ILIKE $2 ORDER BY "ID" DESC LIMIT 1`,
+          [`${tanggalVal.slice(0, 10)}%`, `%${reguNameVal}%`]
+        );
+        if (altCheck.rowCount && altCheck.rowCount > 0) {
+          existingRecord = altCheck.rows[0];
+        }
+      }
+    }
+
+    if (!existingRecord) {
+      logApiRoute('PUT', `/api/absensi/${id}`, 404);
+      return res.status(404).json({
+        success: false,
+        status: 'error',
+        code: 'ABSENSI_NOT_FOUND',
+        error: 'ABSENSI_NOT_FOUND',
+        message: `Data Absensi dengan ID ${id} tidak ditemukan.`,
+      });
+    }
+
+    // 2. Unit isolation & authorization check
+    const recordUnit = String(existingRecord.unitId || '').toUpperCase();
+    const userUnit = String(req.query.unitId || (req as any).user?.unitId || a.unitId || '').toUpperCase();
+    const userRole = String((req as any).user?.role || req.query.role || '').toUpperCase();
+    const isPrivileged = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADM' || userUnit === 'ALL';
+
+    if (!isPrivileged && userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
+      logApiRoute('PUT', `/api/absensi/${id}`, 403);
+      return res.status(403).json({
+        success: false,
+        status: 'error',
+        error: 'FORBIDDEN',
+        message: `Akses ditolak: Absensi ini milik unit ${recordUnit}, tidak dapat diubah oleh unit ${userUnit}.`,
+      });
+    }
+
+    // 3. Extract updated fields with safe merge (do not erase existing non-updated fields)
+    if (Array.isArray(a.petugasList)) {
+      a.petugas1 = a.petugasList[0]?.nama !== undefined ? a.petugasList[0].nama : existingRecord.PETUGAS_1;
+      a.ket1 = a.petugasList[0]?.keterangan !== undefined ? a.petugasList[0].keterangan : existingRecord.KET_1;
+      a.petugas2 = a.petugasList[1]?.nama !== undefined ? a.petugasList[1].nama : existingRecord.PETUGAS_2;
+      a.ket2 = a.petugasList[1]?.keterangan !== undefined ? a.petugasList[1].keterangan : existingRecord.KET_2;
+      a.petugas3 = a.petugasList[2]?.nama !== undefined ? a.petugasList[2].nama : existingRecord.PETUGAS_3;
+      a.ket3 = a.petugasList[2]?.keterangan !== undefined ? a.petugasList[2].keterangan : existingRecord.KET_3;
+      a.petugas4 = a.petugasList[3]?.nama !== undefined ? a.petugasList[3].nama : existingRecord.PETUGAS_4;
+      a.ket4 = a.petugasList[3]?.keterangan !== undefined ? a.petugasList[3].keterangan : existingRecord.KET_4;
+      a.petugas5 = a.petugasList[4]?.nama !== undefined ? a.petugasList[4].nama : existingRecord.PETUGAS_5;
+      a.ket5 = a.petugasList[4]?.keterangan !== undefined ? a.petugasList[4].keterangan : existingRecord.KET_5;
+    }
+
+    const updatedUnitId = a.unitId || existingRecord.unitId || 'UL2';
+    const updatedTanggal = toNullableTimestamp(a.TANGGAL || a.tanggal || a.Tanggal) || existingRecord.TANGGAL;
+    const updatedRegu = a.NAMA_REGU || a.namaRegu || a.reguName || existingRecord.NAMA_REGU || '';
+    const updatedUlp = a.ULP || a.ulpName || a.namaUlp || existingRecord.ULP || '';
+    const updatedPenyulang = a.PENYULANG || a.penyulangName || a.namaPenyulang || existingRecord.PENYULANG || '';
+    const updatedUserName = a.USER_NAME || a.userName || a.username || existingRecord.USER_NAME || '';
+    const updatedNamaPetugas = a.NAMA_PETUGAS || a.namaPetugas || a.petugasName || existingRecord.NAMA_PETUGAS || '';
+    const updatedNip = a.NIP || a.nip || existingRecord.NIP || '';
+
+    const updatedPetugas1 = a.PETUGAS_1 !== undefined ? a.PETUGAS_1 : (a.petugas1 !== undefined ? a.petugas1 : existingRecord.PETUGAS_1);
+    const updatedKet1 = a.KET_1 !== undefined ? a.KET_1 : (a.ket1 !== undefined ? a.ket1 : existingRecord.KET_1);
+    const updatedPetugas2 = a.PETUGAS_2 !== undefined ? a.PETUGAS_2 : (a.petugas2 !== undefined ? a.petugas2 : existingRecord.PETUGAS_2);
+    const updatedKet2 = a.KET_2 !== undefined ? a.KET_2 : (a.ket2 !== undefined ? a.ket2 : existingRecord.KET_2);
+    const updatedPetugas3 = a.PETUGAS_3 !== undefined ? a.PETUGAS_3 : (a.petugas3 !== undefined ? a.petugas3 : existingRecord.PETUGAS_3);
+    const updatedKet3 = a.KET_3 !== undefined ? a.KET_3 : (a.ket3 !== undefined ? a.ket3 : existingRecord.KET_3);
+    const updatedPetugas4 = a.PETUGAS_4 !== undefined ? a.PETUGAS_4 : (a.petugas4 !== undefined ? a.petugas4 : existingRecord.PETUGAS_4);
+    const updatedKet4 = a.KET_4 !== undefined ? a.KET_4 : (a.ket4 !== undefined ? a.ket4 : existingRecord.KET_4);
+    const updatedPetugas5 = a.PETUGAS_5 !== undefined ? a.PETUGAS_5 : (a.petugas5 !== undefined ? a.petugas5 : existingRecord.PETUGAS_5);
+    const updatedKet5 = a.KET_5 !== undefined ? a.KET_5 : (a.ket5 !== undefined ? a.ket5 : existingRecord.KET_5);
+
+    // Photos and timestamps
+    const rawFotoMasuk = a.FOTO_MASUK !== undefined ? a.FOTO_MASUK : (a.fotoMasuk !== undefined ? a.fotoMasuk : existingRecord.FOTO_MASUK);
+    const updatedFotoMasuk = rawFotoMasuk ? String(rawFotoMasuk).trim() : (existingRecord.FOTO_MASUK || '');
+    const updatedTimestampMasuk = toNullableTimestamp(a['TIMESTAMP MASUK'] || a.timestampMasuk || a.waktuMasuk || a.createdAt) || existingRecord['TIMESTAMP MASUK'];
+
+    const rawFotoKeluar = a.FOTO_KELUAR !== undefined ? a.FOTO_KELUAR : (a.fotoKeluar !== undefined ? a.fotoKeluar : existingRecord.FOTO_KELUAR);
+    const updatedFotoKeluar = rawFotoKeluar ? String(rawFotoKeluar).trim() : (existingRecord.FOTO_KELUAR || '');
+    const updatedTimestampKeluar = toNullableTimestamp(a['TIMESTAMP KELUAR'] || a.timestampKeluar || a.waktuKeluar || a.waktuPulang) || existingRecord['TIMESTAMP KELUAR'];
+
+    const updatedLat = a.LATITUDE !== undefined ? String(a.LATITUDE) : (a.latitude !== undefined ? String(a.latitude) : existingRecord.LATITUDE);
+    const updatedLng = a.LONGITUDE !== undefined ? String(a.LONGITUDE) : (a.longitude !== undefined ? String(a.longitude) : existingRecord.LONGITUDE);
+
+    const updateSql = `
+      UPDATE public."ABSENSI"
+      SET
+        "unitId" = $2,
+        "TANGGAL" = $3,
+        "NAMA_REGU" = $4,
+        "ULP" = $5,
+        "PENYULANG" = $6,
+        "USER_NAME" = $7,
+        "NAMA_PETUGAS" = $8,
+        "NIP" = $9,
+        "PETUGAS_1" = $10,
+        "KET_1" = $11,
+        "PETUGAS_2" = $12,
+        "KET_2" = $13,
+        "PETUGAS_3" = $14,
+        "KET_3" = $15,
+        "PETUGAS_4" = $16,
+        "KET_4" = $17,
+        "PETUGAS_5" = $18,
+        "KET_5" = $19,
+        "FOTO_MASUK" = $20,
+        "TIMESTAMP MASUK" = $21,
+        "FOTO_KELUAR" = $22,
+        "TIMESTAMP KELUAR" = $23,
+        "LATITUDE" = $24,
+        "LONGITUDE" = $25
+      WHERE "ID" = $1
+      RETURNING *;
+    `;
+
+    const updateParams = [
+      existingRecord.ID,
+      updatedUnitId,
+      updatedTanggal,
+      updatedRegu,
+      updatedUlp,
+      updatedPenyulang,
+      updatedUserName,
+      updatedNamaPetugas,
+      updatedNip,
+      updatedPetugas1,
+      updatedKet1,
+      updatedPetugas2,
+      updatedKet2,
+      updatedPetugas3,
+      updatedKet3,
+      updatedPetugas4,
+      updatedKet4,
+      updatedPetugas5,
+      updatedKet5,
+      updatedFotoMasuk,
+      updatedTimestampMasuk,
+      updatedFotoKeluar,
+      updatedTimestampKeluar,
+      updatedLat,
+      updatedLng,
+    ];
+
+    const resDb = await query(updateSql, updateParams);
+
+    logDbOperation('ABSENSI', 'UPDATE', existingRecord.ID, updatedUnitId);
+    logApiRoute('PUT', `/api/absensi/${id}`, 200);
+
+    return res.json({
+      status: 'success',
+      success: true,
+      message: 'Absensi berhasil diperbarui',
+      data: resDb.rows[0],
+    });
+  } catch (err: any) {
+    console.error('[BACKEND ERROR] PUT /api/absensi:', err.message);
+    logApiRoute('PUT', `/api/absensi/${id}`, 500);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Helper for POST Absensi (Upsert)
  */
 const handleUpsertAbsensi = async (req: Request, res: Response) => {
   await ensureAbsensiSchema();
@@ -2795,7 +3030,12 @@ router.post('/absensi', requireAuth, handleUpsertAbsensi);
 /**
  * PUT /api/absensi/:id
  */
-router.put('/absensi/:id', requireAuth, handleUpsertAbsensi);
+router.put('/absensi/:id', requireAuth, handleUpdateAbsensi);
+
+/**
+ * PATCH /api/absensi/:id
+ */
+router.patch('/absensi/:id', requireAuth, handleUpdateAbsensi);
 
 /**
  * DELETE /api/absensi/:id
