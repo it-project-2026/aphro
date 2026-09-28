@@ -60,7 +60,10 @@ export class AuthService {
             userName: String(rawUser.Username || cleanUsername),
             email: `${cleanUsername}@pln.co.id`,
             role: (rawUser.Role || 'User') as UserRole,
-            reguName: String(rawUser.Nama_Regu || rawUser.reguName || ''),
+            reguName: String(rawUser.Nama_Regu || rawUser.reguName || rawUser.groupWO || rawUser.namaGroupWO || rawUser.Regu || ''),
+            groupWO: String(rawUser.Nama_Regu || rawUser.reguName || rawUser.groupWO || rawUser.namaGroupWO || rawUser.Regu || ''),
+            namaGroupWO: String(rawUser.Nama_Regu || rawUser.reguName || rawUser.groupWO || rawUser.namaGroupWO || rawUser.Regu || ''),
+            Nama_Regu: String(rawUser.Nama_Regu || rawUser.reguName || rawUser.groupWO || rawUser.namaGroupWO || rawUser.Regu || ''),
             ulpName: String(rawUser.ULP || rawUser.ulpName || ''),
             status: rawUser.Status || 'Aktif',
           };

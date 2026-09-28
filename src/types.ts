@@ -12,6 +12,9 @@ export interface User {
   role: UserRole;
   reguId?: string;
   reguName?: string;
+  groupWO?: string;
+  namaGroupWO?: string;
+  Nama_Regu?: string;
   ulpId?: string;
   ulpName?: string;
   avatarUrl?: string;

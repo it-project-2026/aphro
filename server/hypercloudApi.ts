@@ -509,11 +509,30 @@ router.post('/login', async (req: Request, res: Response) => {
       `[AUTH] Login successful: '${cleanUsername}'`
     );
 
+    const userRegu = String(
+      matchedUser.Nama_Regu ||
+        matchedUser.reguName ||
+        matchedUser.Group_WO ||
+        matchedUser.groupWO ||
+        matchedUser.Regu ||
+        ''
+    ).trim();
+
+    const userUlp = String(
+      matchedUser.ULP ||
+        matchedUser.ulpName ||
+        ''
+    ).trim();
+
     const token = createJwt({
       userId: String(matchedUser.Id || matchedUser.ID || matchedUser.id || ''),
       username: String(matchedUser.Username || matchedUser.UserID || cleanUsername),
       unitId: String(matchedUser.unitId || cleanUnitId).toUpperCase(),
       role: String(matchedUser.Role || matchedUser.role || 'User'),
+      reguName: userRegu,
+      groupWO: userRegu,
+      namaGroupWO: userRegu,
+      ulpName: userUlp,
     });
 
     return res.json({
@@ -557,15 +576,12 @@ router.post('/login', async (req: Request, res: Response) => {
           matchedUser.role ||
           'User',
 
-        reguName:
-          matchedUser.Nama_Regu ||
-          matchedUser.reguName ||
-          '',
+        reguName: userRegu,
+        groupWO: userRegu,
+        namaGroupWO: userRegu,
+        Nama_Regu: userRegu,
 
-        ulpName:
-          matchedUser.ULP ||
-          matchedUser.ulpName ||
-          '',
+        ulpName: userUlp,
 
         status: userStatus,
       },
@@ -1367,7 +1383,12 @@ router.get('/penyulang', async (req: Request, res: Response) => {
 router.get('/work-orders', requireAuth, async (req: Request, res: Response) => {
   logApiCall('GET', '/api/work-orders', req.query);
 
+  const authUser = (req as any).user;
+  const userRole = String(authUser?.role || '').toUpperCase();
+  const isPrivileged = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADM' || authUser?.unitId === 'ALL';
+
   const { unitId, isAll } = parseUnitFilter(req);
+  const targetUnitId = !isPrivileged ? authUser?.unitId : (unitId || authUser?.unitId);
 
   const nomorWo = (
     req.query.Nomor_WO ||
@@ -1386,12 +1407,65 @@ router.get('/work-orders', requireAuth, async (req: Request, res: Response) => {
 
     const params: any[] = [];
 
-    if (!isAll && unitId) {
-      params.push(unitId);
+    // 1. Unit filter
+    if (!isPrivileged) {
+      if (targetUnitId && targetUnitId !== 'ALL') {
+        params.push(targetUnitId);
+        sql += ` AND "unitId" = $${params.length}`;
+      }
+    } else if (!isAll && targetUnitId) {
+      params.push(targetUnitId);
+      sql += ` AND "unitId" = $${params.length}`;
+    }
 
-      sql += `
-        AND "unitId" = $${params.length}
+    // 2. Group WO filter for Role USER
+    let userRegu = String(authUser?.reguName || authUser?.groupWO || '').trim();
+    if (!isPrivileged && !userRegu) {
+      try {
+        const uRes = await query(
+          `SELECT "Nama_Regu" FROM public."USERS" WHERE "Id" = $1 OR "UserID" = $2 OR "Username" = $2 LIMIT 1`,
+          [authUser?.userId, authUser?.username]
+        );
+        if (uRes.rowCount && uRes.rows[0]?.Nama_Regu) {
+          userRegu = String(uRes.rows[0].Nama_Regu).trim();
+        }
+      } catch (err: any) {
+        console.warn('[AUTH] Error resolving user group for work-orders:', err.message);
+      }
+    }
+
+    if (!isPrivileged) {
+      if (!userRegu) {
+        console.log(`[WO_ACCESS_DEBUG] role=${userRole} userId=${authUser?.userId} unitId=${targetUnitId} groupWO=(NONE) -> Returning empty list`);
+        return res.json({
+          status: 'success',
+          data: [],
+          count: 0,
+          message: 'Group WO user belum dikonfigurasi. Hubungi Admin.',
+        });
+      }
+
+      const cleanRegu = userRegu.replace(/^(regu|tim|petugas)\s+/gi, '').trim();
+      const numMatch = userRegu.match(/\d+/)?.[0];
+
+      params.push(`%${userRegu}%`);
+      const pIdx1 = params.length;
+
+      params.push(`%${cleanRegu}%`);
+      const pIdx2 = params.length;
+
+      let reguClause = ` AND (
+        "Regu_ROW" ILIKE $${pIdx1}
+        OR "Regu_ROW" ILIKE $${pIdx2}
       `;
+
+      if (numMatch) {
+        params.push(`%${numMatch}%`);
+        reguClause += ` OR "Regu_ROW" ~* $${params.length}`;
+      }
+
+      reguClause += `)`;
+      sql += reguClause;
     }
 
     if (nomorWo) {
@@ -1411,6 +1485,8 @@ router.get('/work-orders', requireAuth, async (req: Request, res: Response) => {
     `;
 
     const resDb = await query(sql, params);
+
+    console.log(`[WO_ACCESS_DEBUG] role=${userRole} userId=${authUser?.userId} unitId=${targetUnitId} groupWO=${userRegu || 'ALL'} returnedWorkOrders=${resDb.rows.length}`);
 
     return res.json({
       status: 'success',
@@ -1774,12 +1850,46 @@ router.get('/realisasi', requireAuth, async (req: Request, res: Response) => {
     .toString()
     .trim();
 
+  const authUser = (req as any).user;
+  const userRole = String(authUser?.role || '').toUpperCase();
+  const isPrivileged = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADM' || authUser?.unitId === 'ALL';
+
   try {
     let whereClause = ` WHERE 1=1`;
 
     const params: any[] = [];
 
-    if (!isAll && unitId) {
+    // 1. Unit filter
+    if (!isPrivileged) {
+      const targetUnit = authUser?.unitId || unitId;
+      if (targetUnit && targetUnit !== 'ALL') {
+        params.push(targetUnit);
+        whereClause += ` AND "unitId" = $${params.length}`;
+      }
+
+      // Group WO filter for Role USER
+      let userRegu = String(authUser?.reguName || authUser?.groupWO || '').trim();
+      if (!userRegu) {
+        try {
+          const uRes = await query(
+            `SELECT "Nama_Regu" FROM public."USERS" WHERE "Id" = $1 OR "UserID" = $2 OR "Username" = $2 LIMIT 1`,
+            [authUser?.userId, authUser?.username]
+          );
+          if (uRes.rowCount && uRes.rows[0]?.Nama_Regu) {
+            userRegu = String(uRes.rows[0].Nama_Regu).trim();
+          }
+        } catch {}
+      }
+
+      if (userRegu) {
+        const cleanRegu = userRegu.replace(/^(regu|tim|petugas)\s+/gi, '').trim();
+        params.push(`%${userRegu}%`);
+        const p1 = params.length;
+        params.push(`%${cleanRegu}%`);
+        const p2 = params.length;
+        whereClause += ` AND ("REGU_ROW" ILIKE $${p1} OR "REGU_ROW" ILIKE $${p2})`;
+      }
+    } else if (!isAll && unitId) {
       params.push(unitId);
 
       whereClause += `
@@ -2082,9 +2192,42 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
   logApiCall(req.method, req.path, req.body);
   const r = req.body || {};
   const id = req.params.id || r.ID || r.id || `REL-${Date.now()}`;
-  const targetUnitId = String(r.unitId || (req as any).user?.unitId || '').trim().toUpperCase();
+  const authUser = (req as any).user;
+  const userRole = String(authUser?.role || '').toUpperCase();
+  const isPrivileged = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADM' || authUser?.unitId === 'ALL';
+
+  const targetUnitId = String(r.unitId || authUser?.unitId || '').trim().toUpperCase();
   const accessError = assertUnitWriteAccess(req, targetUnitId);
-  if (accessError) return res.status(403).json({ success: false, status: 'error', error: 'FORBIDDEN_UNIT_ACCESS', message: accessError });
+  if (accessError) {
+    console.log(`[REALISASI_ACCESS_DEBUG] role=${userRole} userId=${authUser?.userId} unitId=${targetUnitId} realisasiId=${id} authorized=false reason=UNIT_ACCESS_DENIED`);
+    return res.status(403).json({ success: false, status: 'error', error: 'FORBIDDEN_UNIT_ACCESS', message: accessError });
+  }
+
+  // Authorization check for Role USER on existing record update
+  if (!isPrivileged && req.params.id) {
+    try {
+      const checkRes = await query(`SELECT "ID", "unitId", "REGU_ROW" FROM public."REALISASI" WHERE "ID" = $1`, [id]);
+      if (checkRes.rowCount && checkRes.rowCount > 0) {
+        const existing = checkRes.rows[0];
+        const recordUnit = String(existing.unitId || '').toUpperCase();
+        const userUnit = String(authUser?.unitId || '').toUpperCase();
+
+        if (userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
+          console.log(`[REALISASI_ACCESS_DEBUG] role=${userRole} userId=${authUser?.userId} unitId=${userUnit} realisasiId=${id} authorized=false reason=DIFFERENT_UNIT`);
+          return res.status(403).json({
+            success: false,
+            status: 'error',
+            error: 'FORBIDDEN',
+            message: `Akses ditolak: Realisasi ini milik unit ${recordUnit}, tidak dapat diubah oleh unit ${userUnit}.`,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.warn('[AUTH] Error verifying existing realisasi access:', err.message);
+    }
+  }
+
+  console.log(`[REALISASI_ACCESS_DEBUG] role=${userRole} userId=${authUser?.userId} unitId=${targetUnitId} realisasiId=${id} authorized=true`);
 
   try {
     const sql = `

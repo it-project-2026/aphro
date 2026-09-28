@@ -174,21 +174,14 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
     if (isMatched) return true;
 
-    if (currentUser.ulpName && wo.ulpName) {
-      const u1 = cleanStr(currentUser.ulpName);
-      const u2 = cleanStr(wo.ulpName);
-      if (u1 && u2 && (u1.includes(u2) || u2.includes(u1))) {
-        return true;
-      }
-    }
-
+    // For regular USER role, do NOT fallback to ULP-only match to prevent leaking other teams' WOs
     return false;
   };
 
   // Available Work Orders
   const availableWorkOrders = React.useMemo(() => {
-    const sourceList =
-      displayedWorkOrders.length > 0 ? displayedWorkOrders : workOrders;
+    // For non-admin user, strictly use displayedWorkOrders filtered by Group WO
+    const sourceList = isUserRole ? displayedWorkOrders : (displayedWorkOrders.length > 0 ? displayedWorkOrders : workOrders);
 
     const result = sourceList.filter((wo) => {
       if (editMode && initialData && wo.id === initialData.workOrderId) {

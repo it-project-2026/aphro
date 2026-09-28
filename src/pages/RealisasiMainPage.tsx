@@ -303,6 +303,31 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     return true;
   }, [currentUser, settings.namaUnitLayanan]);
 
+  const canEditRealisasi = React.useCallback((rel: Realisasi) => {
+    if (!currentUser) return false;
+    
+    // Admin / Management roles can always edit
+    if (isAdminUser || isAdmbktUser) return true;
+
+    // Regular USER role can edit records within their unit & matching group
+    const userUnit = InisiasiService.getStandardUnitId(currentUser.unitId || InisiasiService.getSelectedUnitId());
+    const relUnit = InisiasiService.getStandardUnitId(rel.unitId);
+    
+    if (userUnit && relUnit && userUnit !== relUnit) {
+      return false;
+    }
+
+    const wo = workOrdersMap[rel.workOrderId];
+    const userRegu = currentUser.reguName || currentUser.groupWO || currentUser.namaGroupWO || currentUser.Nama_Regu;
+    const relRegu = rel.reguName || wo?.reguName;
+
+    if (userRegu && relRegu) {
+      return matchesReguHelper(relRegu, userRegu);
+    }
+
+    return true;
+  }, [currentUser, isAdminUser, isAdmbktUser, workOrdersMap]);
+
   // Available WO Numbers list for dropdown filter
   const availableWONumbers = useMemo(() => {
     const woSet = new Set<string>();
@@ -1192,11 +1217,11 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                             </td>
                              <td className="p-2 border border-slate-100 dark:border-slate-800">
                               <div className="flex items-center justify-center gap-1.5">
-                                {isAdmbktUser && (
+                                {canEditRealisasi(rel) && (
                                   <button
                                     onClick={() => handleEditRealisasi(rel)}
                                     className="p-1.5 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
-                                    title="Edit Realisasi (Admin/Adm)"
+                                    title="Edit Realisasi"
                                   >
                                     <Edit className="w-3.5 h-3.5" />
                                   </button>
@@ -1319,6 +1344,19 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
         realisasi={selectedForEditModal}
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
+        onSuccess={() => {
+          if (filterNomorWO && filterNomorWO.trim()) {
+            fetchRealisasiFromApi({
+              page,
+              limit,
+              tanggalDari,
+              tanggalSampai,
+              ULP: ulpFilter,
+              Nomor_WO: filterNomorWO.trim(),
+            });
+          }
+          refreshRealisasi();
+        }}
       />
     </div>
   );
