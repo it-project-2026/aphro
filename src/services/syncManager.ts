@@ -321,6 +321,12 @@ export class SyncManager {
    * Directly fetches all application data from HyperCloud PostgreSQL database
    */
   public async syncAllRequired(force = false): Promise<Record<string, any[]>> {
+    const token = ApiService.getAuthToken();
+    if (!token) {
+      console.log('[SyncManager] syncAllRequired aborted: JWT token missing.');
+      return {};
+    }
+
     this.notifyListeners({ type: 'SYNC_STATUS_CHANGED', status: 'SYNCHRONIZING' });
 
     const result: Record<string, any[]> = {};
@@ -519,6 +525,12 @@ export class SyncManager {
    */
   public async processPendingOperations(): Promise<{ successCount: number; failCount: number; totalCount: number }> {
     if (this.isProcessingQueue || typeof window === 'undefined' || !navigator.onLine) {
+      return { successCount: 0, failCount: 0, totalCount: 0 };
+    }
+
+    const token = ApiService.getAuthToken();
+    if (!token) {
+      console.log('[SyncManager] JWT token missing. Skipping pending operations queue.');
       return { successCount: 0, failCount: 0, totalCount: 0 };
     }
 
@@ -886,6 +898,10 @@ export class SyncManager {
         const keysToKeep = [
           'aphro_user',
           'aphro_current_user',
+          'pln_mobile_user',
+          'aphro_token',
+          'jwt_token',
+          'token',
           'aphro_app_settings',
           'aphro_embedded_gas_config',
           'aphro_has_initiated',

@@ -252,10 +252,47 @@ class IndexedDBService {
 
   async clearAll(): Promise<void> {
     try {
-      await dexieDb.delete();
-      await dexieDb.open();
+      console.log('🧹 [idbService] Performing safe non-destructive cache clear...');
+
+      // 1. Clear master_data (safe as it is pure server-fetched cache)
+      await dexieDb.master_data.clear().catch(() => {});
+
+      // 2. Clear metadata except last reset dates and inisiasi settings
+      const keysToKeep = ['last_wib_reset_date', 'last_updated_timestamp', 'aphro_has_initiated'];
+      const metadataItems = await dexieDb.metadata.toArray().catch(() => []);
+      for (const item of metadataItems) {
+        if (!keysToKeep.includes(item.key) && !item.key.startsWith('ver_')) {
+          await dexieDb.metadata.delete(item.key).catch(() => {});
+        }
+      }
+
+      // 3. Clear work_orders that are synced (preserve PENDING or FAILED local items)
+      const workOrders = await dexieDb.work_orders.toArray().catch(() => []);
+      for (const wo of workOrders) {
+        if (wo.syncStatus !== 'PENDING' && wo.syncStatus !== 'FAILED') {
+          await dexieDb.work_orders.delete(wo.id).catch(() => {});
+        }
+      }
+
+      // 4. Clear realisasi that are synced (preserve PENDING or FAILED local items)
+      const realisasi = await dexieDb.realisasi.toArray().catch(() => []);
+      for (const rel of realisasi) {
+        if (rel.syncStatus !== 'PENDING' && rel.syncStatus !== 'FAILED') {
+          await dexieDb.realisasi.delete(rel.localId).catch(() => {});
+        }
+      }
+
+      // 5. Clear photos that are synced (preserve PENDING or FAILED local items)
+      const photos = await dexieDb.photos.toArray().catch(() => []);
+      for (const photo of photos) {
+        if (photo.syncStatus !== 'PENDING' && photo.syncStatus !== 'FAILED') {
+          await dexieDb.photos.delete(photo.id).catch(() => {});
+        }
+      }
+
+      console.log('✅ [idbService] Non-destructive cache clear complete (Preserved pending offline queues).');
     } catch (e) {
-      console.warn('Failed to clear Dexie DB', e);
+      console.warn('Failed to clear Dexie DB caches safely:', e);
     }
   }
 }

@@ -163,6 +163,12 @@ class OfflineSyncQueueEngine {
       return { success: false, total: 0, synced: 0, failed: 0 };
     }
 
+    const token = ApiService.getAuthToken();
+    if (!token) {
+      console.log('[SyncQueueEngine] JWT token missing. Skipping sync queue execution.');
+      return { success: false, total: 0, synced: 0, failed: 0 };
+    }
+
     this.isProcessing = true;
 
     try {
