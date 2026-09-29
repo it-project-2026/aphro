@@ -306,17 +306,29 @@ export function normalizeAbsensi(a: any): any {
 export function normalizeRealisasi(r: any): any {
   if (!r || typeof r !== 'object') return r;
 
+  const cleanField = (val: any): string => {
+    if (!val || typeof val !== 'string') return '';
+    const trimmed = val.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === 'n/a' || lower === 'null' || lower === 'undefined' || lower === '-' || lower === '""') return '';
+    return trimmed;
+  };
+
   const latLngStr = String(r.Latitude_Longitude || r.latitudeLongitude || r.LATITUDE_LONGITUDE || '');
-  let lat = Number(r.latitude || 0);
-  let lng = Number(r.longitude || 0);
+  let lat = Number(r.latitude) || 0;
+  let lng = Number(r.longitude) || 0;
   if (latLngStr.includes(',')) {
     const parts = latLngStr.split(',');
-    lat = Number(parts[0].trim()) || lat;
-    lng = Number(parts[1].trim()) || lng;
+    const parsedLat = Number(parts[0].trim());
+    const parsedLng = Number(parts[1].trim());
+    if (!isNaN(parsedLat) && !isNaN(parsedLng) && (parsedLat !== 0 || parsedLng !== 0)) {
+      lat = parsedLat;
+      lng = parsedLng;
+    }
   }
 
-  const rawFotoSebelum = String(r.Foto_Sebelum || r.fotoSebelumUrl || r.fotoSebelum || r.FOTO_SEBELUM || '');
-  const rawFotoSesudah = String(r.Foto_Sesudah || r.fotoSesudahUrl || r.fotoSesudah || r.FOTO_SESUDAH || '');
+  const rawFotoSebelum = cleanField(r.Foto_Sebelum || r.fotoSebelumUrl || r.fotoSebelum || r.FOTO_SEBELUM);
+  const rawFotoSesudah = cleanField(r.Foto_Sesudah || r.fotoSesudahUrl || r.fotoSesudah || r.FOTO_SESUDAH);
   const fotoSebelumUrl = formatDriveViewUrl(rawFotoSebelum);
   const fotoSesudahUrl = formatDriveViewUrl(rawFotoSesudah);
   const fotoSebelumImg = formatDriveImageUrl(rawFotoSebelum);

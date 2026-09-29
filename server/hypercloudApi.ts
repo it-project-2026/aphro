@@ -2331,6 +2331,16 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       Foto_Sesudah: fotoSesVal ? (fotoSesVal.startsWith('http') ? fotoSesVal : `len:${fotoSesVal.length}`) : '(empty)',
     });
 
+    let latLongVal = String(r.Latitude_Longitude || r.latitudeLongitude || r.latitude_longitude || '').trim();
+    if (!latLongVal && r.latitude !== undefined && r.longitude !== undefined) {
+      const latNum = Number(r.latitude);
+      const lngNum = Number(r.longitude);
+      if (!isNaN(latNum) && !isNaN(lngNum) && (latNum !== 0 || lngNum !== 0)) {
+        latLongVal = `${latNum}, ${lngNum}`;
+      }
+    }
+    const lokasiKerjaVal = String(r.Lokasi_kerja || r.lokasiKerja || r.lokasi_kerja || r.lokasi || '').trim();
+
     const params = [
       id,
       r.unitId || 'UL1',
@@ -2347,8 +2357,8 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       r.Keterangan || r.keterangan || '',
       r.Pertumbuhan_Tanaman || r.pertumbuhanTanaman || '',
       r.Kendala || r.kendala || '',
-      r.Latitude_Longitude || r.latitudeLongitude || '',
-      r.Lokasi_kerja || r.lokasiKerja || '',
+      latLongVal,
+      lokasiKerjaVal,
       timestampVal,
     ];
 

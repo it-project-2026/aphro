@@ -24,13 +24,22 @@ export function normalizeRealisasiRow(row: any): Realisasi {
   ).trim();
 
   // Detect if row was imported with shifted columns (sheet without separate WO_ID column)
-  // Only detect shifted if row is raw database format (has not been normalized before)
+  // Database records from HyperCloud PostgreSQL are never shifted
   const isAlreadyNormalized = Boolean(
     row.tanggalRealisasi && (row.fotoSebelumUrl !== undefined || row.photosSebelum !== undefined)
   );
 
+  const isDatabaseRecord = Boolean(
+    row.ID ||
+    (row.id && String(row.id).startsWith('REL-')) ||
+    row.Foto_Sebelum !== undefined ||
+    row.Foto_Sesudah !== undefined ||
+    row.Latitude_Longitude !== undefined
+  );
+
   const isShifted =
     !isAlreadyNormalized &&
+    !isDatabaseRecord &&
     (rawNoWoCandidate.toUpperCase().startsWith('ULP') ||
       (rawWoIdCandidate.match(/^M\d+\//i) && !rawNoWoCandidate.match(/^M\d+\//i)));
 

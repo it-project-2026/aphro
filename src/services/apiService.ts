@@ -500,6 +500,11 @@ export class ApiService {
     const rawSes = data.fotoSesudahUrl || data.fotoSesudah || data.Foto_Sesudah || data.photosSesudah?.[0]?.fileUrl || data.photosSesudah?.[0]?.url || '';
     const fotoSesudahClean = isValidPhotoUrl(rawSes) ? String(rawSes).trim() : '';
 
+    const latNum = Number(data.latitude || 0);
+    const lngNum = Number(data.longitude || 0);
+    const latLngStr = (latNum && lngNum) ? `${latNum}, ${lngNum}` : (data.Latitude_Longitude || data.latitudeLongitude || '');
+    const lokasiStr = data.lokasiKerja || data.Lokasi_kerja || data.lokasi_kerja || data.lokasi || '';
+
     const payload = {
       id: data.id || data.ID || data.realisasiId,
       ID: data.ID || data.id || data.realisasiId,
@@ -526,12 +531,15 @@ export class ApiService {
       fotoSebelumUrl: fotoSebelumClean,
       fotoSesudahUrl: fotoSesudahClean,
       jenisTanaman: data.jenisTanaman || '',
-      lokasiKerja: data.lokasiKerja || '',
+      lokasiKerja: lokasiStr,
+      Lokasi_kerja: lokasiStr,
       keterangan: data.keterangan || 'TEBANG',
       pertumbuhanTanaman: data.pertumbuhanTanaman || '',
       kendala: data.kendala || '',
-      latitude: Number(data.latitude || 0),
-      longitude: Number(data.longitude || 0),
+      latitude: latNum,
+      longitude: lngNum,
+      Latitude_Longitude: latLngStr,
+      latitudeLongitude: latLngStr,
       petugas: data.petugasName || data.petugas || '',
       petugasId: data.petugasId || '',
       petugasName: data.petugasName || data.petugas || '',
@@ -637,6 +645,13 @@ export class ApiService {
       fotoSesClean = isValidPhotoUrl(rawSes) ? String(rawSes).trim() : '';
     }
 
+    const latNum = data.latitude !== undefined ? Number(data.latitude) : undefined;
+    const lngNum = data.longitude !== undefined ? Number(data.longitude) : undefined;
+    const latLngStr = (latNum !== undefined && lngNum !== undefined && !isNaN(latNum) && !isNaN(lngNum) && (latNum !== 0 || lngNum !== 0))
+      ? `${latNum}, ${lngNum}`
+      : (data.Latitude_Longitude || data.latitudeLongitude || undefined);
+    const lokasiStr = data.lokasiKerja || data.Lokasi_kerja || data.lokasi_kerja || data.lokasi;
+
     const payload = {
       ...data,
       unitId,
@@ -644,6 +659,8 @@ export class ApiService {
       ...(nomorWo ? { Nomor_WO: nomorWo, nomorWO: nomorWo, nomor_wo: nomorWo } : {}),
       ...(fotoSebClean !== undefined ? { Foto_Sebelum: fotoSebClean, fotoSebelum: fotoSebClean, fotoSebelumUrl: fotoSebClean } : {}),
       ...(fotoSesClean !== undefined ? { Foto_Sesudah: fotoSesClean, fotoSesudah: fotoSesClean, fotoSesudahUrl: fotoSesClean } : {}),
+      ...(latLngStr !== undefined ? { Latitude_Longitude: latLngStr, latitudeLongitude: latLngStr } : {}),
+      ...(lokasiStr !== undefined ? { Lokasi_kerja: lokasiStr, lokasiKerja: lokasiStr } : {}),
     };
 
     console.log('[SYNC] ONLINE');

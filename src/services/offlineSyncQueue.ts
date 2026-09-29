@@ -12,6 +12,7 @@ import { dexieDb, LocalSyncQueueItem, LocalRealisasi, LocalPhoto } from './dexie
 import { ApiService } from './apiService';
 import { InisiasiService } from './inisiasiService';
 import { getLocalDateTimeString } from '../utils/dateUtils';
+import { ensureGoogleDrivePhotoUrl, isValidPhotoUrl } from '../utils/driveUtils';
 
 export type SyncListener = (event: {
   status: 'IDLE' | 'SYNCING' | 'COMPLETED' | 'ERROR';
@@ -326,6 +327,44 @@ class OfflineSyncQueueEngine {
           }
         }
 
+        let syncSebUrl = realisasi.fotoSebelumUrl || realisasi.fotoSebelum || realisasi.Foto_Sebelum || '';
+        if (!isValidPhotoUrl(syncSebUrl) && photos && Array.isArray(photos)) {
+          const sebPhoto = photos.find((p: any) => p.type === 'sebelum' || p.slotIndex === 1);
+          if (sebPhoto) {
+            syncSebUrl = sebPhoto.fileUrl || sebPhoto.dataUrl || '';
+          }
+        }
+        if (syncSebUrl && (syncSebUrl.startsWith('data:image') || syncSebUrl.length > 500)) {
+          try {
+            syncSebUrl = await ensureGoogleDrivePhotoUrl(syncSebUrl, {
+              nomorWO: resolvedNomorWo,
+              reguName: realisasi.reguName,
+              photoType: 'Realisasi_Sebelum',
+            });
+          } catch (e) {
+            console.warn('[SyncQueueEngine] Photo sebelum upload failed:', e);
+          }
+        }
+
+        let syncSesUrl = realisasi.fotoSesudahUrl || realisasi.fotoSesudah || realisasi.Foto_Sesudah || '';
+        if (!isValidPhotoUrl(syncSesUrl) && photos && Array.isArray(photos)) {
+          const sesPhoto = photos.find((p: any) => p.type === 'sesudah');
+          if (sesPhoto) {
+            syncSesUrl = sesPhoto.fileUrl || sesPhoto.dataUrl || '';
+          }
+        }
+        if (syncSesUrl && (syncSesUrl.startsWith('data:image') || syncSesUrl.length > 500)) {
+          try {
+            syncSesUrl = await ensureGoogleDrivePhotoUrl(syncSesUrl, {
+              nomorWO: resolvedNomorWo,
+              reguName: realisasi.reguName,
+              photoType: 'Realisasi_Sesudah',
+            });
+          } catch (e) {
+            console.warn('[SyncQueueEngine] Photo sesudah upload failed:', e);
+          }
+        }
+
         const enrichedRealisasi = {
           ...realisasi,
           WO_ID: resolvedWoId,
@@ -333,6 +372,8 @@ class OfflineSyncQueueEngine {
           woId: resolvedWoId,
           Nomor_WO: resolvedNomorWo,
           nomorWO: resolvedNomorWo,
+          ...(isValidPhotoUrl(syncSebUrl) ? { fotoSebelumUrl: syncSebUrl, fotoSebelum: syncSebUrl, Foto_Sebelum: syncSebUrl } : {}),
+          ...(isValidPhotoUrl(syncSesUrl) ? { fotoSesudahUrl: syncSesUrl, fotoSesudah: syncSesUrl, Foto_Sesudah: syncSesUrl } : {}),
         };
 
         console.log('[REALISASI STEP 3]', {

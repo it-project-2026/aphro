@@ -23,14 +23,17 @@ export function extractDriveFileId(url: string | undefined | null): string | nul
  */
 export function formatDriveViewUrl(url: string): string {
   if (!url || typeof url !== 'string') return '';
-  if (isBase64Image(url)) return ''; // Never format or return base64 as Drive view link
-  if (!url.startsWith('http')) return url;
+  const trimmed = url.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === 'n/a' || lower === 'null' || lower === 'undefined' || lower === '-' || lower === '""' || lower === "''") return '';
+  if (isBase64Image(trimmed)) return ''; // Never format or return base64 as Drive view link
+  if (!trimmed.startsWith('http')) return trimmed;
 
-  const match = url.match(/id=([a-zA-Z0-9_-]+)/) || url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const match = trimmed.match(/id=([a-zA-Z0-9_-]+)/) || trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (match && match[1]) {
     return `https://drive.google.com/file/d/${match[1]}/view?usp=sharing`;
   }
-  return url;
+  return trimmed;
 }
 
 /**
@@ -39,14 +42,17 @@ export function formatDriveViewUrl(url: string): string {
  */
 export function formatDriveImageUrl(url: string): string {
   if (!url || typeof url !== 'string') return '';
-  if (url.startsWith('data:image')) return url;
-  if (!url.startsWith('http')) return url;
+  const trimmed = url.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === 'n/a' || lower === 'null' || lower === 'undefined' || lower === '-' || lower === '""' || lower === "''") return '';
+  if (trimmed.startsWith('data:image')) return trimmed;
+  if (!trimmed.startsWith('http')) return trimmed;
 
-  const match = url.match(/id=([a-zA-Z0-9_-]+)/) || url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const match = trimmed.match(/id=([a-zA-Z0-9_-]+)/) || trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (match && match[1]) {
     return `https://lh3.googleusercontent.com/d/${match[1]}`;
   }
-  return url;
+  return trimmed;
 }
 
 /**
