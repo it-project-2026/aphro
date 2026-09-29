@@ -489,7 +489,7 @@ export class ApiService {
     // 4. photosSebelum[0].fileUrl / url
     // Exclude raw base64 data:image strings to prevent bloat in PostgreSQL
     const rawSeb = data.fotoSebelumUrl || data.fotoSebelum || data.Foto_Sebelum || data.photosSebelum?.[0]?.fileUrl || data.photosSebelum?.[0]?.url || '';
-    const fotoSebelumClean = isValidPhotoUrl(rawSeb) ? String(rawSeb).trim() : '';
+    const fotoSebelumClean = rawSeb && typeof rawSeb === 'string' && rawSeb.trim() !== 'N/A' && rawSeb.trim() !== 'null' && rawSeb.trim() !== 'undefined' ? rawSeb.trim() : '';
 
     // Priority for Foto Sesudah:
     // 1. fotoSesudahUrl
@@ -498,10 +498,12 @@ export class ApiService {
     // 4. photosSesudah[0].fileUrl / url
     // Exclude raw base64 data:image strings
     const rawSes = data.fotoSesudahUrl || data.fotoSesudah || data.Foto_Sesudah || data.photosSesudah?.[0]?.fileUrl || data.photosSesudah?.[0]?.url || '';
-    const fotoSesudahClean = isValidPhotoUrl(rawSes) ? String(rawSes).trim() : '';
+    const fotoSesudahClean = rawSes && typeof rawSes === 'string' && rawSes.trim() !== 'N/A' && rawSes.trim() !== 'null' && rawSes.trim() !== 'undefined' ? rawSes.trim() : '';
 
-    const latNum = Number(data.latitude || 0);
-    const lngNum = Number(data.longitude || 0);
+    const latVal = data.latitude ?? data.Latitude ?? data.lat ?? 0;
+    const lngVal = data.longitude ?? data.Longitude ?? data.lon ?? 0;
+    const latNum = Number(latVal) || 0;
+    const lngNum = Number(lngVal) || 0;
     const latLngStr = (latNum && lngNum) ? `${latNum}, ${lngNum}` : (data.Latitude_Longitude || data.latitudeLongitude || '');
     const lokasiStr = data.lokasiKerja || data.Lokasi_kerja || data.lokasi_kerja || data.lokasi || '';
 

@@ -372,8 +372,8 @@ class OfflineSyncQueueEngine {
           woId: resolvedWoId,
           Nomor_WO: resolvedNomorWo,
           nomorWO: resolvedNomorWo,
-          ...(isValidPhotoUrl(syncSebUrl) ? { fotoSebelumUrl: syncSebUrl, fotoSebelum: syncSebUrl, Foto_Sebelum: syncSebUrl } : {}),
-          ...(isValidPhotoUrl(syncSesUrl) ? { fotoSesudahUrl: syncSesUrl, fotoSesudah: syncSesUrl, Foto_Sesudah: syncSesUrl } : {}),
+          ...(syncSebUrl && syncSebUrl.trim() !== 'N/A' && syncSebUrl.trim() !== 'null' ? { fotoSebelumUrl: syncSebUrl, fotoSebelum: syncSebUrl, Foto_Sebelum: syncSebUrl } : {}),
+          ...(syncSesUrl && syncSesUrl.trim() !== 'N/A' && syncSesUrl.trim() !== 'null' ? { fotoSesudahUrl: syncSesUrl, fotoSesudah: syncSesUrl, Foto_Sesudah: syncSesUrl } : {}),
         };
 
         console.log('[REALISASI STEP 3]', {
@@ -477,6 +477,26 @@ class OfflineSyncQueueEngine {
         item.error = error?.message || 'Endpoint tidak ditemukan (HTTP 404).';
         await dexieDb.sync_queue.put(item);
         console.warn(`[SyncQueueEngine] Item ${item.idempotencyKey} marked as FAILED_ENDPOINT_NOT_FOUND. Stopping retries.`);
+        return false;
+      }
+
+      const is401 = errStr.includes('401') || errStr.includes('unauthorized') || errStr.includes('token') || errStr.includes('login');
+      if (is401) {
+        item.status = 'FAILED';
+        item.retryCount = 999;
+        item.error = 'Otentikasi gagal (HTTP 401). Silakan login kembali.';
+        await dexieDb.sync_queue.put(item);
+        console.warn(`[SyncQueueEngine] Item ${item.idempotencyKey} stopped due to 401 Auth Error.`);
+        return false;
+      }
+
+      const is403 = errStr.includes('403') || errStr.includes('forbidden') || errStr.includes('akses ditolak');
+      if (is403) {
+        item.status = 'FAILED';
+        item.retryCount = 999;
+        item.error = 'Akses unit ditolak (HTTP 403).';
+        await dexieDb.sync_queue.put(item);
+        console.warn(`[SyncQueueEngine] Item ${item.idempotencyKey} stopped due to 403 Forbidden.`);
         return false;
       }
 

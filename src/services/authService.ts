@@ -51,13 +51,13 @@ export class AuthService {
 
           const activeUnitObj = InisiasiService.getActiveInisiasiUnit();
 
-          const rawRoleStr = String(rawUser.Role || rawUser.role || 'User').trim();
+          const rawRoleStr = String(rawUser.Role || rawUser.role || rawUser.ROLE || 'User').trim();
           let userRole: UserRole = 'User';
           if (/^super\s*admin$/i.test(rawRoleStr) || rawRoleStr.toLowerCase() === 'superadmin') {
             userRole = 'SuperAdmin';
           } else if (/^adm$/i.test(rawRoleStr) || rawRoleStr.toLowerCase() === 'adm') {
             userRole = 'Adm';
-          } else if (/admin/i.test(rawRoleStr)) {
+          } else if (/admin/i.test(rawRoleStr) || /admbkt/i.test(rawRoleStr) || /manajer/i.test(rawRoleStr) || /supervisor/i.test(rawRoleStr)) {
             userRole = 'Admin';
           } else {
             userRole = 'User';

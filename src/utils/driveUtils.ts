@@ -71,13 +71,14 @@ export function isValidPhotoUrl(value: any): boolean {
     lower === 'undefined' ||
     lower === '-' ||
     lower === '""' ||
-    lower === "''" ||
-    trimmed.startsWith('data:image') ||
-    (trimmed.length > 500 && !trimmed.startsWith('http'))
+    lower === "''"
   ) {
     return false;
   }
-  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  if (trimmed.startsWith('data:image') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return true;
+  }
+  return trimmed.length > 20 && !trimmed.includes(' ');
 }
 
 /**

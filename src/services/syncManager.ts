@@ -522,6 +522,12 @@ export class SyncManager {
       return { successCount: 0, failCount: 0, totalCount: 0 };
     }
 
+    // Trigger Dexie queue processing in parallel
+    try {
+      const { offlineSyncQueue } = await import('./offlineSyncQueue');
+      offlineSyncQueue.processQueue().catch((err) => console.warn('offlineSyncQueue error:', err));
+    } catch (e) {}
+
     this.isProcessingQueue = true;
     let successCount = 0;
     let failCount = 0;

@@ -28,7 +28,7 @@ export function normalizeUser(u: any): User {
   const password = String(u.Password || u.password || u.PASSWORD || u.pass || u.Pass || u.KataSandi || u.kataSandi || u.KATA_SANDI || '').trim();
   const email = String(u.email || u.Email || `${userName.toLowerCase().replace(/[^a-z0-9]/g, '')}@pln.co.id`);
   
-  const rawRole = String(u.Role || u.role || 'User').trim();
+  const rawRole = String(u.Role || u.role || u.ROLE || 'User').trim();
   let role: UserRole = 'User';
   if (/^super\s*admin$/i.test(rawRole) || /superadmin/i.test(rawRole) || /admin\s*utama/i.test(rawRole)) {
     role = 'SuperAdmin';

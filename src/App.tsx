@@ -486,36 +486,21 @@ const AppContent: React.FC = () => {
    * =========================================================
    */
   if (user) {
-    const isUserRole =
-      (user.role || '')
-        .toUpperCase() ===
-      'USER';
+    const userRoleClean = (user.role || '').toString().trim().toUpperCase();
+    const isUserRole = userRoleClean === 'USER';
+    const isAdminRole = userRoleClean === 'ADMIN' || userRoleClean === 'SUPERADMIN' || userRoleClean === 'ADM' || isAdmRole;
 
     /*
      * =======================================================
      * GATE ABSENSI
      * =======================================================
      *
-     * FIX:
-     *
-     * Sebelumnya:
-     *
-     * !hasCheckedInToday
-     *
-     * menyebabkan user bisa kembali ke ABSENSI
-     * setelah render ulang.
-     *
-     * Sekarang:
-     *
-     * !hasCheckedInToday &&
-     * !attendanceCompleted
-     *
-     * Setelah onSuccess() -> attendanceCompleted = true
-     * sehingga gerbang ABSENSI langsung dilewati.
+     * HANYA berlaku untuk role USER biasa.
+     * Akun Admin, SuperAdmin, dan Adm TIDAK WAJIB Melakukan Absensi.
      */
     if (
       isUserRole &&
-      !isAdmRole &&
+      !isAdminRole &&
       !hasCheckedInToday &&
       !attendanceCompleted
     ) {
