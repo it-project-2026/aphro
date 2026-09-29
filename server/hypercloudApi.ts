@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
+import bcrypt from 'bcryptjs';
 import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl } from './database';
 
 const router = Router();
@@ -405,6 +406,36 @@ router.get('/admin/database-status', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/admin/password-diagnostics
+ * Temp read-only diagnostics for password lengths and prefixes
+ */
+router.get('/admin/password-diagnostics', async (req: Request, res: Response) => {
+  try {
+    const resDb = await query(`
+      SELECT 
+        "Username",
+        "UserID",
+        "Role",
+        "unitId",
+        length("Password") as pwd_length,
+        substring("Password", 1, 4) as pwd_prefix,
+        "Status"
+      FROM public."USERS"
+      LIMIT 15;
+    `);
+    return res.json({
+      status: 'success',
+      data: resDb.rows
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: err.message
+    });
+  }
+});
+
 // ==========================================
 // 2. AUTHENTICATION & USERS
 // ==========================================
@@ -525,6 +556,7 @@ router.post('/login', async (req: Request, res: Response) => {
     if (
       String(userStatus).toLowerCase() === 'non-aktif'
     ) {
+      console.log(`[AUTH] Login failed: Account for '${cleanUsername}' is inactive.`);
       return res.status(403).json({
         status: 'error',
         message:
@@ -532,9 +564,35 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    const isPasswordValid =
-      Boolean(serverPass) && cleanPassword.length > 0 &&
-      cleanPassword.toLowerCase() === serverPass.toLowerCase();
+    let isPasswordValid = false;
+    if (Boolean(serverPass) && cleanPassword.length > 0) {
+      const trimmedServerPass = serverPass.trim();
+      const isBcrypt = trimmedServerPass.startsWith('$2a$') || trimmedServerPass.startsWith('$2b$') || trimmedServerPass.startsWith('$2y$');
+      
+      if (isBcrypt) {
+        try {
+          isPasswordValid = bcrypt.compareSync(cleanPassword, trimmedServerPass);
+          console.log(`[AUTH] Bcrypt verification result for '${cleanUsername}': ${isPasswordValid}`);
+        } catch (e: any) {
+          console.error('[AUTH] Bcrypt verification error:', e.message);
+          isPasswordValid = false;
+        }
+      } else if (trimmedServerPass.length === 32 && /^[0-9a-fA-F]{32}$/.test(trimmedServerPass)) {
+        // MD5 Hash
+        const md5Hash = crypto.createHash('md5').update(cleanPassword).digest('hex');
+        isPasswordValid = md5Hash.toLowerCase() === trimmedServerPass.toLowerCase();
+        console.log(`[AUTH] MD5 verification result for '${cleanUsername}': ${isPasswordValid}`);
+      } else if (trimmedServerPass.length === 64 && /^[0-9a-fA-F]{64}$/.test(trimmedServerPass)) {
+        // SHA-256 Hash
+        const sha256Hash = crypto.createHash('sha256').update(cleanPassword).digest('hex');
+        isPasswordValid = sha256Hash.toLowerCase() === trimmedServerPass.toLowerCase();
+        console.log(`[AUTH] SHA-256 verification result for '${cleanUsername}': ${isPasswordValid}`);
+      } else {
+        // Plaintext fallback
+        isPasswordValid = cleanPassword.toLowerCase() === trimmedServerPass.toLowerCase();
+        console.log(`[AUTH] Plaintext verification result for '${cleanUsername}': ${isPasswordValid}`);
+      }
+    }
 
     if (!isPasswordValid) {
       console.log(
@@ -679,25 +737,46 @@ function createJwt(payload: Record<string, any>, expiresInSeconds = 43200): stri
 }
 function verifyJwt(token: string): Record<string, any> | null {
   const parts = token.split('.');
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3) {
+    console.warn('[JWT] Verification failed: Token structure is invalid.');
+    return null;
+  }
   const [h, b, sig] = parts;
   const expected = crypto.createHmac('sha256', getJwtSecret()).update(`${h}.${b}`).digest('base64url');
-  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    console.warn('[JWT] Verification failed: Signature mismatch.');
+    return null;
+  }
   try {
     const payload = JSON.parse(Buffer.from(b, 'base64url').toString('utf8'));
-    return payload.exp > Math.floor(Date.now() / 1000) ? payload : null;
-  } catch { return null; }
+    const isExpired = payload.exp <= Math.floor(Date.now() / 1000);
+    if (isExpired) {
+      console.warn(`[JWT] Verification failed: Token expired for user='${payload.username}'. exp=${payload.exp}`);
+      return null;
+    }
+    return payload;
+  } catch {
+    console.warn('[JWT] Verification failed: Failed to parse payload JSON.');
+    return null;
+  }
 }
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization || '';
-  if (!authHeader.startsWith('Bearer ')) return res.status(401).json({ success: false, status: 'error', message: 'Token login tidak ditemukan.' });
+  if (!authHeader.startsWith('Bearer ')) {
+    console.warn(`[AUTH REQUIRE] Access denied for ${req.method} ${req.path}: Authorization Bearer token missing.`);
+    return res.status(401).json({ success: false, status: 'error', message: 'Token login tidak ditemukan.' });
+  }
   try {
-    const payload = verifyJwt(authHeader.substring(7).trim());
-    if (!payload) return res.status(401).json({ success: false, status: 'error', message: 'Token login tidak valid atau sudah kedaluwarsa.' });
+    const tokenStr = authHeader.substring(7).trim();
+    const payload = verifyJwt(tokenStr);
+    if (!payload) {
+      console.warn(`[AUTH REQUIRE] Access denied for ${req.method} ${req.path}: Token invalid or expired.`);
+      return res.status(401).json({ success: false, status: 'error', message: 'Token login tidak valid atau sudah kedaluwarsa.' });
+    }
     (req as any).user = payload;
     next();
   } catch (err: any) {
-    console.error('[AUTH] JWT verification failed:', err.message);
+    console.error('[AUTH] JWT requireAuth middleware internal error:', err.message);
     return res.status(500).json({ success: false, status: 'error', message: 'Konfigurasi JWT server belum benar.' });
   }
 }

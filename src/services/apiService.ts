@@ -45,12 +45,45 @@ export interface FetchRealisasiParams {
 
 export class ApiService {
   private static getCleanBaseUrl(): string {
+    if (typeof window !== 'undefined' && window.location) {
+      const hostname = window.location.hostname;
+      const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
+      if (!isAphroProduction) {
+        // Only use window.location.origin if the local/preview backend was validated as available.
+        const isLocalValidated = sessionStorage.getItem('aphro_local_backend_validated') === 'true';
+        if (isLocalValidated) {
+          return window.location.origin;
+        }
+      }
+    }
     const rawUrl =
       import.meta.env.VITE_API_URL?.trim() ||
       API_BASE_URL ||
       'https://api.aphro-row.my.id';
 
     return rawUrl.trim().replace(/\/+$/, '');
+  }
+
+  /**
+   * Validasi latar belakang ketersediaan backend lokal di lingkungan dev/preview.
+   */
+  public static initBackgroundValidation(): void {
+    if (typeof window === 'undefined' || !window.location) return;
+    const hostname = window.location.hostname;
+    const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
+    if (!isAphroProduction) {
+      fetch(`${window.location.origin}/api/health`, { method: 'GET' })
+        .then(res => {
+          if (res.ok) {
+            sessionStorage.setItem('aphro_local_backend_validated', 'true');
+          } else {
+            sessionStorage.setItem('aphro_local_backend_validated', 'false');
+          }
+        })
+        .catch(() => {
+          sessionStorage.setItem('aphro_local_backend_validated', 'false');
+        });
+    }
   }
 
   /**
@@ -841,8 +874,6 @@ export class ApiService {
                 'application/json',
               Authorization:
                 `Bearer ${token}`,
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache',
             },
           }
         );

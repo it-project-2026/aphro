@@ -27,6 +27,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "axios": "^1.19.0",
+    "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
     "dexie": "^4.4.6",
     "dotenv": "^17.2.3",
@@ -57,5 +58,7 @@
     "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0"
+  }
 }

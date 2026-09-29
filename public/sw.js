@@ -49,6 +49,11 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
+  // 0. Bypass Service Worker entirely for dynamic API routes (/api/*) to avoid CORS/Auth interference
+  if (url.pathname.includes('/api/')) {
+    return;
+  }
+
   // 1. Always Network-Only for version.json & Supabase API calls
   if (url.pathname.endsWith('/version.json') || url.pathname.includes('/rest/v1/') || url.hostname.includes('supabase')) {
     event.respondWith(

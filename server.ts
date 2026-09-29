@@ -52,13 +52,36 @@ async function startServer() {
 
   app.use(express.json());
 
-  // CORS middleware for internal preview
+  // CORS middleware with dynamic origin matching and robust preflight handling
   app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    const origin = req.headers.origin;
+    if (origin) {
+      const allowedOrigins = [
+        "https://www.aphro-row.my.id",
+        "https://aphro-row.my.id"
+      ];
+      const isAllowed = allowedOrigins.includes(origin) ||
+                        /https?:\/\/localhost(:\d+)?$/.test(origin) ||
+                        /https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+                        /\.run\.app$/.test(origin);
+      if (isAllowed) {
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
+      } else {
+        // Safe default if not matched
+        res.header("Access-Control-Allow-Origin", "https://www.aphro-row.my.id");
+      }
+    } else {
+      // Fallback for non-browser clients
+      res.header("Access-Control-Allow-Origin", "*");
+    }
+
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma");
+    
+    // Process OPTIONS preflight requests immediately before reaching any auth middleware
     if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
+      return res.sendStatus(204);
     }
     next();
   });
