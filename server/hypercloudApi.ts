@@ -1750,14 +1750,7 @@ const handleUpdateWorkOrder = async (req: Request, res: Response) => {
       w.Nama_Regu ??
       null;
 
-    // Debug logging for Penyulang & Regu updates
-    console.log('[WORK_ORDER UPDATE]', {
-      id,
-      penyulangValue,
-      reguValue
-    });
-
-    const sqlUpdate = `
+    const sql = `
       UPDATE public."WORK_ORDER"
       SET
         "unitId" = COALESCE($2, "unitId"),
@@ -1782,29 +1775,34 @@ const handleUpdateWorkOrder = async (req: Request, res: Response) => {
       RETURNING *;
     `;
 
-    const tanggalVal = toNullableTimestamp(w.Tanggal || w.tanggal);
-
     const params = [
       id,
-      w.unitId || null,
-      w.Nomor_WO || w.nomorWO || null,
-      w.PEKERJAAN || w.pekerjaan || null,
-      tanggalVal,
-      w.ULP || w.ulpName || null,
+      w.unitId ?? null,
+      w.Nomor_WO ?? w.nomorWO ?? null,
+      w.PEKERJAAN ?? w.pekerjaan ?? null,
+      w.Tanggal ?? w.tanggal ?? null,
+      w.ULP ?? w.ulpName ?? null,
       penyulangValue,
       reguValue,
-      w.VOLUME !== undefined ? String(w.VOLUME) : (w.volumePekerjaan !== undefined ? String(w.volumePekerjaan) : (w.volume !== undefined ? String(w.volume) : null)),
-      w.SATUAN || w.satuan || null,
-      w.TOTAL_REALISASI !== undefined ? String(w.TOTAL_REALISASI) : (w.totalRealisasi !== undefined ? String(w.totalRealisasi) : null),
-      w.SATUAN_TOTAL_REALISASI || w.satuanTotalRealisasi || null,
-      w.WO_AWAL || w.woAwal || w.woMulai || null,
-      w.WO_AKHIR || w.woAkhir || null,
-      w.LOKASI_START || w.lokasiStart || null,
-      w.LOKASI_FINISH || w.lokasiFinish || null,
-      w.STATUS || w.status || null,
+      w.VOLUME ?? w.volumePekerjaan ?? null,
+      w.SATUAN ?? w.satuan ?? null,
+      w.TOTAL_REALISASI ?? w.totalRealisasi ?? null,
+      w.SATUAN_TOTAL_REALISASI ?? null,
+      w.WO_AWAL ?? w.woAwal ?? null,
+      w.WO_AKHIR ?? w.woAkhir ?? null,
+      w.LOKASI_START ?? w.lokasiStart ?? null,
+      w.LOKASI_FINISH ?? w.lokasiFinish ?? null,
+      w.STATUS ?? w.status ?? null,
     ];
 
-    const resDb = await query(sqlUpdate, params);
+    const resDb = await query(sql, params);
+
+    console.log('[WORK_ORDER UPDATE]', {
+      id,
+      penyulangValue,
+      reguValue,
+      rowCount: resDb.rowCount,
+    });
 
     logDbOperation('WORK_ORDER', 'UPDATE', id, recordUnit);
     logApiRoute(req.method, `/api/work-orders/${id}`, 200);
