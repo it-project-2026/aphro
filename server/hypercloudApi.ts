@@ -446,14 +446,19 @@ router.get('/admin/password-diagnostics', async (req: Request, res: Response) =>
 router.post('/login', async (req: Request, res: Response) => {
   const {
     username,
+    Username,
     userName,
+    UserName,
+    UserID,
+    userID,
     password,
     Password,
     unitId,
+    UnitID,
   } = req.body || {};
 
   const cleanUsername = String(
-    username || userName || ''
+    username || Username || userName || UserName || UserID || userID || ''
   ).trim();
 
   const cleanPassword = String(
@@ -461,7 +466,7 @@ router.post('/login', async (req: Request, res: Response) => {
   ).trim();
 
   const cleanUnitId = String(
-    unitId || ''
+    unitId || UnitID || ''
   ).trim().toUpperCase();
 
   console.log(
