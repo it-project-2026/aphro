@@ -149,23 +149,27 @@ export async function testConnection(): Promise<{
   }
 
   // 2. Check HyperCloudHost live API Gateway
-  try {
-    const res = await axios.get(`${HYPERCLOUD_API_URL}/api/health`, {
-      timeout: 4000,
-      validateStatus: () => true,
-    });
-    const duration = Date.now() - start;
-    if (res.status === 200 && (res.data?.status === 'ok' || res.data?.database === 'connected' || res.data?.ok)) {
-      return {
-        connected: true,
-        latencyMs: duration,
-        message: `Terhubung ke Database HyperCloudHost PostgreSQL (${res.data.databaseName || 'meysxysd_aphro'}) via Gateway`,
-        timestamp: res.data.timestamp || new Date().toISOString(),
-        database: res.data.databaseName || 'meysxysd_aphro',
-      };
+  // CRITICAL: Avoid infinite HTTP recursion loop on server self-checks in production!
+  const isProd = process.env.NODE_ENV === 'production';
+  if (!isProd && HYPERCLOUD_API_URL && !HYPERCLOUD_API_URL.includes('localhost') && !HYPERCLOUD_API_URL.includes('127.0.0.1')) {
+    try {
+      const res = await axios.get(`${HYPERCLOUD_API_URL}/api/health`, {
+        timeout: 4000,
+        validateStatus: () => true,
+      });
+      const duration = Date.now() - start;
+      if (res.status === 200 && (res.data?.status === 'ok' || res.data?.database === 'connected' || res.data?.ok)) {
+        return {
+          connected: true,
+          latencyMs: duration,
+          message: `Terhubung ke Database HyperCloudHost PostgreSQL (${res.data.databaseName || 'meysxysd_aphro'}) via Gateway`,
+          timestamp: res.data.timestamp || new Date().toISOString(),
+          database: res.data.databaseName || 'meysxysd_aphro',
+        };
+      }
+    } catch (err: any) {
+      console.warn('[DB] HyperCloudHost API Gateway health check error:', err.message);
     }
-  } catch (err: any) {
-    console.warn('[DB] HyperCloudHost API Gateway health check error:', err.message);
   }
 
   return {
