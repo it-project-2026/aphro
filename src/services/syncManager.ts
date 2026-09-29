@@ -589,10 +589,16 @@ export class SyncManager {
               const res = await ApiService.saveWorkOrder(updatedPayload);
               isSuccess = res.success;
               errorMessage = res.message || '';
+              if (isSuccess && updatedPayload.id) {
+                await dexieDb.work_orders.update(updatedPayload.id, { syncStatus: 'SYNCED' }).catch(() => {});
+              }
             } else if (item.type === 'UPDATE') {
               const res = await ApiService.updateWorkOrder(updatedPayload.id, updatedPayload);
               isSuccess = res.success;
               errorMessage = res.message || '';
+              if (isSuccess && updatedPayload.id) {
+                await dexieDb.work_orders.update(updatedPayload.id, { syncStatus: 'SYNCED' }).catch(() => {});
+              }
             } else if (item.type === 'DELETE') {
               const res = await ApiService.deleteWorkOrder(updatedPayload.id);
               isSuccess = res.success;

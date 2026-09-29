@@ -1672,11 +1672,11 @@ router.post('/work-orders', requireAuth, async (req: Request, res: Response) => 
 });
 
 /**
- * PUT /api/work-orders/:id
+ * PUT /api/work-orders/:id & PATCH /api/work-orders/:id
  */
-router.put('/work-orders/:id', requireAuth, async (req: Request, res: Response) => {
+const handleUpdateWorkOrder = async (req: Request, res: Response) => {
   const id = req.params.id;
-  logApiCall('PUT', `/api/work-orders/${id}`, req.body);
+  logApiCall(req.method, `/api/work-orders/${id}`, req.body);
   
   try {
     const check = await query(
@@ -1685,7 +1685,7 @@ router.put('/work-orders/:id', requireAuth, async (req: Request, res: Response) 
     );
 
     if (check.rowCount === 0) {
-      logApiRoute('PUT', `/api/work-orders/${id}`, 404);
+      logApiRoute(req.method, `/api/work-orders/${id}`, 404);
       return res.status(404).json({
         success: false,
         status: 'error',
@@ -1695,9 +1695,12 @@ router.put('/work-orders/:id', requireAuth, async (req: Request, res: Response) 
     }
 
     const recordUnit = String(check.rows[0]?.unitId || '').toUpperCase();
-    const userUnit = String(req.query.unitId || (req as any).user?.unitId || '').toUpperCase();
-    if (userUnit && recordUnit && userUnit !== 'ALL' && recordUnit !== userUnit) {
-      logApiRoute('PUT', `/api/work-orders/${id}`, 403);
+    const userUnit = String((req as any).user?.unitId || req.query.unitId || req.body?.unitId || '').toUpperCase();
+    const userRole = String((req as any).user?.role || (req as any).user?.Role || req.query.role || '').toUpperCase();
+    const isAdmin = userRole === 'ADMIN' || userRole === 'ADM' || userRole === 'SUPERADMIN' || userUnit === 'ALL';
+
+    if (userUnit && recordUnit && !isAdmin && userUnit !== 'ALL' && recordUnit !== userUnit) {
+      logApiRoute(req.method, `/api/work-orders/${id}`, 403);
       return res.status(403).json({
         success: false,
         status: 'error',
@@ -1710,7 +1713,7 @@ router.put('/work-orders/:id', requireAuth, async (req: Request, res: Response) 
     const resDb = await handleUpsertWorkOrder(w);
 
     logDbOperation('WORK_ORDER', 'UPDATE', id, recordUnit);
-    logApiRoute('PUT', `/api/work-orders/${id}`, 200);
+    logApiRoute(req.method, `/api/work-orders/${id}`, 200);
 
     return res.json({
       status: 'success',
@@ -1718,15 +1721,18 @@ router.put('/work-orders/:id', requireAuth, async (req: Request, res: Response) 
       data: resDb.rows[0],
     });
   } catch (err: any) {
-    console.error('[BACKEND ERROR] PUT /api/work-orders:', err.message);
-    logApiRoute('PUT', `/api/work-orders/${id}`, 500);
+    console.error(`[BACKEND ERROR] ${req.method} /api/work-orders:`, err.message);
+    logApiRoute(req.method, `/api/work-orders/${id}`, 500);
     return res.status(500).json({
       status: 'error',
       success: false,
       message: err.message,
     });
   }
-});
+};
+
+router.put('/work-orders/:id', requireAuth, handleUpdateWorkOrder);
+router.patch('/work-orders/:id', requireAuth, handleUpdateWorkOrder);
 
 /**
  * DELETE /api/work-orders/:id
