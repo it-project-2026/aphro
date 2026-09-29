@@ -53,7 +53,7 @@ const GASSyncContext = React.createContext<GASSyncContextType | undefined>(undef
 export function GASSyncProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const { setMasterData } = useMasterData();
-  const { setWorkOrders } = useWorkOrders();
+  const { refreshWorkOrders } = useWorkOrders();
   const { setRealisasiList } = useRealisasi();
   const { setAbsensiList } = useAbsensi();
 
@@ -114,7 +114,6 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
         setPendingCount(pCount);
 
         if (cachedData) {
-          if (cachedData.WORK_ORDER) setWorkOrders(cachedData.WORK_ORDER);
           if (cachedData.REALISASI) setRealisasiList(cachedData.REALISASI);
           if (cachedData.ABSENSI) setAbsensiList(cachedData.ABSENSI);
 
@@ -145,8 +144,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
         const tName = event.tableName;
         const data = event.data;
 
-        if (tName === 'WORK_ORDER' || tName === 'WORK_ORDERS') setWorkOrders(data);
-        else if (tName === 'REALISASI') setRealisasiList(data);
+        if (tName === 'REALISASI') setRealisasiList(data);
         else if (tName === 'ABSENSI') setAbsensiList(data);
         else if (['ULP', 'PENYULANG', 'REGU_ROW', 'PETUGAS', 'USERS'].includes(tName)) {
           const key = tName === 'REGU_ROW' ? 'regu' : (tName.toLowerCase() as 'ulp' | 'penyulang' | 'petugas' | 'users');
@@ -174,7 +172,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       isMounted = false;
       unsubscribe();
     };
-  }, [setMasterData, setWorkOrders, setRealisasiList, setAbsensiList]);
+  }, [setMasterData, refreshWorkOrders, setRealisasiList, setAbsensiList]);
 
   // Process offline pending queue
   const processPendingQueue = React.useCallback(async (
@@ -253,7 +251,6 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
       const syncedTables = await syncManager.syncAllRequired();
 
       if (syncedTables) {
-        if (syncedTables.WORK_ORDER) setWorkOrders(syncedTables.WORK_ORDER);
         if (syncedTables.REALISASI) setRealisasiList(syncedTables.REALISASI);
         if (syncedTables.ABSENSI) setAbsensiList(syncedTables.ABSENSI);
 
@@ -265,6 +262,9 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
           users: syncedTables.USERS,
         });
       }
+
+      // After manual sync completes, refresh work orders directly from API in WorkOrderContext
+      await refreshWorkOrders(0);
 
       setIsGasConnected(true);
       setSyncStage('success');
@@ -291,7 +291,7 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsSyncing(false);
     }
-  }, [isSyncing, refreshPendingCount]);
+  }, [isSyncing, refreshPendingCount, refreshWorkOrders]);
 
   // 00:00 WIB Automated Midnight Local Cache Clear & Data Sync Scheduler
   React.useEffect(() => {

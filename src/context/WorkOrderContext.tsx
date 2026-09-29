@@ -21,7 +21,7 @@ interface WorkOrderContextType {
   addWorkOrder: (wo: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WorkOrder>;
   updateWorkOrder: (id: string, wo: Partial<WorkOrder>) => Promise<void>;
   deleteWorkOrder: (id: string, nomorWO?: string) => Promise<void>;
-  refreshWorkOrders: () => Promise<void>;
+  refreshWorkOrders: (page?: number, force?: boolean) => Promise<void>;
 }
 
 const WorkOrderContext = React.createContext<WorkOrderContextType | undefined>(undefined);
@@ -79,7 +79,14 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         InisiasiService.getSelectedUnitId() ||
         undefined;
 
-      // 1. ONLINE-FIRST: Fetch from HyperCloud API
+      // 1. Initial Cache Load: Read from Dexie DB as initial cache if page === 0
+      const cachedLocals = await dexieDb.work_orders.toArray();
+      if (cachedLocals.length > 0 && page === 0) {
+        console.log(`[DB SOURCE] entity=WORK_ORDERS source=DEXIE_INITIAL_CACHE count=${cachedLocals.length}`);
+        setWorkOrders(cachedLocals);
+      }
+
+      // 2. ONLINE-FIRST: Fetch from HyperCloud API
       const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
       if (isOnline) {
         const res = await ApiService.fetchWorkOrders(unitId);
@@ -102,8 +109,9 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
           console.log(`[DB SOURCE] entity=WORK_ORDERS source=HYPERCLOUD unitId=${unitId} count=${corrected.length}`);
 
-          // Update Dexie cache in background
-          dexieDb.work_orders.bulkPut(
+          // Update Dexie cache to prevent stale rows, clearing old local cached data
+          await dexieDb.work_orders.clear().catch(() => {});
+          await dexieDb.work_orders.bulkPut(
             corrected.map((wo) => ({
               ...wo,
               syncStatus: 'SYNCED',
@@ -118,14 +126,10 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           return;
         } else {
           console.warn(`[DB SOURCE] entity=WORK_ORDERS source=AUTH_OR_API_ERROR unitId=${unitId}`);
-          setIsLoading(false);
-          isFetchingRef.current = false;
-          return;
         }
       }
 
-      // 2. OFFLINE FALLBACK: Load from Dexie DB ONLY if offline
-      const cachedLocals = await dexieDb.work_orders.toArray();
+      // 3. OFFLINE FALLBACK: Load from Dexie DB ONLY if offline or if API didn't return success
       if (cachedLocals.length > 0) {
         console.log(`[DB SOURCE] entity=WORK_ORDERS source=OFFLINE_DEXIE count=${cachedLocals.length}`);
         setWorkOrders(cachedLocals);
@@ -422,6 +426,8 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       if (!res.offline) {
         showToast('Work Order berhasil diperbarui', 'success');
         await dexieDb.work_orders.update(id, { syncStatus: 'SYNCED' });
+        // Force refresh work orders from API after update
+        refreshWorkOrders(0, true).catch(() => {});
       } else {
         showToast('Tersimpan di antrean offline.', 'info');
       }
@@ -429,7 +435,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       console.warn('Update WO error:', err);
       showToast('Koneksi terputus, tersimpan di antrean offline.', 'info');
     }
-  }, [workOrders, showToast]);
+  }, [workOrders, showToast, refreshWorkOrders]);
 
   const deleteWorkOrder = React.useCallback(async (id: string, nomorWO?: string) => {
     const cleanId = (id || '').trim();
@@ -471,7 +477,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       addWorkOrder,
       updateWorkOrder,
       deleteWorkOrder,
-      refreshWorkOrders: (page?: number) => refreshWorkOrders(page)
+      refreshWorkOrders: (page?: number, force?: boolean) => refreshWorkOrders(page, force)
     }}>
       {children}
     </WorkOrderContext.Provider>

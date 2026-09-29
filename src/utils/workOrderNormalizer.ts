@@ -8,31 +8,30 @@ export function normalizeWorkOrderRow(row: any): WorkOrder {
   const rawSatuanRel = String(row.SATUAN_TOTAL_REALISASI || row.satuanTotalRealisasi || 'KMS').toUpperCase();
   const satuanTotalRealisasi: 'KMS' | 'GAWANG' = rawSatuanRel === 'GAWANG' ? 'GAWANG' : 'KMS';
 
-  const rawPenyulang =
-    row.penyulangName ??
-    row.PENYULANG ??
-    row.Penyulang ??
-    row.penyulang ??
-    row.Nama_Penyulang ??
-    row.nama_penyulang ??
-    row.NAMA_PENYULANG ??
-    row.FE_PENYULANG ??
-    row.Feeder ??
-    row.feeder ??
-    '';
+  const rawPenyulang = [
+    row.PENYULANG,
+    row.Penyulang,
+    row.penyulangName,
+    row.NAMA_PENYULANG,
+    row.Nama_Penyulang,
+    row.penyulang,
+    row.nama_penyulang,
+    row.FE_PENYULANG,
+    row.Feeder,
+    row.feeder
+  ].find(v => v !== undefined && v !== null && String(v).trim() !== '' && String(v) !== 'null' && String(v) !== 'undefined') ?? '';
 
-  const rawRegu =
-    row.reguName ??
-    row.REGU_ROW ??
-    row.Regu_ROW ??
-    row.regu_row ??
-    row.REGU ??
-    row.Regu ??
-    row.regu ??
-    row.Nama_Regu ??
-    row.nama_regu ??
-    row.NAMA_REGU ??
-    '';
+  const rawRegu = [
+    row.REGU_ROW,
+    row.Regu_ROW,
+    row.Regu,
+    row.reguName,
+    row.NAMA_REGU,
+    row.Nama_Regu,
+    row.regu_row,
+    row.regu,
+    row.nama_regu
+  ].find(v => v !== undefined && v !== null && String(v).trim() !== '' && String(v) !== 'null' && String(v) !== 'undefined') ?? '';
 
   const rawNomorWo = String(row.Nomor_WO || row.nomorWO || row.WO_ID || '').trim();
   const dateFromWo = parseDateFromNomorWO(rawNomorWo);

@@ -170,16 +170,33 @@ function toNullableTimestamp(val: any): string | null {
  */
 async function handleUpsertWorkOrder(w: any) {
   const woId = w.WO_ID || w.woId || w.id || `WO-${Date.now()}`;
+
+  const penyulangValue =
+    w.PENYULANG ??
+    w.Penyulang ??
+    w.penyulangName ??
+    w.NAMA_PENYULANG ??
+    w.Nama_Penyulang ??
+    null;
+
+  const reguValue =
+    w.REGU_ROW ??
+    w.Regu_ROW ??
+    w.Regu ??
+    w.reguName ??
+    w.NAMA_REGU ??
+    w.Nama_Regu ??
+    null;
   
   const sql = `
     INSERT INTO public."WORK_ORDER" (
-      "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "Penyulang",
+      "WO_ID", "unitId", "Nomor_WO", "PEKERJAAN", "Tanggal", "ULP", "Penyulang", "PENYULANG",
       "Regu_ROW", "VOLUME", "SATUAN", "TOTAL_REALISASI", "SATUAN_TOTAL_REALISASI",
       "WO_AWAL", "WO_AKHIR", "LOKASI_START", "LOKASI_FINISH", "STATUS", "Created_At"
     )
     VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,
-      $10,$11,$12,$13,$14,$15,$16,$17,$18
+      $10,$11,$12,$13,$14,$15,$16,$17,$18,$19
     )
     ON CONFLICT ("WO_ID")
     DO UPDATE SET
@@ -189,6 +206,7 @@ async function handleUpsertWorkOrder(w: any) {
       "Tanggal" = EXCLUDED."Tanggal",
       "ULP" = EXCLUDED."ULP",
       "Penyulang" = EXCLUDED."Penyulang",
+      "PENYULANG" = EXCLUDED."PENYULANG",
       "Regu_ROW" = EXCLUDED."Regu_ROW",
       "VOLUME" = EXCLUDED."VOLUME",
       "SATUAN" = EXCLUDED."SATUAN",
@@ -213,8 +231,9 @@ async function handleUpsertWorkOrder(w: any) {
     w.PEKERJAAN || w.pekerjaan || 'NORMAL',
     tanggalVal,
     w.ULP || w.ulpName || w.ulp || '',
-    w.Penyulang || w.penyulang || w.PENYULANG || w.penyulangName || '',
-    w.Regu_ROW || w.reguRow || w.REGU_ROW || w.reguName || w.regu || '',
+    penyulangValue || '',
+    penyulangValue || '',
+    reguValue || '',
     w.VOLUME !== undefined ? String(w.VOLUME) : (w.volumePekerjaan !== undefined ? String(w.volumePekerjaan) : (w.volume !== undefined ? String(w.volume) : '0')),
     w.SATUAN || w.satuan || 'KMS',
     w.TOTAL_REALISASI !== undefined ? String(w.TOTAL_REALISASI) : (w.totalRealisasi !== undefined ? String(w.totalRealisasi) : '0'),
@@ -1709,8 +1728,83 @@ const handleUpdateWorkOrder = async (req: Request, res: Response) => {
       });
     }
 
-    const w = { ...req.body, WO_ID: id };
-    const resDb = await handleUpsertWorkOrder(w);
+    const w = {
+      ...(req.body || {}),
+      WO_ID: id,
+    };
+
+    const penyulangValue =
+      w.PENYULANG ??
+      w.Penyulang ??
+      w.penyulangName ??
+      w.NAMA_PENYULANG ??
+      w.Nama_Penyulang ??
+      null;
+
+    const reguValue =
+      w.REGU_ROW ??
+      w.Regu_ROW ??
+      w.Regu ??
+      w.reguName ??
+      w.NAMA_REGU ??
+      w.Nama_Regu ??
+      null;
+
+    // Debug logging for Penyulang & Regu updates
+    console.log('[WORK_ORDER UPDATE]', {
+      id,
+      penyulangValue,
+      reguValue
+    });
+
+    const sqlUpdate = `
+      UPDATE public."WORK_ORDER"
+      SET
+        "unitId" = COALESCE($2, "unitId"),
+        "Nomor_WO" = COALESCE($3, "Nomor_WO"),
+        "PEKERJAAN" = COALESCE($4, "PEKERJAAN"),
+        "Tanggal" = COALESCE($5, "Tanggal"),
+        "ULP" = COALESCE($6, "ULP"),
+        "Penyulang" = COALESCE($7, "Penyulang"),
+        "PENYULANG" = COALESCE($7, "PENYULANG"),
+        "Regu_ROW" = COALESCE($8, "Regu_ROW"),
+        "REGU_ROW" = COALESCE($8, "REGU_ROW"),
+        "VOLUME" = COALESCE($9, "VOLUME"),
+        "SATUAN" = COALESCE($10, "SATUAN"),
+        "TOTAL_REALISASI" = COALESCE($11, "TOTAL_REALISASI"),
+        "SATUAN_TOTAL_REALISASI" = COALESCE($12, "SATUAN_TOTAL_REALISASI"),
+        "WO_AWAL" = COALESCE($13, "WO_AWAL"),
+        "WO_AKHIR" = COALESCE($14, "WO_AKHIR"),
+        "LOKASI_START" = COALESCE($15, "LOKASI_START"),
+        "LOKASI_FINISH" = COALESCE($16, "LOKASI_FINISH"),
+        "STATUS" = COALESCE($17, "STATUS")
+      WHERE "WO_ID" = $1 OR "Nomor_WO" = $1
+      RETURNING *;
+    `;
+
+    const tanggalVal = toNullableTimestamp(w.Tanggal || w.tanggal);
+
+    const params = [
+      id,
+      w.unitId || null,
+      w.Nomor_WO || w.nomorWO || null,
+      w.PEKERJAAN || w.pekerjaan || null,
+      tanggalVal,
+      w.ULP || w.ulpName || null,
+      penyulangValue,
+      reguValue,
+      w.VOLUME !== undefined ? String(w.VOLUME) : (w.volumePekerjaan !== undefined ? String(w.volumePekerjaan) : (w.volume !== undefined ? String(w.volume) : null)),
+      w.SATUAN || w.satuan || null,
+      w.TOTAL_REALISASI !== undefined ? String(w.TOTAL_REALISASI) : (w.totalRealisasi !== undefined ? String(w.totalRealisasi) : null),
+      w.SATUAN_TOTAL_REALISASI || w.satuanTotalRealisasi || null,
+      w.WO_AWAL || w.woAwal || w.woMulai || null,
+      w.WO_AKHIR || w.woAkhir || null,
+      w.LOKASI_START || w.lokasiStart || null,
+      w.LOKASI_FINISH || w.lokasiFinish || null,
+      w.STATUS || w.status || null,
+    ];
+
+    const resDb = await query(sqlUpdate, params);
 
     logDbOperation('WORK_ORDER', 'UPDATE', id, recordUnit);
     logApiRoute(req.method, `/api/work-orders/${id}`, 200);

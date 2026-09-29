@@ -835,11 +835,14 @@ export class ApiService {
           `/api/work-orders${query}`,
           {
             method: 'GET',
+            cache: 'no-store',
             headers: {
               Accept:
                 'application/json',
               Authorization:
                 `Bearer ${token}`,
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
             },
           }
         );
@@ -1103,9 +1106,11 @@ export class ApiService {
     }
     if (rawPenyulang !== undefined) {
       payload.Penyulang = toSafeString(rawPenyulang);
+      payload.PENYULANG = toSafeString(rawPenyulang);
     }
     if (rawRegu !== undefined) {
       payload.Regu_ROW = toSafeString(rawRegu);
+      payload.REGU_ROW = toSafeString(rawRegu);
     }
     if (rawSatuan !== undefined) {
       payload.SATUAN = toSafeString(rawSatuan, 'KMS');
