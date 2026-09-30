@@ -358,10 +358,14 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         customTimestamp: timestampStr,
       });
 
+      // Compress photo to stay under 300KB and avoid HTTP 413
+      const { compressImage } = await import('../utils/imageCompression');
+      const compressedBase64 = await compressImage(watermarkedBase64);
+
       if (type === 'sebelum') {
-        setFotoSebelumUrl(watermarkedBase64);
+        setFotoSebelumUrl(compressedBase64);
       } else {
-        setFotoSesudahUrl(watermarkedBase64);
+        setFotoSesudahUrl(compressedBase64);
       }
 
       showToast(

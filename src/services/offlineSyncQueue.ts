@@ -381,13 +381,17 @@ class OfflineSyncQueueEngine {
         }
         if (syncSebUrl && (syncSebUrl.startsWith('data:image') || syncSebUrl.length > 500)) {
           try {
+            // Compress photo to stay under 300KB before any remote sync/upload
+            const { compressImage } = await import('../utils/imageCompression');
+            syncSebUrl = await compressImage(syncSebUrl);
+
             syncSebUrl = await ensureGoogleDrivePhotoUrl(syncSebUrl, {
               nomorWO: resolvedNomorWo,
               reguName: realisasi.reguName,
               photoType: 'Realisasi_Sebelum',
             });
           } catch (e) {
-            console.warn('[SyncQueueEngine] Photo sebelum upload failed:', e);
+            console.warn('[SyncQueueEngine] Photo sebelum compression/upload failed:', e);
           }
         }
 
@@ -400,13 +404,17 @@ class OfflineSyncQueueEngine {
         }
         if (syncSesUrl && (syncSesUrl.startsWith('data:image') || syncSesUrl.length > 500)) {
           try {
+            // Compress photo to stay under 300KB before any remote sync/upload
+            const { compressImage } = await import('../utils/imageCompression');
+            syncSesUrl = await compressImage(syncSesUrl);
+
             syncSesUrl = await ensureGoogleDrivePhotoUrl(syncSesUrl, {
               nomorWO: resolvedNomorWo,
               reguName: realisasi.reguName,
               photoType: 'Realisasi_Sesudah',
             });
           } catch (e) {
-            console.warn('[SyncQueueEngine] Photo sesudah upload failed:', e);
+            console.warn('[SyncQueueEngine] Photo sesudah compression/upload failed:', e);
           }
         }
 

@@ -448,6 +448,11 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           customTimestamp: timestampStr,
         });
 
+        // CRITICAL PERFORMANCE & PAYLOAD OPTIMIZATION:
+        // Compress the image immediately to keep size under 300KB and avoid HTTP 413
+        const { compressImage } = await import('../utils/imageCompression');
+        const compressedBase64 = await compressImage(watermarkedBase64);
+
         if (fileInput) fileInput.value = '';
 
         const photoObj: WatermarkedPhoto = {
@@ -456,7 +461,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
             .substring(2, 6)}`,
           type,
           slotIndex,
-          dataUrl: watermarkedBase64,
+          dataUrl: compressedBase64,
           fileUrl: '',
           originalName: file.name,
           timestamp: timestampStr,
@@ -481,11 +486,11 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
 
         showToast(
-          `Foto ${type} slot ${slotIndex} berhasil diberi watermark!`,
+          `Foto ${type} slot ${slotIndex} berhasil diberi watermark dan dikompres otomatis!`,
           'success'
         );
 
-        ensureGoogleDrivePhotoUrl(watermarkedBase64, {
+        ensureGoogleDrivePhotoUrl(compressedBase64, {
           nomorWO: selectedWO.nomorWO,
           reguName: selectedWO.reguName,
           photoType: type === 'sebelum' ? 'Realisasi_Sebelum' : 'Realisasi_Sesudah',

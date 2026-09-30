@@ -725,7 +725,11 @@ export class SyncManager {
               nomorWO: resolvedNomorWo,
             };
 
-            // 8. Pastikan objek yang akhirnya diberikan ke ApiService.saveRealisasi() adalah objek REALISASI lengkap
+            // 8. Pastikan objek yang akhirnya diberikan ke ApiService.saveRealisasi() adalah objek REALISASI lengkap (kompresi foto disertakan)
+            const { compressImage } = await import('../utils/imageCompression');
+            const compressedSeb = await compressImage(realisasiPayload.Foto_Sebelum || realisasiPayload.fotoSebelum || realisasiPayload.fotoSebelumUrl || '');
+            const compressedSes = await compressImage(realisasiPayload.Foto_Sesudah || realisasiPayload.fotoSesudah || realisasiPayload.fotoSesudahUrl || '');
+
             const relPayload = {
               ...realisasiPayload,
               id: realisasiPayload.id || realisasiPayload.ID || item.idempotencyKey,
@@ -736,6 +740,12 @@ export class SyncManager {
               workOrderId: resolvedWoId,
               woId: resolvedWoId,
               nomorWO: resolvedNomorWo,
+              Foto_Sebelum: compressedSeb,
+              fotoSebelum: compressedSeb,
+              fotoSebelumUrl: compressedSeb,
+              Foto_Sesudah: compressedSes,
+              fotoSesudah: compressedSes,
+              fotoSesudahUrl: compressedSes,
             };
 
             // 9. Debug aman tepat sebelum saveRealisasi()
