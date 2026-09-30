@@ -150,6 +150,35 @@ class OfflineSyncQueueEngine {
   }
 
   /**
+   * Reset all FAILED sync items back to PENDING so they can be re-synced
+   */
+  public async resetFailedItems(): Promise<number> {
+    try {
+      const failedItems = await dexieDb.sync_queue
+        .where('status')
+        .equals('FAILED')
+        .or('status')
+        .equals('FAILED_ENDPOINT_NOT_FOUND')
+        .toArray();
+
+      let resetCount = 0;
+      for (const item of failedItems) {
+        item.status = 'PENDING';
+        item.retryCount = 0;
+        item.error = undefined;
+        await dexieDb.sync_queue.put(item);
+        resetCount++;
+      }
+
+      console.log(`[SyncQueueEngine] Reset ${resetCount} failed sync items back to PENDING.`);
+      return resetCount;
+    } catch (e) {
+      console.warn('[SyncQueueEngine] Error resetting failed sync items:', e);
+      return 0;
+    }
+  }
+
+  /**
    * Main Queue Processor with concurrency limit & backoff
    */
   public async processQueue(): Promise<{ success: boolean; total: number; synced: number; failed: number }> {
@@ -165,14 +194,21 @@ class OfflineSyncQueueEngine {
 
     const token = ApiService.getAuthToken();
     if (!token) {
-      console.log('[SyncQueueEngine] JWT token missing. Skipping sync queue execution.');
-      return { success: false, total: 0, synced: 0, failed: 0 };
+      console.log('[SyncQueueEngine] JWT token missing. Cannot sync to server.');
+      this.notify({
+        status: 'ERROR',
+        total: 0,
+        completed: 0,
+        failed: 1,
+        message: 'Otentikasi dibutuhkan. Silakan login kembali untuk menyinkronkan data tertahan.',
+      });
+      return { success: false, total: 0, synced: 0, failed: 1 };
     }
 
     this.isProcessing = true;
 
     try {
-      // 0. Recovery: Reset any orphaned 'SYNCING' items back to 'PENDING' before fetching queue
+      // 0. Recovery: Reset any orphaned 'SYNCING' items and FAILED items back to 'PENDING'
       const orphaned = await dexieDb.sync_queue.where('status').equals('SYNCING').toArray();
       if (orphaned.length > 0) {
         for (const item of orphaned) {
@@ -180,6 +216,9 @@ class OfflineSyncQueueEngine {
           await dexieDb.sync_queue.put(item);
         }
       }
+
+      // Auto-reset failed items with high retry count so manual/auto sync always attempts them
+      await this.resetFailedItems();
 
       const pendingItems = await dexieDb.sync_queue
         .where('status')

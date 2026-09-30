@@ -105,11 +105,11 @@ export async function query<T = any>(text: string, params: any[] = []): Promise<
       }
       return res;
     } catch (err: any) {
-      if (err.message?.includes('ECONNREFUSED')) {
+      const errStr = String(err?.message || err || '');
+      if (errStr.includes('ECONNREFUSED') || errStr.includes('connect') || errStr.includes('closed') || errStr.includes('timeout')) {
         directPgFailed = true;
-      } else {
-        console.error(`[DB QUERY ERROR] ${err.message}`);
       }
+      console.warn(`[DB QUERY WARNING] Direct query failed (${err.message}), falling back to gateway.`);
       throw err;
     }
   }

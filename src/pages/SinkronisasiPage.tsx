@@ -16,6 +16,7 @@ import {
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { syncManager } from '../services/syncManager';
 import { idbService } from '../services/indexedDbService';
+import { ApiService } from '../services/apiService';
 import { dexieDb } from '../services/dexieDb';
 import { useToast } from '../hooks/useToast';
 import { getLocalDateTimeString } from '../utils/dateUtils';
@@ -108,10 +109,19 @@ export const SinkronisasiPage: React.FC = () => {
       return;
     }
 
+    const token = ApiService.getAuthToken();
+    if (!token) {
+      showToast('⚠ Otentikasi tidak ditemukan. Silakan login kembali untuk menyinkronkan data ke HyperCloud.', 'error');
+      return;
+    }
+
     setIsSyncing(true);
     showToast('Memulai sinkronisasi data ke server HyperCloud...', 'info');
 
     try {
+      // Reset any previously failed status before syncing
+      await offlineSyncQueue.resetFailedItems();
+
       // 1. Process Realisasi & WO Delete Queue
       const relResult = await offlineSyncQueue.processQueue();
       
@@ -122,9 +132,9 @@ export const SinkronisasiPage: React.FC = () => {
       const totalFailed = relResult.failed + genResult.failCount;
 
       if (totalFailed === 0) {
-        showToast(`Sinkronisasi selesai! ${totalSynced} item berhasil terkirim.`, 'success');
+        showToast(`✓ Sinkronisasi selesai! ${totalSynced} item berhasil terkirim.`, 'success');
       } else {
-        showToast(`Sinkronisasi selesai dengan beberapa kendala: ${totalSynced} berhasil, ${totalFailed} gagal.`, 'info');
+        showToast(`Sinkronisasi selesai: ${totalSynced} berhasil, ${totalFailed} gagal.`, 'info');
       }
     } catch (err: any) {
       showToast(err?.message || 'Terjadi kesalahan saat sinkronisasi.', 'error');

@@ -2343,6 +2343,10 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
       },
     });
   } catch (err: any) {
+    console.warn('[REALISASI QUERY ERROR] Direct query failed, attempting HyperCloudHost Gateway fallback:', err.message);
+    const proxied = await proxyToHypercloudGateway(req, res);
+    if (proxied) return;
+
     return res.status(500).json({
       status: 'error',
       message: err.message,
@@ -2546,10 +2550,13 @@ router.get(
           cleanedRows,
       });
     } catch (err: any) {
-      console.error(
-        '[REALISASI DASHBOARD] Error:',
+      console.warn(
+        '[REALISASI DASHBOARD] Direct query failed, attempting HyperCloudHost Gateway fallback:',
         err.message
       );
+
+      const proxied = await proxyToHypercloudGateway(req, res);
+      if (proxied) return;
 
       return res.status(500).json({
         status: 'error',
