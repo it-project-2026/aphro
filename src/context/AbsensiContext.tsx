@@ -10,6 +10,7 @@ import { resolveUserTimRowAndUlp } from '../services/rekapHarianService';
 import {
   getLocalDateTimeString,
   getWIBDateString,
+  normalizeDateISO,
 } from '../utils/dateUtils';
 
 interface AbsensiContextType {
@@ -62,44 +63,7 @@ export function AbsensiProvider({
   const normalizeDate = React.useCallback(
     (value: unknown): string => {
       if (!value) return '';
-
-      const s = String(value).trim();
-
-      // YYYY-MM-DD atau ISO timestamp
-      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-        return s.substring(0, 10);
-      }
-
-      // DD/MM/YYYY atau DD-MM-YYYY
-      const match = s.match(
-        /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/
-      );
-
-      if (match) {
-        return `${match[3]}-${match[2].padStart(
-          2,
-          '0'
-        )}-${match[1].padStart(2, '0')}`;
-      }
-
-      // Fallback Date parser
-      const parsed = new Date(s);
-
-      if (!Number.isNaN(parsed.getTime())) {
-        const y = parsed.getFullYear();
-        const m = String(parsed.getMonth() + 1).padStart(
-          2,
-          '0'
-        );
-        const d = String(parsed.getDate()).padStart(
-          2,
-          '0'
-        );
-
-        return `${y}-${m}-${d}`;
-      }
-
-      return '';
+      return normalizeDateISO(value);
     },
     []
   );
@@ -197,9 +161,30 @@ export function AbsensiProvider({
 
   /*
    * =========================================================
-   * INITIAL LOAD
+   * INITIAL LOAD (IndexedDB Cache + Server Fetch)
    * =========================================================
    */
+  React.useEffect(() => {
+    let isMounted = true;
+    async function loadCachedAbsensi() {
+      try {
+        const cached = await idbService.getTable<Absensi>('ABSENSI');
+        if (cached && cached.length > 0 && isMounted) {
+          console.log(`[AbsensiContext] Loaded ${cached.length} cached absensi from IndexedDB`);
+          setAbsensiList((prev) => (prev.length === 0 ? cached : prev));
+        }
+      } catch (err) {
+        console.warn('[AbsensiContext] Error loading cached absensi:', err);
+      }
+    }
+
+    loadCachedAbsensi();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   React.useEffect(() => {
     if (!user) {
       setAbsensiList([]);

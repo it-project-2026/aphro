@@ -33,18 +33,20 @@ export const getMessagingSafe = async (): Promise<Messaging | null> => {
 
 export const requestForToken = async () => {
   try {
-    if (typeof window === 'undefined' || !('Notification' in window)) return null;
+    if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
+      return null;
+    }
+    // Only proceed if user has explicitly granted notification permission
+    if (Notification.permission !== 'granted') {
+      return null;
+    }
     const messaging = await getMessagingSafe();
     if (!messaging) return null;
 
-    if (Notification.permission !== 'granted') {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') return null;
-    }
-
     const currentToken = await getToken(messaging, {
       vapidKey: 'BGrmudCVGIDGatsIOlDYs254nhyO32Jgo7siAccQOjQo_Mx_Gn7ctZ_bQDAdrOpe-iil33gB8zxt4vdC0s6kJO4'
-    });
+    }).catch(() => null);
+
     return currentToken || null;
   } catch {
     return null;

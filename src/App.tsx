@@ -57,7 +57,7 @@ const AppContent: React.FC = () => {
 
   const { settings } = useSettings();
 
-  const { hasCheckedInToday } = useAbsensi();
+  const { hasCheckedInToday, isLoading: isAbsensiLoading, absensiList } = useAbsensi();
 
   const {
     isSyncing,
@@ -523,6 +523,10 @@ const AppContent: React.FC = () => {
      * HANYA berlaku untuk role USER biasa.
      * Akun Admin, SuperAdmin, dan Adm TIDAK WAJIB Melakukan Absensi.
      */
+    if (isUserRole && !isAdminRole && isAbsensiLoading && absensiList.length === 0) {
+      return <LoadingFallback />;
+    }
+
     if (
       isUserRole &&
       !isAdminRole &&
