@@ -2519,18 +2519,44 @@ export class ApiService {
 
     try {
       const woRes = await this.fetchWorkOrders(stdId);
-      const relRes = await this.fetchRealisasi({
-        unitId: stdId,
-        limit: 1000,
-        tanggalDari: startDate,
-        tanggalSampai: endDate,
-      });
+      let rawRel: Realisasi[] = [];
+
+      try {
+        const relRes = await this.fetchRealisasi({
+          unitId: stdId,
+          limit: 1000,
+          tanggalDari: startDate,
+          tanggalSampai: endDate,
+        });
+        rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
+      } catch (filteredFetchErr: any) {
+        console.warn('fetchRealisasi with date filters failed, trying fallback without date params:', filteredFetchErr?.message || filteredFetchErr);
+        try {
+          // Fallback: fetch without date params then filter locally in memory
+          const allRelRes = await this.fetchRealisasi({
+            unitId: stdId,
+            limit: 1000,
+          });
+          const allData = Array.isArray(allRelRes?.data) ? allRelRes.data : [];
+          rawRel = allData.filter((r) => {
+            const tgl = (r.tanggalRealisasi || (r as any).TANGGAL || (r as any).tanggal || '').slice(0, 10);
+            return !tgl || (tgl >= startDate && tgl <= endDate);
+          });
+        } catch (unfilteredErr: any) {
+          console.warn('Fallback fetchRealisasi without date params also failed, checking Dexie cache:', unfilteredErr?.message || unfilteredErr);
+          const { dexieDb } = await import('./dexieDb');
+          const localRecords = await dexieDb.realisasi.toArray();
+          rawRel = localRecords
+            .map(item => normalizeRealisasiRow(item))
+            .filter((r) => {
+              const tgl = (r.tanggalRealisasi || (r as any).TANGGAL || (r as any).tanggal || '').slice(0, 10);
+              return !tgl || (tgl >= startDate && tgl <= endDate);
+            });
+        }
+      }
 
       const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
-      const rawRel: Realisasi[] = Array.isArray(relRes?.data) ? relRes.data : [];
-
       const workOrders = rawWo.map((row: any) => normalizeWorkOrderRow(row));
-      // fetchRealisasi() sudah mengembalikan array Realisasi yang telah dinormalisasi
       const realisasiList = rawRel;
 
       const minDate = realisasiList.reduce((min, r) => (!min || (r.tanggalRealisasi && r.tanggalRealisasi < min) ? r.tanggalRealisasi : min), '');
@@ -2550,7 +2576,7 @@ export class ApiService {
         success: true,
         workOrders,
         realisasiList,
-        message: `Memuat ${workOrders.length} Work Order dan ${realisasiList.length} Realisasi dari HyperCloud untuk ${monthPadded}/${year}.`,
+        message: `Memuat ${workOrders.length} Work Order dan ${realisasiList.length} Realisasi untuk ${monthPadded}/${year}.`,
       };
     } catch (err: any) {
       console.warn('fetchRekapPeriodData exception:', err);
