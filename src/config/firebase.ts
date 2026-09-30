@@ -36,6 +36,10 @@ export const requestForToken = async () => {
     if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
       return null;
     }
+    // Prevent repeated 401 requests if FCM credentials were rejected by Google API
+    if (sessionStorage.getItem('aphro_fcm_unauthorized') === 'true') {
+      return null;
+    }
     // Only proceed if user has explicitly granted notification permission
     if (Notification.permission !== 'granted') {
       return null;
@@ -43,11 +47,18 @@ export const requestForToken = async () => {
     const messaging = await getMessagingSafe();
     if (!messaging) return null;
 
-    const currentToken = await getToken(messaging, {
-      vapidKey: 'BGrmudCVGIDGatsIOlDYs254nhyO32Jgo7siAccQOjQo_Mx_Gn7ctZ_bQDAdrOpe-iil33gB8zxt4vdC0s6kJO4'
-    }).catch(() => null);
-
-    return currentToken || null;
+    try {
+      const currentToken = await getToken(messaging, {
+        vapidKey: 'BGrmudCVGIDGatsIOlDYs254nhyO32Jgo7siAccQOjQo_Mx_Gn7ctZ_bQDAdrOpe-iil33gB8zxt4vdC0s6kJO4'
+      });
+      return currentToken || null;
+    } catch (fcmErr: any) {
+      const errMsg = String(fcmErr?.message || fcmErr || '').toLowerCase();
+      if (errMsg.includes('401') || errMsg.includes('unauthorized') || fcmErr?.code === 'messaging/token-subscribe-failed') {
+        sessionStorage.setItem('aphro_fcm_unauthorized', 'true');
+      }
+      return null;
+    }
   } catch {
     return null;
   }

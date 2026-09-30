@@ -40,6 +40,65 @@ export function getCanonicalUlpKey(s?: string): string {
 }
 
 /**
+ * Robust & precise team matcher for Regu within ULP
+ * Ensures teams within the same ULP get UNIQUE, SPECIFIC counts based on Regu Name / Number
+ */
+export function isSpecificReguMatch(
+  rowTimRaw: string,
+  relReguRaw: string,
+  rowUlpRaw?: string,
+  relUlpRaw?: string
+): boolean {
+  if (!rowTimRaw || !relReguRaw) return false;
+
+  const rowUlpKey = getCanonicalUlpKey(rowUlpRaw);
+  const relUlpKey = getCanonicalUlpKey(relUlpRaw);
+
+  // 1. First verify ULP: if both ULP names exist and conflict, return false immediately
+  if (
+    rowUlpKey &&
+    relUlpKey &&
+    rowUlpKey !== relUlpKey &&
+    !rowUlpKey.includes(relUlpKey) &&
+    !relUlpKey.includes(rowUlpKey)
+  ) {
+    return false;
+  }
+
+  const rowTimCanon = getCanonicalReguKey(rowTimRaw);
+  const relReguCanon = getCanonicalReguKey(relReguRaw);
+
+  if (!rowTimCanon || !relReguCanon) return false;
+
+  // 2. Extract Regu number (e.g. 'Tim 01' -> 1, 'Regu 2' -> 2)
+  const rowNumMatch = rowTimCanon.match(/\b0*(\d+)\b/);
+  const relNumMatch = relReguCanon.match(/\b0*(\d+)\b/);
+
+  if (rowNumMatch && relNumMatch) {
+    const rowNum = parseInt(rowNumMatch[1], 10);
+    const relNum = parseInt(relNumMatch[1], 10);
+    // When regu numbers are present on both sides, they MUST match exactly
+    return rowNum === relNum;
+  }
+
+  // 3. Fallback: string matching on regu names with ULP stripped out
+  let cleanRow = rowTimCanon;
+  let cleanRel = relReguCanon;
+  if (rowUlpKey) cleanRow = cleanRow.replace(rowUlpKey, '').trim();
+  if (relUlpKey) cleanRel = cleanRel.replace(relUlpKey, '').trim();
+
+  if (!cleanRow || !cleanRel) {
+    return rowTimCanon === relReguCanon;
+  }
+
+  return (
+    cleanRow === cleanRel ||
+    cleanRow.includes(cleanRel) ||
+    cleanRel.includes(cleanRow)
+  );
+}
+
+/**
  * Helper canonical key untuk pencocokan PENYULANG
  * Toleran terhadap "F. Cingkariang", "F.Cingkariang", "Cingkariang", "CINGKARIANG"
  */
@@ -1124,48 +1183,7 @@ export class RekapHarianService {
               if (!relUlpRaw && matchedWo?.ulpName) relUlpRaw = matchedWo.ulpName;
             }
 
-            const rowUlpKey = getCanonicalUlpKey(row.namaUlp);
-            const relUlpKey = getCanonicalUlpKey(relUlpRaw);
-            const relUlpCanon = getCanonicalReguKey(relUlpRaw);
-            const relTimCanon = getCanonicalReguKey(relReguRaw);
-            
-            const rowNumMatch = rowTimCanon.match(/\d+/);
-            const relNumMatch = relTimCanon.match(/\d+/);
-            
-            let matchTim = false;
-
-            // First verify ULP mismatch: if both ULP names exist and conflict, skip
-            const ulpConflicted = Boolean(
-              rowUlpKey &&
-              relUlpKey &&
-              rowUlpKey !== relUlpKey &&
-              !rowUlpKey.includes(relUlpKey) &&
-              !relUlpKey.includes(rowUlpKey)
-            );
-
-            if (!ulpConflicted && rowTimCanon && relTimCanon) {
-              if (
-                relTimCanon === rowTimCanon ||
-                relTimCanon.includes(rowTimCanon) ||
-                rowTimCanon.includes(relTimCanon)
-              ) {
-                matchTim = true;
-              } else if (
-                rowNumMatch &&
-                relNumMatch &&
-                parseInt(rowNumMatch[0], 10) === parseInt(relNumMatch[0], 10) &&
-                (rowUlpKey === relUlpKey || !rowUlpKey || !relUlpKey)
-              ) {
-                matchTim = true;
-              } else {
-                // Location keyword matching (e.g., 'Koto Tuo', 'Baso', 'Bukittinggi', etc.)
-                const rowKeywords = rowTimCanon.split(' ').filter(w => w.length > 3);
-                const relKeywords = `${relTimCanon} ${relUlpCanon} ${String(rel.lokasiKerja || '').toLowerCase()}`;
-                if (rowKeywords.some(kw => relKeywords.includes(kw))) {
-                  matchTim = true;
-                }
-              }
-            }
+            const matchTim = isSpecificReguMatch(row.timRow, relReguRaw, row.namaUlp, relUlpRaw);
 
             if (matchTim) {
               const dayKey = String(parts.d).padStart(2, '0');
@@ -1198,35 +1216,10 @@ export class RekapHarianService {
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const woUlpCanon = getCanonicalReguKey(wo.ulpName || (wo as any).ULP || '');
-            const woTimCanon = getCanonicalReguKey(wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || '');
-            const woUlpKey = getCanonicalUlpKey(wo.ulpName || (wo as any).ULP || '');
-            const rowUlpKey = getCanonicalUlpKey(row.namaUlp);
-            
-            const rowNumMatch = rowTimCanon.match(/\d+/);
-            const woNumMatch = woTimCanon.match(/\d+/);
-            
-            let matchTim = false;
+            const woReguRaw = wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || '';
+            const woUlpRaw = wo.ulpName || (wo as any).ULP || '';
 
-            const ulpConflicted = Boolean(
-              rowUlpKey &&
-              woUlpKey &&
-              rowUlpKey !== woUlpKey &&
-              !rowUlpKey.includes(woUlpKey) &&
-              !woUlpKey.includes(rowUlpKey)
-            );
-
-            if (!ulpConflicted && rowTimCanon && woTimCanon) {
-              if (
-                woTimCanon === rowTimCanon ||
-                woTimCanon.includes(rowTimCanon) ||
-                rowTimCanon.includes(woTimCanon)
-              ) {
-                matchTim = true;
-              } else if (rowNumMatch && woNumMatch && parseInt(rowNumMatch[0], 10) === parseInt(woNumMatch[0], 10)) {
-                matchTim = true;
-              }
-            }
+            const matchTim = isSpecificReguMatch(row.timRow, woReguRaw, row.namaUlp, woUlpRaw);
 
             if (matchTim) {
               let targetDayKey = String(parts.d).padStart(2, '0');
