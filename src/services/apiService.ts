@@ -49,11 +49,7 @@ export class ApiService {
       const hostname = window.location.hostname;
       const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
       if (!isAphroProduction) {
-        // Only use window.location.origin if the local/preview backend was validated as available.
-        const isLocalValidated = sessionStorage.getItem('aphro_local_backend_validated') === 'true';
-        if (isLocalValidated) {
-          return window.location.origin;
-        }
+        return window.location.origin;
       }
     }
     const rawUrl =
@@ -262,11 +258,11 @@ export class ApiService {
     try {
       console.log(`[ApiService] API request: ${externalUrl}`);
       const res = await fetch(externalUrl, finalOptions);
-      if (res.status === 404 && localUrl && localUrl !== externalUrl) {
-        console.warn(`[ApiService] Primary endpoint 404 for ${externalUrl}. Retrying on application backend (${localUrl})...`);
+      if ((res.status === 404 || res.status >= 500) && localUrl && localUrl !== externalUrl) {
+        console.warn(`[ApiService] Primary endpoint status ${res.status} for ${externalUrl}. Retrying on application backend (${localUrl})...`);
         try {
           const localRes = await fetch(localUrl, finalOptions);
-          if (localRes.ok || localRes.status !== 404) {
+          if (localRes.ok || localRes.status < 500) {
             return localRes;
           }
         } catch (localErr) {
