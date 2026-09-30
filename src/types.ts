@@ -83,6 +83,8 @@ export interface WatermarkedPhoto {
   slotIndex: 1 | 2 | 3;
   dataUrl: string; // base64 image with watermark burned in
   fileUrl?: string; // Google Drive direct link
+  uploadStatus?: 'IDLE' | 'UPLOADING' | 'UPLOADED' | 'FAILED';
+  uploadError?: string;
   originalName: string;
   timestamp: string;
   latitude: number;

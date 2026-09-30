@@ -304,6 +304,9 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     editMode && initialData ? initialData.photosSesudah || [] : []
   );
 
+  // In-flight upload promise cache to prevent duplicate upload requests when user submits form
+  const activeUploadPromises = React.useRef<Map<string, Promise<string>>>(new Map());
+
   React.useEffect(() => {
     if (availableWorkOrders.length === 0) return;
 
@@ -463,6 +466,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           slotIndex,
           dataUrl: compressedBase64,
           fileUrl: '',
+          uploadStatus: 'UPLOADING',
           originalName: file.name,
           timestamp: timestampStr,
           latitude: lat,
@@ -490,20 +494,59 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           'success'
         );
 
-        ensureGoogleDrivePhotoUrl(compressedBase64, {
+        // Start background pre-upload and track Promise in activeUploadPromises
+        const uploadPromise = ensureGoogleDrivePhotoUrl(compressedBase64, {
           nomorWO: selectedWO.nomorWO,
           reguName: selectedWO.reguName,
           photoType: type === 'sebelum' ? 'Realisasi_Sebelum' : 'Realisasi_Sesudah',
         })
           .then((uploadedUrl) => {
-            if (uploadedUrl && isValidPhotoUrl(uploadedUrl)) {
-              photoObj.fileUrl = uploadedUrl;
+            if (uploadedUrl && isValidUploadedPhotoUrl(uploadedUrl)) {
+              if (type === 'sebelum') {
+                setPhotosSebelum((prev) =>
+                  prev.map((p) =>
+                    p.id === photoObj.id
+                      ? { ...p, fileUrl: uploadedUrl, uploadStatus: 'UPLOADED' }
+                      : p
+                  )
+                );
+              } else {
+                setPhotosSesudah((prev) =>
+                  prev.map((p) =>
+                    p.id === photoObj.id
+                      ? { ...p, fileUrl: uploadedUrl, uploadStatus: 'UPLOADED' }
+                      : p
+                  )
+                );
+              }
               console.log(`[REALISASI_PHOTO_DEBUG] Background photo upload ready for ${type} slot ${slotIndex}:`, uploadedUrl);
+              return uploadedUrl;
             }
+            throw new Error('Invalid URL returned from upload');
           })
           .catch((err) => {
+            if (type === 'sebelum') {
+              setPhotosSebelum((prev) =>
+                prev.map((p) =>
+                  p.id === photoObj.id
+                    ? { ...p, uploadStatus: 'FAILED', uploadError: err?.message }
+                    : p
+                )
+              );
+            } else {
+              setPhotosSesudah((prev) =>
+                prev.map((p) =>
+                  p.id === photoObj.id
+                    ? { ...p, uploadStatus: 'FAILED', uploadError: err?.message }
+                    : p
+                )
+              );
+            }
             console.warn('Background photo upload note:', err);
+            return '';
           });
+
+        activeUploadPromises.current.set(photoObj.id, uploadPromise);
       } catch (err: any) {
         showToast(
           `Foto gagal diproses: ${
@@ -633,22 +676,90 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       return;
     }
 
+    const tStart = performance.now();
+    const tValStart = performance.now();
+
     setIsProcessing(true);
     showToast(
       'Menyimpan realisasi & mengunggah foto ke Google Drive...',
       'info'
     );
 
+    const valDuration = performance.now() - tValStart;
+
     try {
-      console.log('[REALISASI_PHOTO_DEBUG] BEFORE_UPLOAD_START');
-      const finalSebUrl = await ensureGoogleDrivePhotoUrl(
-        photosSebelum[0]?.fileUrl || photosSebelum[0]?.dataUrl || '',
-        {
-          nomorWO: resolvedNomorWo || selectedWO.nomorWO,
-          reguName: selectedWO.reguName,
-          photoType: 'Realisasi_Sebelum',
+      // Helper function to resolve photo URL efficiently (Reuse -> Await in-flight -> Parallel fresh upload)
+      const resolvePhotoUrl = async (
+        photo: WatermarkedPhoto | undefined,
+        photoType: 'Realisasi_Sebelum' | 'Realisasi_Sesudah',
+        nomorWO: string,
+        reguName: string
+      ): Promise<{
+        url: string;
+        path: 'REUSE_URL' | 'WAIT_BACKGROUND_UPLOAD' | 'UPLOAD_REQUIRED';
+        durationMs: number;
+      }> => {
+        if (!photo) return { url: '', path: 'REUSE_URL', durationMs: 0 };
+        const tPhotoStart = performance.now();
+
+        // 1. If photo is already uploaded and valid Google Drive URL exists -> REUSE IMMEDIATELY (0ms)
+        if (photo.fileUrl && isValidUploadedPhotoUrl(photo.fileUrl)) {
+          return {
+            url: photo.fileUrl,
+            path: 'REUSE_URL',
+            durationMs: performance.now() - tPhotoStart,
+          };
         }
-      );
+
+        // 2. If background upload is in-flight -> Await existing promise without creating duplicate upload
+        const inFlightPromise = activeUploadPromises.current.get(photo.id);
+        if (inFlightPromise) {
+          try {
+            const awaitedUrl = await inFlightPromise;
+            if (awaitedUrl && isValidUploadedPhotoUrl(awaitedUrl)) {
+              return {
+                url: awaitedUrl,
+                path: 'WAIT_BACKGROUND_UPLOAD',
+                durationMs: performance.now() - tPhotoStart,
+              };
+            }
+          } catch {}
+        }
+
+        // 3. Fallback: Fresh upload needed (e.g. offline queue or failed earlier)
+        const freshPromise = ensureGoogleDrivePhotoUrl(photo.fileUrl || photo.dataUrl || '', {
+          nomorWO,
+          reguName,
+          photoType,
+        });
+        activeUploadPromises.current.set(photo.id, freshPromise);
+        const freshUrl = await freshPromise;
+        return {
+          url: freshUrl,
+          path: 'UPLOAD_REQUIRED',
+          durationMs: performance.now() - tPhotoStart,
+        };
+      };
+
+      const resolvedNomorWoStr = resolvedNomorWo || selectedWO.nomorWO;
+      const reguNameStr = selectedWO.reguName || 'ROW';
+
+      // Concurrently resolve both Foto Sebelum and Foto Sesudah
+      const [sebResult, sesResult] = await Promise.all([
+        resolvePhotoUrl(photosSebelum[0], 'Realisasi_Sebelum', resolvedNomorWoStr, reguNameStr),
+        resolvePhotoUrl(photosSesudah[0], 'Realisasi_Sesudah', resolvedNomorWoStr, reguNameStr),
+      ]);
+
+      const finalSebUrl = sebResult.url;
+      const finalSesUrl = sesResult.url;
+
+      console.log(`[REALISASI_UPLOAD_STATE]
+before=${photosSebelum[0]?.uploadStatus || (isValidUploadedPhotoUrl(finalSebUrl) ? 'UPLOADED' : 'IDLE')}
+after=${photosSesudah[0]?.uploadStatus || (isValidUploadedPhotoUrl(finalSesUrl) ? 'UPLOADED' : 'IDLE')}`);
+
+      console.log(`[REALISASI_SAVE_PATH]
+before=${sebResult.path}
+after=${sesResult.path}`);
 
       // Validate Foto Sebelum upload (Must be a valid remote/local url, not base64)
       if (!isValidUploadedPhotoUrl(finalSebUrl)) {
@@ -657,17 +768,6 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         showToast('Foto Sebelum belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
         return;
       }
-      console.log('[REALISASI_PHOTO_DEBUG] BEFORE_UPLOAD_SUCCESS');
-
-      console.log('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_START');
-      const finalSesUrl = await ensureGoogleDrivePhotoUrl(
-        photosSesudah[0]?.fileUrl || photosSesudah[0]?.dataUrl || '',
-        {
-          nomorWO: resolvedNomorWo || selectedWO.nomorWO,
-          reguName: selectedWO.reguName,
-          photoType: 'Realisasi_Sesudah',
-        }
-      );
 
       // Validate Foto Sesudah upload (Must be a valid remote/local url, not base64)
       if (!isValidUploadedPhotoUrl(finalSesUrl)) {
@@ -676,7 +776,6 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         showToast('Foto Sesudah belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
         return;
       }
-      console.log('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_SUCCESS');
 
       console.log('[REALISASI_PHOTO_DEBUG] FINAL_PHOTO_VALIDATION', {
         beforeValid: isValidUploadedPhotoUrl(finalSebUrl),
@@ -685,18 +784,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         afterUrlPresent: Boolean(finalSesUrl),
       });
 
-      if (!isValidUploadedPhotoUrl(finalSebUrl)) {
-        setIsProcessing(false);
-        showToast('Foto Sebelum belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
-        return;
-      }
-
-      if (!isValidUploadedPhotoUrl(finalSesUrl)) {
-        setIsProcessing(false);
-        showToast('Foto Sesudah belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
-        return;
-      }
-
+      const tApiStart = performance.now();
       if (editMode && initialData) {
         await updateRealisasi(initialData.id, {
           workOrderId: resolvedWoId,
@@ -762,6 +850,22 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           progressPercent: 100,
           status: 'Selesai',
         });
+
+        const totalDuration = performance.now() - tStart;
+        const apiDuration = performance.now() - tApiStart;
+
+        console.log(`[REALISASI_TIMING]
+validation=${valDuration.toFixed(2)}ms
+compress_before=0.00ms (pre-compressed on capture)
+upload_before=${sebResult.durationMs.toFixed(2)}ms
+compress_after=0.00ms (pre-compressed on capture)
+upload_after=${sesResult.durationMs.toFixed(2)}ms
+api_post_and_indexeddb=${apiDuration.toFixed(2)}ms
+TOTAL=${totalDuration.toFixed(2)}ms`);
+
+        // Clean up completed promises
+        if (photosSebelum[0]?.id) activeUploadPromises.current.delete(photosSebelum[0].id);
+        if (photosSesudah[0]?.id) activeUploadPromises.current.delete(photosSesudah[0].id);
 
         setNoTiang('');
         setKeterangan('TEBANG');

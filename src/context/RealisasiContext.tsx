@@ -1158,10 +1158,12 @@ export function RealisasiProvider({
               targetId,
           };
 
+        const tApiPostStart = performance.now();
         const saveRes =
           await ApiService.saveRealisasi(
             fullRealisasi
           );
+        const apiPostDuration = performance.now() - tApiPostStart;
 
         if (!saveRes.success) {
           showToast(
@@ -1193,6 +1195,7 @@ export function RealisasiProvider({
           ]
         );
 
+        const tDexieStart = performance.now();
         try {
           const localDexieRow:
             LocalRealisasi = {
@@ -1220,6 +1223,9 @@ export function RealisasiProvider({
             dexieErr
           );
         }
+        const dexieDuration = performance.now() - tDexieStart;
+
+        console.log(`[API_AND_IDB_SUBTIMING] api_post=${apiPostDuration.toFixed(2)}ms indexeddb_save=${dexieDuration.toFixed(2)}ms`);
 
         auditRealisasiMutation(
           null,

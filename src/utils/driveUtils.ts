@@ -171,66 +171,7 @@ sizeMB=${estMB} MB`);
 
     console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} upload START (nomorWO=${nomorWO}, isBase64=true, len=${base64Len})`);
 
-    // Strategy A: Upload directly to Application Backend Media Storage API (/api/media/upload-photo)
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const { ApiService } = await import('../services/apiService');
-        const token = ApiService.getAuthToken();
-        const res = await ApiService.executeFetch('/api/media/upload-photo', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            base64Data: clean,
-            nomorWO,
-            photoType,
-          }),
-        });
-
-        if (res.ok) {
-          const json = await res.json();
-          const fileUrl = json?.fileUrl || json?.url;
-          if (fileUrl && isValidPhotoUrl(fileUrl)) {
-            console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} backend storage upload SUCCESS (attempt ${attempt}) -> URL: ${fileUrl}`);
-            return fileUrl;
-          }
-        } else {
-          // Classify non-OK server statuses (Section E)
-          let errorType = `HTTP_${res.status}`;
-          if (res.status === 413) {
-            errorType = 'HTTP_413_CONTENT_TOO_LARGE';
-            console.error(`[MEDIA_UPLOAD_413] Server rejected photo upload due to size limit: 413 Content Too Large. No further upload retries.`);
-          } else if (res.status === 401) {
-            errorType = 'HTTP_401_UNAUTHORIZED';
-          } else if (res.status === 403) {
-            errorType = 'HTTP_403_FORBIDDEN';
-          } else if (res.status === 404) {
-            errorType = 'HTTP_404_NOT_FOUND';
-          } else if (res.status >= 500) {
-            errorType = 'HTTP_5XX_SERVER_ERROR';
-          }
-
-          console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} backend upload status classified as: ${errorType}`);
-
-          // For critical client or configuration errors, stop retry loop immediately
-          if (res.status === 413 || res.status === 401 || res.status === 403 || res.status === 404) {
-            break; 
-          }
-        }
-      } catch (backendErr: any) {
-        // Detect CORS / Network errors specifically
-        let errorType = 'NETWORK_ERROR';
-        if (backendErr?.message?.includes('fetch') || backendErr?.message?.includes('NetworkError') || !navigator.onLine) {
-          errorType = 'CORS_ERROR_OR_NETWORK_ERROR';
-        }
-        console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} backend storage attempt ${attempt} warning (${errorType}):`, backendErr?.message || backendErr);
-      }
-    }
-
-    // Strategy B: Upload to Google Apps Script (GAS) if configured or embedded
+    // Strategy 1: Upload directly to Google Apps Script (GAS) / Google Drive
     let gasUrl = options.gasUrl || (typeof localStorage !== 'undefined' ? localStorage.getItem('aphro_gas_url') || '' : '');
     let folderId = options.folderId;
     if (!gasUrl) {
