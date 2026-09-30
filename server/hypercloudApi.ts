@@ -1998,6 +1998,25 @@ router.delete(
  *
  * Endpoint paginated untuk halaman data REALISASI.
  */
+/**
+ * Helper to validate strict YYYY-MM-DD date format and calendar existence
+ */
+function isValidDateFormat(dateStr: string): boolean {
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const [y, m, d] = dateStr.split('-').map(n => parseInt(n, 10));
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dateObj = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dateObj.getUTCFullYear() === y &&
+    dateObj.getUTCMonth() === m - 1 &&
+    dateObj.getUTCDate() === d
+  );
+}
+
+/**
+ * 2. REALISASI
+ */
 const handleGetRealisasiList = async (req: Request, res: Response) => {
   logApiCall('GET', '/api/realisasi', req.query);
 
@@ -2055,6 +2074,35 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
     .toString()
     .trim();
 
+  // Validate date parameters strictly
+  if (tanggalDari) {
+    if (!isValidDateFormat(tanggalDari)) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'VALIDATION_ERROR',
+        message: 'tanggalDari harus menggunakan format YYYY-MM-DD yang valid (contoh: 2026-09-01)',
+      });
+    }
+  }
+
+  if (tanggalSampai) {
+    if (!isValidDateFormat(tanggalSampai)) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'VALIDATION_ERROR',
+        message: 'tanggalSampai harus menggunakan format YYYY-MM-DD yang valid (contoh: 2026-09-30)',
+      });
+    }
+  }
+
+  if (tanggalDari && tanggalSampai && tanggalDari > tanggalSampai) {
+    return res.status(400).json({
+      status: 'error',
+      error: 'VALIDATION_ERROR',
+      message: 'tanggalDari tidak boleh lebih besar dari tanggalSampai',
+    });
+  }
+
   const authUser = (req as any).user;
   const userRole = String(authUser?.role || '').toUpperCase();
   const isPrivileged = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADM' || authUser?.unitId === 'ALL';
@@ -2069,7 +2117,7 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
       const targetUnit = authUser?.unitId || unitId;
       if (targetUnit && targetUnit !== 'ALL') {
         params.push(targetUnit);
-        whereClause += ` AND "unitId" = $${params.length}`;
+        whereClause += ` AND UPPER(COALESCE("unitId", '')) = UPPER($${params.length})`;
       }
 
       // Group WO filter for Role USER
@@ -2098,7 +2146,7 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
       params.push(unitId);
 
       whereClause += `
-        AND "unitId" = $${params.length}
+        AND UPPER(COALESCE("unitId", '')) = UPPER($${params.length})
       `;
     }
 
@@ -2121,34 +2169,19 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
       `;
     }
 
-    if (tanggalDari) {
+    // Date range filter using native DATE comparisons (no LIKE / ~~ operator)
+    if (tanggalDari && tanggalSampai) {
       params.push(tanggalDari);
-
-      whereClause += `
-        AND (
-          CASE
-            WHEN "TANGGAL" LIKE '____-__-__%' THEN SUBSTRING("TANGGAL" FROM 1 FOR 10)
-            WHEN "TANGGAL" LIKE '__-__-____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
-            WHEN "TANGGAL" LIKE '__/__/____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
-            ELSE SUBSTRING(COALESCE("TANGGAL", "Timestamp"::text, "Created_At"::text, ''), 1, 10)
-          END
-        ) >= $${params.length}
-      `;
-    }
-
-    if (tanggalSampai) {
+      const pIdxFrom = params.length;
       params.push(tanggalSampai);
-
-      whereClause += `
-        AND (
-          CASE
-            WHEN "TANGGAL" LIKE '____-__-__%' THEN SUBSTRING("TANGGAL" FROM 1 FOR 10)
-            WHEN "TANGGAL" LIKE '__-__-____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
-            WHEN "TANGGAL" LIKE '__/__/____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
-            ELSE SUBSTRING(COALESCE("TANGGAL", "Timestamp"::text, "Created_At"::text, ''), 1, 10)
-          END
-        ) <= $${params.length}
-      `;
+      const pIdxTo = params.length;
+      whereClause += ` AND "TANGGAL"::date BETWEEN $${pIdxFrom}::date AND $${pIdxTo}::date`;
+    } else if (tanggalDari) {
+      params.push(tanggalDari);
+      whereClause += ` AND "TANGGAL"::date >= $${params.length}::date`;
+    } else if (tanggalSampai) {
+      params.push(tanggalSampai);
+      whereClause += ` AND "TANGGAL"::date <= $${params.length}::date`;
     }
 
     const countSql = `
@@ -2267,6 +2300,35 @@ router.get(
       .toString()
       .trim();
 
+    // Validate date parameters strictly
+    if (tanggalDari) {
+      if (!isValidDateFormat(tanggalDari)) {
+        return res.status(400).json({
+          status: 'error',
+          error: 'VALIDATION_ERROR',
+          message: 'tanggalDari harus menggunakan format YYYY-MM-DD yang valid (contoh: 2026-09-01)',
+        });
+      }
+    }
+
+    if (tanggalSampai) {
+      if (!isValidDateFormat(tanggalSampai)) {
+        return res.status(400).json({
+          status: 'error',
+          error: 'VALIDATION_ERROR',
+          message: 'tanggalSampai harus menggunakan format YYYY-MM-DD yang valid (contoh: 2026-09-30)',
+        });
+      }
+    }
+
+    if (tanggalDari && tanggalSampai && tanggalDari > tanggalSampai) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'VALIDATION_ERROR',
+        message: 'tanggalDari tidak boleh lebih besar dari tanggalSampai',
+      });
+    }
+
     try {
       let whereClause = ` WHERE 1=1`;
 
@@ -2300,34 +2362,19 @@ router.get(
         `;
       }
 
-      if (tanggalDari) {
+      // Date range filter using native DATE comparisons (no LIKE / ~~ operator)
+      if (tanggalDari && tanggalSampai) {
         params.push(tanggalDari);
-
-        whereClause += `
-          AND (
-            CASE
-              WHEN "TANGGAL" LIKE '____-__-__%' THEN SUBSTRING("TANGGAL" FROM 1 FOR 10)
-              WHEN "TANGGAL" LIKE '__-__-____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
-              WHEN "TANGGAL" LIKE '__/__/____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
-              ELSE SUBSTRING(COALESCE("TANGGAL", "Timestamp"::text, "Created_At"::text, ''), 1, 10)
-            END
-          ) >= $${params.length}
-        `;
-      }
-
-      if (tanggalSampai) {
+        const pIdxFrom = params.length;
         params.push(tanggalSampai);
-
-        whereClause += `
-          AND (
-            CASE
-              WHEN "TANGGAL" LIKE '____-__-__%' THEN SUBSTRING("TANGGAL" FROM 1 FOR 10)
-              WHEN "TANGGAL" LIKE '__-__-____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
-              WHEN "TANGGAL" LIKE '__/__/____%' THEN SUBSTRING("TANGGAL" FROM 7 FOR 4) || '-' || SUBSTRING("TANGGAL" FROM 4 FOR 2) || '-' || SUBSTRING("TANGGAL" FROM 1 FOR 2)
-              ELSE SUBSTRING(COALESCE("TANGGAL", "Timestamp"::text, "Created_At"::text, ''), 1, 10)
-            END
-          ) <= $${params.length}
-        `;
+        const pIdxTo = params.length;
+        whereClause += ` AND "TANGGAL"::date BETWEEN $${pIdxFrom}::date AND $${pIdxTo}::date`;
+      } else if (tanggalDari) {
+        params.push(tanggalDari);
+        whereClause += ` AND "TANGGAL"::date >= $${params.length}::date`;
+      } else if (tanggalSampai) {
+        params.push(tanggalSampai);
+        whereClause += ` AND "TANGGAL"::date <= $${params.length}::date`;
       }
 
       const sql = `

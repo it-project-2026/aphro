@@ -715,10 +715,18 @@ export class RekapHarianService {
     realisasiList: Realisasi[],
     workOrders: WorkOrder[]
   ): RekapItemData[] {
-    const normalize = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
-
     const existingPenyulang = new Set(currentRows.map(r => getCanonicalPenyulangKey(r.timRow)));
     const dynamicRows = [...currentRows];
+
+    // Build Work Order maps for fallback penyulang resolution
+    const woMapById: Record<string, WorkOrder> = {};
+    const woMapByNo: Record<string, WorkOrder> = {};
+    if (Array.isArray(workOrders)) {
+      workOrders.forEach((w) => {
+        if (w.id) woMapById[String(w.id).trim()] = w;
+        if (w.nomorWO) woMapByNo[String(w.nomorWO).trim().toUpperCase()] = w;
+      });
+    }
 
     const addMissingPenyulang = (ulp?: string, penyulang?: string) => {
       if (!penyulang) return;
@@ -739,20 +747,10 @@ export class RekapHarianService {
       }
     };
 
-    // Build Work Order maps for fallback penyulang resolution
-    const woMapById: Record<string, WorkOrder> = {};
-    const woMapByNo: Record<string, WorkOrder> = {};
-    if (Array.isArray(workOrders)) {
-      workOrders.forEach((w) => {
-        if (w.id) woMapById[w.id] = w;
-        if (w.nomorWO) woMapByNo[w.nomorWO] = w;
-      });
-    }
-
     realisasiList?.forEach(r => {
       let peny = r.penyulangName || (r as any).Penyulang || (r as any).PENYULANG || (r as any).Nama_Penyulang || '';
       if (!peny || peny === '-' || peny === 'null') {
-        const matchedWo = woMapById[r.workOrderId] || woMapByNo[r.nomorWO];
+        const matchedWo = (r.workOrderId && woMapById[r.workOrderId]) || (r.nomorWO && woMapByNo[String(r.nomorWO).trim().toUpperCase()]);
         if (matchedWo?.penyulangName) peny = matchedWo.penyulangName;
       }
       addMissingPenyulang(r.ulpName, peny);
@@ -794,7 +792,7 @@ export class RekapHarianService {
               (rel as any).FEEDER ||
               '';
             if (!relPenyulangRaw || relPenyulangRaw === '-' || relPenyulangRaw === 'null') {
-              const matchedWo = woMapById[rel.workOrderId] || woMapByNo[rel.nomorWO];
+              const matchedWo = (rel.workOrderId && woMapById[rel.workOrderId]) || (rel.nomorWO && woMapByNo[String(rel.nomorWO).trim().toUpperCase()]);
               if (matchedWo?.penyulangName) relPenyulangRaw = matchedWo.penyulangName;
             }
             const relPenyulangCanon = getCanonicalPenyulangKey(relPenyulangRaw);
@@ -819,14 +817,6 @@ export class RekapHarianService {
               } else {
                 updatedDaily[dayKey].pangkas++;
               }
-
-              console.log('[REKAP TEBANG PANGKAS]', {
-                type: 'penyulang',
-                tebang: updatedDaily[dayKey].tebang1,
-                pangkas: updatedDaily[dayKey].pangkas,
-                tanggal: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${dayKey}`,
-                relId: rel.id || rel.ID
-              });
             }
           }
         });
@@ -1031,6 +1021,16 @@ export class RekapHarianService {
     realisasiList: Realisasi[],
     workOrders: WorkOrder[]
   ): RekapItemData[] {
+    // Build Work Order maps for fallback regu/ulp resolution
+    const woMapById: Record<string, WorkOrder> = {};
+    const woMapByNo: Record<string, WorkOrder> = {};
+    if (Array.isArray(workOrders)) {
+      workOrders.forEach((w) => {
+        if (w.id) woMapById[String(w.id).trim()] = w;
+        if (w.nomorWO) woMapByNo[String(w.nomorWO).trim().toUpperCase()] = w;
+      });
+    }
+
     // Dynamically include any teams from realisasi or workOrders that are not in currentRows
     const existingTeams = new Set(currentRows.map(r => getCanonicalReguKey(r.timRow)));
     const dynamicRows = [...currentRows];
@@ -1054,7 +1054,14 @@ export class RekapHarianService {
       }
     };
 
-    realisasiList?.forEach(r => addMissingTeam(r.ulpName, r.reguName || r.petugasName));
+    realisasiList?.forEach(r => {
+      let regu = r.reguName || (r as any).REGU_ROW || (r as any).Regu || (r as any).petugasName || '';
+      if (!regu || regu === '-' || regu === 'null') {
+        const matchedWo = (r.workOrderId && woMapById[r.workOrderId]) || (r.nomorWO && woMapByNo[String(r.nomorWO).trim().toUpperCase()]);
+        if (matchedWo?.reguName) regu = matchedWo.reguName;
+      }
+      addMissingTeam(r.ulpName, regu);
+    });
     workOrders?.forEach(w => addMissingTeam(w.ulpName, w.reguName));
 
     return dynamicRows.map((row) => {
@@ -1085,9 +1092,17 @@ export class RekapHarianService {
           if (!parts) return;
 
           if (parts.y === year && parts.m === monthIndex + 1) {
-            const relUlpRaw = rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || '';
+            let relUlpRaw = rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || '';
+            let relReguRaw = rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || '';
+
+            // Fallback resolution from Work Order
+            if (!relReguRaw || relReguRaw === '-' || relReguRaw === 'null') {
+              const matchedWo = (rel.workOrderId && woMapById[rel.workOrderId]) || (rel.nomorWO && woMapByNo[String(rel.nomorWO).trim().toUpperCase()]);
+              if (matchedWo?.reguName) relReguRaw = matchedWo.reguName;
+              if (!relUlpRaw && matchedWo?.ulpName) relUlpRaw = matchedWo.ulpName;
+            }
+
             const relUlpCanon = getCanonicalReguKey(relUlpRaw);
-            const relReguRaw = rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || '';
             const relTimCanon = getCanonicalReguKey(relReguRaw);
             
             const rowNumMatch = rowTimCanon.match(/\d+/);
@@ -1101,10 +1116,14 @@ export class RekapHarianService {
                 rowTimCanon.includes(relTimCanon)
               ) {
                 matchTim = true;
-              } else if (rowNumMatch && relNumMatch) {
-                const matchUlp = !relUlpCanon || !rowUlpCanon || relUlpCanon.includes(rowUlpCanon) || rowUlpCanon.includes(relUlpCanon) || relTimCanon.includes(rowUlpCanon);
-                if (matchUlp) {
-                  matchTim = parseInt(rowNumMatch[0], 10) === parseInt(relNumMatch[0], 10);
+              } else if (rowNumMatch && relNumMatch && parseInt(rowNumMatch[0], 10) === parseInt(relNumMatch[0], 10)) {
+                matchTim = true;
+              } else {
+                // Location keyword matching (e.g., 'Koto Tuo', 'Baso', 'Bukittinggi', etc.)
+                const rowKeywords = rowTimCanon.split(' ').filter(w => w.length > 3);
+                const relKeywords = `${relTimCanon} ${relUlpCanon} ${String(rel.lokasiKerja || '').toLowerCase()}`;
+                if (rowKeywords.some(kw => relKeywords.includes(kw))) {
+                  matchTim = true;
                 }
               }
             }
@@ -1121,14 +1140,6 @@ export class RekapHarianService {
               } else {
                 updatedDaily[dayKey].pangkas++;
               }
-
-              console.log('[REKAP TEBANG PANGKAS]', {
-                type: 'pekerjaan_harian',
-                tebang: updatedDaily[dayKey].tebang1,
-                pangkas: updatedDaily[dayKey].pangkas,
-                tanggal: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${dayKey}`,
-                relId: rel.id || rel.ID
-              });
 
               // Track dates of activity for each Penyulang to help align KMS
               const penyClean = getCanonicalPenyulangKey(rel.penyulangName || (rel as any).Penyulang || 'GENERAL');
