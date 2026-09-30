@@ -2656,23 +2656,23 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       )
       ON CONFLICT ("ID")
       DO UPDATE SET
-        "unitId" = EXCLUDED."unitId",
-        "WO_ID" = EXCLUDED."WO_ID",
-        "Nomor_WO" = EXCLUDED."Nomor_WO",
-        "ULP" = EXCLUDED."ULP",
-        "REGU_ROW" = EXCLUDED."REGU_ROW",
-        "PENYULANG" = EXCLUDED."PENYULANG",
-        "NO_TIANG" = EXCLUDED."NO_TIANG",
-        "TANGGAL" = EXCLUDED."TANGGAL",
+        "unitId" = COALESCE(NULLIF(EXCLUDED."unitId", ''), "REALISASI"."unitId"),
+        "WO_ID" = COALESCE(NULLIF(EXCLUDED."WO_ID", ''), "REALISASI"."WO_ID"),
+        "Nomor_WO" = COALESCE(NULLIF(EXCLUDED."Nomor_WO", ''), "REALISASI"."Nomor_WO"),
+        "ULP" = COALESCE(NULLIF(EXCLUDED."ULP", ''), "REALISASI"."ULP"),
+        "REGU_ROW" = COALESCE(NULLIF(EXCLUDED."REGU_ROW", ''), "REALISASI"."REGU_ROW"),
+        "PENYULANG" = COALESCE(NULLIF(EXCLUDED."PENYULANG", ''), "REALISASI"."PENYULANG"),
+        "NO_TIANG" = COALESCE(NULLIF(EXCLUDED."NO_TIANG", ''), "REALISASI"."NO_TIANG"),
+        "TANGGAL" = COALESCE(NULLIF(EXCLUDED."TANGGAL", ''), "REALISASI"."TANGGAL"),
         "Foto_Sebelum" = COALESCE(NULLIF(EXCLUDED."Foto_Sebelum", ''), "REALISASI"."Foto_Sebelum"),
         "Foto_Sesudah" = COALESCE(NULLIF(EXCLUDED."Foto_Sesudah", ''), "REALISASI"."Foto_Sesudah"),
-        "Jenis_Tanaman" = EXCLUDED."Jenis_Tanaman",
-        "Keterangan" = EXCLUDED."Keterangan",
-        "Pertumbuhan_Tanaman" = EXCLUDED."Pertumbuhan_Tanaman",
-        "Kendala" = EXCLUDED."Kendala",
-        "Latitude_Longitude" = EXCLUDED."Latitude_Longitude",
-        "Lokasi_kerja" = EXCLUDED."Lokasi_kerja",
-        "Timestamp" = EXCLUDED."Timestamp"
+        "Jenis_Tanaman" = COALESCE(NULLIF(EXCLUDED."Jenis_Tanaman", ''), "REALISASI"."Jenis_Tanaman"),
+        "Keterangan" = COALESCE(NULLIF(EXCLUDED."Keterangan", ''), "REALISASI"."Keterangan"),
+        "Pertumbuhan_Tanaman" = COALESCE(NULLIF(EXCLUDED."Pertumbuhan_Tanaman", ''), "REALISASI"."Pertumbuhan_Tanaman"),
+        "Kendala" = COALESCE(NULLIF(EXCLUDED."Kendala", ''), "REALISASI"."Kendala"),
+        "Latitude_Longitude" = COALESCE(NULLIF(EXCLUDED."Latitude_Longitude", ''), "REALISASI"."Latitude_Longitude"),
+        "Lokasi_kerja" = COALESCE(NULLIF(EXCLUDED."Lokasi_kerja", ''), "REALISASI"."Lokasi_kerja"),
+        "Timestamp" = COALESCE(EXCLUDED."Timestamp", "REALISASI"."Timestamp")
       RETURNING *;
     `;
 
