@@ -527,11 +527,11 @@ class OfflineSyncQueueEngine {
 
       const is401 = errStr.includes('401') || errStr.includes('unauthorized') || errStr.includes('token') || errStr.includes('login');
       if (is401) {
-        item.status = 'FAILED';
-        item.retryCount = 999;
-        item.error = 'Otentikasi gagal (HTTP 401). Silakan login kembali.';
+        item.status = 'PENDING';
+        item.retryCount = 0;
+        item.error = 'Sesi otentikasi telah berakhir (HTTP 401). Silakan login kembali untuk menyinkronkan data ini.';
         await dexieDb.sync_queue.put(item);
-        console.warn(`[SyncQueueEngine] Item ${item.idempotencyKey} stopped due to 401 Auth Error.`);
+        console.warn(`[SyncQueueEngine] Item ${item.idempotencyKey} kept as PENDING awaiting fresh JWT token login.`);
         return false;
       }
 

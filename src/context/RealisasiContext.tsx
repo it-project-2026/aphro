@@ -723,6 +723,8 @@ export function RealisasiProvider({
           nomorWO: newRelUI.nomorWO,
         });
 
+        let lastSaveErrorMsg: string | undefined;
+
         // 1. ONLINE-FIRST logic
         if (typeof navigator !== 'undefined' && navigator.onLine) {
           try {
@@ -758,9 +760,11 @@ export function RealisasiProvider({
               await fetchDashboardRealisasi();
               return newRelUI;
             } else {
+              lastSaveErrorMsg = saveRes?.message;
               console.warn('[RealisasiContext] API save returned error, falling back to offline queue:', saveRes?.message);
             }
-          } catch (directErr) {
+          } catch (directErr: any) {
+            lastSaveErrorMsg = directErr?.message;
             console.warn('[RealisasiContext] Direct save exception:', directErr);
           }
         }
@@ -772,8 +776,10 @@ export function RealisasiProvider({
         
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
           showToast('⚠ Tidak ada koneksi Internet. Data tersimpan sementara di perangkat dan akan disinkronkan saat koneksi tersedia.', 'info');
+        } else if (lastSaveErrorMsg) {
+          showToast(`⚠ Data tersimpan di perangkat (Menunggu Sync): ${lastSaveErrorMsg}`, 'warning');
         } else {
-          showToast('⚠ HyperCloud tidak dapat dihubungi. Data disimpan sementara dan menunggu sinkronisasi.', 'warning');
+          showToast('⚠ Server belum mengonfirmasi. Data disimpan sementara di perangkat dan menunggu sinkronisasi.', 'warning');
         }
         return newRelUI;
       },

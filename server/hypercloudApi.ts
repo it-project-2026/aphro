@@ -190,13 +190,18 @@ function isValidPhotoUrlServer(val: any): boolean {
     lower === 'undefined' ||
     lower === '-' ||
     lower === '""' ||
-    lower === "''" ||
-    trimmed.startsWith('data:image') ||
-    (trimmed.length > 500 && !trimmed.startsWith('http'))
+    lower === "''"
   ) {
     return false;
   }
-  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  return (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('/uploads/') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('data:image') ||
+    trimmed.length > 20
+  );
 }
 
 /**
@@ -2674,11 +2679,40 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
     const tanggalVal = toNullableTimestamp(r.TANGGAL || r.tanggal) || new Date().toISOString().split('T')[0];
     const timestampVal = toNullableTimestamp(r.Timestamp || r.timestamp) || new Date().toISOString();
 
-    const fotoSebVal = (r.Foto_Sebelum || r.fotoSebelum || r.fotoSebelumUrl || '').toString().trim();
-    const fotoSesVal = (r.Foto_Sesudah || r.fotoSesudah || r.fotoSesudahUrl || '').toString().trim();
+    let fotoSebVal = (r.Foto_Sebelum || r.fotoSebelum || r.fotoSebelumUrl || '').toString().trim();
+    let fotoSesVal = (r.Foto_Sesudah || r.fotoSesudah || r.fotoSesudahUrl || '').toString().trim();
+
+    // Auto-convert raw Base64 photo payloads to server file storage (/uploads/realisasi/...)
+    if (fotoSebVal.startsWith('data:image') || (fotoSebVal.length > 500 && !fotoSebVal.startsWith('http'))) {
+      try {
+        const { extractBase64ToBuffer, saveImageFile } = await import('./photoMigrationService');
+        const decoded = extractBase64ToBuffer(fotoSebVal);
+        if (decoded && decoded.buffer.length > 50) {
+          const safeWo = String(r.Nomor_WO || r.nomorWO || r.WO_ID || 'WO').replace(/[^a-zA-Z0-9_-]/g, '_');
+          fotoSebVal = saveImageFile(decoded.buffer, safeWo, 'sebelum', decoded.ext);
+          console.log(`[REALISASI_UPSERT] Auto-converted photo sebelum base64 -> file URL: ${fotoSebVal}`);
+        }
+      } catch (err: any) {
+        console.warn('[REALISASI_UPSERT] Auto base64 photo sebelum conversion warning:', err.message);
+      }
+    }
+
+    if (fotoSesVal.startsWith('data:image') || (fotoSesVal.length > 500 && !fotoSesVal.startsWith('http'))) {
+      try {
+        const { extractBase64ToBuffer, saveImageFile } = await import('./photoMigrationService');
+        const decoded = extractBase64ToBuffer(fotoSesVal);
+        if (decoded && decoded.buffer.length > 50) {
+          const safeWo = String(r.Nomor_WO || r.nomorWO || r.WO_ID || 'WO').replace(/[^a-zA-Z0-9_-]/g, '_');
+          fotoSesVal = saveImageFile(decoded.buffer, safeWo, 'sesudah', decoded.ext);
+          console.log(`[REALISASI_UPSERT] Auto-converted photo sesudah base64 -> file URL: ${fotoSesVal}`);
+        }
+      } catch (err: any) {
+        console.warn('[REALISASI_UPSERT] Auto base64 photo sesudah conversion warning:', err.message);
+      }
+    }
 
     // STRICT VALIDATION FOR NORMAL PETUGAS REALISASI CREATE (POST)
-    // Both Foto Sebelum and Foto Sesudah must be valid URLs before saving
+    // Both Foto Sebelum and Foto Sesudah must be available before saving
     const isManualAdmin = Boolean(r.isManualAdmin || r.bypassPhotoValidation);
     if (req.method === 'POST' && !isManualAdmin && !req.params.id) {
       const isSebValid = isValidPhotoUrlServer(fotoSebVal);
