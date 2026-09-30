@@ -1,6 +1,15 @@
 {
   "headers": [
     {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/",
       "headers": [
         {
@@ -43,7 +52,7 @@
       "destination": "https://api.aphro-row.my.id/api/:match*"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|assets/|uploads/|.*\\.[a-zA-Z0-9]+$).*)",
       "destination": "/index.html"
     }
   ]

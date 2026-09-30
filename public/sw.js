@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aphro-v2026.09.16.01';
+const CACHE_NAME = 'aphro-v2026.09.30.01';
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/favicon.ico',
@@ -68,8 +68,11 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request, { cache: 'no-cache' })
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
-            const copy = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+            const contentType = networkResponse.headers.get('content-type') || '';
+            if (contentType.includes('text/html')) {
+              const copy = networkResponse.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+            }
           }
           return networkResponse;
         })
@@ -78,15 +81,32 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Cache-First for Hashed JS/CSS and static assets
+  // 3. Cache-First for Hashed JS/CSS and static assets with strict Content-Type safety
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        return cachedResponse;
+        const contentType = cachedResponse.headers.get('content-type') || '';
+        if (url.pathname.endsWith('.js') && contentType.includes('text/html')) {
+          caches.open(CACHE_NAME).then((cache) => cache.delete(event.request));
+        } else {
+          return cachedResponse;
+        }
       }
+
       return fetch(event.request).then((networkResponse) => {
-        // Cache static assets dynamically (excluding API/HTML)
-        if (networkResponse.status === 200 && (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|woff2?)$/))) {
+        if (!networkResponse || networkResponse.status !== 200) {
+          return networkResponse;
+        }
+
+        const contentType = networkResponse.headers.get('content-type') || '';
+
+        // Prevent caching HTML fallbacks when browser requests JS/CSS assets
+        if (url.pathname.match(/\.(js|css)$/) && contentType.includes('text/html')) {
+          return networkResponse;
+        }
+
+        // Cache static assets dynamically if valid
+        if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|woff2?)$/)) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
         }
