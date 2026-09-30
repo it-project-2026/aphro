@@ -272,7 +272,9 @@ const AppContent: React.FC = () => {
             .toUpperCase() === 'USER'
         ) {
           return (
-            <WorkOrderMainPage />
+            <RealisasiMainPage
+              initialSubTab="input"
+            />
           );
         }
 

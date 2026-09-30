@@ -4,6 +4,8 @@ import { useWorkOrders } from '../context/WorkOrderContext';
 import { useSettings } from '../context/SettingsContext';
 import { useGASSync } from '../context/GASSyncContext';
 import { useMasterData } from '../context/MasterDataContext';
+import { useAbsensi } from '../context/AbsensiContext';
+import { useUI } from '../context/UIContext';
 import { resolveUserTimRowAndUlp } from '../services/rekapHarianService';
 import { InisiasiService } from '../services/inisiasiService';
 import { useToast } from '../hooks/useToast';
@@ -37,7 +39,15 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   const { settings } = useSettings();
   const { syncWithGAS, isSyncing } = useGASSync();
   const { users, ulpList, reguList } = useMasterData();
+  const { hasCheckedInToday } = useAbsensi();
+  const { setActiveTab } = useUI();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (hasCheckedInToday) {
+      setActiveTab('input_realisasi');
+    }
+  }, [hasCheckedInToday, setActiveTab]);
 
   const userIdentity = useMemo(() => {
     const activeUnit = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || InisiasiService.getActiveInisiasiUnit().namaUL;
