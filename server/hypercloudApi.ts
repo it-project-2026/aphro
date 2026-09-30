@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import bcrypt from 'bcryptjs';
-import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl } from './database';
+import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl, getPool } from './database';
 
 const router = Router();
 
@@ -34,6 +34,11 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
   // Pre-sanitize GET requests for /api/realisasi with date filters to prevent remote gateway SQL date operator 500 errors
   const isRealisasiGet = req.method === 'GET' && (endpoint === '/realisasi' || endpoint === '/realisasi/dashboard' || endpoint.startsWith('/realisasi'));
   const hasDateFilter = Boolean(req.query.tanggalDari || req.query.tanggalSampai);
+
+  // If direct PostgreSQL pool is active, skip remote gateway proxy and execute pristine local SQL query
+  if (isRealisasiGet && getPool() !== null) {
+    return false;
+  }
 
   let targetQueryParams = { ...req.query };
   if (isRealisasiGet && hasDateFilter) {
