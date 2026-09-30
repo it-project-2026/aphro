@@ -31,91 +31,75 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
     };
   }
 
+  // Pre-sanitize GET requests for /api/realisasi with date filters to prevent remote gateway SQL date operator 500 errors
+  const isRealisasiGet = req.method === 'GET' && (endpoint === '/realisasi' || endpoint === '/realisasi/dashboard' || endpoint.startsWith('/realisasi'));
+  const hasDateFilter = Boolean(req.query.tanggalDari || req.query.tanggalSampai);
+
+  let targetQueryParams = { ...req.query };
+  if (isRealisasiGet && hasDateFilter) {
+    delete targetQueryParams.tanggalDari;
+    delete targetQueryParams.tanggalSampai;
+    if (endpoint === '/realisasi') {
+      targetQueryParams.limit = '10000';
+      targetQueryParams.page = '1';
+    }
+  }
+
   try {
     const remoteRes = await axios({
       method: req.method as any,
       url,
-      params: req.query,
+      params: targetQueryParams,
       data: req.method !== 'GET' ? bodyData : undefined,
       headers,
       timeout: 10000,
       validateStatus: () => true,
     });
 
-    if (remoteRes.status >= 500) {
-      // Special self-healing recovery for GET /api/realisasi or /api/realisasi/dashboard with date filters
-      const isRealisasiGet = req.method === 'GET' && (endpoint === '/realisasi' || endpoint === '/realisasi/dashboard' || endpoint.startsWith('/realisasi'));
-      const hasDateFilter = Boolean(req.query.tanggalDari || req.query.tanggalSampai);
+    if (remoteRes.status === 200 && isRealisasiGet && hasDateFilter && remoteRes.data && Array.isArray(remoteRes.data.data)) {
+      const rawRows = remoteRes.data.data;
+      const tanggalDariStr = String(req.query.tanggalDari || '').trim();
+      const tanggalSampaiStr = String(req.query.tanggalSampai || '').trim();
 
-      if (isRealisasiGet && hasDateFilter) {
-        console.warn(`[HYPERCLOUD PROXY RECOVERY] Remote gateway returned HTTP ${remoteRes.status} due to remote SQL date operator error. Fetching dataset without date params to apply secure in-memory date filter...`);
-        try {
-          const cleanParams = { ...req.query };
-          delete cleanParams.tanggalDari;
-          delete cleanParams.tanggalSampai;
-          if (endpoint === '/realisasi') {
-            cleanParams.limit = '10000';
-            cleanParams.page = '1';
-          }
+      const filteredRows = rawRows.filter((item: any) => {
+        const rawTgl = String(item.TANGGAL || item.tanggal || item.Tanggal || '').slice(0, 10);
+        if (!rawTgl) return true;
+        if (tanggalDariStr && rawTgl < tanggalDariStr) return false;
+        if (tanggalSampaiStr && rawTgl > tanggalSampaiStr) return false;
+        return true;
+      });
 
-          const fallbackRemoteRes = await axios({
-            method: 'GET',
-            url,
-            params: cleanParams,
-            headers,
-            timeout: 15000,
-            validateStatus: () => true,
-          });
-
-          if (fallbackRemoteRes.status === 200 && fallbackRemoteRes.data && Array.isArray(fallbackRemoteRes.data.data)) {
-            const rawRows = fallbackRemoteRes.data.data;
-            const tanggalDariStr = String(req.query.tanggalDari || '').trim();
-            const tanggalSampaiStr = String(req.query.tanggalSampai || '').trim();
-
-            const filteredRows = rawRows.filter((item: any) => {
-              const rawTgl = String(item.TANGGAL || item.tanggal || item.Tanggal || '').slice(0, 10);
-              if (!rawTgl) return true;
-              if (tanggalDariStr && rawTgl < tanggalDariStr) return false;
-              if (tanggalSampaiStr && rawTgl > tanggalSampaiStr) return false;
-              return true;
-            });
-
-            if (endpoint === '/realisasi/dashboard') {
-              res.status(200).json({
-                status: 'success',
-                unitId: req.query.unitId || 'ALL',
-                count: filteredRows.length,
-                data: filteredRows,
-              });
-              return true;
-            }
-
-            const page = Math.max(parseInt(String(req.query.page || '1'), 10), 1);
-            const limit = Math.min(Math.max(parseInt(String(req.query.limit || '20'), 10), 1), 1000);
-            const totalRecords = filteredRows.length;
-            const totalPages = Math.ceil(totalRecords / limit) || 1;
-            const offset = (page - 1) * limit;
-            const paginatedRows = filteredRows.slice(offset, offset + limit);
-
-            console.log(`[HYPERCLOUD PROXY RECOVERY SUCCESS] Filtered ${rawRows.length} rows down to ${totalRecords} matching date range ${tanggalDariStr || 'MIN'} -> ${tanggalSampaiStr || 'MAX'}`);
-
-            res.status(200).json({
-              status: 'success',
-              data: paginatedRows,
-              pagination: {
-                page,
-                limit,
-                totalRecords,
-                totalPages,
-              },
-            });
-            return true;
-          }
-        } catch (recErr: any) {
-          console.warn('[HYPERCLOUD PROXY RECOVERY FAILED]', recErr.message);
-        }
+      if (endpoint === '/realisasi/dashboard') {
+        res.status(200).json({
+          status: 'success',
+          unitId: req.query.unitId || 'ALL',
+          count: filteredRows.length,
+          data: filteredRows,
+        });
+        return true;
       }
 
+      const page = Math.max(parseInt(String(req.query.page || '1'), 10), 1);
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit || '20'), 10), 1), 1000);
+      const totalRecords = filteredRows.length;
+      const totalPages = Math.ceil(totalRecords / limit) || 1;
+      const offset = (page - 1) * limit;
+      const paginatedRows = filteredRows.slice(offset, offset + limit);
+
+      res.status(200).json({
+        status: 'success',
+        data: paginatedRows,
+        pagination: {
+          page,
+          limit,
+          totalRecords,
+          totalPages,
+        },
+      });
+      return true;
+    }
+
+    if (remoteRes.status >= 500) {
       console.warn(`[HYPERCLOUD PROXY] Remote gateway returned HTTP ${remoteRes.status} for ${req.method} ${endpoint}. Falling back to local Express handler.`);
       return false;
     }
