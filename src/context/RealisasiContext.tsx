@@ -1476,11 +1476,9 @@ export function RealisasiProvider({
               );
             } else {
               showToast(
-                'Realisasi dihapus di perangkat (Server: ' +
-                  (res.message ||
-                    'Pending') +
-                ')',
-                'info'
+                'Gagal menghapus dari Database: ' +
+                  (res.message || 'Ditolak server'),
+                'error'
               );
             }
 

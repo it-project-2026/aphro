@@ -5,6 +5,7 @@ import { useToast } from '../hooks/useToast';
 import { ApiService } from '../services/apiService';
 import { InisiasiService } from '../services/inisiasiService';
 import { syncManager } from '../services/syncManager';
+import { idbService } from '../services/indexedDbService';
 import {
   getLocalDateTimeString,
   getWIBDateString,
@@ -175,6 +176,8 @@ export function AbsensiProvider({
         );
 
         setAbsensiList(sortedData);
+        // Persist fresh server state to IndexedDB cache so GASSyncProvider doesn't restore stale data
+        idbService.saveTable('ABSENSI', sortedData).catch((e) => console.warn('Failed to cache ABSENSI to idb:', e));
       } else {
         console.warn(
           '[ABSENSI TRACE] fetchAbsensi FAILED:',
@@ -591,14 +594,23 @@ export function AbsensiProvider({
           return false;
         }
 
+        const currentRecord = absensiList[existingIndex] as any;
         const updatedAbs = {
-          ...absensiList[
-            existingIndex
-          ],
+          ...currentRecord,
           ...absData,
           updatedAt:
             getLocalDateTimeString(),
         };
+
+        // If petugasList is being updated, clean out root PETUGAS_i/KET_i so they don't override the edited petugasList
+        if (Array.isArray(absData.petugasList) && absData.petugasList.length > 0) {
+          for (let i = 1; i <= 20; i++) {
+            delete (updatedAbs as any)[`PETUGAS_${i}`];
+            delete (updatedAbs as any)[`KET_${i}`];
+            delete (updatedAbs as any)[`Petugas_${i}`];
+            delete (updatedAbs as any)[`Ket_${i}`];
+          }
+        }
 
         const isOnline =
           typeof navigator !==

@@ -423,15 +423,19 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      if (!res.offline) {
+      if (!res.offline && res.status !== 'error') {
         showToast('Work Order berhasil diperbarui', 'success');
         await dexieDb.work_orders.update(id, { syncStatus: 'SYNCED' });
         // Force refresh work orders from API after update
         refreshWorkOrders(0, true).catch(() => {});
+      } else if (res.status === 'error') {
+        showToast(`Gagal update di server: ${res.message || 'Error'}`, 'error');
+        // Revert local changes from database
+        refreshWorkOrders(0, true).catch(() => {});
       } else {
         showToast('Tersimpan di antrean offline.', 'info');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Update WO error:', err);
       showToast('Koneksi terputus, tersimpan di antrean offline.', 'info');
     }
@@ -441,30 +445,44 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     const cleanId = (id || '').trim();
     const cleanNomor = (nomorWO || '').trim();
 
-    setWorkOrders((prev) => prev.filter((wo) => wo.id !== cleanId && wo.nomorWO !== cleanNomor));
-
     try {
-      await dexieDb.work_orders.delete(cleanId);
-    } catch (e) {
-      console.warn('Delete Dexie WO error:', e);
-    }
+      const result = await ApiService.deleteWorkOrder(cleanId);
+      if (result.success) {
+        setWorkOrders((prev) => prev.filter((wo) => wo.id !== cleanId && wo.nomorWO !== cleanNomor));
+        try {
+          await dexieDb.work_orders.delete(cleanId);
+        } catch (e) {
+          console.warn('Delete Dexie WO error:', e);
+        }
+        showToast('Work Order berhasil dihapus dari Database', 'success');
+        refreshWorkOrders(0, true).catch(() => {});
+        return;
+      }
 
-    try {
-      await syncManager.executeMutation({
-        type: 'DELETE',
-        tableName: 'WORK_ORDER',
-        payload: { id: cleanId, nomorWO: cleanNomor },
-        apiCall: async () => {
-          const result = await ApiService.deleteWorkOrder(cleanId);
-          return { status: result.success ? 'success' : 'error', message: result.message };
-        },
-      });
-
-      showToast('Work Order dihapus', 'info');
-    } catch (err) {
-      showToast('Hapus tersimpan (offline).', 'info');
+      // If online API delete returned error (e.g. 403 or 401)
+      showToast(`Gagal menghapus Work Order: ${result.message || 'Ditolak server'}`, 'error');
+      refreshWorkOrders(0, true).catch(() => {});
+    } catch (err: any) {
+      console.warn('Delete WO API exception:', err);
+      // Fallback to syncManager offline mutation
+      try {
+        await syncManager.executeMutation({
+          type: 'DELETE',
+          tableName: 'WORK_ORDER',
+          payload: { id: cleanId, nomorWO: cleanNomor },
+          apiCall: async () => {
+            const res = await ApiService.deleteWorkOrder(cleanId);
+            return { status: res.success ? 'success' : 'error', message: res.message };
+          },
+        });
+        setWorkOrders((prev) => prev.filter((wo) => wo.id !== cleanId && wo.nomorWO !== cleanNomor));
+        await dexieDb.work_orders.delete(cleanId).catch(() => {});
+        showToast('Hapus tersimpan di antrean offline.', 'info');
+      } catch (offlineErr) {
+        showToast('Gagal menghapus Work Order.', 'error');
+      }
     }
-  }, [showToast]);
+  }, [showToast, refreshWorkOrders]);
 
   return (
     <WorkOrderContext.Provider value={{

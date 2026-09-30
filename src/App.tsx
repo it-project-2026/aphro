@@ -126,6 +126,10 @@ const AppContent: React.FC = () => {
         .toLowerCase() === 'admbkt'
     );
 
+  const userRoleClean = (user?.role || '').toString().trim().toUpperCase();
+  const isUserRole = userRoleClean === 'USER';
+  const isAdminRole = userRoleClean === 'ADMIN' || userRoleClean === 'SUPERADMIN' || userRoleClean === 'ADM' || isAdmRole;
+
   /*
    * =========================================================
    * INITIAL LOADING
@@ -152,6 +156,25 @@ const AppContent: React.FC = () => {
     setAttendanceCompleted(false);
     setShowAbsensiForm(false);
   }, [user?.id]);
+
+  React.useEffect(() => {
+    if (
+      isUserRole &&
+      !isAdminRole &&
+      (hasCheckedInToday || attendanceCompleted)
+    ) {
+      if (activeTab === 'dashboard' || activeTab === 'absensi' || activeTab === 'welcome') {
+        setActiveTab('input_realisasi');
+      }
+    }
+  }, [
+    isUserRole,
+    isAdminRole,
+    hasCheckedInToday,
+    attendanceCompleted,
+    activeTab,
+    setActiveTab,
+  ]);
 
   /*
    * =========================================================

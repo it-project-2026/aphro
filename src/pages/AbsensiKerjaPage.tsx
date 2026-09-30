@@ -581,6 +581,18 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
                 <p className="text-xs text-[#00A2B9] dark:text-teal-400 mt-0.5">
                   Waktu Masuk: {todayAbsensi.timestampMasuk || todayAbsensi.createdAt}
                 </p>
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onSuccess) onSuccess();
+                      else setActiveTab('input_realisasi');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs cursor-pointer inline-flex items-center space-x-1.5"
+                  >
+                    <span>Lanjut ke Input Realisasi &rarr;</span>
+                  </button>
+                </div>
               </div>
             </div>
 

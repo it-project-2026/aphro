@@ -3053,17 +3053,18 @@ const handleUpdateAbsensi = async (req: Request, res: Response) => {
     }
 
     // 3. Extract updated fields with safe merge (do not erase existing non-updated fields)
-    if (Array.isArray(a.petugasList)) {
+    const hasPetugasList = Array.isArray(a.petugasList) && a.petugasList.length > 0;
+    if (hasPetugasList) {
       a.petugas1 = a.petugasList[0]?.nama !== undefined ? a.petugasList[0].nama : existingRecord.PETUGAS_1;
       a.ket1 = a.petugasList[0]?.keterangan !== undefined ? a.petugasList[0].keterangan : existingRecord.KET_1;
-      a.petugas2 = a.petugasList[1]?.nama !== undefined ? a.petugasList[1].nama : existingRecord.PETUGAS_2;
-      a.ket2 = a.petugasList[1]?.keterangan !== undefined ? a.petugasList[1].keterangan : existingRecord.KET_2;
-      a.petugas3 = a.petugasList[2]?.nama !== undefined ? a.petugasList[2].nama : existingRecord.PETUGAS_3;
-      a.ket3 = a.petugasList[2]?.keterangan !== undefined ? a.petugasList[2].keterangan : existingRecord.KET_3;
-      a.petugas4 = a.petugasList[3]?.nama !== undefined ? a.petugasList[3].nama : existingRecord.PETUGAS_4;
-      a.ket4 = a.petugasList[3]?.keterangan !== undefined ? a.petugasList[3].keterangan : existingRecord.KET_4;
-      a.petugas5 = a.petugasList[4]?.nama !== undefined ? a.petugasList[4].nama : existingRecord.PETUGAS_5;
-      a.ket5 = a.petugasList[4]?.keterangan !== undefined ? a.petugasList[4].keterangan : existingRecord.KET_5;
+      a.petugas2 = a.petugasList[1]?.nama !== undefined ? a.petugasList[1].nama : (existingRecord.PETUGAS_2 || '-');
+      a.ket2 = a.petugasList[1]?.keterangan !== undefined ? a.petugasList[1].keterangan : (existingRecord.KET_2 || 'HADIR');
+      a.petugas3 = a.petugasList[2]?.nama !== undefined ? a.petugasList[2].nama : (existingRecord.PETUGAS_3 || '-');
+      a.ket3 = a.petugasList[2]?.keterangan !== undefined ? a.petugasList[2].keterangan : (existingRecord.KET_3 || 'HADIR');
+      a.petugas4 = a.petugasList[3]?.nama !== undefined ? a.petugasList[3].nama : (existingRecord.PETUGAS_4 || '-');
+      a.ket4 = a.petugasList[3]?.keterangan !== undefined ? a.petugasList[3].keterangan : (existingRecord.KET_4 || 'HADIR');
+      a.petugas5 = a.petugasList[4]?.nama !== undefined ? a.petugasList[4].nama : (existingRecord.PETUGAS_5 || '-');
+      a.ket5 = a.petugasList[4]?.keterangan !== undefined ? a.petugasList[4].keterangan : (existingRecord.KET_5 || 'HADIR');
     }
 
     const updatedUnitId = a.unitId || existingRecord.unitId || 'UL2';
@@ -3075,16 +3076,17 @@ const handleUpdateAbsensi = async (req: Request, res: Response) => {
     const updatedNamaPetugas = a.NAMA_PETUGAS || a.namaPetugas || a.petugasName || existingRecord.NAMA_PETUGAS || '';
     const updatedNip = a.NIP || a.nip || existingRecord.NIP || '';
 
-    const updatedPetugas1 = a.PETUGAS_1 !== undefined ? a.PETUGAS_1 : (a.petugas1 !== undefined ? a.petugas1 : existingRecord.PETUGAS_1);
-    const updatedKet1 = a.KET_1 !== undefined ? a.KET_1 : (a.ket1 !== undefined ? a.ket1 : existingRecord.KET_1);
-    const updatedPetugas2 = a.PETUGAS_2 !== undefined ? a.PETUGAS_2 : (a.petugas2 !== undefined ? a.petugas2 : existingRecord.PETUGAS_2);
-    const updatedKet2 = a.KET_2 !== undefined ? a.KET_2 : (a.ket2 !== undefined ? a.ket2 : existingRecord.KET_2);
-    const updatedPetugas3 = a.PETUGAS_3 !== undefined ? a.PETUGAS_3 : (a.petugas3 !== undefined ? a.petugas3 : existingRecord.PETUGAS_3);
-    const updatedKet3 = a.KET_3 !== undefined ? a.KET_3 : (a.ket3 !== undefined ? a.ket3 : existingRecord.KET_3);
-    const updatedPetugas4 = a.PETUGAS_4 !== undefined ? a.PETUGAS_4 : (a.petugas4 !== undefined ? a.petugas4 : existingRecord.PETUGAS_4);
-    const updatedKet4 = a.KET_4 !== undefined ? a.KET_4 : (a.ket4 !== undefined ? a.ket4 : existingRecord.KET_4);
-    const updatedPetugas5 = a.PETUGAS_5 !== undefined ? a.PETUGAS_5 : (a.petugas5 !== undefined ? a.petugas5 : existingRecord.PETUGAS_5);
-    const updatedKet5 = a.KET_5 !== undefined ? a.KET_5 : (a.ket5 !== undefined ? a.ket5 : existingRecord.KET_5);
+    // If petugasList was sent, prioritize the evaluated a.petugas1 / a.ket1
+    const updatedPetugas1 = hasPetugasList ? (a.petugas1 ?? existingRecord.PETUGAS_1) : (a.petugas1 !== undefined ? a.petugas1 : (a.PETUGAS_1 !== undefined ? a.PETUGAS_1 : existingRecord.PETUGAS_1));
+    const updatedKet1 = hasPetugasList ? (a.ket1 ?? existingRecord.KET_1) : (a.ket1 !== undefined ? a.ket1 : (a.KET_1 !== undefined ? a.KET_1 : existingRecord.KET_1));
+    const updatedPetugas2 = hasPetugasList ? (a.petugas2 ?? existingRecord.PETUGAS_2) : (a.petugas2 !== undefined ? a.petugas2 : (a.PETUGAS_2 !== undefined ? a.PETUGAS_2 : existingRecord.PETUGAS_2));
+    const updatedKet2 = hasPetugasList ? (a.ket2 ?? existingRecord.KET_2) : (a.ket2 !== undefined ? a.ket2 : (a.KET_2 !== undefined ? a.KET_2 : existingRecord.KET_2));
+    const updatedPetugas3 = hasPetugasList ? (a.petugas3 ?? existingRecord.PETUGAS_3) : (a.petugas3 !== undefined ? a.petugas3 : (a.PETUGAS_3 !== undefined ? a.PETUGAS_3 : existingRecord.PETUGAS_3));
+    const updatedKet3 = hasPetugasList ? (a.ket3 ?? existingRecord.KET_3) : (a.ket3 !== undefined ? a.ket3 : (a.KET_3 !== undefined ? a.KET_3 : existingRecord.KET_3));
+    const updatedPetugas4 = hasPetugasList ? (a.petugas4 ?? existingRecord.PETUGAS_4) : (a.petugas4 !== undefined ? a.petugas4 : (a.PETUGAS_4 !== undefined ? a.PETUGAS_4 : existingRecord.PETUGAS_4));
+    const updatedKet4 = hasPetugasList ? (a.ket4 ?? existingRecord.KET_4) : (a.ket4 !== undefined ? a.ket4 : (a.KET_4 !== undefined ? a.KET_4 : existingRecord.KET_4));
+    const updatedPetugas5 = hasPetugasList ? (a.petugas5 ?? existingRecord.PETUGAS_5) : (a.petugas5 !== undefined ? a.petugas5 : (a.PETUGAS_5 !== undefined ? a.PETUGAS_5 : existingRecord.PETUGAS_5));
+    const updatedKet5 = hasPetugasList ? (a.ket5 ?? existingRecord.KET_5) : (a.ket5 !== undefined ? a.ket5 : (a.KET_5 !== undefined ? a.KET_5 : existingRecord.KET_5));
 
     // Photos and timestamps
     const rawFotoMasuk = a.FOTO_MASUK !== undefined ? a.FOTO_MASUK : (a.fotoMasuk !== undefined ? a.fotoMasuk : existingRecord.FOTO_MASUK);
