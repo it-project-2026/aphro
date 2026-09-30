@@ -120,8 +120,11 @@ export const DashboardPage: React.FC = () => {
   }, []);
 
 
-  const [filterYear, setFilterYear] = React.useState<string>('ALL');
-  const [filterMonth, setFilterMonth] = React.useState<string>('ALL');
+  const currentYearStr = String(new Date().getFullYear());
+  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
+
+  const [filterYear, setFilterYear] = React.useState<string>(currentYearStr);
+  const [filterMonth, setFilterMonth] = React.useState<string>(currentMonthStr);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [filterUlp, setFilterUlp] = React.useState('ALL');
@@ -454,6 +457,25 @@ export const DashboardPage: React.FC = () => {
     ? (filterUlp === 'ALL' ? penyulangList.length : penyulangList.filter(p => matchesUlp(p.ulpName, p.ulpId, filterUlp)).length)
     : 1;
 
+  const MONTH_NAMES: Record<string, string> = {
+    '01': 'Januari',
+    '02': 'Februari',
+    '03': 'Maret',
+    '04': 'April',
+    '05': 'Mei',
+    '06': 'Juni',
+    '07': 'Juli',
+    '08': 'Agustus',
+    '09': 'September',
+    '10': 'Oktober',
+    '11': 'November',
+    '12': 'Desember',
+  };
+
+  const activeMonthName = filterMonth === 'ALL' ? 'Semua Bulan' : MONTH_NAMES[filterMonth] || filterMonth;
+  const activeYearName = filterYear === 'ALL' ? 'Semua Tahun' : filterYear;
+  const activePeriodLabel = `${activeMonthName} ${filterYear === 'ALL' ? '' : activeYearName}`.trim();
+
   // Prepare data for RealisasiTargetDashboard
   const reguDashboardData = React.useMemo(() => {
     return topPerformersData.map((r, idx) => ({
@@ -601,7 +623,7 @@ export const DashboardPage: React.FC = () => {
             <RealisasiTargetDashboard 
               data={reguDashboardData} 
               title="PROGRESS PENYELESAIAN ROW"
-              subtitle={`Tim: ${currentUser?.reguName || 'Lapangan'}`}
+              subtitle={`Periode: ${activePeriodLabel} • Tim: ${currentUser?.reguName || 'Lapangan'}`}
             />
           </div>
 
@@ -827,8 +849,8 @@ export const DashboardPage: React.FC = () => {
 
         <button
           onClick={() => {
-            setFilterYear('ALL');
-            setFilterMonth('ALL');
+            setFilterYear(currentYearStr);
+            setFilterMonth(currentMonthStr);
             setStartDate('');
             setEndDate('');
             setFilterUlp('ALL');
@@ -1002,7 +1024,7 @@ export const DashboardPage: React.FC = () => {
         <RealisasiTargetDashboard 
           data={reguDashboardData} 
           title="REALISASI & TARGET PROGRAM"
-          subtitle={settings.namaUnitLayanan ? (settings.namaUnitLayanan.toUpperCase().startsWith('UP3') ? settings.namaUnitLayanan.toUpperCase() : `UP3 ${settings.namaUnitLayanan.replace(/^UL\s*/i, '').toUpperCase()}`) : "UP3 BUKITTINGGI"}
+          subtitle={`Periode: ${activePeriodLabel} • ${settings.namaUnitLayanan ? (settings.namaUnitLayanan.toUpperCase().startsWith('UP3') ? settings.namaUnitLayanan.toUpperCase() : `UP3 ${settings.namaUnitLayanan.replace(/^UL\s*/i, '').toUpperCase()}`) : "UP3 BUKITTINGGI"}`}
         />
       </div>
 
