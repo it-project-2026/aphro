@@ -27,6 +27,12 @@ export function formatDriveViewUrl(url: string): string {
   const lower = trimmed.toLowerCase();
   if (lower === 'n/a' || lower === 'null' || lower === 'undefined' || lower === '-' || lower === '""' || lower === "''") return '';
   if (isBase64Image(trimmed)) return ''; // Never format or return base64 as Drive view link
+  if (trimmed.startsWith('/uploads/')) {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}${trimmed}`;
+    }
+    return trimmed;
+  }
   if (!trimmed.startsWith('http')) return trimmed;
 
   const match = trimmed.match(/id=([a-zA-Z0-9_-]+)/) || trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
@@ -38,7 +44,7 @@ export function formatDriveViewUrl(url: string): string {
 
 /**
  * Converts any Google Drive URL to direct image CDN link (lh3.googleusercontent.com)
- * so it can be safely rendered inside <img src="..." /> tags in web UI.
+ * or returns local /uploads/ URL so it can be safely rendered inside <img src="..." /> tags in web UI.
  */
 export function formatDriveImageUrl(url: string): string {
   if (!url || typeof url !== 'string') return '';
@@ -46,6 +52,7 @@ export function formatDriveImageUrl(url: string): string {
   const lower = trimmed.toLowerCase();
   if (lower === 'n/a' || lower === 'null' || lower === 'undefined' || lower === '-' || lower === '""' || lower === "''") return '';
   if (trimmed.startsWith('data:image')) return trimmed;
+  if (trimmed.startsWith('/uploads/')) return trimmed;
   if (!trimmed.startsWith('http')) return trimmed;
 
   const match = trimmed.match(/id=([a-zA-Z0-9_-]+)/) || trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
@@ -58,7 +65,7 @@ export function formatDriveImageUrl(url: string): string {
 /**
  * Universal validator for photo URLs.
  * Rejects null, undefined, '', ' ', 'N/A', 'n/a', 'null', 'undefined', '-', and data:image Base64 strings.
- * Accepts valid HTTP/HTTPS URLs (including Google Drive URLs).
+ * Accepts valid HTTP/HTTPS URLs, local storage /uploads/ URLs, and valid Base64 data.
  */
 export function isValidPhotoUrl(value: any): boolean {
   if (!value || typeof value !== 'string') return false;
@@ -75,7 +82,7 @@ export function isValidPhotoUrl(value: any): boolean {
   ) {
     return false;
   }
-  if (trimmed.startsWith('data:image') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('data:image') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return true;
   }
   return trimmed.length > 20 && !trimmed.includes(' ');

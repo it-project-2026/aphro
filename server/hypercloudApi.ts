@@ -3581,6 +3581,68 @@ router.post(['/log-activity', '/logs'], async (req: Request, res: Response) => {
 });
 
 /**
+ * MEDIA BASE64 EXTRACTION & STORAGE MIGRATION ROUTES
+ */
+router.get('/media/migration-preview', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { runBase64PhotoMigration } = await import('./photoMigrationService');
+    const unitId = req.query.unitId as string | undefined;
+    const preview = await runBase64PhotoMigration({ dryRun: true, unitId });
+    return res.json({
+      status: 'success',
+      data: preview,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+router.post('/media/migrate-base64', requireAuth, async (req: Request, res: Response) => {
+  const authUser = (req as any).user;
+  const userRole = String(authUser?.role || '').toUpperCase();
+  const isPrivileged = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADM' || authUser?.unitId === 'ALL';
+
+  if (!isPrivileged) {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Hanya Administrator yang memiliki wewenang untuk menjalankan migrasi media Base64.',
+    });
+  }
+
+  try {
+    const { runBase64PhotoMigration } = await import('./photoMigrationService');
+    const unitId = req.body.unitId as string | undefined;
+    const result = await runBase64PhotoMigration({ dryRun: false, unitId });
+    return res.json({
+      status: 'success',
+      message: `Migrasi selesai: ${result.migratedCount} foto Base64 berhasil diekstrak menjadi file JPEG, disimpan ke storage, diverifikasi, dan dicadangkan ke PostgreSQL.`,
+      data: result,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+router.get('/media/backup-status', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const backupRes = await query(`
+      SELECT "ID", "Backup_At", "Migrated_At", "Foto_Sebelum_Url", "Foto_Sesudah_Url", "Status"
+      FROM public."REALISASI_PHOTO_BACKUP"
+      ORDER BY "Backup_At" DESC
+      LIMIT 100
+    `);
+    const totalCountRes = await query(`SELECT COUNT(*) as total FROM public."REALISASI_PHOTO_BACKUP"`);
+    return res.json({
+      status: 'success',
+      totalBackupRecords: parseInt(totalCountRes.rows[0]?.total || '0', 10),
+      recentBackups: backupRes.rows,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+/**
  * 404 Fallback for unhandled API routes under /api
  */
 router.all('*', (req: Request, res: Response) => {

@@ -50,7 +50,15 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  // Serve uploaded images statically
+  const uploadsStaticDir = path.join(process.cwd(), 'public', 'uploads');
+  if (!fs.existsSync(uploadsStaticDir)) {
+    fs.mkdirSync(uploadsStaticDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsStaticDir));
 
   // CORS middleware with dynamic origin matching and robust preflight handling
   app.use((req, res, next) => {
