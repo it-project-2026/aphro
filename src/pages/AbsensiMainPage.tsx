@@ -41,39 +41,25 @@ interface AbsensiMainPageProps {
 function formatHariTanggal(dateStr: string) {
   if (!dateStr) return '-';
   try {
-    let year = 0, month = 0, day = 0;
     const s = String(dateStr).trim();
-    
-    // Match YYYY-MM-DD or YYYY/MM/DD
-    const ymdMatch = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-    // Match DD-MM-YYYY or DD/MM/YYYY
-    const dmyMatch = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+    // Normalize through timezone-aware normalizeDateISO first
+    const isoDate = normalizeDateISO(s) || s.slice(0, 10);
+    const ymdMatch = isoDate.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
     
     if (ymdMatch) {
-      year = parseInt(ymdMatch[1], 10);
-      month = parseInt(ymdMatch[2], 10) - 1;
-      day = parseInt(ymdMatch[3], 10);
-    } else if (dmyMatch) {
-      day = parseInt(dmyMatch[1], 10);
-      month = parseInt(dmyMatch[2], 10) - 1;
-      year = parseInt(dmyMatch[3], 10);
-    } else {
-      const d = new Date(s);
-      if (isNaN(d.getTime())) return dateStr;
-      year = d.getFullYear();
-      month = d.getMonth();
-      day = d.getDate();
+      const year = parseInt(ymdMatch[1], 10);
+      const month = parseInt(ymdMatch[2], 10) - 1;
+      const day = parseInt(ymdMatch[3], 10);
+      const localDate = new Date(year, month, day);
+      const dayOfWeek = localDate.getDay();
+      const INDONESIAN_DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const hari = INDONESIAN_DAYS[dayOfWeek] || 'Senin';
+      const formattedDay = String(day).padStart(2, '0');
+      const formattedMonth = String(month + 1).padStart(2, '0');
+      return `${hari}, ${formattedDay}/${formattedMonth}/${year}`;
     }
     
-    const localDate = new Date(year, month, day);
-    const dayOfWeek = localDate.getDay();
-    const INDONESIAN_DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-    const hari = INDONESIAN_DAYS[dayOfWeek] || 'Senin';
-    
-    const formattedDay = String(day).padStart(2, '0');
-    const formattedMonth = String(month + 1).padStart(2, '0');
-    
-    return `${hari}, ${formattedDay}/${formattedMonth}/${year}`;
+    return dateStr;
   } catch {
     return dateStr;
   }
@@ -110,6 +96,10 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       setActiveSubTab(initialSubTab);
     }
   }, [initialSubTab, isAdmRole]);
+
+  useEffect(() => {
+    refreshAbsensi();
+  }, [activeSubTab, refreshAbsensi]);
 
   const todayStr = getLocalDateTimeString().slice(0, 10);
 
@@ -490,7 +480,9 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
       }
 
       // Date Filter: if filterDate is empty, display all records
-      const matchesDate = !filterDate || itemDateNormalized === filterDate;
+      const rawDateSub = String(item.tanggal || '').slice(0, 10);
+      const rawCreatedSub = String(item.createdAt || '').slice(0, 10);
+      const matchesDate = !filterDate || itemDateNormalized === filterDate || rawDateSub === filterDate || rawCreatedSub === filterDate;
 
       // ULP Filter
       const matchesUlp =
