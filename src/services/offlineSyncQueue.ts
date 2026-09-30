@@ -125,9 +125,9 @@ class OfflineSyncQueueEngine {
     const timestamp = getLocalDateTimeString();
 
     try {
-      await dexieDb.realisasi.where('id').equals(id).or('localId').equals(id).or('serverId').equals(id).or('idempotencyKey').equals(id).delete();
-      await dexieDb.realisasi.delete(id);
-      await dexieDb.photos.where('realisasiId').equals(id).delete();
+      await dexieDb.realisasi.where('localId').equals(id).or('id').equals(id).or('ID').equals(id).or('serverId').equals(id).or('idempotencyKey').equals(id).delete().catch(() => {});
+      await dexieDb.realisasi.delete(id).catch(() => {});
+      await dexieDb.photos.where('realisasiId').equals(id).delete().catch(() => {});
     } catch (e) {
       console.warn('Dexie delete error in enqueueDeleteRealisasi:', e);
     }

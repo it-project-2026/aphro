@@ -18,6 +18,7 @@ export interface LocalWorkOrder extends WorkOrder {
 
 export interface LocalRealisasi extends Realisasi {
   localId: string;
+  ID?: string;
   serverId?: string;
   idempotencyKey: string;
   syncStatus: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED';
@@ -93,6 +94,10 @@ export class AphroDexieDB extends Dexie {
       sync_queue: 'idempotencyKey, type, tableName, status, retryCount, timestamp',
       master_data: 'id, category, ulpId, reguId, updatedAt',
       metadata: 'key, updatedAt',
+    });
+
+    this.version(2).stores({
+      realisasi: 'localId, id, ID, serverId, idempotencyKey, woId, nomorWO, ulpId, reguId, petugasId, syncStatus, createdAt, updatedAt',
     });
   }
 }

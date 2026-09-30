@@ -1428,15 +1428,18 @@ export function RealisasiProvider({
           }
 
           await dexieDb.realisasi
-            .where('id')
+            .where('localId')
             .equals(id)
-            .or('localId')
+            .or('id')
+            .equals(id)
+            .or('ID')
             .equals(id)
             .or('serverId')
             .equals(id)
             .modify(
               dexieUpdates
-            );
+            )
+            .catch(() => {});
         } catch (err) {
           console.warn(
             'Update Dexie Realisasi Admin error:',
@@ -1485,24 +1488,28 @@ export function RealisasiProvider({
 
         try {
           await dexieDb.realisasi
-            .where('id')
+            .where('localId')
             .equals(id)
-            .or('localId')
+            .or('id')
+            .equals(id)
+            .or('ID')
             .equals(id)
             .or('serverId')
             .equals(id)
             .or('idempotencyKey')
             .equals(id)
-            .delete();
+            .delete()
+            .catch(() => {});
 
           await dexieDb.realisasi.delete(
             id
-          );
+          ).catch(() => {});
 
           await dexieDb.photos
             .where('realisasiId')
             .equals(id)
-            .delete();
+            .delete()
+            .catch(() => {});
         } catch (e) {
           console.warn(
             'Delete Dexie Realisasi error:',
