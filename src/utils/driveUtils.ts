@@ -230,9 +230,19 @@ sizeMB=${estMB} MB`);
       }
     }
 
-    // Strategy B: Upload to Google Apps Script (GAS) if configured
-    const gasUrl = options.gasUrl || (typeof localStorage !== 'undefined' ? localStorage.getItem('aphro_gas_url') || '' : '');
-    if (gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
+    // Strategy B: Upload to Google Apps Script (GAS) if configured or embedded
+    let gasUrl = options.gasUrl || (typeof localStorage !== 'undefined' ? localStorage.getItem('aphro_gas_url') || '' : '');
+    let folderId = options.folderId;
+    if (!gasUrl) {
+      try {
+        const { getActiveGasConfig } = await import('../config/gasConfig');
+        const activeCfg = getActiveGasConfig();
+        gasUrl = activeCfg?.gasWebAppUrl || '';
+        folderId = folderId || activeCfg?.driveFolderId;
+      } catch {}
+    }
+
+    if (gasUrl && (typeof navigator === 'undefined' || navigator.onLine)) {
       try {
         const { GASApiService } = await import('../services/gasApiService');
         const uploadRes = await GASApiService.uploadPhoto(gasUrl, {
@@ -240,7 +250,7 @@ sizeMB=${estMB} MB`);
           nomorWO,
           reguName: options.reguName || 'ROW',
           photoType,
-          folderId: options.folderId,
+          folderId: folderId,
         });
 
         if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
