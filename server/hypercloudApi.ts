@@ -43,6 +43,79 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
     });
 
     if (remoteRes.status >= 500) {
+      // Special self-healing recovery for GET /api/realisasi or /api/realisasi/dashboard with date filters
+      const isRealisasiGet = req.method === 'GET' && (endpoint === '/realisasi' || endpoint === '/realisasi/dashboard' || endpoint.startsWith('/realisasi'));
+      const hasDateFilter = Boolean(req.query.tanggalDari || req.query.tanggalSampai);
+
+      if (isRealisasiGet && hasDateFilter) {
+        console.warn(`[HYPERCLOUD PROXY RECOVERY] Remote gateway returned HTTP ${remoteRes.status} due to remote SQL date operator error. Fetching dataset without date params to apply secure in-memory date filter...`);
+        try {
+          const cleanParams = { ...req.query };
+          delete cleanParams.tanggalDari;
+          delete cleanParams.tanggalSampai;
+          if (endpoint === '/realisasi') {
+            cleanParams.limit = '10000';
+            cleanParams.page = '1';
+          }
+
+          const fallbackRemoteRes = await axios({
+            method: 'GET',
+            url,
+            params: cleanParams,
+            headers,
+            timeout: 15000,
+            validateStatus: () => true,
+          });
+
+          if (fallbackRemoteRes.status === 200 && fallbackRemoteRes.data && Array.isArray(fallbackRemoteRes.data.data)) {
+            const rawRows = fallbackRemoteRes.data.data;
+            const tanggalDariStr = String(req.query.tanggalDari || '').trim();
+            const tanggalSampaiStr = String(req.query.tanggalSampai || '').trim();
+
+            const filteredRows = rawRows.filter((item: any) => {
+              const rawTgl = String(item.TANGGAL || item.tanggal || item.Tanggal || '').slice(0, 10);
+              if (!rawTgl) return true;
+              if (tanggalDariStr && rawTgl < tanggalDariStr) return false;
+              if (tanggalSampaiStr && rawTgl > tanggalSampaiStr) return false;
+              return true;
+            });
+
+            if (endpoint === '/realisasi/dashboard') {
+              res.status(200).json({
+                status: 'success',
+                unitId: req.query.unitId || 'ALL',
+                count: filteredRows.length,
+                data: filteredRows,
+              });
+              return true;
+            }
+
+            const page = Math.max(parseInt(String(req.query.page || '1'), 10), 1);
+            const limit = Math.min(Math.max(parseInt(String(req.query.limit || '20'), 10), 1), 1000);
+            const totalRecords = filteredRows.length;
+            const totalPages = Math.ceil(totalRecords / limit) || 1;
+            const offset = (page - 1) * limit;
+            const paginatedRows = filteredRows.slice(offset, offset + limit);
+
+            console.log(`[HYPERCLOUD PROXY RECOVERY SUCCESS] Filtered ${rawRows.length} rows down to ${totalRecords} matching date range ${tanggalDariStr || 'MIN'} -> ${tanggalSampaiStr || 'MAX'}`);
+
+            res.status(200).json({
+              status: 'success',
+              data: paginatedRows,
+              pagination: {
+                page,
+                limit,
+                totalRecords,
+                totalPages,
+              },
+            });
+            return true;
+          }
+        } catch (recErr: any) {
+          console.warn('[HYPERCLOUD PROXY RECOVERY FAILED]', recErr.message);
+        }
+      }
+
       console.warn(`[HYPERCLOUD PROXY] Remote gateway returned HTTP ${remoteRes.status} for ${req.method} ${endpoint}. Falling back to local Express handler.`);
       return false;
     }
@@ -2144,6 +2217,13 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
   const userRole = String(authUser?.role || '').toUpperCase();
   const isPrivileged = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADM' || authUser?.unitId === 'ALL';
 
+  console.log(`[REALISASI API]\nunitId=${unitId || authUser?.unitId || 'ALL'}\ntanggalDari=${tanggalDari || 'NONE'}\ntanggalSampai=${tanggalSampai || 'NONE'}\npage=${page}\nlimit=${limit}`);
+  let dateFilterMode = 'NONE';
+  if (tanggalDari && tanggalSampai) dateFilterMode = 'DATE_RANGE';
+  else if (tanggalDari) dateFilterMode = 'DATE_FROM';
+  else if (tanggalSampai) dateFilterMode = 'DATE_TO';
+  console.log(`[REALISASI DATE FILTER]\nmode=${dateFilterMode}`);
+
   try {
     let whereClause = ` WHERE 1=1`;
 
@@ -3116,8 +3196,8 @@ const handleUpdateAbsensi = async (req: Request, res: Response) => {
       const reguNameVal = a.NAMA_REGU || a.namaRegu || a.reguName || a.Regu || '';
       if (tanggalVal && reguNameVal) {
         const altCheck = await query(
-          `SELECT * FROM public."ABSENSI" WHERE "TANGGAL"::text LIKE $1 AND "NAMA_REGU" ILIKE $2 ORDER BY "ID" DESC LIMIT 1`,
-          [`${tanggalVal.slice(0, 10)}%`, `%${reguNameVal}%`]
+          `SELECT * FROM public."ABSENSI" WHERE "TANGGAL"::date = $1::date AND "NAMA_REGU" ILIKE $2 ORDER BY "ID" DESC LIMIT 1`,
+          [tanggalVal.slice(0, 10), `%${reguNameVal}%`]
         );
         if (altCheck.rowCount && altCheck.rowCount > 0) {
           existingRecord = altCheck.rows[0];
@@ -3323,8 +3403,8 @@ const handleUpsertAbsensi = async (req: Request, res: Response) => {
 
   if (!targetId || targetId.startsWith('ABS-')) {
     try {
-      let checkSql = `SELECT "ID" FROM public."ABSENSI" WHERE ("TANGGAL"::text LIKE $1 OR "TANGGAL"::text LIKE $2)`;
-      const checkParams: any[] = [`${tanggalVal}%`, `${tanggalVal.slice(0, 10)}%`];
+      let checkSql = `SELECT "ID" FROM public."ABSENSI" WHERE "TANGGAL"::date = $1::date`;
+      const checkParams: any[] = [tanggalVal.slice(0, 10)];
 
       if (reguNameVal) {
         checkParams.push(`%${reguNameVal}%`);

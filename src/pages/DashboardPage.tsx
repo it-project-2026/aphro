@@ -21,7 +21,8 @@ import {
   calculateTimRowTargetKms,
 } from '../utils/metricUtils';
 import { normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
-import { InisiasiService } from '../services/inisiasiService';
+import { InisiasiService, getStandardUnitId } from '../services/inisiasiService';
+import { getRealisasiPohonCount, classifyKeteranganPohon } from '../services/rekapHarianService';
 import { TopPerformersList } from '../components/dashboard/TopPerformersList';
 import { RecentWOTable } from '../components/dashboard/RecentWOTable';
 import { StatCard } from '../components/common/StatCard';
@@ -87,7 +88,7 @@ export const DashboardPage: React.FC = () => {
   const { setActiveTab, isDarkMode } = useUI();
   const { isGasConnected, syncWithGAS } = useGASSync();
 
-  const activeUnitId = currentUser?.unitId || InisiasiService.getSelectedUnitId() || 'UL1';
+  const activeUnitId = getStandardUnitId(currentUser?.unitId || settings.namaUnitLayanan || InisiasiService.getSelectedUnitId() || 'UL1');
 
   // Automatically reset filters when unit changes
   React.useEffect(() => {
@@ -198,7 +199,8 @@ export const DashboardPage: React.FC = () => {
     filterYear,
     filterMonth,
     startDate,
-    endDate
+    endDate,
+    activeUnitId
   );
 
   // 1. Deduplicate Work Orders based on composite key (Nomor WO + Penyulang)
@@ -331,26 +333,54 @@ export const DashboardPage: React.FC = () => {
 
   const kmsPercentage = totalTargetKms > 0 ? Math.round((totalRealisasiKms / totalTargetKms) * 100) : 0;
 
-  // Tebang/Pangkas Metrics logic with exact / strict matching on keterangan for filteredRealisasi (filtered by unitId via Inisiasi)
+  // Tebang/Pangkas Metrics logic with exact tree counts & classification according to Inisiasi Unit
   const totalTebang = React.useMemo(() => {
-    return filteredRealisasi.filter(r => {
-      const ket = String(r.keterangan || '').toUpperCase().trim();
-      return ket === 'TEBANG' || ket.includes('TEBANG');
-    }).length;
+    return filteredRealisasi.reduce((sum, r) => {
+      const action = classifyKeteranganPohon(r.keterangan);
+      if (action === 'TEBANG') {
+        return sum + getRealisasiPohonCount(r);
+      }
+      return sum;
+    }, 0);
   }, [filteredRealisasi]);
 
   const totalPangkas = React.useMemo(() => {
-    return filteredRealisasi.filter(r => {
-      const ket = String(r.keterangan || '').toUpperCase().trim();
-      return ket === 'PANGKAS' || ket.includes('PANGKAS');
-    }).length;
+    return filteredRealisasi.reduce((sum, r) => {
+      const action = classifyKeteranganPohon(r.keterangan);
+      if (action === 'PANGKAS') {
+        return sum + getRealisasiPohonCount(r);
+      }
+      return sum;
+    }, 0);
   }, [filteredRealisasi]);
 
   const totalRealisasiPohon = totalTebang + totalPangkas;
 
   // Realisasi Penyulang Metrics logic
-  const targetPenyulangs = Array.from(new Set(filteredWOs.map(w => w.penyulangName).filter(Boolean))).length;
-  const uniqueRealizedPenyulangs = Array.from(new Set(filteredRealisasi.map(r => r.penyulangName).filter(Boolean))).length;
+  const targetPenyulangs = React.useMemo(() => {
+    const setPenyulangsInWOs = new Set(filteredWOs.map(w => w.penyulangName).filter(Boolean));
+    const setPenyulangsInMaster = new Set(
+      penyulangList
+        .filter(p => {
+          const pUnit = getStandardUnitId(p.unitId);
+          if (pUnit) return pUnit === activeUnitId;
+          return filterUlp === 'ALL' || matchesUlp(p.ulpName, p.ulpId, filterUlp);
+        })
+        .map(p => p.namaPenyulang)
+        .filter(Boolean)
+    );
+    const combined = new Set([...Array.from(setPenyulangsInWOs), ...Array.from(setPenyulangsInMaster)]);
+    return combined.size || 1;
+  }, [filteredWOs, penyulangList, activeUnitId, filterUlp, matchesUlp]);
+
+  const uniqueRealizedPenyulangs = React.useMemo(() => {
+    const setRealizedPenyulangs = new Set(
+      filteredRealisasi
+        .map(r => (r.penyulangName || (r as any).Penyulang || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+    return setRealizedPenyulangs.size;
+  }, [filteredRealisasi]);
   const uniqueRealizedWOs = Array.from(new Set(filteredRealisasi.map(r => r.nomorWO).filter(Boolean))).length;
 
   const totalPetugas = React.useMemo(() => {
@@ -925,8 +955,8 @@ export const DashboardPage: React.FC = () => {
 
         <StatCard
           title="TOTAL PENYULANG TERLAYANI"
-          value={uniqueRealizedPenyulangs}
-          subtitle="Berdasarkan realisasi unik"
+          value={`${uniqueRealizedPenyulangs} / ${targetPenyulangs}`}
+          subtitle={`${uniqueRealizedPenyulangs} dari ${targetPenyulangs} Penyulang Terjangkau`}
           icon={Building2}
           iconBgColor="bg-teal-50 dark:bg-teal-900/30"
           iconColor="text-teal-600 dark:text-teal-400"

@@ -2,6 +2,7 @@ import React from 'react';
 import { WorkOrder, Realisasi, ULP, ReguROW, Petugas, Penyulang } from '../types';
 import { getWOTargetKms, getWORealisasiKms, isWOSelesai, TARGET_KMS_PER_TIM_ROW } from '../utils/metricUtils';
 import { normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
+import { getStandardUnitId } from '../services/inisiasiService';
 
 export const useDashboardMetrics = (
   workOrders: WorkOrder[],
@@ -18,8 +19,30 @@ export const useDashboardMetrics = (
   filterYear: string = 'ALL',
   filterMonth: string = 'ALL',
   startDate: string = '',
-  endDate: string = ''
+  endDate: string = '',
+  activeUnitId: string = 'UL1'
 ) => {
+  const stdActiveUnit = React.useMemo(() => getStandardUnitId(activeUnitId), [activeUnitId]);
+
+  const matchesUnit = React.useCallback((itemUnitId?: string, itemUlpName?: string) => {
+    if (!stdActiveUnit || stdActiveUnit === 'ALL') return true;
+    const stdItem = getStandardUnitId(itemUnitId);
+    if (stdItem) return stdItem === stdActiveUnit;
+
+    if (itemUlpName && ulpList && ulpList.length > 0) {
+      const cleanItemUlp = cleanStr(itemUlpName);
+      if (!cleanItemUlp) return true;
+      const matchedUlp = ulpList.find(u => {
+        const cleanName = cleanStr(u.namaULP || '');
+        return cleanName && (cleanName.includes(cleanItemUlp) || cleanItemUlp.includes(cleanName));
+      });
+      if (matchedUlp && matchedUlp.unitId) {
+        return getStandardUnitId(matchedUlp.unitId) === stdActiveUnit;
+      }
+    }
+    return true;
+  }, [stdActiveUnit, ulpList, cleanStr]);
+
   const matchesDate = React.useCallback((rawDate?: any, rawNomorWO?: string, rawCreatedAt?: any) => {
     const itemDate = normalizeDateISO(rawDate) || parseDateFromNomorWO(rawNomorWO || '') || normalizeDateISO(rawCreatedAt) || '';
     if (!itemDate) return true;
@@ -53,26 +76,29 @@ export const useDashboardMetrics = (
 
   const filteredWOs = React.useMemo(() => {
     return workOrders.filter(wo => {
+      const unitMatch = matchesUnit(wo.unitId, wo.ulpName);
       const ulpMatch = matchesUlp(wo.ulpName, wo.ulpId, filterUlp);
       const penyulangMatch = matchesPenyulang(wo.penyulangName, wo.penyulangId, filterPenyulang);
       const dateMatch = matchesDate(wo.tanggal, wo.nomorWO, wo.createdAt);
-      return ulpMatch && penyulangMatch && dateMatch;
+      return unitMatch && ulpMatch && penyulangMatch && dateMatch;
     });
-  }, [workOrders, filterUlp, filterPenyulang, matchesUlp, matchesPenyulang, matchesDate]);
+  }, [workOrders, matchesUnit, filterUlp, filterPenyulang, matchesUlp, matchesPenyulang, matchesDate]);
 
   const filteredRealisasi = React.useMemo(() => {
     return realisasiList.filter(rel => {
+      const unitMatch = matchesUnit(rel.unitId, rel.ulpName);
       const ulpMatch = matchesUlp(rel.ulpName, undefined, filterUlp);
       const penyulangMatch = matchesPenyulang(rel.penyulangName, undefined, filterPenyulang);
       const dateMatch = matchesDate(rel.tanggalRealisasi, rel.nomorWO, rel.createdAt);
-      return ulpMatch && penyulangMatch && dateMatch;
+      return unitMatch && ulpMatch && penyulangMatch && dateMatch;
     });
-  }, [realisasiList, filterUlp, filterPenyulang, matchesUlp, matchesPenyulang, matchesDate]);
+  }, [realisasiList, matchesUnit, filterUlp, filterPenyulang, matchesUlp, matchesPenyulang, matchesDate]);
 
   const topPerformersData = React.useMemo(() => {
     const reguMap = new Map<string, any>();
     
     reguList.forEach((r, idx) => {
+      if (!matchesUnit(r.unitId, r.ulpName)) return;
       const key = cleanStr(r.namaRegu || r.id || `regu-${idx}`);
       if (!key) return;
       if (filterUlp !== 'ALL' && (r.ulpName || r.ulpId) && !matchesUlp(r.ulpName, r.ulpId, filterUlp)) return;
@@ -138,12 +164,11 @@ export const useDashboardMetrics = (
 
     return Array.from(reguMap.values()).map(r => {
       const realKms = Number(r.realisasiKms.toFixed(2));
-      // Target setiap tim ROW adalah 50.20 KMS
       const targetVal = TARGET_KMS_PER_TIM_ROW;
       const pct = targetVal > 0 ? Math.min(100, Math.round((realKms / targetVal) * 100)) : 0;
       return { ...r, targetKms: targetVal, realisasiKms: realKms, percentage: pct };
     }).sort((a, b) => b.realisasiKms - a.realisasiKms);
-  }, [reguList, filterUlp, matchesUlp, filteredWOs, filteredRealisasi, cleanStr]);
+  }, [reguList, matchesUnit, filterUlp, matchesUlp, filteredWOs, filteredRealisasi, cleanStr]);
 
   return { filteredWOs, filteredRealisasi, topPerformersData };
 };
