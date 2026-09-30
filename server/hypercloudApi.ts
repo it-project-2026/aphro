@@ -3831,6 +3831,18 @@ router.post('/media/migrate-base64', requireAuth, async (req: Request, res: Resp
 });
 
 router.post('/media/upload-photo', requireAuth, async (req: Request, res: Response) => {
+  const authUser = (req as any).user;
+  const contentLength = req.headers['content-length'] || '';
+  const contentType = req.headers['content-type'] || '';
+  
+  console.log(`[MEDIA_UPLOAD_REQUEST]
+method=POST
+path=${req.path}
+content-type=${contentType}
+content-length=${contentLength}
+user=${authUser?.username || authUser?.name || 'Anonymous'}
+unitId=${authUser?.unitId || 'N/A'}`);
+
   try {
     const { base64Data, nomorWO, photoType } = req.body || {};
     if (!base64Data || typeof base64Data !== 'string') {

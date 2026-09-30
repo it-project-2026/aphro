@@ -125,7 +125,23 @@ export async function ensureGoogleDrivePhotoUrl(
 
   // 2. If Base64 string, upload with retry & fallback
   if (isBase64Image(clean)) {
-    console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} upload START (nomorWO=${nomorWO}, isBase64=true, len=${clean.length})`);
+    // Diagnostic logging of upload payload size (Section 3)
+    const mimeType = clean.match(/data:([^;]+);/)?.[1] || 'image/jpeg';
+    const base64Len = clean.length;
+    const estBytes = Math.round((base64Len * 3) / 4);
+    const estKB = (estBytes / 1024).toFixed(2);
+    const estMB = (estBytes / (1024 * 1024)).toFixed(2);
+
+    console.log(`[MEDIA_UPLOAD_PAYLOAD_SIZE]
+nomorWO=${nomorWO}
+photoFieldName=${photoType}
+mimeType=${mimeType}
+base64Length=${base64Len}
+approxBytes=${estBytes}
+sizeKB=${estKB} KB
+sizeMB=${estMB} MB`);
+
+    console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} upload START (nomorWO=${nomorWO}, isBase64=true, len=${base64Len})`);
 
     // Strategy A: Upload directly to Application Backend Media Storage API (/api/media/upload-photo)
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -153,9 +169,36 @@ export async function ensureGoogleDrivePhotoUrl(
             console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} backend storage upload SUCCESS (attempt ${attempt}) -> URL: ${fileUrl}`);
             return fileUrl;
           }
+        } else {
+          // Classify non-OK server statuses (Section E)
+          let errorType = `HTTP_${res.status}`;
+          if (res.status === 413) {
+            errorType = 'HTTP_413_CONTENT_TOO_LARGE';
+            console.error(`[MEDIA_UPLOAD_413] Server rejected photo upload due to size limit: 413 Content Too Large. No further upload retries.`);
+          } else if (res.status === 401) {
+            errorType = 'HTTP_401_UNAUTHORIZED';
+          } else if (res.status === 403) {
+            errorType = 'HTTP_403_FORBIDDEN';
+          } else if (res.status === 404) {
+            errorType = 'HTTP_404_NOT_FOUND';
+          } else if (res.status >= 500) {
+            errorType = 'HTTP_5XX_SERVER_ERROR';
+          }
+
+          console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} backend upload status classified as: ${errorType}`);
+
+          // For critical client or configuration errors, stop retry loop immediately
+          if (res.status === 413 || res.status === 401 || res.status === 403 || res.status === 404) {
+            break; 
+          }
         }
       } catch (backendErr: any) {
-        console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} backend storage attempt ${attempt} warning:`, backendErr?.message || backendErr);
+        // Detect CORS / Network errors specifically
+        let errorType = 'NETWORK_ERROR';
+        if (backendErr?.message?.includes('fetch') || backendErr?.message?.includes('NetworkError') || !navigator.onLine) {
+          errorType = 'CORS_ERROR_OR_NETWORK_ERROR';
+        }
+        console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} backend storage attempt ${attempt} warning (${errorType}):`, backendErr?.message || backendErr);
       }
     }
 
