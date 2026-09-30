@@ -709,9 +709,8 @@ ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
 
   // Vite middleware for development vs production
   const distPath = path.join(process.cwd(), "dist");
-  const hasDist = fs.existsSync(path.join(distPath, "index.html"));
 
-  if (process.env.NODE_ENV !== "production" && !hasDist) {
+  if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
