@@ -89,6 +89,34 @@ export function isValidPhotoUrl(value: any): boolean {
 }
 
 /**
+ * Validator for strictly uploaded photo URLs.
+ * Rejects data:image Base64 strings. Only accepts valid http/https or /uploads/ paths.
+ */
+export function isValidUploadedPhotoUrl(value: any): boolean {
+  if (!value || typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    trimmed === '' ||
+    lower === 'n/a' ||
+    lower === 'null' ||
+    lower === 'undefined' ||
+    lower === '-' ||
+    lower === '""' ||
+    lower === "''"
+  ) {
+    return false;
+  }
+  if (trimmed.startsWith('data:image') || (trimmed.length > 500 && !trimmed.startsWith('http'))) {
+    return false;
+  }
+  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return true;
+  }
+  return trimmed.length > 20 && !trimmed.includes(' ');
+}
+
+/**
  * Ensures photo string is converted to a verified storage or Google Drive URL.
  * 1. If photo is already an HTTP URL or /uploads/ path, validates and returns it.
  * 2. If photo is Base64, uploads it to the server backend storage (/api/media/upload-photo)

@@ -553,49 +553,39 @@ export class ApiService {
     const latLngStr = (latNum && lngNum) ? `${latNum}, ${lngNum}` : (data.Latitude_Longitude || data.latitudeLongitude || '');
     const lokasiStr = data.lokasiKerja || data.Lokasi_kerja || data.lokasi_kerja || data.lokasi || '';
 
+    // STRICT BASE64 VALIDATION (Rule E)
+    const isBase64 = (str: string) => str && (str.startsWith('data:image') || (str.length > 500 && !str.startsWith('http')));
+    if (isBase64(fotoSebelumClean) || isBase64(fotoSesudahClean)) {
+      throw new Error('REALISASI_BLOCKED_BASE64: Foto belum berhasil di-upload ke Google Drive');
+    }
+
+    // CONCEPT C/D: Whitelisted minimal final payload structure with ZERO duplicate photo fields
     const payload = {
       id: data.id || data.ID || data.realisasiId,
       ID: data.ID || data.id || data.realisasiId,
       realisasiId: data.id || data.ID || data.realisasiId,
       WO_ID: woId,
-      woId: woId,
-      workOrderId: woId,
       Nomor_WO: nomorWo,
-      nomorWO: nomorWo,
-      nomor_wo: nomorWo,
       unitId: unitId,
       ULP: data.ulpName || data.ULP || '',
-      ulpName: data.ulpName || data.ULP || '',
-      regu: data.reguName || data.regu || data.REGU_ROW || '',
-      reguName: data.reguName || data.regu || data.REGU_ROW || '',
-      penyulang: data.penyulangName || data.penyulang || data.PENYULANG || '',
-      penyulangName: data.penyulangName || data.penyulang || data.PENYULANG || '',
-      noTiang: data.noTiang || data.NO_TIANG || '',
-      tanggalRealisasi: data.tanggalRealisasi || data.tanggal || data.TANGGAL || getWIBDateString(),
+      REGU_ROW: data.reguName || data.regu || data.REGU_ROW || '',
+      PENYULANG: data.penyulangName || data.penyulang || data.PENYULANG || '',
+      NO_TIANG: data.noTiang || data.NO_TIANG || '',
+      TANGGAL: data.tanggalRealisasi || data.tanggal || data.TANGGAL || getWIBDateString(),
       Foto_Sebelum: fotoSebelumClean,
       Foto_Sesudah: fotoSesudahClean,
-      fotoSebelum: fotoSebelumClean,
-      fotoSesudah: fotoSesudahClean,
-      fotoSebelumUrl: fotoSebelumClean,
-      fotoSesudahUrl: fotoSesudahClean,
-      jenisTanaman: data.jenisTanaman || '',
-      lokasiKerja: lokasiStr,
-      Lokasi_kerja: lokasiStr,
-      keterangan: data.keterangan || 'TEBANG',
-      pertumbuhanTanaman: data.pertumbuhanTanaman || '',
-      kendala: data.kendala || '',
-      latitude: latNum,
-      longitude: lngNum,
+      Jenis_Tanaman: data.jenisTanaman || '',
+      Keterangan: data.keterangan || 'TEBANG',
+      Pertumbuhan_Tanaman: data.pertumbuhanTanaman || '',
+      Kendala: data.kendala || '',
       Latitude_Longitude: latLngStr,
-      latitudeLongitude: latLngStr,
+      Lokasi_kerja: lokasiStr,
+      Timestamp: data.Timestamp || data.timestamp || getLocalDateTimeString(),
       petugas: data.petugasName || data.petugas || '',
-      petugasId: data.petugasId || '',
-      petugasName: data.petugasName || data.petugas || '',
-      progressPercent: 100,
       status: 'Selesai',
     };
 
-    console.log('[REALISASI_PHOTO_DEBUG] create payload:', {
+    console.log('[REALISASI_PHOTO_DEBUG] create whitelisted payload:', {
       id: payload.ID || payload.id,
       unitId: payload.unitId,
       WO_ID: payload.WO_ID,
@@ -604,7 +594,7 @@ export class ApiService {
       Foto_Sesudah: fotoSesudahClean || '(EMPTY)',
     });
 
-    // 1. Diagnose Foto_Sebelum and Foto_Sesudah sizes securely (Section 2)
+    // 1. Diagnose Foto_Sebelum and Foto_Sesudah sizes securely (Rule B)
     const sebLen = fotoSebelumClean.length;
     const sebApproxBytes = Math.round((sebLen * 3) / 4);
     const sesLen = fotoSesudahClean.length;
@@ -613,32 +603,24 @@ export class ApiService {
     const bodyStr = JSON.stringify(payload);
     const totalJsonBytes = typeof Blob !== 'undefined' ? new Blob([bodyStr]).size : Buffer.from(bodyStr).length;
 
-    console.log(`[REALISASI_PAYLOAD_SIZE]
-id=${payload.id || payload.ID}
-Foto_Sebelum:
-  type=${fotoSebelumClean.startsWith('data:') ? (fotoSebelumClean.split(';')[0]?.split(':')[1] || 'image/jpeg') : 'image/jpeg'}
-  base64Length=${sebLen}
-  approxBytes=${sebApproxBytes}
-
-Foto_Sesudah:
-  type=${fotoSesudahClean.startsWith('data:') ? (fotoSesudahClean.split(';')[0]?.split(':')[1] || 'image/jpeg') : 'image/jpeg'}
-  base64Length=${sesLen}
-  approxBytes=${sesApproxBytes}
-
-TOTAL_JSON_BYTES=${totalJsonBytes}`);
-
-    // 2. Measure FINAL payload body tepat sebelum fetch() (Section 3)
     const bodyBytes = totalJsonBytes;
     const bodyKB = (bodyBytes / 1024).toFixed(2);
     const bodyMB = (bodyBytes / (1024 * 1024)).toFixed(2);
 
+    const getPhotoType = (str: string) => {
+      if (!str) return 'EMPTY';
+      if (str.startsWith('data:image') || (str.length > 500 && !str.startsWith('http'))) return 'BASE64';
+      return 'GOOGLE_DRIVE_URL';
+    };
+
     console.log(`[API_REALISASI_FINAL_PAYLOAD]
 endpoint=/api/realisasi
-method=POST
 id=${payload.id || payload.ID}
 unitId=${payload.unitId}
-Foto_Sebelum=${fotoSebelumClean.startsWith('http') ? 'URL' : (sebApproxBytes + ' bytes')}
-Foto_Sesudah=${fotoSesudahClean.startsWith('http') ? 'URL' : (sesApproxBytes + ' bytes')}
+Foto_Sebelum_type=${getPhotoType(fotoSebelumClean)}
+Foto_Sesudah_type=${getPhotoType(fotoSesudahClean)}
+Foto_Sebelum_length=${sebLen}
+Foto_Sesudah_length=${sesLen}
 bodyBytes=${bodyBytes}
 bodyKB=${bodyKB} KB
 bodyMB=${bodyMB} MB`);

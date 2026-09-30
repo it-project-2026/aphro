@@ -9,7 +9,7 @@ import { WatermarkedPhoto, WOStatus } from '../types';
 import { generateWatermarkedImage } from '../utils/watermark';
 import { GASApiService } from '../services/gasApiService';
 import { InisiasiService } from '../services/inisiasiService';
-import { ensureGoogleDrivePhotoUrl, isValidPhotoUrl } from '../utils/driveUtils';
+import { ensureGoogleDrivePhotoUrl, isValidPhotoUrl, isValidUploadedPhotoUrl } from '../utils/driveUtils';
 import { getWIBDateString } from '../utils/dateUtils';
 import {
   Camera,
@@ -650,8 +650,8 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
       );
 
-      // Validate Foto Sebelum upload
-      if (!isValidPhotoUrl(finalSebUrl)) {
+      // Validate Foto Sebelum upload (Must be a valid remote/local url, not base64)
+      if (!isValidUploadedPhotoUrl(finalSebUrl)) {
         console.warn('[REALISASI_PHOTO_DEBUG] BEFORE_UPLOAD_FAILED');
         setIsProcessing(false);
         showToast('Foto Sebelum belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
@@ -669,8 +669,8 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         }
       );
 
-      // Validate Foto Sesudah upload
-      if (!isValidPhotoUrl(finalSesUrl)) {
+      // Validate Foto Sesudah upload (Must be a valid remote/local url, not base64)
+      if (!isValidUploadedPhotoUrl(finalSesUrl)) {
         console.warn('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_FAILED');
         setIsProcessing(false);
         showToast('Foto Sesudah belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
@@ -679,19 +679,19 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       console.log('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_SUCCESS');
 
       console.log('[REALISASI_PHOTO_DEBUG] FINAL_PHOTO_VALIDATION', {
-        beforeValid: isValidPhotoUrl(finalSebUrl),
-        afterValid: isValidPhotoUrl(finalSesUrl),
+        beforeValid: isValidUploadedPhotoUrl(finalSebUrl),
+        afterValid: isValidUploadedPhotoUrl(finalSesUrl),
         beforeUrlPresent: Boolean(finalSebUrl),
         afterUrlPresent: Boolean(finalSesUrl),
       });
 
-      if (!isValidPhotoUrl(finalSebUrl)) {
+      if (!isValidUploadedPhotoUrl(finalSebUrl)) {
         setIsProcessing(false);
         showToast('Foto Sebelum belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
         return;
       }
 
-      if (!isValidPhotoUrl(finalSesUrl)) {
+      if (!isValidUploadedPhotoUrl(finalSesUrl)) {
         setIsProcessing(false);
         showToast('Foto Sesudah belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
         return;

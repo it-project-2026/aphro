@@ -35,7 +35,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../hooks/useToast';
 import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
 import { generateWatermarkedImage } from '../utils/watermark';
-import { formatDriveImageUrl, ensureGoogleDrivePhotoUrl, isBase64Image, isValidPhotoUrl } from '../utils/driveUtils';
+import { formatDriveImageUrl, ensureGoogleDrivePhotoUrl, isBase64Image, isValidPhotoUrl, isValidUploadedPhotoUrl } from '../utils/driveUtils';
 import { extractExifFromPhoto, ExifPhotoMetadata } from '../utils/exifReader';
 import { GASApiService } from '../services/gasApiService';
 import { RekapHarianService, UL_PRESETS, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
@@ -461,7 +461,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         photoType: 'Realisasi_Sebelum',
       });
 
-      if (fotoSebelumUrl.trim() && isBase64Image(fotoSebelumUrl.trim()) && !isValidPhotoUrl(finalSebUrl)) {
+      if (fotoSebelumUrl.trim() && isBase64Image(fotoSebelumUrl.trim()) && !isValidUploadedPhotoUrl(finalSebUrl)) {
         setErrorMessage('Foto sebelum belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
         setIsSubmitting(false);
         return;
@@ -473,7 +473,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         photoType: 'Realisasi_Sesudah',
       });
 
-      if (fotoSesudahUrl.trim() && isBase64Image(fotoSesudahUrl.trim()) && !isValidPhotoUrl(finalSesUrl)) {
+      if (fotoSesudahUrl.trim() && isBase64Image(fotoSesudahUrl.trim()) && !isValidUploadedPhotoUrl(finalSesUrl)) {
         setErrorMessage('Foto sesudah belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
         setIsSubmitting(false);
         return;
@@ -502,10 +502,10 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         lokasiKerja: lokasiKerja.trim(),
         latitude: latNum,
         longitude: lngNum,
-        Foto_Sebelum: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : undefined,
-        Foto_Sesudah: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : undefined,
-        fotoSebelumUrl: isValidPhotoUrl(finalSebUrl) ? finalSebUrl : '',
-        fotoSesudahUrl: isValidPhotoUrl(finalSesUrl) ? finalSesUrl : '',
+        Foto_Sebelum: isValidUploadedPhotoUrl(finalSebUrl) ? finalSebUrl : undefined,
+        Foto_Sesudah: isValidUploadedPhotoUrl(finalSesUrl) ? finalSesUrl : undefined,
+        fotoSebelumUrl: isValidUploadedPhotoUrl(finalSebUrl) ? finalSebUrl : '',
+        fotoSesudahUrl: isValidUploadedPhotoUrl(finalSesUrl) ? finalSesUrl : '',
         photosSebelum: fotoSebelumUrl
           ? [
               {

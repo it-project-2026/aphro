@@ -725,9 +725,55 @@ export function RealisasiProvider({
 
         let lastSaveErrorMsg: string | undefined;
 
-        // 1. ONLINE-FIRST logic
+        // 1. ONLINE-FIRST logic (Concept D/E/F)
         if (typeof navigator !== 'undefined' && navigator.onLine) {
           try {
+            console.log('[REALISASI_ONLINE_UPLOAD] Starting photo upload to Google Drive/Media storage before saving Realisasi...');
+            
+            // Extract raw photo source (Data URLs or file URLs)
+            const rawSebSrc = newRelUI.fotoSebelumUrl || newRelUI.photosSebelum?.[0]?.dataUrl || newRelUI.photosSebelum?.[0]?.fileUrl || '';
+            const rawSesSrc = newRelUI.fotoSesudahUrl || newRelUI.photosSesudah?.[0]?.dataUrl || newRelUI.photosSesudah?.[0]?.fileUrl || '';
+
+            // Run compression on raw base64 if needed before upload
+            const { compressImage } = await import('../utils/imageCompression');
+            const compressedSeb = await compressImage(rawSebSrc);
+            const compressedSes = await compressImage(rawSesSrc);
+
+            const uploadedSebUrl = await ensureGoogleDrivePhotoUrl(compressedSeb, {
+              nomorWO: resolvedNomorWo,
+              reguName: relData.reguName || 'ROW',
+              photoType: 'Realisasi_Sebelum',
+            });
+
+            const uploadedSesUrl = await ensureGoogleDrivePhotoUrl(compressedSes, {
+              nomorWO: resolvedNomorWo,
+              reguName: relData.reguName || 'ROW',
+              photoType: 'Realisasi_Sesudah',
+            });
+
+            const isBase64Val = (str: string) => str && (str.startsWith('data:image') || (str.length > 500 && !str.startsWith('http')));
+            if (isBase64Val(uploadedSebUrl) || isBase64Val(uploadedSesUrl)) {
+              throw new Error('REALISASI_BLOCKED_BASE64: Foto belum berhasil di-upload ke Google Drive/Media Storage.');
+            }
+
+            // Update photo URL properties with whitelisted server URLs
+            newRelUI.fotoSebelumUrl = uploadedSebUrl;
+            newRelUI.fotoSebelum = uploadedSebUrl;
+            newRelUI.Foto_Sebelum = uploadedSebUrl;
+            newRelUI.fotoSesudahUrl = uploadedSesUrl;
+            newRelUI.fotoSesudah = uploadedSesUrl;
+            newRelUI.Foto_Sesudah = uploadedSesUrl;
+
+            // Also clean up base64 from nested lists so they do not get serialized
+            if (newRelUI.photosSebelum?.[0]) {
+              newRelUI.photosSebelum[0].dataUrl = '';
+              newRelUI.photosSebelum[0].fileUrl = uploadedSebUrl;
+            }
+            if (newRelUI.photosSesudah?.[0]) {
+              newRelUI.photosSesudah[0].dataUrl = '';
+              newRelUI.photosSesudah[0].fileUrl = uploadedSesUrl;
+            }
+
             const saveRes = await ApiService.saveRealisasi(newRelUI);
 
             if (saveRes && saveRes.success) {
