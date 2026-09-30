@@ -713,9 +713,31 @@ ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: "custom",
     });
     app.use(vite.middlewares);
+    app.use(express.static(path.join(process.cwd(), "public")));
+
+    app.use("*", async (req, res, next) => {
+      const url = req.originalUrl;
+      if (url.startsWith("/api") || url.startsWith("/uploads")) {
+        return next();
+      }
+
+      // Guard: Return 404 for missing static assets/scripts instead of serving index.html as text/html
+      if (/\.(js|mjs|ts|tsx|css|json|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/i.test(url.split('?')[0])) {
+        return res.status(404).type('text/plain').send('File not found');
+      }
+
+      try {
+        let template = fs.readFileSync(path.join(process.cwd(), "index.html"), "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     app.use(express.static(distPath, {
       setHeaders: (res, filePath) => {
@@ -726,7 +748,17 @@ ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
         }
       }
     }));
-    app.get("*", (req, res) => {
+    app.use("*", (req, res, next) => {
+      const url = req.originalUrl;
+      if (url.startsWith("/api") || url.startsWith("/uploads")) {
+        return next();
+      }
+
+      // Guard: Return 404 for missing static assets/scripts instead of serving index.html as text/html
+      if (/\.(js|mjs|ts|tsx|css|json|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/i.test(url.split('?')[0])) {
+        return res.status(404).type('text/plain').send('File not found');
+      }
+
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
