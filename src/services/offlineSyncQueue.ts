@@ -522,6 +522,28 @@ class OfflineSyncQueueEngine {
       console.warn(`[SyncQueueEngine] Sync failed for key ${item.idempotencyKey}:`, error);
 
       const errStr = String(error?.message || error || '').toLowerCase();
+
+      // Check HTTP 413 (Content Too Large) (Non-Retryable Rule)
+      const is413 = errStr.includes('413') || errStr.includes('too large') || errStr.includes('content-length');
+      if (is413) {
+        item.status = 'FAILED_NON_RETRYABLE';
+        item.retryCount = 999;
+        item.error = 'Payload Realisasi terlalu besar. Data tidak dikirim ulang otomatis sampai ukuran payload diperbaiki.';
+        await dexieDb.sync_queue.put(item);
+        console.error(`[SyncQueueEngine] Item ${item.idempotencyKey} marked as FAILED_NON_RETRYABLE due to HTTP 413. Stopping auto retries.`);
+        
+        // Update Local Realisasi status
+        const localId = item.payload?.realisasi?.localId || item.payload?.id || item.idempotencyKey;
+        if (item.tableName === 'REALISASI' && localId) {
+          await dexieDb.realisasi.update(localId, {
+            syncStatus: 'FAILED',
+            syncError: item.error,
+            retryCount: 999,
+          }).catch(() => {});
+        }
+        return false;
+      }
+
       const is404 = errStr.includes('404') || errStr.includes('not found') || errStr.includes('tidak ditemukan');
 
       if (is404) {

@@ -18,12 +18,12 @@ export const compressImage = (base64Str: string): Promise<string> => {
     const base64Content = parts.length > 1 ? parts[1] : parts[0];
     const estimatedSizeBytes = Math.round((base64Content.length * 3) / 4);
 
-    // If ALREADY <= 350KB, DO NOT RE-DECODE OR RE-CANVAS! Return immediately!
-    if (estimatedSizeBytes <= 350 * 1024) {
+    // If ALREADY <= 120KB, DO NOT RE-DECODE OR RE-CANVAS! Return immediately!
+    if (estimatedSizeBytes <= 120 * 1024) {
       return resolve(base64Str);
     }
 
-    // 3. If larger than 350KB, perform single-pass fast resize & compression
+    // 3. If larger than 120KB, perform single-pass fast resize & compression
     const img = new Image();
 
     const cleanup = () => {
@@ -41,9 +41,9 @@ export const compressImage = (base64Str: string): Promise<string> => {
           return resolve(base64Str);
         }
 
-        let width = img.width || 1280;
-        let height = img.height || 960;
-        const MAX_SIZE = 1280;
+        let width = img.width || 1024;
+        let height = img.height || 768;
+        const MAX_SIZE = 1024; // Max 1024px is highly readable for watermark text but keeps size extremely small
 
         if (width > height) {
           if (width > MAX_SIZE) {
@@ -65,8 +65,8 @@ export const compressImage = (base64Str: string): Promise<string> => {
         // Immediately release source img memory
         cleanup();
 
-        // Target single pass with quality 0.75
-        const resultBase64 = canvas.toDataURL('image/jpeg', 0.75);
+        // Target single pass with quality 0.70 (70%) for maximum compression & clear text
+        const resultBase64 = canvas.toDataURL('image/jpeg', 0.70);
 
         // Clean up canvas
         canvas.width = 0;

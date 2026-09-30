@@ -809,14 +809,42 @@ export class SyncManager {
               details: `Berhasil sinkronkan antrean offline ke HyperCloud (Key: ${item.idempotencyKey})`,
             });
           } else {
-            item.status = 'FAILED';
-            item.error = errorMessage || 'Gagal menyimpan ke HyperCloud API';
+            const errStr = String(errorMessage || '').toLowerCase();
+            const is413 = errStr.includes('413') || errStr.includes('too large');
+            const is404 = errStr.includes('404') || errStr.includes('not found');
+            const is401 = errStr.includes('401') || errStr.includes('unauthorized');
+            const is403 = errStr.includes('403') || errStr.includes('forbidden');
+
+            if (is413) {
+              item.status = 'FAILED_NON_RETRYABLE';
+              item.error = 'Payload Realisasi terlalu besar. Data tidak dikirim ulang otomatis sampai ukuran payload diperbaiki.';
+            } else if (is404 || is403 || is401) {
+              item.status = 'FAILED_NON_RETRYABLE';
+              item.error = errorMessage || 'Gagal menyimpan ke HyperCloud API (Non-Retryable)';
+            } else {
+              item.status = 'FAILED';
+              item.error = errorMessage || 'Gagal menyimpan ke HyperCloud API';
+            }
             await idbService.updatePendingOperation(item);
             failCount++;
           }
         } catch (err: any) {
-          item.status = 'FAILED';
-          item.error = err.message || 'Koneksi ke HyperCloud terputus';
+          const errStr = String(err.message || '').toLowerCase();
+          const is413 = errStr.includes('413') || errStr.includes('too large');
+          const is404 = errStr.includes('404') || errStr.includes('not found');
+          const is401 = errStr.includes('401') || errStr.includes('unauthorized');
+          const is403 = errStr.includes('403') || errStr.includes('forbidden');
+
+          if (is413) {
+            item.status = 'FAILED_NON_RETRYABLE';
+            item.error = 'Payload Realisasi terlalu besar. Data tidak dikirim ulang otomatis sampai ukuran payload diperbaiki.';
+          } else if (is404 || is403 || is401) {
+            item.status = 'FAILED_NON_RETRYABLE';
+            item.error = err.message || 'Koneksi ditolak (Non-Retryable)';
+          } else {
+            item.status = 'FAILED';
+            item.error = err.message || 'Koneksi ke HyperCloud terputus';
+          }
           await idbService.updatePendingOperation(item);
           failCount++;
         }

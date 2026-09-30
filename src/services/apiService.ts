@@ -637,11 +637,11 @@ endpoint=/api/realisasi
 method=POST
 id=${payload.id || payload.ID}
 unitId=${payload.unitId}
+Foto_Sebelum=${fotoSebelumClean.startsWith('http') ? 'URL' : (sebApproxBytes + ' bytes')}
+Foto_Sesudah=${fotoSesudahClean.startsWith('http') ? 'URL' : (sesApproxBytes + ' bytes')}
 bodyBytes=${bodyBytes}
 bodyKB=${bodyKB} KB
-bodyMB=${bodyMB} MB
-fotoSebelumBytes=${sebApproxBytes}
-fotoSesudahBytes=${sesApproxBytes}`);
+bodyMB=${bodyMB} MB`);
 
     console.log('[SYNC] ONLINE');
     console.log(`[SYNC] Sending REALISASI to HyperCloud: POST /api/realisasi (unitId=${unitId}, JWT=AVAILABLE, id=${payload.id})`);
