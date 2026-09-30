@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import bcrypt from 'bcryptjs';
-import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl, getPool } from './database';
+import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl, getPool, isNetworkConnectionError } from './database';
 
 const router = Router();
 
@@ -12,6 +12,8 @@ const router = Router();
 async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?: string): Promise<boolean> {
   const endpoint = targetPath || req.path;
   const url = `${HYPERCLOUD_API_URL}/api${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+
+  res.setHeader('X-Data-Source', 'HYPERCLOUD_GATEWAY');
 
   const headers: Record<string, string> = {};
   if (req.headers.authorization) {
@@ -348,6 +350,8 @@ router.get('/health', async (req: Request, res: Response) => {
   logApiCall('GET', '/api/health');
 
   const connResult = await testConnection();
+  res.setHeader('X-Data-Source', connResult.source);
+  console.log(`[DATA SOURCE] endpoint=/api/health source=${connResult.source}`);
 
   if (connResult.connected) {
     logApiRoute('GET', '/api/health', 200);
@@ -355,6 +359,7 @@ router.get('/health', async (req: Request, res: Response) => {
       ok: true,
       service: 'aphro-api',
       database: 'connected',
+      dataSource: connResult.source,
       success: true,
       status: 'ok',
       connected: true,
@@ -1711,6 +1716,8 @@ router.get('/work-orders', requireAuth, async (req: Request, res: Response) => {
 
     const resDb = await query(sql, params);
 
+    res.setHeader('X-Data-Source', 'DIRECT_POSTGRESQL');
+    console.log(`[DATA SOURCE] endpoint=/api/work-orders source=DIRECT_POSTGRESQL`);
     console.log(`[WO_ACCESS_DEBUG] role=${userRole} userId=${authUser?.userId} unitId=${targetUnitId} groupWO=${userRegu || 'ALL'} returnedWorkOrders=${resDb.rows.length}`);
 
     return res.json({
@@ -2331,6 +2338,9 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
       dataParams
     );
 
+    res.setHeader('X-Data-Source', 'DIRECT_POSTGRESQL');
+    console.log(`[DATA SOURCE] endpoint=/api/realisasi source=DIRECT_POSTGRESQL`);
+
     return res.json({
       status: 'success',
       data: dataRes.rows,
@@ -2534,6 +2544,9 @@ router.get(
           Foto_Sesudah: cleanFoto(row.Foto_Sesudah),
         };
       });
+
+      res.setHeader('X-Data-Source', 'DIRECT_POSTGRESQL');
+      console.log(`[DATA SOURCE] endpoint=/api/realisasi/dashboard source=DIRECT_POSTGRESQL`);
 
       return res.json({
         status: 'success',

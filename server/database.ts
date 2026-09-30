@@ -9,18 +9,29 @@ export const HYPERCLOUD_API_URL = (
   'https://api.aphro-row.my.id'
 ).replace(/\/+$/, '');
 
-let rawUrl = String(
-  process.env.HYPERCLOUD_DATABASE_URL ||
-  process.env.DATABASE_URL ||
-  ''
-).trim().replace(/^["']|["']$/g, '');
+/**
+ * Prioritas Variabel Lingkungan:
+ * 1. HYPERCLOUD_DATABASE_URL
+  * 2. DATABASE_URL
+ */
+function resolveDatabaseUrl(): string {
+  const envUrl = String(
+    process.env.HYPERCLOUD_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    ''
+  ).trim().replace(/^["']|["']$/g, '');
 
-let dbUrl = rawUrl;
+  return envUrl;
+}
+
+let dbUrl = resolveDatabaseUrl();
 let poolInstance: pg.Pool | null = null;
 let directPgFailed = false;
+let lastPgFailTime = 0;
+const PG_RECOVERY_COOLDOWN_MS = 60000; // 60 detik cooldown pemulihan otomatis
 
 /**
- * Check if the database URL points to a local host where pg might not be listening
+ * Memeriksa apakah URL koneksi merujuk pada IP loopback / localhost
  */
 export function isLocalhostDbUrl(url: string): boolean {
   if (!url) return true;
@@ -28,13 +39,45 @@ export function isLocalhostDbUrl(url: string): boolean {
 }
 
 /**
- * Get or initialize the reusable PostgreSQL Connection Pool
+ * Memeriksa secara spesifik apakah kesalahan merupakan kesalahan koneksi jaringan TCP murni
+ * (Bukan kesalahan sintaks SQL, constraint violation, atau autentikasi).
+ */
+export function isNetworkConnectionError(err: any): boolean {
+  const code = String(err?.code || '').toUpperCase();
+  const msg = String(err?.message || err || '').toUpperCase();
+  return (
+    code === 'ECONNREFUSED' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ENOTFOUND' ||
+    code === 'ECONNRESET' ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('CONNECT ETIMEDOUT') ||
+    msg.includes('CONNECTION TIMEOUT') ||
+    msg.includes('CONNECTION CLOSED') ||
+    msg.includes('TERMINATING CONNECTION') ||
+    msg.includes('57P01') ||
+    msg.includes('57P02') ||
+    msg.includes('57P03')
+  );
+}
+
+/**
+ * Mengembalikan atau menginisialisasi PostgreSQL Connection Pool.
+ * Menggunakan pemulihan otomatis setelah cooldown 60 detik jika terjadi kegagalan sementara.
  */
 export function getPool(): pg.Pool | null {
-  if (directPgFailed) return null;
+  // Cooldown Auto-Recovery: Jika sudah lewat 60 detik dari kegagalan terakhir, beri kesempatan coba ulang
+  if (directPgFailed) {
+    if (Date.now() - lastPgFailTime > PG_RECOVERY_COOLDOWN_MS) {
+      console.log('[DB RECOVERY] Cooldown 60s selesai. Mencoba ulang koneksi Direct PostgreSQL...');
+      directPgFailed = false;
+    } else {
+      return null;
+    }
+  }
 
-  // In non-production preview environments, localhost DB URLs do not have a local PG daemon on port 5432.
-  // Bypass direct TCP connect so requests route seamlessly via HyperCloudHost API Gateway without ECONNREFUSED logs.
+  // Pada lingkungan preview/dev lokal (yang bukan VPS produksi), jika URL adalah localhost 127.0.0.1
+  // dan port 5432 tidak aktif lokal, abaikan koneksi direct TCP agar tidak memicu log ECONNREFUSED berulang.
   if (process.env.NODE_ENV !== 'production' && isLocalhostDbUrl(dbUrl)) {
     return null;
   }
@@ -44,9 +87,9 @@ export function getPool(): pg.Pool | null {
       return null;
     }
 
-    // Masked log for security
+    // Masking kredensial rahasia untuk log keamanan
     const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':*****@');
-    console.log(`[DB] Initializing HyperCloudHost PostgreSQL Connection Pool (${maskedUrl})`);
+    console.log(`[DB] Menginisialisasi HyperCloudHost PostgreSQL Connection Pool (${maskedUrl})`);
 
     try {
       poolInstance = new Pool({
@@ -58,15 +101,18 @@ export function getPool(): pg.Pool | null {
       });
 
       poolInstance.on('error', (err) => {
-        if (err.message?.includes('ECONNREFUSED')) {
+        if (isNetworkConnectionError(err)) {
           directPgFailed = true;
-          return;
+          lastPgFailTime = Date.now();
+          console.warn('[DB WARNING] Kegagalan jaringan koneksi Direct PostgreSQL:', err.message);
+        } else {
+          console.warn('[DB CLIENT WARNING] Peringatan klien PostgreSQL:', err.message);
         }
-        console.warn('[DB WARNING] Error on PostgreSQL client:', err.message);
       });
     } catch (e: any) {
-      console.warn('[DB] Failed to construct PostgreSQL Pool:', e.message);
+      console.warn('[DB ERROR] Gagal mengonstruksi PostgreSQL Pool:', e.message);
       directPgFailed = true;
+      lastPgFailTime = Date.now();
       return null;
     }
   }
@@ -75,7 +121,7 @@ export function getPool(): pg.Pool | null {
 }
 
 /**
- * Dynamically set or update the connection URL
+ * Mengubah secara dinamis URL koneksi
  */
 export function setDatabaseUrl(url: string): void {
   if (!url || typeof url !== 'string') return;
@@ -83,8 +129,9 @@ export function setDatabaseUrl(url: string): void {
   if (newClean !== dbUrl) {
     dbUrl = newClean;
     directPgFailed = false;
+    lastPgFailTime = 0;
     if (poolInstance) {
-      console.log('[DB] Reloading database connection pool with updated URL');
+      console.log('[DB] Memuat ulang database connection pool dengan URL baru');
       poolInstance.end().catch(() => {});
       poolInstance = null;
     }
@@ -96,7 +143,7 @@ export function getDatabaseUrl(): string {
 }
 
 /**
- * Execute a query with connection pool
+ * Menjalankan SQL query melalui connection pool dengan klasifikasi kesalahan ketat
  */
 export async function query<T = any>(text: string, params: any[] = []): Promise<pg.QueryResult<T>> {
   const pool = getPool();
@@ -111,23 +158,26 @@ export async function query<T = any>(text: string, params: any[] = []): Promise<
       }
       return res;
     } catch (err: any) {
-      const errStr = String(err?.message || err || '');
-      if (errStr.includes('ECONNREFUSED') || errStr.includes('connect') || errStr.includes('closed') || errStr.includes('timeout')) {
+      if (isNetworkConnectionError(err)) {
         directPgFailed = true;
+        lastPgFailTime = Date.now();
+        console.warn(`[DB QUERY WARNING] Direct query gagal karena koneksi jaringan (${err.message}), beralih ke Gateway.`);
+      } else {
+        console.error(`[DB SQL ERROR] Direct SQL query melempar kesalahan sintaks/data: ${err.message}`);
       }
-      console.warn(`[DB QUERY WARNING] Direct query failed (${err.message}), falling back to gateway.`);
       throw err;
     }
   }
 
-  throw new Error('Database direct TCP connection is unavailable. Operations are serviced via HyperCloudHost API Gateway.');
+  throw new Error('Koneksi langsung TCP PostgreSQL sedang tidak tersedia. Layanan dialihkan ke HyperCloudHost API Gateway.');
 }
 
 /**
- * Test database connection latency & status across Direct PG and HyperCloudHost Gateway
+ * Menguji status dan latensi koneksi database (Direct PG & API Gateway)
  */
 export async function testConnection(): Promise<{
   connected: boolean;
+  source: 'DIRECT_POSTGRESQL' | 'HYPERCLOUD_GATEWAY';
   latencyMs?: number;
   message: string;
   timestamp?: string;
@@ -135,27 +185,31 @@ export async function testConnection(): Promise<{
 }> {
   const start = Date.now();
 
-  // 1. If direct external DB URL is provided and not flagged as failed, try direct PG query
-  if (dbUrl && !isLocalhostDbUrl(dbUrl) && !directPgFailed) {
+  // 1. Uji koneksi Direct PG jika pool dapat dibuat dan tidak dalam status failed
+  const pool = getPool();
+  if (pool && !directPgFailed) {
     try {
-      const res = await query('SELECT 1 as connected, NOW() as current_time');
+      const res = await pool.query('SELECT 1 as connected, NOW() as current_time');
       const duration = Date.now() - start;
       if (res && res.rows && res.rows.length > 0) {
         return {
           connected: true,
+          source: 'DIRECT_POSTGRESQL',
           latencyMs: duration,
-          message: `Terhubung ke HyperCloudHost PostgreSQL (${duration}ms)`,
-          timestamp: res.rows[0].current_time,
+          message: `Terhubung langsung ke HyperCloudHost PostgreSQL via Direct TCP (${duration}ms)`,
+          timestamp: String(res.rows[0].current_time),
           database: 'meysxysd_aphro',
         };
       }
-    } catch {
-      directPgFailed = true;
+    } catch (err: any) {
+      if (isNetworkConnectionError(err)) {
+        directPgFailed = true;
+        lastPgFailTime = Date.now();
+      }
     }
   }
 
-  // 2. Check HyperCloudHost live API Gateway
-  // CRITICAL: Avoid infinite HTTP recursion loop on server self-checks in production!
+  // 2. Uji ketersediaan API Gateway
   const isProd = process.env.NODE_ENV === 'production';
   if (!isProd && HYPERCLOUD_API_URL && !HYPERCLOUD_API_URL.includes('localhost') && !HYPERCLOUD_API_URL.includes('127.0.0.1')) {
     try {
@@ -167,6 +221,7 @@ export async function testConnection(): Promise<{
       if (res.status === 200 && (res.data?.status === 'ok' || res.data?.database === 'connected' || res.data?.ok)) {
         return {
           connected: true,
+          source: 'HYPERCLOUD_GATEWAY',
           latencyMs: duration,
           message: `Terhubung ke Database HyperCloudHost PostgreSQL (${res.data.databaseName || 'meysxysd_aphro'}) via Gateway`,
           timestamp: res.data.timestamp || new Date().toISOString(),
@@ -174,22 +229,23 @@ export async function testConnection(): Promise<{
         };
       }
     } catch (err: any) {
-      console.warn('[DB] HyperCloudHost API Gateway health check error:', err.message);
+      console.warn('[DB] Peringatan pemeriksaan kesehatan HyperCloudHost API Gateway:', err.message);
     }
   }
 
   return {
     connected: false,
+    source: 'HYPERCLOUD_GATEWAY',
     message: 'Gagal terhubung ke HyperCloudHost Database atau API Gateway',
   };
 }
 
 /**
- * Close the connection pool cleanly
+ * Menutup pool koneksi secara bersih
  */
 export async function closePool(): Promise<void> {
   if (poolInstance) {
-    console.log('[DB] Closing HyperCloudHost PostgreSQL Pool');
+    console.log('[DB] Mematikan HyperCloudHost PostgreSQL Pool');
     await poolInstance.end().catch(() => {});
     poolInstance = null;
   }
