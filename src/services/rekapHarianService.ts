@@ -27,6 +27,19 @@ export function getCanonicalReguKey(s?: string): string {
 }
 
 /**
+ * Helper canonical key untuk pencocokan ULP
+ */
+export function getCanonicalUlpKey(s?: string): string {
+  if (!s) return '';
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^(ulp|ul)\s+/gi, '')
+    .trim();
+}
+
+/**
  * Helper canonical key untuk pencocokan PENYULANG
  * Toleran terhadap "F. Cingkariang", "F.Cingkariang", "Cingkariang", "CINGKARIANG"
  */
@@ -40,6 +53,24 @@ export function getCanonicalPenyulangKey(s?: string): string {
     .replace(/[._-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Robust Tree Count extractor from Realisasi record
+ */
+export function getRealisasiPohonCount(rel: any): number {
+  if (!rel) return 1;
+  const rawCount =
+    rel.pohonCount ||
+    rel.jumlahPohon ||
+    rel.jumlah_pohon ||
+    rel.pohon ||
+    rel.jumlah;
+  const parsed = Number(rawCount);
+  if (!isNaN(parsed) && parsed > 0) {
+    return Math.round(parsed);
+  }
+  return 1; // Default 1 realisasi item = 1 pohon/titik
 }
 
 /**
@@ -811,11 +842,12 @@ export class RekapHarianService {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
+              const treeCount = getRealisasiPohonCount(rel);
               const action = classifyRealisasiAction(rel);
               if (action === 'TEBANG') {
-                updatedDaily[dayKey].tebang1++;
+                updatedDaily[dayKey].tebang1 += treeCount;
               } else {
-                updatedDaily[dayKey].pangkas++;
+                updatedDaily[dayKey].pangkas += treeCount;
               }
             }
           }
@@ -847,16 +879,6 @@ export class RekapHarianService {
 
               updatedDaily[dayKey].targetKms += targetKms;
               updatedDaily[dayKey].realisasiKms += realisasiKms;
-
-              // Also aggregate TEBANG and PANGKAS if defined on Work Order level
-              const normPekerjaan = String(wo.pekerjaan || (wo as any).PEKERJAAN || wo.jenisPekerjaan || '').trim().toUpperCase();
-              if (normPekerjaan === 'TEBANG' || normPekerjaan.includes('TEBANG')) {
-                const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
-                updatedDaily[dayKey].tebang1 += (isNaN(vol) ? 1 : vol);
-              } else if (normPekerjaan === 'PANGKAS' || normPekerjaan.includes('PANGKAS')) {
-                const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
-                updatedDaily[dayKey].pangkas += (isNaN(vol) ? 1 : vol);
-              }
             }
           }
         });
@@ -1102,6 +1124,8 @@ export class RekapHarianService {
               if (!relUlpRaw && matchedWo?.ulpName) relUlpRaw = matchedWo.ulpName;
             }
 
+            const rowUlpKey = getCanonicalUlpKey(row.namaUlp);
+            const relUlpKey = getCanonicalUlpKey(relUlpRaw);
             const relUlpCanon = getCanonicalReguKey(relUlpRaw);
             const relTimCanon = getCanonicalReguKey(relReguRaw);
             
@@ -1109,14 +1133,29 @@ export class RekapHarianService {
             const relNumMatch = relTimCanon.match(/\d+/);
             
             let matchTim = false;
-            if (rowTimCanon && relTimCanon) {
+
+            // First verify ULP mismatch: if both ULP names exist and conflict, skip
+            const ulpConflicted = Boolean(
+              rowUlpKey &&
+              relUlpKey &&
+              rowUlpKey !== relUlpKey &&
+              !rowUlpKey.includes(relUlpKey) &&
+              !relUlpKey.includes(rowUlpKey)
+            );
+
+            if (!ulpConflicted && rowTimCanon && relTimCanon) {
               if (
                 relTimCanon === rowTimCanon ||
                 relTimCanon.includes(rowTimCanon) ||
                 rowTimCanon.includes(relTimCanon)
               ) {
                 matchTim = true;
-              } else if (rowNumMatch && relNumMatch && parseInt(rowNumMatch[0], 10) === parseInt(relNumMatch[0], 10)) {
+              } else if (
+                rowNumMatch &&
+                relNumMatch &&
+                parseInt(rowNumMatch[0], 10) === parseInt(relNumMatch[0], 10) &&
+                (rowUlpKey === relUlpKey || !rowUlpKey || !relUlpKey)
+              ) {
                 matchTim = true;
               } else {
                 // Location keyword matching (e.g., 'Koto Tuo', 'Baso', 'Bukittinggi', etc.)
@@ -1134,11 +1173,12 @@ export class RekapHarianService {
                 updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
               }
 
+              const treeCount = getRealisasiPohonCount(rel);
               const action = classifyRealisasiAction(rel);
               if (action === 'TEBANG') {
-                updatedDaily[dayKey].tebang1++;
+                updatedDaily[dayKey].tebang1 += treeCount;
               } else {
-                updatedDaily[dayKey].pangkas++;
+                updatedDaily[dayKey].pangkas += treeCount;
               }
 
               // Track dates of activity for each Penyulang to help align KMS
@@ -1160,23 +1200,31 @@ export class RekapHarianService {
           if (parts.y === year && parts.m === monthIndex + 1) {
             const woUlpCanon = getCanonicalReguKey(wo.ulpName || (wo as any).ULP || '');
             const woTimCanon = getCanonicalReguKey(wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || '');
+            const woUlpKey = getCanonicalUlpKey(wo.ulpName || (wo as any).ULP || '');
+            const rowUlpKey = getCanonicalUlpKey(row.namaUlp);
             
             const rowNumMatch = rowTimCanon.match(/\d+/);
             const woNumMatch = woTimCanon.match(/\d+/);
             
             let matchTim = false;
-            if (rowTimCanon && woTimCanon) {
+
+            const ulpConflicted = Boolean(
+              rowUlpKey &&
+              woUlpKey &&
+              rowUlpKey !== woUlpKey &&
+              !rowUlpKey.includes(woUlpKey) &&
+              !woUlpKey.includes(rowUlpKey)
+            );
+
+            if (!ulpConflicted && rowTimCanon && woTimCanon) {
               if (
                 woTimCanon === rowTimCanon ||
                 woTimCanon.includes(rowTimCanon) ||
                 rowTimCanon.includes(woTimCanon)
               ) {
                 matchTim = true;
-              } else if (rowNumMatch && woNumMatch) {
-                const matchUlp = !woUlpCanon || !rowUlpCanon || woUlpCanon.includes(rowUlpCanon) || rowUlpCanon.includes(woUlpCanon) || woTimCanon.includes(rowUlpCanon);
-                if (matchUlp) {
-                  matchTim = parseInt(rowNumMatch[0], 10) === parseInt(woNumMatch[0], 10);
-                }
+              } else if (rowNumMatch && woNumMatch && parseInt(rowNumMatch[0], 10) === parseInt(woNumMatch[0], 10)) {
+                matchTim = true;
               }
             }
 
@@ -1192,16 +1240,6 @@ export class RekapHarianService {
 
               updatedDaily[targetDayKey].targetKms += targetKms;
               updatedDaily[targetDayKey].realisasiKms += realisasiKms;
-
-              // Also aggregate TEBANG and PANGKAS if defined on Work Order level
-              const normPekerjaan = String(wo.pekerjaan || (wo as any).PEKERJAAN || wo.jenisPekerjaan || '').trim().toUpperCase();
-              if (normPekerjaan === 'TEBANG' || normPekerjaan.includes('TEBANG')) {
-                const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
-                updatedDaily[targetDayKey].tebang1 += (isNaN(vol) ? 1 : vol);
-              } else if (normPekerjaan === 'PANGKAS' || normPekerjaan.includes('PANGKAS')) {
-                const vol = Number(wo.volumePekerjaan || (wo as any).VOLUME || 1);
-                updatedDaily[targetDayKey].pangkas += (isNaN(vol) ? 1 : vol);
-              }
             }
           }
         });
