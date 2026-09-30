@@ -371,6 +371,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   const [previewPhoto, setPreviewPhoto] =
     React.useState<WatermarkedPhoto | null>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
+  const [savingStage, setSavingStage] = React.useState<string>('');
   const [submissionStatus, setSubmissionStatus] = React.useState<
     'idle' | 'success' | 'finalizing'
   >('idle');
@@ -680,14 +681,17 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     const tValStart = performance.now();
 
     setIsProcessing(true);
-    showToast(
-      'Menyimpan realisasi & mengunggah foto ke Google Drive...',
-      'info'
-    );
+    setSavingStage('📷 Mengunggah foto...');
 
     const valDuration = performance.now() - tValStart;
 
     try {
+      let resolvedPhotoCount = 0;
+      const markPhotoResolved = () => {
+        resolvedPhotoCount++;
+        setSavingStage(`⏳ ${resolvedPhotoCount}/2 foto`);
+      };
+
       // Helper function to resolve photo URL efficiently (Reuse -> Await in-flight -> Parallel fresh upload)
       const resolvePhotoUrl = async (
         photo: WatermarkedPhoto | undefined,
@@ -699,11 +703,15 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         path: 'REUSE_URL' | 'WAIT_BACKGROUND_UPLOAD' | 'UPLOAD_REQUIRED';
         durationMs: number;
       }> => {
-        if (!photo) return { url: '', path: 'REUSE_URL', durationMs: 0 };
+        if (!photo) {
+          markPhotoResolved();
+          return { url: '', path: 'REUSE_URL', durationMs: 0 };
+        }
         const tPhotoStart = performance.now();
 
         // 1. If photo is already uploaded and valid Google Drive URL exists -> REUSE IMMEDIATELY (0ms)
         if (photo.fileUrl && isValidUploadedPhotoUrl(photo.fileUrl)) {
+          markPhotoResolved();
           return {
             url: photo.fileUrl,
             path: 'REUSE_URL',
@@ -717,6 +725,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           try {
             const awaitedUrl = await inFlightPromise;
             if (awaitedUrl && isValidUploadedPhotoUrl(awaitedUrl)) {
+              markPhotoResolved();
               return {
                 url: awaitedUrl,
                 path: 'WAIT_BACKGROUND_UPLOAD',
@@ -734,6 +743,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         });
         activeUploadPromises.current.set(photo.id, freshPromise);
         const freshUrl = await freshPromise;
+        markPhotoResolved();
         return {
           url: freshUrl,
           path: 'UPLOAD_REQUIRED',
@@ -765,6 +775,7 @@ after=${sesResult.path}`);
       if (!isValidUploadedPhotoUrl(finalSebUrl)) {
         console.warn('[REALISASI_PHOTO_DEBUG] BEFORE_UPLOAD_FAILED');
         setIsProcessing(false);
+        setSavingStage('');
         showToast('Foto Sebelum belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
         return;
       }
@@ -773,6 +784,7 @@ after=${sesResult.path}`);
       if (!isValidUploadedPhotoUrl(finalSesUrl)) {
         console.warn('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_FAILED');
         setIsProcessing(false);
+        setSavingStage('');
         showToast('Foto Sesudah belum berhasil diupload. Silakan upload/ambil ulang foto.', 'error');
         return;
       }
@@ -783,6 +795,9 @@ after=${sesResult.path}`);
         beforeUrlPresent: Boolean(finalSebUrl),
         afterUrlPresent: Boolean(finalSesUrl),
       });
+
+      // Photos verified, now saving record to database
+      setSavingStage('☁️ Menyimpan data...');
 
       const tApiStart = performance.now();
       if (editMode && initialData) {
@@ -1648,12 +1663,13 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
               </div>
 
               {/* Submit */}
-              <div className="pt-6 border-t border-teal-200 dark:border-slate-700 flex justify-end gap-3">
+              <div className="pt-6 border-t border-teal-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3">
                 {onCancel && (
                   <button
                     type="button"
                     onClick={onCancel}
-                    className="px-6 py-4 text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-2xl transition-all"
+                    disabled={isProcessing}
+                    className="px-6 py-4 text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 disabled:opacity-50 rounded-2xl transition-all"
                   >
                     Batal
                   </button>
@@ -1661,10 +1677,19 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
                 <button
                   type="submit"
                   disabled={isProcessing}
-                  className="w-full sm:w-auto inline-flex items-center space-x-3 px-10 py-4 text-sm font-black text-white bg-gradient-to-r from-black via-slate-900 to-red-600 hover:from-slate-900 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl shadow-xl shadow-black/25 transition-all active:scale-95"
+                  className="w-full sm:w-auto inline-flex items-center justify-center space-x-3 px-8 py-4 text-sm font-black text-white bg-gradient-to-r from-black via-slate-900 to-red-600 hover:from-slate-900 hover:to-red-700 disabled:opacity-85 disabled:cursor-not-allowed rounded-2xl shadow-xl shadow-black/25 transition-all active:scale-95"
                 >
-                  <Save className="w-5 h-5" />
-                  <span>Simpan Realisasi Pekerjaan</span>
+                  {isProcessing ? (
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span className="font-bold tracking-wide text-white">{savingStage || 'Menyimpan...'}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Save className="w-5 h-5" />
+                      <span>Simpan Realisasi Pekerjaan</span>
+                    </>
+                  )}
                 </button>
               </div>
             </>
