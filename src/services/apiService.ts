@@ -8,7 +8,9 @@ import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
 import { isValidPhotoUrl } from '../utils/driveUtils';
 
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL?.trim() || 'https://api.aphro-row.my.id';
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL?.trim()) ||
+  (typeof process !== 'undefined' && (process.env.VITE_API_URL || process.env.HYPERCLOUD_API_URL)) ||
+  'https://api.aphro-row.my.id';
 
 export interface PaginationMeta {
   page: number;
@@ -53,7 +55,7 @@ export class ApiService {
       }
     }
     const rawUrl =
-      import.meta.env.VITE_API_URL?.trim() ||
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL?.trim()) ||
       API_BASE_URL ||
       'https://api.aphro-row.my.id';
 
@@ -818,22 +820,22 @@ bodyMB=${bodyMB} MB`);
         try {
           const errJson = await res.json();
           serverMsg = errJson?.message;
-          serverError = errJson?.error;
+          serverError = errJson?.error || errJson?.code;
         } catch {
           // ignore
         }
 
-        const errReason = ApiService.classifyErrorReason(res.status, serverError);
-        console.warn(`[SYNC] FAILED endpoint=/api/realisasi/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'}`);
-
-        // IDEMPOTENCY: If record is already gone on server, consider delete satisfied
+        // IDEMPOTENCY: If record is already gone on server (404 RECORD_NOT_FOUND / REALISASI_NOT_FOUND)
         if (res.status === 404 && serverError !== 'ROUTE_NOT_FOUND') {
-          console.log(`[SYNC] Realisasi ${id} already removed from HyperCloud. Considering DELETE satisfied.`);
+          console.log(`[SYNC] Realisasi ${id} already absent from HyperCloud (HTTP 404 ${serverError || 'RECORD_NOT_FOUND'}). Considering DELETE satisfied.`);
           return {
             success: true,
             message: 'Realisasi sudah tidak ada di server.',
           };
         }
+
+        const errReason = ApiService.classifyErrorReason(res.status, serverError);
+        console.warn(`[SYNC] FAILED endpoint=/api/realisasi/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'}`);
 
         return {
           success: false,
@@ -2133,21 +2135,22 @@ bodyMB=${bodyMB} MB`);
         try {
           const errJson = await res.json();
           serverMsg = errJson?.message;
-          serverError = errJson?.error;
+          serverError = errJson?.error || errJson?.code;
         } catch {
           // ignore
         }
-        const errReason = ApiService.classifyErrorReason(res.status, serverError);
-        console.warn(`[SYNC] FAILED endpoint=/api/work-orders/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'}`);
 
         // IDEMPOTENCY: If record is already deleted from server (404 WORK_ORDER_NOT_FOUND / RECORD_NOT_FOUND)
         if (res.status === 404 && serverError !== 'ROUTE_NOT_FOUND') {
-          console.log(`[SYNC] Work Order ${id} was already removed from HyperCloud. Considering DELETE satisfied.`);
+          console.log(`[SYNC] Work Order ${id} was already absent from HyperCloud (HTTP 404 ${serverError || 'RECORD_NOT_FOUND'}). Considering DELETE satisfied.`);
           return {
             success: true,
             message: 'Work Order sudah tidak ada di server.',
           };
         }
+
+        const errReason = ApiService.classifyErrorReason(res.status, serverError);
+        console.warn(`[SYNC] FAILED endpoint=/api/work-orders/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'}`);
 
         return {
           success: false,
@@ -2203,21 +2206,22 @@ bodyMB=${bodyMB} MB`);
         try {
           const errJson = await res.json();
           serverMsg = errJson?.message;
-          serverError = errJson?.error;
+          serverError = errJson?.error || errJson?.code;
         } catch {
           // ignore
         }
-        const errReason = ApiService.classifyErrorReason(res.status, serverError);
-        console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'}`);
 
         // IDEMPOTENCY: If record is already deleted from server (404 ABSENSI_NOT_FOUND / RECORD_NOT_FOUND)
         if (res.status === 404 && serverError !== 'ROUTE_NOT_FOUND') {
-          console.log(`[SYNC] Absensi ${id} was already removed from HyperCloud. Considering DELETE satisfied.`);
+          console.log(`[SYNC] Absensi ${id} was already absent from HyperCloud (HTTP 404 ${serverError || 'RECORD_NOT_FOUND'}). Considering DELETE satisfied.`);
           return {
             success: true,
             message: 'Data absensi sudah tidak ada di server.',
           };
         }
+
+        const errReason = ApiService.classifyErrorReason(res.status, serverError);
+        console.warn(`[SYNC] FAILED endpoint=/api/absensi/${id} HTTP=${res.status} reason=${errReason} detail=${serverMsg || 'None'}`);
 
         return {
           success: false,
