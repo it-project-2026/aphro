@@ -33,6 +33,12 @@ export function isLocalhostDbUrl(url: string): boolean {
 export function getPool(): pg.Pool | null {
   if (directPgFailed) return null;
 
+  // In non-production preview environments, localhost DB URLs do not have a local PG daemon on port 5432.
+  // Bypass direct TCP connect so requests route seamlessly via HyperCloudHost API Gateway without ECONNREFUSED logs.
+  if (process.env.NODE_ENV !== 'production' && isLocalhostDbUrl(dbUrl)) {
+    return null;
+  }
+
   if (!poolInstance) {
     if (!dbUrl) {
       return null;
