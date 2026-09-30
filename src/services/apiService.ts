@@ -604,6 +604,45 @@ export class ApiService {
       Foto_Sesudah: fotoSesudahClean || '(EMPTY)',
     });
 
+    // 1. Diagnose Foto_Sebelum and Foto_Sesudah sizes securely (Section 2)
+    const sebLen = fotoSebelumClean.length;
+    const sebApproxBytes = Math.round((sebLen * 3) / 4);
+    const sesLen = fotoSesudahClean.length;
+    const sesApproxBytes = Math.round((sesLen * 3) / 4);
+
+    const bodyStr = JSON.stringify(payload);
+    const totalJsonBytes = typeof Blob !== 'undefined' ? new Blob([bodyStr]).size : Buffer.from(bodyStr).length;
+
+    console.log(`[REALISASI_PAYLOAD_SIZE]
+id=${payload.id || payload.ID}
+Foto_Sebelum:
+  type=${fotoSebelumClean.startsWith('data:') ? (fotoSebelumClean.split(';')[0]?.split(':')[1] || 'image/jpeg') : 'image/jpeg'}
+  base64Length=${sebLen}
+  approxBytes=${sebApproxBytes}
+
+Foto_Sesudah:
+  type=${fotoSesudahClean.startsWith('data:') ? (fotoSesudahClean.split(';')[0]?.split(':')[1] || 'image/jpeg') : 'image/jpeg'}
+  base64Length=${sesLen}
+  approxBytes=${sesApproxBytes}
+
+TOTAL_JSON_BYTES=${totalJsonBytes}`);
+
+    // 2. Measure FINAL payload body tepat sebelum fetch() (Section 3)
+    const bodyBytes = totalJsonBytes;
+    const bodyKB = (bodyBytes / 1024).toFixed(2);
+    const bodyMB = (bodyBytes / (1024 * 1024)).toFixed(2);
+
+    console.log(`[API_REALISASI_FINAL_PAYLOAD]
+endpoint=/api/realisasi
+method=POST
+id=${payload.id || payload.ID}
+unitId=${payload.unitId}
+bodyBytes=${bodyBytes}
+bodyKB=${bodyKB} KB
+bodyMB=${bodyMB} MB
+fotoSebelumBytes=${sebApproxBytes}
+fotoSesudahBytes=${sesApproxBytes}`);
+
     console.log('[SYNC] ONLINE');
     console.log(`[SYNC] Sending REALISASI to HyperCloud: POST /api/realisasi (unitId=${unitId}, JWT=AVAILABLE, id=${payload.id})`);
 
@@ -615,7 +654,7 @@ export class ApiService {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: bodyStr,
       });
 
       console.log(`[REALISASI_PHOTO_DEBUG] response POST /api/realisasi HTTP=${res.status}`);
