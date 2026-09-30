@@ -2362,6 +2362,22 @@ router.get(
         params
       );
 
+      // Sanitize oversized base64 data URLs for dashboard payload optimization and prevent JSON truncation
+      const cleanedRows = (dataRes.rows || []).map((row: any) => {
+        const cleanFoto = (foto: any) => {
+          if (!foto) return '';
+          const s = String(foto).trim();
+          if (s.startsWith('http://') || s.startsWith('https://')) return s;
+          if (s.length > 500 || s.startsWith('data:image')) return '';
+          return s;
+        };
+        return {
+          ...row,
+          Foto_Sebelum: cleanFoto(row.Foto_Sebelum),
+          Foto_Sesudah: cleanFoto(row.Foto_Sesudah),
+        };
+      });
+
       return res.json({
         status: 'success',
 
@@ -2371,10 +2387,10 @@ router.get(
             : unitId,
 
         count:
-          dataRes.rows.length,
+          cleanedRows.length,
 
         data:
-          dataRes.rows,
+          cleanedRows,
       });
     } catch (err: any) {
       console.error(

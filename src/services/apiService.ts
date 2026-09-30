@@ -431,8 +431,25 @@ export class ApiService {
     let json: any;
 
     try {
-      json = await response.json();
+      const text = await response.text();
+      json = JSON.parse(text);
     } catch {
+      try {
+        const localRecords = await dexieDb.realisasi.toArray();
+        if (localRecords.length > 0) {
+          const normalized = localRecords.map(item => normalizeRealisasiRow(item));
+          return {
+            status: 'success',
+            unitId: targetUnitId,
+            pagination: { page: 1, limit: normalized.length, total: normalized.length, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+            data: normalized,
+            message: 'Memuat data realisasi dari cache lokal.',
+          };
+        }
+      } catch (dexErr) {
+        console.warn('Dexie fallback error:', dexErr);
+      }
+
       throw new Error(
         'Response dari API Realisasi tidak valid.'
       );
@@ -1872,8 +1889,27 @@ export class ApiService {
         };
       }
 
-      const json =
-        await res.json();
+      const rawText = await res.text();
+      let json: any = {};
+      try {
+        json = JSON.parse(rawText);
+      } catch (parseErr: any) {
+        console.warn('[ApiService.fetchRealisasiDashboard JSON Parse Warning] Recovering from malformed response payload:', parseErr?.message || parseErr);
+        const cached = await dexieDb.realisasi.toArray().catch(() => []);
+        if (cached.length > 0) {
+          const normalized = cached.map(item => normalizeRealisasiRow(item));
+          return {
+            status: 'success',
+            data: normalized,
+            message: 'Memuat data dashboard dari cache lokal.',
+          };
+        }
+        return {
+          status: 'error',
+          data: [],
+          message: 'Gagal memproses response JSON dari server dashboard.',
+        };
+      }
 
       const rawData =
         Array.isArray(json.data)
