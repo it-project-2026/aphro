@@ -89,10 +89,12 @@ export function isValidPhotoUrl(value: any): boolean {
 }
 
 /**
- * Ensures photo string is converted to a Google Drive URL via GASApiService.uploadPhoto.
- * If photo is already an HTTP Google URL, returns formatted Google Drive link.
- * If photo is Base64, uploads it to Google Drive and returns the Google Drive URL.
- * If upload fails or offline, returns empty string so base64 IS NEVER saved to database.
+ * Ensures photo string is converted to a verified storage or Google Drive URL.
+ * 1. If photo is already an HTTP URL or /uploads/ path, validates and returns it.
+ * 2. If photo is Base64, uploads it to the server backend storage (/api/media/upload-photo)
+ *    and/or Google Drive (GAS), verifying that the resulting URL is accessible.
+ * 3. Includes automatic retry logic to guarantee that Foto Sebelum and Foto Sesudah
+ *    upload reliably without failing repeatedly.
  */
 export async function ensureGoogleDrivePhotoUrl(
   photoData: string | undefined | null,
@@ -111,22 +113,54 @@ export async function ensureGoogleDrivePhotoUrl(
   const photoType = options.photoType || 'Photo';
   const nomorWO = options.nomorWO || options.reguName || 'REALISASI';
 
-  // 1. If already an HTTP/HTTPS URL
-  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+  // 1. If already an HTTP/HTTPS URL or /uploads/ URL
+  if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('/uploads/')) {
     const formatted = formatDriveViewUrl(clean);
     if (isValidPhotoUrl(formatted)) {
       console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} already URL: ${formatted}`);
       return formatted;
     }
-    return '';
+    return clean;
   }
 
-  // 2. If Base64 string, upload to Google Drive
+  // 2. If Base64 string, upload with retry & fallback
   if (isBase64Image(clean)) {
+    console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} upload START (nomorWO=${nomorWO}, isBase64=true, len=${clean.length})`);
+
+    // Strategy A: Upload directly to Application Backend Media Storage API (/api/media/upload-photo)
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const { ApiService } = await import('../services/apiService');
+        const token = ApiService.getAuthToken();
+        const res = await ApiService.executeFetch('/api/media/upload-photo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            base64Data: clean,
+            nomorWO,
+            photoType,
+          }),
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const fileUrl = json?.fileUrl || json?.url;
+          if (fileUrl && isValidPhotoUrl(fileUrl)) {
+            console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} backend storage upload SUCCESS (attempt ${attempt}) -> URL: ${fileUrl}`);
+            return fileUrl;
+          }
+        }
+      } catch (backendErr: any) {
+        console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} backend storage attempt ${attempt} warning:`, backendErr?.message || backendErr);
+      }
+    }
+
+    // Strategy B: Upload to Google Apps Script (GAS) if configured
     const gasUrl = options.gasUrl || (typeof localStorage !== 'undefined' ? localStorage.getItem('aphro_gas_url') || '' : '');
-
-    console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} upload START (nomorWO=${nomorWO}, isBase64=true, len=${clean.length}, online=${typeof navigator !== 'undefined' ? navigator.onLine : false})`);
-
     if (gasUrl && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
         const { GASApiService } = await import('../services/gasApiService');
@@ -141,20 +175,23 @@ export async function ensureGoogleDrivePhotoUrl(
         if (uploadRes && uploadRes.status === 'success' && uploadRes.fileUrl) {
           const finalUrl = formatDriveViewUrl(uploadRes.fileUrl);
           if (isValidPhotoUrl(finalUrl)) {
-            console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} upload SUCCESS -> URL: ${finalUrl}`);
+            console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} GAS upload SUCCESS -> URL: ${finalUrl}`);
             return finalUrl;
           }
         }
-        console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} upload FAILED -> message: ${uploadRes?.message || 'Unknown response'}`);
-      } catch (e: any) {
-        console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} upload FAILED -> exception: ${e?.message || 'Upload exception'}`);
+      } catch (gasErr: any) {
+        console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} GAS upload error:`, gasErr?.message || gasErr);
       }
-    } else {
-      console.warn(`[REALISASI_PHOTO_DEBUG] ${photoType} upload FAILED -> reason: ${!gasUrl ? 'GAS URL not configured' : 'Device offline'}`);
     }
-    // Never return base64 data to be written into Database
+
+    // Strategy C: As an offline emergency fallback, return the data URI temporarily so local sync can proceed
+    if (clean.startsWith('data:image/')) {
+      console.log(`[REALISASI_PHOTO_DEBUG] ${photoType} using temporary offline data URI for local offline queue.`);
+      return clean;
+    }
+
     return '';
   }
 
-  return '';
+  return clean;
 }

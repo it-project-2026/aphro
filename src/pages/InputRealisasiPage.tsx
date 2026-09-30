@@ -485,31 +485,20 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           'success'
         );
 
-        const gasUrl =
-          settings.gasWebAppUrl ||
-          localStorage.getItem('aphro_gas_url') ||
-          '';
-
-        if (gasUrl && navigator.onLine) {
-          GASApiService.uploadPhoto(gasUrl, {
-            base64Data: watermarkedBase64,
-            nomorWO: selectedWO.nomorWO,
-            reguName: selectedWO.reguName,
-            photoType: type === 'sebelum' ? 'Sebelum' : 'Sesudah',
+        ensureGoogleDrivePhotoUrl(watermarkedBase64, {
+          nomorWO: selectedWO.nomorWO,
+          reguName: selectedWO.reguName,
+          photoType: type === 'sebelum' ? 'Realisasi_Sebelum' : 'Realisasi_Sesudah',
+        })
+          .then((uploadedUrl) => {
+            if (uploadedUrl && isValidPhotoUrl(uploadedUrl)) {
+              photoObj.fileUrl = uploadedUrl;
+              console.log(`[REALISASI_PHOTO_DEBUG] Background photo upload ready for ${type} slot ${slotIndex}:`, uploadedUrl);
+            }
           })
-            .then((uploadRes) => {
-              if (
-                uploadRes &&
-                uploadRes.status === 'success' &&
-                uploadRes.fileUrl
-              ) {
-                photoObj.fileUrl = uploadRes.fileUrl;
-              }
-            })
-            .catch((err) => {
-              console.warn('Background Google Drive upload note:', err);
-            });
-        }
+          .catch((err) => {
+            console.warn('Background photo upload note:', err);
+          });
       } catch (err: any) {
         showToast(
           `Foto gagal diproses: ${

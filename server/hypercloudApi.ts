@@ -3623,6 +3623,38 @@ router.post('/media/migrate-base64', requireAuth, async (req: Request, res: Resp
   }
 });
 
+router.post('/media/upload-photo', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { base64Data, nomorWO, photoType } = req.body || {};
+    if (!base64Data || typeof base64Data !== 'string') {
+      return res.status(400).json({ status: 'error', message: 'base64Data wajib disertakan' });
+    }
+
+    const { extractBase64ToBuffer, saveImageFile } = await import('./photoMigrationService');
+    const decoded = extractBase64ToBuffer(base64Data);
+
+    if (!decoded || decoded.buffer.length < 50) {
+      return res.status(400).json({ status: 'error', message: 'Format data gambar Base64 tidak valid atau rusak' });
+    }
+
+    const safeWo = String(nomorWO || 'WO').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const typeKey = String(photoType || 'photo').toLowerCase().includes('sesudah') ? 'sesudah' : 'sebelum';
+    const relativeUrl = saveImageFile(decoded.buffer, safeWo, typeKey, decoded.ext);
+
+    return res.json({
+      status: 'success',
+      fileUrl: relativeUrl,
+      url: relativeUrl,
+      size: decoded.buffer.length,
+      format: decoded.ext,
+      message: 'Foto berhasil disimpan ke storage server',
+    });
+  } catch (err: any) {
+    console.error('[Photo Upload API] Error:', err.message);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 router.get('/media/backup-status', requireAuth, async (req: Request, res: Response) => {
   try {
     const backupRes = await query(`
