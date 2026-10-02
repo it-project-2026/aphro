@@ -930,7 +930,7 @@ export function AbsensiProvider({
       return String(s)
         .toLowerCase()
         .trim()
-        .replace(/^(regu|tim|petugas|kelompok|regu_row|ulp)\s+/gi, '')
+        .replace(/^(regu_row|regu|tim|petugas|kelompok|row|ulp)\s+/gi, '')
         .replace(/[^a-z0-9]/gi, '');
     };
 
@@ -1041,7 +1041,15 @@ export function AbsensiProvider({
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
     if (!todayAbsensiRecord) return false;
     const fotoMasuk = todayAbsensiRecord.fotoMasuk || (todayAbsensiRecord as any).FOTO_MASUK || (todayAbsensiRecord as any).foto_masuk;
-    const tsMasuk = todayAbsensiRecord.timestampMasuk || (todayAbsensiRecord as any).TIMESTAMP_MASUK || (todayAbsensiRecord as any).timestamp_masuk;
+    const tsMasuk =
+      todayAbsensiRecord.timestampMasuk ||
+      (todayAbsensiRecord as any).TIMESTAMP_MASUK ||
+      (todayAbsensiRecord as any).timestamp_masuk ||
+      (todayAbsensiRecord as any)['TIMESTAMP MASUK'] ||
+      (todayAbsensiRecord as any).Timestamp ||
+      todayAbsensiRecord.createdAt ||
+      (todayAbsensiRecord as any).CREATED_AT ||
+      (todayAbsensiRecord as any).Created_At;
     return Boolean(fotoMasuk || tsMasuk);
   }, [user, todayAbsensiRecord]);
 
@@ -1049,7 +1057,11 @@ export function AbsensiProvider({
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
     if (!todayAbsensiRecord) return false;
     const fotoKeluar = todayAbsensiRecord.fotoKeluar || (todayAbsensiRecord as any).FOTO_KELUAR || (todayAbsensiRecord as any).foto_keluar;
-    const tsKeluar = todayAbsensiRecord.timestampKeluar || (todayAbsensiRecord as any).TIMESTAMP_KELUAR || (todayAbsensiRecord as any).timestamp_keluar;
+    const tsKeluar =
+      todayAbsensiRecord.timestampKeluar ||
+      (todayAbsensiRecord as any).TIMESTAMP_KELUAR ||
+      (todayAbsensiRecord as any).timestamp_keluar ||
+      (todayAbsensiRecord as any)['TIMESTAMP KELUAR'];
     return Boolean(fotoKeluar || tsKeluar);
   }, [user, todayAbsensiRecord]);
 
