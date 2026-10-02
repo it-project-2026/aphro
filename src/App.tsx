@@ -569,9 +569,7 @@ activeTab: ${activeTab}`);
     if (
       isUserRole &&
       !isAdminRole &&
-      (absensiVerificationStatus === 'loading') &&
-      !hasCheckedInToday &&
-      !attendanceCompleted
+      (absensiVerificationStatus === 'loading')
     ) {
       return <LoadingFallback />;
     }
