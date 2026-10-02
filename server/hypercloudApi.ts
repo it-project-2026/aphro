@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import bcrypt from 'bcryptjs';
-import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl, getPool, isNetworkConnectionError } from './database';
+import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl, getPool, isNetworkConnectionError, isDirectPgAvailable } from './database';
 
 const router = Router();
 
@@ -37,8 +37,8 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
   const isRealisasiGet = req.method === 'GET' && (endpoint === '/realisasi' || endpoint === '/realisasi/dashboard' || endpoint.startsWith('/realisasi'));
   const hasDateFilter = Boolean(req.query.tanggalDari || req.query.tanggalSampai);
 
-  // If direct PostgreSQL pool is active, skip remote gateway proxy and execute pristine local SQL query
-  if (isRealisasiGet && getPool() !== null) {
+  // If direct PostgreSQL pool is active and available, skip remote gateway proxy and execute pristine local SQL query
+  if (isRealisasiGet && isDirectPgAvailable()) {
     return false;
   }
 
@@ -52,6 +52,8 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
     }
   }
 
+  const timeoutMs = isRealisasiGet || endpoint.includes('dashboard') || endpoint.includes('work-orders') || endpoint.includes('absensi') ? 45000 : 25000;
+
   try {
     const remoteRes = await axios({
       method: req.method as any,
@@ -59,7 +61,7 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
       params: targetQueryParams,
       data: req.method !== 'GET' ? bodyData : undefined,
       headers,
-      timeout: 10000,
+      timeout: timeoutMs,
       validateStatus: () => true,
     });
 

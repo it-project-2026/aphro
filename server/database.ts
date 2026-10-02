@@ -30,6 +30,11 @@ let directPgFailed = false;
 let lastPgFailTime = 0;
 const PG_RECOVERY_COOLDOWN_MS = 60000; // 60 detik cooldown pemulihan otomatis
 
+export function isDirectPgAvailable(): boolean {
+  if (directPgFailed) return false;
+  return getPool() !== null;
+}
+
 /**
  * Memeriksa apakah URL koneksi merujuk pada IP loopback / localhost
  */
@@ -94,7 +99,7 @@ export function getPool(): pg.Pool | null {
     try {
       poolInstance = new Pool({
         connectionString: dbUrl,
-        connectionTimeoutMillis: 3000,
+        connectionTimeoutMillis: 2000,
         idleTimeoutMillis: 30000,
         max: 10,
         ssl: dbUrl.includes('sslmode=require') ? { rejectUnauthorized: false } : false,
