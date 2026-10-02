@@ -13,6 +13,19 @@ import {
   normalizeDateISO,
 } from '../utils/dateUtils';
 
+export function getCanonicalReguId(input?: string | null): string {
+  if (!input) return '';
+  const s = String(input).trim().toUpperCase();
+  const match = s.match(/(?:ROW|REGU|TIM|USER|USR|KELOMPOK)[-_\s]*0?(\d{1,2})/i) || s.match(/\b0?(\d{1,2})\b/);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    if (!isNaN(num) && num >= 1 && num <= 99) {
+      return 'ROW' + String(num).padStart(2, '0');
+    }
+  }
+  return s.replace(/[^A-Z0-9]/g, '');
+}
+
 interface AbsensiContextType {
   absensiList: Absensi[];
   setAbsensiList: React.Dispatch<React.SetStateAction<Absensi[]>>;
@@ -957,49 +970,49 @@ export function AbsensiProvider({
     const userReguClean = cleanStr(resolved.reguName || user.reguName || (user as any).namaGroupWO || (user as any).groupWO || (user as any).Nama_Regu || user.name);
     const userRowNumber = extractRowNumber(resolved.reguName) ?? extractRowNumber(user.userName) ?? extractRowNumber(user.name) ?? extractRowNumber(user.reguName);
     const userIdentifierClean = cleanStr(user.userName || user.nip || user.id || user.name);
+    const canonicalUserRegu = getCanonicalReguId(resolved.reguName || user.reguName || (user as any).namaGroupWO || (user as any).groupWO || (user as any).Nama_Regu || user.userName || user.name);
 
     return absensiList.find((abs: any) => {
       if (!abs) return false;
 
-      const rawDate = abs.tanggal ?? abs.TANGGAL ?? abs.Tanggal ?? abs.createdAt;
-      const absDate = normalizeDate(rawDate);
-      const isToday =
-        absDate === todayISO ||
-        String(rawDate || '').slice(0, 10) === todayStr ||
-        normalizeDateISO(rawDate) === todayISO ||
-        normalizeDateISO(rawDate) === todayStr;
-
+      // 1. Direct Business Date Match (TANGGAL)
+      const recordDateStr = String(abs.TANGGAL ?? abs.tanggal ?? abs.Tanggal ?? '').trim().slice(0, 10);
+      const isToday = recordDateStr === todayISO;
       if (!isToday) return false;
 
-      // 0. Unit Check
-      const absUnitStd = InisiasiService.getStandardUnitId(abs.unitId || abs.UnitId);
+      // 2. Unit Check
+      const absUnitStd = InisiasiService.getStandardUnitId(abs.unitId || abs.UnitId || abs.UNIT_ID);
       if (absUnitStd && userUnitStd && absUnitStd !== userUnitStd && userUnitStd !== 'ALL') {
         return false;
       }
 
-      // 1. REGU Match
-      const reguVal = abs.reguName ?? abs.NAMA_REGU ?? abs.REGU_ROW ?? abs.Nama_Regu ?? abs.Regu ?? '';
-      const absReguClean = cleanStr(reguVal);
-      const absRowNumber = extractRowNumber(reguVal);
+      // 3. Canonical REGU Match (NAMA_REGU)
+      const reguVal = abs.NAMA_REGU ?? abs.reguName ?? abs.Nama_Regu ?? abs.Regu ?? '';
+      const canonicalRecordRegu = getCanonicalReguId(reguVal);
 
-      let isReguMatch = false;
-      if (userReguClean && absReguClean) {
-        if (
-          userReguClean === absReguClean ||
-          userReguClean.includes(absReguClean) ||
-          absReguClean.includes(userReguClean)
-        ) {
+      let isReguMatch = Boolean(canonicalUserRegu && canonicalRecordRegu && canonicalUserRegu === canonicalRecordRegu);
+
+      if (!isReguMatch) {
+        const absReguClean = cleanStr(reguVal);
+        const absRowNumber = extractRowNumber(reguVal);
+        if (userReguClean && absReguClean) {
+          if (
+            userReguClean === absReguClean ||
+            userReguClean.includes(absReguClean) ||
+            absReguClean.includes(userReguClean)
+          ) {
+            isReguMatch = true;
+          }
+        }
+        if (!isReguMatch && userRowNumber !== null && absRowNumber !== null && userRowNumber === absRowNumber) {
           isReguMatch = true;
         }
       }
-      if (!isReguMatch && userRowNumber !== null && absRowNumber !== null && userRowNumber === absRowNumber) {
-        isReguMatch = true;
-      }
 
-      // 2. USER / PETUGAS Match
-      const userVal = abs.userName ?? abs.USER_NAME ?? abs.userId ?? abs.UserID ?? '';
-      const petugasVal = abs.namaPetugas ?? abs.NAMA_PETUGAS ?? abs.nama ?? '';
-      const nipVal = abs.nip ?? abs.NIP ?? '';
+      // 4. USER / PETUGAS Match
+      const userVal = abs.USER_NAME ?? abs.userName ?? abs.userId ?? abs.UserID ?? '';
+      const petugasVal = abs.NAMA_PETUGAS ?? abs.namaPetugas ?? abs.nama ?? '';
+      const nipVal = abs.NIP ?? abs.nip ?? '';
       
       let isUserMatch = false;
       if (userIdentifierClean) {
@@ -1015,7 +1028,7 @@ export function AbsensiProvider({
         }
       }
 
-      // 3. PETUGAS LIST Match
+      // 5. PETUGAS LIST Match
       let isMemberMatch = false;
       if (Array.isArray(abs.petugasList) && abs.petugasList.length > 0) {
         isMemberMatch = abs.petugasList.some((p: any) => {
