@@ -44,11 +44,32 @@ import {
 
 export const RekapPekerjaanHarianPage: React.FC = () => {
   const { settings } = useSettings();
-  const { realisasiList } = useRealisasi();
-  const { workOrders } = useWorkOrders();
+  const { realisasiList, refreshRealisasi } = useRealisasi();
+  const { workOrders, refreshWorkOrders } = useWorkOrders();
   const { ulpList, reguList, setMasterData } = useMasterData();
   const { showToast } = useToast();
   const { syncWithGAS, isSyncing: isGASSyncing } = useGASSync();
+
+  // 10-second active polling when Rekap Pekerjaan Harian is open
+  const isFetchingPollingRef = useRef(false);
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (isFetchingPollingRef.current || !navigator.onLine) return;
+      try {
+        isFetchingPollingRef.current = true;
+        await Promise.all([
+          refreshRealisasi(true),
+          refreshWorkOrders(0),
+        ]);
+      } catch (err) {
+        // silent
+      } finally {
+        isFetchingPollingRef.current = false;
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [refreshRealisasi, refreshWorkOrders]);
 
   // ULP Filter inside selected UL ('ALL' or specific ULP name)
   const [selectedUlpFilter, setSelectedUlpFilter] = useState<string>('ALL');

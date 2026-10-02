@@ -4,6 +4,7 @@ import { User, UserRole } from '../types';
 import { AuthContextData } from './contextConstants';
 import { AuthService } from '../services/authService';
 import { InisiasiService } from '../services/inisiasiService';
+import { realtimeService } from '../services/realtimeService';
 import { getPrimaryTimRowForUnit } from '../services/rekapHarianService';
 
 interface AuthContextType {
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = React.useCallback(() => {
+    realtimeService.disconnect();
     setUser(null);
     AuthService.clearSession();
   }, [setUser]);
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // context hooks (WorkOrders, Realisasi, MasterData, Absensi) find token immediately
     AuthService.saveLocalSession(fullUser);
     setUser(fullUser);
+    realtimeService.connect(userUnitId);
   }, [setUser]);
 
   // Synchronize active inisiasi unit with current user unit on mount / user state update
@@ -62,6 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user && user.unitId) {
       const stdUserUnit = InisiasiService.getStandardUnitId(user.unitId);
       InisiasiService.saveSelectedUnit(stdUserUnit);
+      realtimeService.connect(stdUserUnit);
+    } else {
+      realtimeService.disconnect();
     }
   }, [user]);
 

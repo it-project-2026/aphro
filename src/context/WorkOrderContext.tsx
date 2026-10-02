@@ -154,12 +154,9 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshWorkOrders, settings.namaUnitLayanan, user, user?.unitId, user?.id]);
 
-  // Real-time polling & sync listener (every 12 seconds)
+  // Focus & event listeners for data synchronization (No background polling)
   React.useEffect(() => {
     if (!user) return;
-    const interval = setInterval(() => {
-      refreshWorkOrders(0);
-    }, 12000);
 
     const handleFocus = () => {
       refreshWorkOrders(0);
@@ -173,7 +170,6 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('aphro_data_updated', handleCustomUpdate);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('aphro_data_updated', handleCustomUpdate);
     };

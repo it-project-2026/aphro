@@ -874,6 +874,75 @@ function verifyJwt(token: string): Record<string, any> | null {
     return null;
   }
 }
+
+interface SseClient {
+  id: string;
+  res: Response;
+  unitId: string;
+  userId: string;
+}
+const sseClients: Set<SseClient> = new Set();
+
+export function broadcastRealtimeEvent(type: string, unitId: string, payload: any = {}) {
+  const eventData = JSON.stringify({ type, unitId, ...payload, timestamp: new Date().toISOString() });
+  console.log(`[REALTIME BROADCAST] type=${type} unitId=${unitId} activeClients=${sseClients.size}`);
+  sseClients.forEach(client => {
+    if (client.unitId && client.unitId !== 'ALL' && unitId && unitId !== 'ALL' && client.unitId.toUpperCase() !== unitId.toUpperCase()) {
+      return;
+    }
+    try {
+      client.res.write(`data: ${eventData}\n\n`);
+    } catch {
+      // stale client
+    }
+  });
+}
+
+router.get('/realtime', (req: Request, res: Response) => {
+  const token = String(req.query.token || '').trim();
+  const queryUnit = String(req.query.unitId || '').trim().toUpperCase();
+
+  let payload: any = null;
+  if (token) {
+    payload = verifyJwt(token);
+  }
+
+  if (!payload) {
+    console.warn('[REALTIME] Connection rejected: Invalid or missing token.');
+    return res.status(401).json({ success: false, message: 'Unauthorized for realtime stream' });
+  }
+
+  const userId = payload?.userId || payload?.sub || payload?.username || 'anonymous';
+  const unitId = queryUnit || payload?.unitId || 'ALL';
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const clientId = `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const client: SseClient = { id: clientId, res, unitId, userId };
+  sseClients.add(client);
+
+  console.log(`[REALTIME] SSE CONNECT user=${userId} unitId=${unitId} clientsTotal=${sseClients.size}`);
+
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', unitId, message: 'SSE Stream Connected' })}\n\n`);
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(':ping\n\n');
+    } catch {
+      clearInterval(heartbeat);
+    }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.delete(client);
+    console.log(`[REALTIME] SSE DISCONNECT user=${userId} unitId=${unitId} clientsTotal=${sseClients.size}`);
+  });
+});
+
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization || '';
   if (!authHeader.startsWith('Bearer ')) {

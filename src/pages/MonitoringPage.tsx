@@ -36,14 +36,35 @@ export const MonitoringPage: React.FC = () => {
   const draggable1 = useDraggableScroll();
   
   const { user: currentUser } = useAuth();
-  const { workOrders, displayedWorkOrders } = useWorkOrders();
-  const { realisasiList, dashboardRealisasiList } = useRealisasi();
+  const { workOrders, displayedWorkOrders, refreshWorkOrders } = useWorkOrders();
+  const { realisasiList, dashboardRealisasiList, refreshRealisasi } = useRealisasi();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { syncWithGAS } = useGASSync();
 
   const isUserRole = currentUser?.role === 'User';
   const activeUnitId = getStandardUnitId(currentUser?.unitId || settings.namaUnitLayanan || InisiasiService.getSelectedUnitId() || 'UL1');
+
+  // 10-second active polling when Monitoring is open
+  const isFetchingPollingRef = React.useRef(false);
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (isFetchingPollingRef.current || !navigator.onLine) return;
+      try {
+        isFetchingPollingRef.current = true;
+        await Promise.all([
+          refreshWorkOrders(0),
+          refreshRealisasi(true),
+        ]);
+      } catch (err) {
+        // silent
+      } finally {
+        isFetchingPollingRef.current = false;
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [refreshWorkOrders, refreshRealisasi]);
 
   // Default to current year and current month
   const currentYearStr = String(new Date().getFullYear());

@@ -412,13 +412,9 @@ export function RealisasiProvider({
     }
   }, [user, user?.unitId, user?.id, settings.namaUnitLayanan, refreshRealisasi, fetchDashboardRealisasi]);
 
-  // Real-time polling & real-time sync across Dashboard, Monitoring, Rekap Harian & Penyulang (every 10 seconds)
+  // Visibility & event listeners for data synchronization (No background polling)
   React.useEffect(() => {
     if (!user) return;
-    const interval = setInterval(() => {
-      refreshRealisasi(true);
-      fetchDashboardRealisasi();
-    }, 10000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -442,7 +438,6 @@ export function RealisasiProvider({
     window.addEventListener('aphro_data_updated', handleCustomUpdate);
 
     return () => {
-      clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('aphro_data_updated', handleCustomUpdate);

@@ -34,11 +34,32 @@ import {
 
 export const RekapPenyulangHarianPage: React.FC = () => {
   const { settings } = useSettings();
-  const { realisasiList } = useRealisasi();
-  const { workOrders } = useWorkOrders();
+  const { realisasiList, refreshRealisasi } = useRealisasi();
+  const { workOrders, refreshWorkOrders } = useWorkOrders();
   const { ulpList, penyulangList } = useMasterData();
   const { showToast } = useToast();
   const { syncWithGAS, isSyncing: isGASSyncing } = useGASSync();
+
+  // 10-second active polling when Rekap Penyulang Harian is open
+  const isFetchingPollingRef = useRef(false);
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (isFetchingPollingRef.current || !navigator.onLine) return;
+      try {
+        isFetchingPollingRef.current = true;
+        await Promise.all([
+          refreshRealisasi(true),
+          refreshWorkOrders(0),
+        ]);
+      } catch (err) {
+        // silent
+      } finally {
+        isFetchingPollingRef.current = false;
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [refreshRealisasi, refreshWorkOrders]);
 
   // ULP Filter inside selected UL
   const [selectedUlpFilter, setSelectedUlpFilter] = useState<string>('ALL');
