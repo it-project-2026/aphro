@@ -412,6 +412,43 @@ export function RealisasiProvider({
     }
   }, [user, user?.unitId, user?.id, settings.namaUnitLayanan, refreshRealisasi, fetchDashboardRealisasi]);
 
+  // Real-time polling & real-time sync across Dashboard, Monitoring, Rekap Harian & Penyulang (every 10 seconds)
+  React.useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      refreshRealisasi(true);
+      fetchDashboardRealisasi();
+    }, 10000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshRealisasi(true);
+        fetchDashboardRealisasi();
+      }
+    };
+
+    const handleFocus = () => {
+      refreshRealisasi(true);
+      fetchDashboardRealisasi();
+    };
+
+    const handleCustomUpdate = () => {
+      refreshRealisasi(true);
+      fetchDashboardRealisasi();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('aphro_data_updated', handleCustomUpdate);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('aphro_data_updated', handleCustomUpdate);
+    };
+  }, [user, refreshRealisasi, fetchDashboardRealisasi]);
+
   // ============================================================
   // OFFLINE SYNC
   // ============================================================
@@ -804,6 +841,7 @@ export function RealisasiProvider({
 
               await refreshRealisasi(true);
               await fetchDashboardRealisasi();
+              window.dispatchEvent(new CustomEvent('aphro_data_updated'));
               return newRelUI;
             } else {
               lastSaveErrorMsg = saveRes?.message;

@@ -26,8 +26,8 @@ export async function generateEnhancedLaporanPetaPDF(
   const ulpTitle = filterUlpName !== 'ALL' ? filterUlpName.toUpperCase() : (points[0]?.ulpName?.toUpperCase() || 'BASO');
   const feederTitle = filterPenyulangName !== 'ALL' ? filterPenyulangName.toUpperCase() : (points[0]?.penyulangName?.toUpperCase() || 'F. MATUR');
 
-  // 1. Calculate Tiles
-  const tiles = calculateGeographicTiles(points, 25); 
+  // 1. Calculate Tiles (Max 10 points per page)
+  const tiles = calculateGeographicTiles(points, 10); 
 
   // 2. Process each tile as a separate page
   for (let i = 0; i < tiles.length; i++) {
@@ -222,17 +222,44 @@ async function generateMapImageForTile(
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    // Projection logic
+    // Projection logic with Earth Curvature (cos(lat)) & 2:1 Canvas Aspect Ratio Correction
     const { north, south, east, west } = tile.bounds;
-    const latSpan = north - south;
-    const lngSpan = east - west;
+    const centerLat = (north + south) / 2;
+    const centerLng = (east + west) / 2;
+    const cosLat = Math.max(0.1, Math.cos((centerLat * Math.PI) / 180));
+
+    const rawLatSpan = Math.max(0.0001, north - south);
+    const rawLngSpan = Math.max(0.0001, east - west);
+    const adjustedLngSpan = rawLngSpan * cosLat;
+
+    const targetAspect = width / height; // 1600 / 800 = 2.0
+    const currentAspect = adjustedLngSpan / rawLatSpan;
+
+    let finalLatSpan = rawLatSpan;
+    let finalLngSpan = rawLngSpan;
+
+    if (currentAspect < targetAspect) {
+      const neededAdjustedLngSpan = rawLatSpan * targetAspect;
+      finalLngSpan = neededAdjustedLngSpan / cosLat;
+    } else {
+      finalLatSpan = adjustedLngSpan / targetAspect;
+    }
+
+    finalLatSpan *= 1.25;
+    finalLngSpan *= 1.25;
+
+    const finalNorth = centerLat + finalLatSpan / 2;
+    const finalSouth = centerLat - finalLatSpan / 2;
+    const finalEast = centerLng + finalLngSpan / 2;
+    const finalWest = centerLng - finalLngSpan / 2;
+
     const padding = 100;
     const usableW = width - padding * 2;
     const usableH = height - padding * 2;
 
     const project = (lat: number, lng: number) => ({
-      x: padding + ((lng - west) / lngSpan) * usableW,
-      y: height - padding - ((lat - south) / latSpan) * usableH
+      x: padding + ((lng - finalWest) / (finalEast - finalWest)) * usableW,
+      y: height - padding - ((lat - finalSouth) / (finalNorth - finalSouth)) * usableH
     });
 
     // 1. Fetch Satellite, Road, and Label Tiles
@@ -246,7 +273,7 @@ async function generateMapImageForTile(
       return 14;
     };
 
-    const zoom = getZoom(latSpan, lngSpan);
+    const zoom = getZoom(finalLatSpan, finalLngSpan);
     const topLeftTile = getTileCoords(north, west, zoom);
     const bottomRightTile = getTileCoords(south, east, zoom);
 
@@ -389,7 +416,7 @@ async function generateMapImageForTile(
     drawNorthArrow(ctx, width - 60, 60);
 
     // Draw Scale Bar
-    drawScaleBar(ctx, 60, height - 60, lngSpan);
+    drawScaleBar(ctx, 60, height - 60, finalLngSpan);
 
     // Points & Labels
     const projectedPoints = tile.points.map(p => ({
@@ -475,17 +502,44 @@ function generateVectorMapImageForTile(
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  // Projection logic
+  // Projection logic with Earth Curvature (cos(lat)) & 2:1 Canvas Aspect Ratio Correction
   const { north, south, east, west } = tile.bounds;
-  const latSpan = north - south;
-  const lngSpan = east - west;
+  const centerLat = (north + south) / 2;
+  const centerLng = (east + west) / 2;
+  const cosLat = Math.max(0.1, Math.cos((centerLat * Math.PI) / 180));
+
+  const rawLatSpan = Math.max(0.0001, north - south);
+  const rawLngSpan = Math.max(0.0001, east - west);
+  const adjustedLngSpan = rawLngSpan * cosLat;
+
+  const targetAspect = width / height; // 1600 / 800 = 2.0
+  const currentAspect = adjustedLngSpan / rawLatSpan;
+
+  let finalLatSpan = rawLatSpan;
+  let finalLngSpan = rawLngSpan;
+
+  if (currentAspect < targetAspect) {
+    const neededAdjustedLngSpan = rawLatSpan * targetAspect;
+    finalLngSpan = neededAdjustedLngSpan / cosLat;
+  } else {
+    finalLatSpan = adjustedLngSpan / targetAspect;
+  }
+
+  finalLatSpan *= 1.25;
+  finalLngSpan *= 1.25;
+
+  const finalNorth = centerLat + finalLatSpan / 2;
+  const finalSouth = centerLat - finalLatSpan / 2;
+  const finalEast = centerLng + finalLngSpan / 2;
+  const finalWest = centerLng - finalLngSpan / 2;
+
   const padding = 100;
   const usableW = width - padding * 2;
   const usableH = height - padding * 2;
 
   const project = (lat: number, lng: number) => ({
-    x: padding + ((lng - west) / lngSpan) * usableW,
-    y: height - padding - ((lat - south) / latSpan) * usableH
+    x: padding + ((lng - finalWest) / (finalEast - finalWest)) * usableW,
+    y: height - padding - ((lat - finalSouth) / (finalNorth - finalSouth)) * usableH
   });
 
   // Background - Clean Light Gray Map Theme
@@ -557,7 +611,7 @@ function generateVectorMapImageForTile(
   drawNorthArrow(ctx, width - 60, 60);
 
   // Draw Scale Bar
-  drawScaleBar(ctx, 60, height - 60, lngSpan);
+  drawScaleBar(ctx, 60, height - 60, finalLngSpan);
 
   // Projected Points
   const projectedPoints = tile.points.map(p => ({

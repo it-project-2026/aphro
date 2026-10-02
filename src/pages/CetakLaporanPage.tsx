@@ -18,6 +18,7 @@ import {
   exportCetakPetaToExcel,
 } from '../utils/exportUtils';
 import { generateEnhancedLaporanPetaPDF } from '../utils/pdfExportService';
+import { calculateGeographicTiles } from '../utils/pdfMapPagination';
 import { MapPoint } from '../utils/pdfExportTypes';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -538,6 +539,7 @@ export const CetakLaporanPage: React.FC = () => {
         ...pt,
         lat,
         lng,
+        seqNo: idx + 1,
       };
     });
   }, [targetedRealisasi, targetedWorkOrders, workOrdersMap, selectedUlpName, selectedPenyulangName]);
@@ -545,11 +547,33 @@ export const CetakLaporanPage: React.FC = () => {
   const avgLat = nonOverlappingMapPoints.length > 0 ? nonOverlappingMapPoints.reduce((acc, p) => acc + p.lat, 0) / nonOverlappingMapPoints.length : -0.286071;
   const avgLng = nonOverlappingMapPoints.length > 0 ? nonOverlappingMapPoints.reduce((acc, p) => acc + p.lng, 0) / nonOverlappingMapPoints.length : 100.449261;
   const mapCenter: [number, number] = useMemo(() => [avgLat, avgLng], [avgLat, avgLng]);
-  const mapPolylinePositions: [number, number][] = useMemo(() => nonOverlappingMapPoints.map((p) => [p.lat, p.lng]), [nonOverlappingMapPoints]);
+  const mapPolylinePositions: [number, number][] = useMemo(() => nonOverlappingMapPoints.map((p) => [p.lat, p.lng] as [number, number]), [nonOverlappingMapPoints]);
 
   const routeCoordsKey = useMemo(() => {
     return nonOverlappingMapPoints.map((p) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
   }, [nonOverlappingMapPoints]);
+
+  // Segment tiles (Max 10 points per page segment)
+  const mapTiles = useMemo(() => {
+    return calculateGeographicTiles(nonOverlappingMapPoints, 10);
+  }, [nonOverlappingMapPoints]);
+
+  const [activeMapTileIndex, setActiveMapTileIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveMapTileIndex(0);
+  }, [routeCoordsKey]);
+
+  const activeTile = mapTiles[activeMapTileIndex] || mapTiles[0];
+  const activeTilePoints = activeTile ? activeTile.points : nonOverlappingMapPoints;
+  const activeTilePolylinePositions: [number, number][] = useMemo(() => {
+    return activeTilePoints.map(p => [p.lat, p.lng] as [number, number]);
+  }, [activeTilePoints]);
+
+  const activeTileCenter: [number, number] = useMemo(() => {
+    if (activeTile?.center) return [activeTile.center.lat, activeTile.center.lng];
+    return mapCenter;
+  }, [activeTile, mapCenter]);
 
   // Street routing via OSRM
   useEffect(() => {
@@ -1314,6 +1338,54 @@ export const CetakLaporanPage: React.FC = () => {
         {/* ======================================================== */}
         {reportType === 'peta' && (
           <div className="space-y-6">
+            {/* Segment Navigation Panel (Halaman X dari Y) */}
+            {mapTiles.length > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-300 dark:border-slate-700">
+                <div className="flex items-center space-x-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <Layers className="w-4 h-4 text-[#00A2B9]" />
+                  <span>Segmen Halaman Peta: <strong className="text-teal-700 dark:text-teal-400">Halaman {activeMapTileIndex + 1} dari {mapTiles.length}</strong></span>
+                  <span className="text-[10px] text-slate-500 font-normal">({activeTilePoints.length} Titik pada segmen ini)</span>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveMapTileIndex(prev => Math.max(0, prev - 1))}
+                    disabled={activeMapTileIndex === 0}
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-40 hover:bg-slate-50 transition-colors"
+                  >
+                    ← Segmen Sebelumnya
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {mapTiles.map((tile, idx) => (
+                      <button
+                        key={`tile-btn-${tile.id}`}
+                        type="button"
+                        onClick={() => setActiveMapTileIndex(idx)}
+                        className={`w-7 h-7 text-xs font-extrabold rounded-lg transition-all ${
+                          activeMapTileIndex === idx
+                            ? 'bg-[#00A2B9] text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {tile.id}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveMapTileIndex(prev => Math.min(mapTiles.length - 1, prev + 1))}
+                    disabled={activeMapTileIndex === mapTiles.length - 1}
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-40 hover:bg-slate-50 transition-colors"
+                  >
+                    Segmen Berikutnya →
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div 
               ref={draggable2.ref}
               onMouseDown={draggable2.onMouseDown}
@@ -1331,7 +1403,7 @@ export const CetakLaporanPage: React.FC = () => {
 
                 <div className="col-span-6 sm:col-span-8 p-2 flex flex-col items-center justify-center bg-white">
                   <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 uppercase tracking-wide">
-                    GAMBAR PETA POHON (ROW)
+                    GAMBAR PETA POHON (ROW) {mapTiles.length > 1 ? `- SEGMEN ${activeMapTileIndex + 1} (${activeTilePoints.length} Titik)` : ''}
                   </h3>
                   <h4 className="font-bold text-[11px] sm:text-xs text-teal-800 uppercase">
                     FEEDER {selectedPenyulangName}
@@ -1353,16 +1425,16 @@ export const CetakLaporanPage: React.FC = () => {
                 id="gis-map-container"
                 className="border-2 border-slate-900 rounded-xl overflow-hidden bg-slate-100 shadow-inner relative"
                 onCapture={setLatestMapImage}
-                triggerKey={nonOverlappingMapPoints.length}
-                points={nonOverlappingMapPoints}
-                polylinePositions={activePolylinePositions}
+                triggerKey={`${activeMapTileIndex}-${activeTilePoints.length}`}
+                points={activeTilePoints}
+                polylinePositions={activeTilePolylinePositions}
                 feederName={selectedPenyulangName}
                 ulpName={selectedUlpName}
               >
                 <div className="h-[600px] w-full relative z-0">
                   <MapContainer
-                    center={mapCenter}
-                    zoom={13}
+                    center={activeTileCenter}
+                    zoom={15}
                     preferCanvas={true}
                     scrollWheelZoom={true}
                     style={{ height: '100%', width: '100%' }}
@@ -1379,18 +1451,18 @@ export const CetakLaporanPage: React.FC = () => {
                       pane="overlayPane"
                     />
 
-                    <RecenterMap positions={mapPolylinePositions} />
+                    <RecenterMap positions={activeTilePolylinePositions} />
 
-                    {activePolylinePositions.length > 1 && (
+                    {activeTilePolylinePositions.length > 1 && (
                       <>
                         <Polyline
-                          positions={activePolylinePositions}
+                          positions={activeTilePolylinePositions}
                           color="#0f172a"
                           weight={6}
                           opacity={0.85}
                         />
                         <Polyline
-                          positions={activePolylinePositions}
+                          positions={activeTilePolylinePositions}
                           color="#f59e0b"
                           weight={3.5}
                           opacity={1}
@@ -1399,8 +1471,9 @@ export const CetakLaporanPage: React.FC = () => {
                       </>
                     )}
 
-                    {nonOverlappingMapPoints.map((pt, idx) => {
-                      const plantIcon = createPlantMarkerIcon(pt.jenisTanaman, pt.noTiang, idx + 1, pt.status, pt.keterangan, pt.lokasiKerja);
+                    {activeTilePoints.map((pt, idx) => {
+                      const seqNum = pt.seqNo || (activeMapTileIndex * 10 + idx + 1);
+                      const plantIcon = createPlantMarkerIcon(pt.jenisTanaman, pt.noTiang, seqNum, pt.status, pt.keterangan, pt.lokasiKerja);
 
                       return (
                         <Marker
@@ -1453,11 +1526,11 @@ export const CetakLaporanPage: React.FC = () => {
                 {/* Floating Overlay Badge */}
                 <div className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm p-3 rounded-xl border border-slate-300 shadow-md text-[10px] space-y-1 font-sans">
                   <p className="font-extrabold text-slate-900 flex items-center space-x-1">
-                    <span>⚡ JARINGAN TR & PETA GIS ROW</span>
+                    <span>⚡ SEGMEN {activeMapTileIndex + 1} / {mapTiles.length}</span>
                   </p>
-                  <p className="text-slate-600">Total Titik: <span className="font-extrabold text-teal-700">{nonOverlappingMapPoints.length} Lokasi</span></p>
+                  <p className="text-slate-600">Titik Segmen Ini: <span className="font-extrabold text-teal-700">{activeTilePoints.length} Lokasi</span></p>
+                  <p className="text-slate-600">Total Semua Titik: <span className="font-extrabold text-slate-800">{nonOverlappingMapPoints.length} Lokasi</span></p>
                   <p className="text-slate-600">Feeder: <span className="font-bold text-slate-800">{selectedPenyulangName}</span></p>
-                  <p className="text-slate-600">ULP: <span className="font-bold text-slate-800">{selectedUlpName}</span></p>
                 </div>
               </MapReportCapture>
 
