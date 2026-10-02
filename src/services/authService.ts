@@ -40,8 +40,25 @@ export class AuthService {
     if (typeof navigator !== 'undefined' && navigator.onLine) {
       try {
         const apiRes = await ApiService.login(cleanUsername, cleanPassword, targetUnitId);
-        if (apiRes.status === 'success' && apiRes.user) {
+        if (apiRes.status === 'success' && apiRes.user && apiRes.token) {
           const rawUser = apiRes.user;
+          const newToken = apiRes.token.trim();
+
+          // Pastikan token benar-benar valid JWT dan belum expired
+          if (!ApiService.isValidToken(newToken) || ApiService.isTokenExpired(newToken)) {
+            return {
+              success: false,
+              error: 'Server mengembalikan token autentikasi yang tidak valid atau telah kedaluwarsa.',
+            };
+          }
+
+          // Bersihkan seluruh session & token lama sebelum menyimpan session baru
+          this.clearSession();
+
+          // Simpan token baru ke canonical storage segera
+          localStorage.setItem('aphro_token', newToken);
+          localStorage.setItem('jwt_token', newToken);
+
           const userUnitId = InisiasiService.getStandardUnitId(rawUser.unitId || rawUser.UnitID || rawUser.unit_id || targetUnitId) || targetUnitId;
 
           // Automatically sync active unit selection to user's real unit
@@ -78,11 +95,12 @@ export class AuthService {
             Nama_Regu: String(rawUser.Nama_Regu || rawUser.reguName || rawUser.groupWO || rawUser.namaGroupWO || rawUser.Regu || ''),
             ulpName: String(rawUser.ULP || rawUser.ulpName || ''),
             status: rawUser.Status || 'Aktif',
+            token: newToken,
           };
 
-          (normalized as any).token = apiRes.token;
+          (normalized as any).jwtToken = newToken;
 
-          await this.saveLocalSession(normalized);
+          await this.saveLocalSession(normalized, newToken);
           return { success: true, user: normalized };
         } else {
           const msg = apiRes.message || '';
@@ -107,23 +125,43 @@ export class AuthService {
   }
 
   /**
-   * Save / sync active user profile to Dexie & localStorage
+   * Save / sync active user profile to Dexie & localStorage.
+   * Parameter explicitToken menjamin bahwa token baru dari API login selalu diutamakan
+   * dan tidak pernah tertimpa oleh token lama dari cache.
    */
-  static async saveLocalSession(user: User): Promise<void> {
+  static async saveLocalSession(user: User, explicitToken?: string): Promise<void> {
     try {
+      const candidateToken = (explicitToken || user.token || (user as any).jwtToken || (user as any).accessToken || '').trim();
+      let activeToken = '';
+
+      if (candidateToken && ApiService.isValidToken(candidateToken) && !ApiService.isTokenExpired(candidateToken)) {
+        activeToken = candidateToken;
+      } else {
+        const freshToken = ApiService.getAuthToken();
+        if (freshToken) {
+          activeToken = freshToken;
+        }
+      }
+
+      if (activeToken) {
+        user.token = activeToken;
+        (user as any).jwtToken = activeToken;
+        localStorage.setItem('aphro_token', activeToken);
+        localStorage.setItem('jwt_token', activeToken);
+      } else {
+        delete user.token;
+        delete (user as any).jwtToken;
+        delete (user as any).accessToken;
+        localStorage.removeItem('aphro_token');
+        localStorage.removeItem('jwt_token');
+      }
+
       localStorage.setItem('aphro_user', JSON.stringify(user));
       localStorage.setItem('pln_mobile_user', JSON.stringify(user));
       localStorage.setItem('aphro_has_initiated', 'true');
 
       if (user.unitId) {
         InisiasiService.saveSelectedUnit(user.unitId);
-      }
-
-      const token = user.token || (user as any).jwtToken || (user as any).accessToken || ApiService.getAuthToken();
-      if (token && ApiService.isValidToken(token)) {
-        user.token = token.trim();
-        localStorage.setItem('aphro_token', token.trim());
-        localStorage.setItem('jwt_token', token.trim());
       }
 
       await dexieDb.users.put({
@@ -137,7 +175,8 @@ export class AuthService {
   }
 
   /**
-   * Clear active user session
+   * Clear active user session (logout / session expired).
+   * Membersihkan kredensial & canonical token tanpa merusak data offline pekerjaan/queue.
    */
   static clearSession(): void {
     try {
@@ -146,6 +185,10 @@ export class AuthService {
       localStorage.removeItem('aphro_token');
       localStorage.removeItem('jwt_token');
       localStorage.removeItem('token');
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('aphro_token');
+        sessionStorage.removeItem('jwt_token');
+      }
     } catch (e) {
       // Ignore
     }

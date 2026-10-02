@@ -100,8 +100,9 @@ export class ApiService {
 
   /**
    * Cek kedaluwarsa JWT dari klaim exp secara aman di sisi klien.
+   * Mengembalikan true jika token tidak valid, format rusak, atau masa berlakunya telah habis.
    */
-  public static isTokenExpired(token: string): boolean {
+  public static isTokenExpired(token: string, bufferSeconds = 5): boolean {
     if (!this.isValidToken(token)) return true;
     try {
       const parts = token.trim().split('.');
@@ -109,24 +110,42 @@ export class ApiService {
       const payload = JSON.parse(atob(payloadBase64));
       if (!payload.exp) return false;
       const nowInSeconds = Math.floor(Date.now() / 1000);
-      return payload.exp <= nowInSeconds;
+      return payload.exp <= (nowInSeconds + bufferSeconds);
     } catch {
-      return false;
+      return true;
     }
   }
 
   /**
-   * Mengambil JWT token tunggal yang valid dari localStorage.
+   * Mengambil JWT token tunggal yang valid dan AKTIF (belum expired) dari localStorage.
+   * Jika token ditemukan tetapi sudah kedaluwarsa (isTokenExpired === true), token TIDAK
+   * akan dikembalikan (return '') dan token kedaluwarsa akan dibersihkan dari penyimpanan.
+   *
    * Sumber kanonikal utama: aphro_token
    * Sumber cadangan sinkronisasi: aphro_user atau pln_mobile_user
    */
   static getAuthToken(): string {
     if (typeof localStorage === 'undefined') return '';
 
+    const checkValidAndFresh = (raw: any): string | null => {
+      if (!this.isValidToken(raw)) return null;
+      const trimmed = String(raw).trim();
+      if (this.isTokenExpired(trimmed)) {
+        return null;
+      }
+      return trimmed;
+    };
+
     // 1. Sumber Utama: aphro_token
     const aphroToken = localStorage.getItem('aphro_token');
-    if (this.isValidToken(aphroToken)) {
-      return aphroToken!.trim();
+    const validAphro = checkValidAndFresh(aphroToken);
+    if (validAphro) {
+      return validAphro;
+    }
+    // Jika aphro_token ada di storage tetapi sudah kedaluwarsa, bersihkan segera
+    if (aphroToken && this.isTokenExpired(aphroToken)) {
+      localStorage.removeItem('aphro_token');
+      localStorage.removeItem('jwt_token');
     }
 
     // 2. Sumber Sinkronisasi: aphro_user
@@ -135,10 +154,16 @@ export class ApiService {
       try {
         const u = JSON.parse(aphroUserStr);
         const tok = u?.token || u?.jwtToken || u?.accessToken;
-        if (this.isValidToken(tok)) {
-          const validTok = (tok as string).trim();
+        const validTok = checkValidAndFresh(tok);
+        if (validTok) {
           localStorage.setItem('aphro_token', validTok);
+          localStorage.setItem('jwt_token', validTok);
           return validTok;
+        } else if (tok && this.isTokenExpired(tok)) {
+          delete u.token;
+          delete u.jwtToken;
+          delete u.accessToken;
+          localStorage.setItem('aphro_user', JSON.stringify(u));
         }
       } catch {}
     }
@@ -149,10 +174,16 @@ export class ApiService {
       try {
         const u = JSON.parse(plnUserStr);
         const tok = u?.token || u?.jwtToken || u?.accessToken;
-        if (this.isValidToken(tok)) {
-          const validTok = (tok as string).trim();
+        const validTok = checkValidAndFresh(tok);
+        if (validTok) {
           localStorage.setItem('aphro_token', validTok);
+          localStorage.setItem('jwt_token', validTok);
           return validTok;
+        } else if (tok && this.isTokenExpired(tok)) {
+          delete u.token;
+          delete u.jwtToken;
+          delete u.accessToken;
+          localStorage.setItem('pln_mobile_user', JSON.stringify(u));
         }
       } catch {}
     }
@@ -166,19 +197,25 @@ export class ApiService {
   static getAuthTokenSource(): string {
     if (typeof localStorage === 'undefined') return 'NONE';
     const aphroToken = localStorage.getItem('aphro_token');
-    if (this.isValidToken(aphroToken)) return 'localStorage:aphro_token';
+    if (this.isValidToken(aphroToken)) {
+      return this.isTokenExpired(aphroToken) ? 'localStorage:aphro_token (expired)' : 'localStorage:aphro_token';
+    }
     const aphroUserStr = localStorage.getItem('aphro_user');
     if (aphroUserStr) {
       try {
         const u = JSON.parse(aphroUserStr);
-        if (this.isValidToken(u?.token)) return 'localStorage:aphro_user.token';
+        if (this.isValidToken(u?.token)) {
+          return this.isTokenExpired(u?.token) ? 'localStorage:aphro_user.token (expired)' : 'localStorage:aphro_user.token';
+        }
       } catch {}
     }
     const plnUserStr = localStorage.getItem('pln_mobile_user');
     if (plnUserStr) {
       try {
         const u = JSON.parse(plnUserStr);
-        if (this.isValidToken(u?.token)) return 'localStorage:pln_mobile_user.token';
+        if (this.isValidToken(u?.token)) {
+          return this.isTokenExpired(u?.token) ? 'localStorage:pln_mobile_user.token (expired)' : 'localStorage:pln_mobile_user.token';
+        }
       } catch {}
     }
     return 'NOT_FOUND_OR_INVALID';
@@ -275,11 +312,31 @@ export class ApiService {
       headers.set('Accept', 'application/json');
     }
 
-    // Standarisasi Authorization Header: Hanya pasang Bearer jika token valid
-    if (this.isValidToken(token)) {
-      headers.set('Authorization', `Bearer ${token}`);
-    } else {
+    const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+    const apiPath = cleanPath.startsWith('/api/') ? cleanPath : cleanPath === '/api' ? '/api' : `/api${cleanPath}`;
+
+    // Endpoint /api/login tidak boleh menyertakan Authorization header
+    const isLoginEndpoint = apiPath === '/api/login' || apiPath.endsWith('/login');
+
+    if (isLoginEndpoint) {
       headers.delete('Authorization');
+    } else {
+      // Periksa header Authorization bawaan options jika ada
+      const existingAuth = headers.get('Authorization');
+      if (existingAuth) {
+        const match = existingAuth.match(/^Bearer\s+(.+)$/i);
+        const candidate = match ? match[1].trim() : '';
+        if (!this.isValidToken(candidate) || this.isTokenExpired(candidate)) {
+          headers.delete('Authorization');
+        }
+      }
+
+      // Standarisasi Authorization Header: Hanya pasang Bearer jika token valid dan AKTIF (tidak expired)
+      if (this.isValidToken(token) && !this.isTokenExpired(token)) {
+        headers.set('Authorization', `Bearer ${token}`);
+      } else if (!headers.has('Authorization')) {
+        headers.delete('Authorization');
+      }
     }
 
     const finalOptions: RequestInit = {
@@ -288,9 +345,6 @@ export class ApiService {
     };
 
     const externalBase = this.getCleanBaseUrl(); // "https://api.aphro-row.my.id"
-    const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
-    const apiPath = cleanPath.startsWith('/api/') ? cleanPath : cleanPath === '/api' ? '/api' : `/api${cleanPath}`;
-
     const externalUrl = `${externalBase}${apiPath}`;
 
     const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -306,16 +360,41 @@ export class ApiService {
 
       // Safe Diagnostic Log (tanpa membocorkan isi token) jika status 401
       if (res.status === 401) {
+        const isExpired = token ? this.isTokenExpired(token) : true;
         console.warn('[AUTH DEBUG]', {
           status: 401,
           hasToken: Boolean(token),
           tokenLength: token ? token.length : 0,
           tokenSource: this.getAuthTokenSource(),
-          isExpired: token ? this.isTokenExpired(token) : true,
+          isExpired,
           endpoint: apiPath,
           authorizationHeaderPresent: headers.has('Authorization'),
         });
+
+        // Bersihkan token expired dari canonical localStorage agar tidak dipakai kembali
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('aphro_token');
+          localStorage.removeItem('jwt_token');
+          localStorage.removeItem('token');
+        }
+
+        // Tandai authentication state sebagai expired dan beri tahu AuthContext
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('aphro:auth_expired', {
+              detail: {
+                endpoint: apiPath,
+                status: 401,
+                isExpired,
+              },
+            })
+          );
+        }
+
+        // HTTP 401 tidak boleh di-retry ke endpoint lokal atau diulang tanpa kredensial baru
+        return res;
       }
+
       if ((res.status === 404 || res.status >= 500) && localUrl && localUrl !== externalUrl) {
         console.warn(`[ApiService] Primary endpoint status ${res.status} for ${externalUrl}. Retrying on application backend (${localUrl})...`);
         try {
@@ -1759,20 +1838,28 @@ bodyMB=${bodyMB} MB`);
         };
       }
 
-      if (json.token) {
-        try {
-          localStorage.setItem(
-            'aphro_token',
-            json.token
-          );
+      const rawToken = json.token;
+      if (!this.isValidToken(rawToken) || this.isTokenExpired(rawToken)) {
+        console.error('[ApiService.login] Invalid or expired token received from server login response');
+        return {
+          status: 'error',
+          message: 'Server mengembalikan token autentikasi yang tidak valid atau telah kedaluwarsa.',
+        };
+      }
 
-          localStorage.setItem(
-            'jwt_token',
-            json.token
-          );
-        } catch {
-          // Ignore storage error
-        }
+      const freshToken = rawToken.trim();
+      try {
+        localStorage.setItem(
+          'aphro_token',
+          freshToken
+        );
+
+        localStorage.setItem(
+          'jwt_token',
+          freshToken
+        );
+      } catch {
+        // Ignore storage error
       }
 
       return {
@@ -1781,7 +1868,7 @@ bodyMB=${bodyMB} MB`);
           json.message ||
           'Login berhasil',
         token:
-          json.token,
+          freshToken,
         user:
           json.user,
       };
