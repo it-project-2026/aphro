@@ -63,6 +63,7 @@ const AppContent: React.FC = () => {
     isLoading: isAbsensiLoading,
     absensiList,
     hasVerifiedWithServer,
+    absensiVerificationStatus,
   } = useAbsensi();
 
   const {
@@ -174,12 +175,29 @@ const AppContent: React.FC = () => {
   }, [user?.id]);
 
   React.useEffect(() => {
+    if (user) {
+      console.log('[APP ABSENSI GATE]', {
+        hasCheckedInToday,
+        absensiVerificationStatus,
+        userUnitId: user?.unitId,
+        userRegu: user?.reguName,
+        activeTab
+      });
+    }
+  }, [user, hasCheckedInToday, absensiVerificationStatus, activeTab]);
+
+  React.useEffect(() => {
     if (
       isUserRole &&
       !isAdminRole &&
       (hasCheckedInToday || attendanceCompleted)
     ) {
       if (activeTab === 'dashboard' || activeTab === 'absensi' || activeTab === 'welcome') {
+        console.log('[APP ABSENSI REDIRECT]', {
+          from: activeTab,
+          to: 'input_realisasi',
+          reason: 'hasCheckedInToday=true'
+        });
         setActiveTab('input_realisasi');
       }
     }
@@ -540,10 +558,18 @@ const AppContent: React.FC = () => {
      * Akun Admin, SuperAdmin, dan Adm TIDAK WAJIB Melakukan Absensi.
      */
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+    console.log(`[APP ABSENSI GATE]
+hasCheckedInToday: ${hasCheckedInToday}
+absensiVerificationStatus: ${absensiVerificationStatus}
+user.unitId: ${user?.unitId}
+user.reguName: ${user?.reguName || (user as any)?.groupWO}
+activeTab: ${activeTab}`);
+
     if (
       isUserRole &&
       !isAdminRole &&
-      (isAbsensiLoading || (!hasVerifiedWithServer && isOnline)) &&
+      (absensiVerificationStatus === 'loading') &&
       !hasCheckedInToday &&
       !attendanceCompleted
     ) {
@@ -556,6 +582,7 @@ const AppContent: React.FC = () => {
       !hasCheckedInToday &&
       !attendanceCompleted
     ) {
+      console.log('[APP ABSENSI GATE] REDIRECT -> VERIFIKASI ABSENSI');
       return (
         <React.Suspense
           fallback={

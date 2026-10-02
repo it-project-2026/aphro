@@ -16,7 +16,9 @@ import {
 export function getCanonicalReguId(input?: string | null): string {
   if (!input) return '';
   const s = String(input).trim().toUpperCase();
-  const match = s.match(/(?:ROW|REGU|TIM|USER|USR|KELOMPOK)[-_\s]*0?(\d{1,2})/i) || s.match(/\b0?(\d{1,2})\b/);
+  const standardized = s.replace(/[^A-Z0-9]/g, ' ');
+  const match = standardized.match(/(?:ROW|REGU|TIM|USER|USR|KELOMPOK|GROUP)\s*0?(\d{1,2})\b/) || 
+                standardized.match(/\b0?(\d{1,2})\b/);
   if (match) {
     const num = parseInt(match[1], 10);
     if (!isNaN(num) && num >= 1 && num <= 99) {
@@ -44,6 +46,7 @@ interface AbsensiContextType {
   todayAbsensiRecord: Absensi | null;
   isLoading: boolean;
   hasVerifiedWithServer: boolean;
+  absensiVerificationStatus: 'loading' | 'verified' | 'error';
 }
 
 const AbsensiContext =
@@ -71,6 +74,9 @@ export function AbsensiProvider({
 
   const [hasVerifiedWithServer, setHasVerifiedWithServer] =
     React.useState(false);
+
+  const [apiError, setApiError] =
+    React.useState<string | null>(null);
 
   const [isLoading, setIsLoading] =
     React.useState<boolean>(() => {
@@ -138,19 +144,18 @@ export function AbsensiProvider({
 
     try {
       setIsLoading(true);
+      setApiError(null);
 
       const res =
         await ApiService.fetchAbsensi(unitId);
 
-      if (
-        res.success &&
-        Array.isArray(res.data)
-      ) {
+      if (res.success) {
+        const rawData = Array.isArray(res.data) ? res.data : [];
         console.log(
-          `[ABSENSI TRACE] fetchAbsensi SUCCESS. Received ${res.data.length} records.`
+          `[ABSENSI TRACE] fetchAbsensi SUCCESS. Received ${rawData.length} records.`
         );
 
-        const sortedData = [...res.data].sort(
+        const sortedData = [...rawData].sort(
           (a: any, b: any) => {
             const dateA = new Date(
               a.TANGGAL ||
@@ -178,12 +183,14 @@ export function AbsensiProvider({
           '[ABSENSI TRACE] fetchAbsensi FAILED:',
           res.message
         );
+        setApiError(res.message || 'Gagal mengambil data dari server');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(
         '[ABSENSI TRACE] refreshAbsensi EXCEPTION:',
         err
       );
+      setApiError(err?.message || 'Gagal mengambil data dari server');
     } finally {
       setIsLoading(false);
       setHasVerifiedWithServer(true);
@@ -955,7 +962,6 @@ export function AbsensiProvider({
     };
 
     const todayISO = getWIBDateString();
-    const todayStr = getLocalDateTimeString().slice(0, 10);
 
     const userUnitStd = InisiasiService.getStandardUnitId(user.unitId);
     const activeUnitName =
@@ -972,27 +978,26 @@ export function AbsensiProvider({
     const userIdentifierClean = cleanStr(user.userName || user.nip || user.id || user.name);
     const canonicalUserRegu = getCanonicalReguId(resolved.reguName || user.reguName || (user as any).namaGroupWO || (user as any).groupWO || (user as any).Nama_Regu || user.userName || user.name);
 
-    return absensiList.find((abs: any) => {
-      if (!abs) return false;
+    let matched: any = null;
+
+    absensiList.forEach((abs: any) => {
+      if (!abs) return;
 
       // 1. Direct Business Date Match (TANGGAL)
-      const recordDateStr = String(abs.TANGGAL ?? abs.tanggal ?? abs.Tanggal ?? '').trim().slice(0, 10);
-      const isToday = recordDateStr === todayISO;
-      if (!isToday) return false;
+      const recordDateStr = normalizeDate(abs.TANGGAL ?? abs.tanggal ?? abs.Tanggal);
+      const tanggalValid = recordDateStr === todayISO;
 
       // 2. Unit Check
       const absUnitStd = InisiasiService.getStandardUnitId(abs.unitId || abs.UnitId || abs.UNIT_ID);
-      if (absUnitStd && userUnitStd && absUnitStd !== userUnitStd && userUnitStd !== 'ALL') {
-        return false;
-      }
+      const unitValid = !absUnitStd || !userUnitStd || userUnitStd === 'ALL' || absUnitStd === userUnitStd;
 
-      // 3. Canonical REGU Match (NAMA_REGU)
+      // 3. Canonical REGU Match (NAMA_REGU) - absolutely NO REGU_ROW referenced here
       const reguVal = abs.NAMA_REGU ?? abs.reguName ?? abs.Nama_Regu ?? abs.Regu ?? '';
       const canonicalRecordRegu = getCanonicalReguId(reguVal);
 
-      let isReguMatch = Boolean(canonicalUserRegu && canonicalRecordRegu && canonicalUserRegu === canonicalRecordRegu);
+      let reguValid = Boolean(canonicalUserRegu && canonicalRecordRegu && canonicalUserRegu === canonicalRecordRegu);
 
-      if (!isReguMatch) {
+      if (!reguValid) {
         const absReguClean = cleanStr(reguVal);
         const absRowNumber = extractRowNumber(reguVal);
         if (userReguClean && absReguClean) {
@@ -1001,54 +1006,47 @@ export function AbsensiProvider({
             userReguClean.includes(absReguClean) ||
             absReguClean.includes(userReguClean)
           ) {
-            isReguMatch = true;
+            reguValid = true;
           }
         }
-        if (!isReguMatch && userRowNumber !== null && absRowNumber !== null && userRowNumber === absRowNumber) {
-          isReguMatch = true;
+        if (!reguValid && userRowNumber !== null && absRowNumber !== null && userRowNumber === absRowNumber) {
+          reguValid = true;
         }
       }
 
-      // 4. USER / PETUGAS Match
-      const userVal = abs.USER_NAME ?? abs.userName ?? abs.userId ?? abs.UserID ?? '';
-      const petugasVal = abs.NAMA_PETUGAS ?? abs.namaPetugas ?? abs.nama ?? '';
-      const nipVal = abs.NIP ?? abs.nip ?? '';
-      
-      let isUserMatch = false;
-      if (userIdentifierClean) {
-        const uClean = cleanStr(userVal);
-        const pClean = cleanStr(petugasVal);
-        const nClean = cleanStr(nipVal);
-        if (
-          (uClean && (uClean === userIdentifierClean || uClean.includes(userIdentifierClean) || userIdentifierClean.includes(uClean))) ||
-          (pClean && (pClean === userIdentifierClean || pClean.includes(userIdentifierClean) || userIdentifierClean.includes(pClean))) ||
-          (nClean && nClean === userIdentifierClean)
-        ) {
-          isUserMatch = true;
-        }
+      // 4. Check photoMasuk or timestampMasuk
+      const fotoMasukVal = String(abs.fotoMasuk || abs.FOTO_MASUK || abs.FotoMasuk || '').trim();
+      const timestampMasukVal = String(abs.timestampMasuk || abs['TIMESTAMP MASUK'] || abs.TIMESTAMP_MASUK || abs.TIMESTAMP || '').trim();
+      const masukValid = (fotoMasukVal !== '' && fotoMasukVal !== '-') || (timestampMasukVal !== '' && timestampMasukVal !== '-');
+
+      const isRecordMatch = tanggalValid && unitValid && reguValid && masukValid;
+
+      if (isRecordMatch && !matched) {
+        matched = abs;
       }
 
-      // 5. PETUGAS LIST Match
-      let isMemberMatch = false;
-      if (Array.isArray(abs.petugasList) && abs.petugasList.length > 0) {
-        isMemberMatch = abs.petugasList.some((p: any) => {
-          const pNama = cleanStr(p?.nama || p?.name);
-          return Boolean(pNama && userIdentifierClean && (pNama === userIdentifierClean || userIdentifierClean.includes(pNama) || pNama.includes(userIdentifierClean)));
-        });
-      }
-      if (!isMemberMatch) {
-        for (let i = 1; i <= 20; i++) {
-          const pField = cleanStr(abs[`PETUGAS_${i}`] || abs[`Petugas_${i}`] || abs[`petugas_${i}`]);
-          if (pField && userIdentifierClean && (pField === userIdentifierClean || userIdentifierClean.includes(pField) || pField.includes(userIdentifierClean))) {
-            isMemberMatch = true;
-            break;
-          }
-        }
-      }
+      // Print debug logs as required
+      console.log(`[ABSENSI CHECK]
+todayWIB: ${todayISO}
+user.unitId: ${user.unitId}
+user.reguName: ${resolved.reguName || user.reguName}
+user.ulpName: ${resolved.ulpName || user.ulpName}
+absensiList.length: ${absensiList.length}
+record.ID: ${abs.ID || abs.id}
+record.TANGGAL: ${abs.TANGGAL || abs.tanggal}
+record.unitId: ${abs.unitId}
+record.NAMA_REGU: ${abs.NAMA_REGU || abs.reguName}
+canonicalUserRegu: ${canonicalUserRegu}
+canonicalRecordRegu: ${canonicalRecordRegu}
+tanggalValid: ${tanggalValid}
+unitValid: ${unitValid}
+reguValid: ${reguValid}
+masukValid: ${masukValid}
+hasCheckedInToday: ${isRecordMatch}`);
+    });
 
-      return isReguMatch || isUserMatch || isMemberMatch;
-    }) ?? null;
-  }, [absensiList, user, normalizeDate]);
+    return matched;
+  }, [absensiList, user]);
 
   const sudahMasuk = React.useMemo(() => {
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
@@ -1103,6 +1101,25 @@ export function AbsensiProvider({
    * PROVIDER
    * =========================================================
    */
+  const absensiVerificationStatus = React.useMemo(() => {
+    if (apiError) return 'error';
+    if (isLoading) return 'loading';
+    if (!hasVerifiedWithServer) return 'loading';
+    return 'verified';
+  }, [isLoading, hasVerifiedWithServer, apiError]);
+
+  // Logging sementara [ABSENSI FINAL STATE] sesuai petunjuk audit
+  React.useEffect(() => {
+    console.log('[ABSENSI FINAL STATE]', {
+      hasCheckedInToday,
+      absensiVerificationStatus,
+      todayISO: getWIBDateString(),
+      userUnitId: user?.unitId,
+      userRegu: user?.reguName,
+      absensiCount: absensiList.length
+    });
+  }, [hasCheckedInToday, absensiVerificationStatus, user, absensiList.length]);
+
   return (
     <AbsensiContext.Provider
       value={{
@@ -1118,6 +1135,7 @@ export function AbsensiProvider({
         todayAbsensiRecord,
         isLoading,
         hasVerifiedWithServer,
+        absensiVerificationStatus,
       }}
     >
       {children}

@@ -1,0 +1,12 @@
+# gcloud ignore file to ensure dist/ is uploaded as build artifacts
+.gcloudignore
+.git
+.gitignore
+
+# Ignore node_modules but DO NOT ignore dist/ or build/
+node_modules/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
