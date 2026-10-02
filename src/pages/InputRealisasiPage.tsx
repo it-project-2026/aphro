@@ -1,4 +1,5 @@
 import * as React from 'react';
+import exifr from 'exifr';
 import { useAuth } from '../context/AuthContext';
 import { useWorkOrders } from '../context/WorkOrderContext';
 import { useRealisasi } from '../context/RealisasiContext';
@@ -429,108 +430,108 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     }
 
     setIsProcessing(true);
-    showToast(
-      'Membaca GPS & membubuhkan watermark otomatis pada foto...',
-      'info'
-    );
+    showToast('Membaca EXIF, GPS & membubuhkan watermark...', 'info');
 
-    const processPhoto = async (lat: number, lon: number) => {
-      try {
-        const timestampStr = new Date().toLocaleString('id-ID', {
-          dateStyle: 'full',
-          timeStyle: 'medium',
-        });
+    try {
+      // 1. EXIF Parsing
+      const exifData = await exifr.parse(file).catch(() => null);
+      let lat = exifData?.latitude;
+      let lon = exifData?.longitude;
+      let accuracy = exifData?.GPSDOP || 0;
+      let source: 'EXIF' | 'DEVICE' = 'EXIF';
 
-        const watermarkedBase64 = await generateWatermarkedImage({
-          imageFile: file,
-          userName: petugasName,
-          ulpName: selectedWO.ulpName,
-          nomorWO: selectedWO.nomorWO,
-          noTiang,
-          latitude: lat,
-          longitude: lon,
-          customTimestamp: timestampStr,
-        });
-
-        // CRITICAL PERFORMANCE & PAYLOAD OPTIMIZATION:
-        // Compress the image immediately to keep size under 300KB and avoid HTTP 413
-        const { compressImage } = await import('../utils/imageCompression');
-        const compressedBase64 = await compressImage(watermarkedBase64);
-
-        if (fileInput) fileInput.value = '';
-
-        const photoObj: WatermarkedPhoto = {
-          id: `pic-${Date.now()}-${slotIndex}-${Math.random()
-            .toString(36)
-            .substring(2, 6)}`,
-          type,
-          slotIndex,
-          dataUrl: compressedBase64,
-          fileUrl: '',
-          uploadStatus: 'UPLOADING',
-          originalName: file.name,
-          timestamp: timestampStr,
-          latitude: lat,
-          longitude: lon,
-          userName: petugasName,
-          ulpName: selectedWO.ulpName,
-        };
-
-        if (type === 'sebelum') {
-          console.log('[REALISASI_PHOTO_DEBUG] BEFORE_CAPTURE', { slotIndex, size: file.size, name: file.name });
-          setPhotosSebelum((prev) => [
-            ...prev.filter((p) => p.slotIndex !== slotIndex),
-            photoObj,
-          ]);
-        } else {
-          console.log('[REALISASI_PHOTO_DEBUG] AFTER_CAPTURE', { slotIndex, size: file.size, name: file.name });
-          setPhotosSesudah((prev) => [
-            ...prev.filter((p) => p.slotIndex !== slotIndex),
-            photoObj,
-          ]);
+      // 2. Fallback to Device GPS
+      if (lat === undefined || lon === undefined) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              maximumAge: 30000,
+              timeout: 10000,
+            })
+          );
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+          accuracy = pos.coords.accuracy;
+          source = 'DEVICE';
+        } catch (err) {
+          console.warn('GPS Device failed', err);
         }
+      }
 
-        showToast(
-          `Foto ${type} slot ${slotIndex} berhasil diberi watermark dan dikompres otomatis!`,
-          'success'
-        );
+      // 3. Process Photo (Watermark + Compression + Dexie)
+      const timestampStr = new Date().toLocaleString('id-ID', {
+        dateStyle: 'full',
+        timeStyle: 'medium',
+      });
 
-        // Start background pre-upload and track Promise in activeUploadPromises
-        const uploadPromise = ensureGoogleDrivePhotoUrl(compressedBase64, {
-          nomorWO: selectedWO.nomorWO,
-          reguName: selectedWO.reguName,
-          photoType: type === 'sebelum' ? 'Realisasi_Sebelum' : 'Realisasi_Sesudah',
-        })
-          .then((uploadedUrl) => {
-            if (uploadedUrl && isValidUploadedPhotoUrl(uploadedUrl)) {
-              if (type === 'sebelum') {
-                setPhotosSebelum((prev) =>
-                  prev.map((p) =>
-                    p.id === photoObj.id
-                      ? { ...p, fileUrl: uploadedUrl, uploadStatus: 'UPLOADED' }
-                      : p
-                  )
-                );
-              } else {
-                setPhotosSesudah((prev) =>
-                  prev.map((p) =>
-                    p.id === photoObj.id
-                      ? { ...p, fileUrl: uploadedUrl, uploadStatus: 'UPLOADED' }
-                      : p
-                  )
-                );
-              }
-              console.log(`[REALISASI_PHOTO_DEBUG] Background photo upload ready for ${type} slot ${slotIndex}:`, uploadedUrl);
-              return uploadedUrl;
-            }
-            throw new Error('Invalid URL returned from upload');
-          })
-          .catch((err) => {
+      const watermarkedBase64 = await generateWatermarkedImage({
+        imageFile: file,
+        userName: petugasName,
+        ulpName: selectedWO.ulpName,
+        nomorWO: selectedWO.nomorWO,
+        noTiang,
+        latitude: lat || 0,
+        longitude: lon || 0,
+        customTimestamp: timestampStr,
+      });
+
+      const { compressImage } = await import('../utils/imageCompression');
+      const compressedBase64 = await compressImage(watermarkedBase64);
+      
+      // Convert base64 to Blob for Dexie
+      const byteString = atob(compressedBase64.split(',')[1]);
+      const mimeString = compressedBase64.split(',')[0].split(':')[1].split(';')[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const photoBlob = new Blob([ab], { type: mimeString });
+
+      const photoObj: WatermarkedPhoto = {
+        id: `pic-${Date.now()}-${slotIndex}-${Math.random().toString(36).substring(2, 6)}`,
+        type,
+        slotIndex,
+        dataUrl: compressedBase64, // Base64 for display/watermark processing
+        photoBlob, // Blob for IndexedDB storage
+        fileUrl: '',
+        uploadStatus: 'UPLOADING',
+        originalName: file.name,
+        timestamp: timestampStr,
+        latitude: lat || 0,
+        longitude: lon || 0,
+        userName: petugasName,
+        ulpName: selectedWO.ulpName,
+      };
+
+      if (type === 'sebelum') {
+        setPhotosSebelum((prev) => [
+          ...prev.filter((p) => p.slotIndex !== slotIndex),
+          photoObj,
+        ]);
+      } else {
+        setPhotosSesudah((prev) => [
+          ...prev.filter((p) => p.slotIndex !== slotIndex),
+          photoObj,
+        ]);
+      }
+
+      showToast(`Foto ${type} slot ${slotIndex} berhasil diproses!`, 'success');
+
+      // 4. Background Upload
+      const uploadPromise = ensureGoogleDrivePhotoUrl(compressedBase64, {
+        nomorWO: selectedWO.nomorWO,
+        reguName: selectedWO.reguName,
+        photoType: type === 'sebelum' ? 'Realisasi_Sebelum' : 'Realisasi_Sesudah',
+      })
+        .then((uploadedUrl) => {
+          if (uploadedUrl && isValidUploadedPhotoUrl(uploadedUrl)) {
             if (type === 'sebelum') {
               setPhotosSebelum((prev) =>
                 prev.map((p) =>
                   p.id === photoObj.id
-                    ? { ...p, uploadStatus: 'FAILED', uploadError: err?.message }
+                    ? { ...p, fileUrl: uploadedUrl, uploadStatus: 'UPLOADED' }
                     : p
                 )
               );
@@ -538,47 +539,26 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
               setPhotosSesudah((prev) =>
                 prev.map((p) =>
                   p.id === photoObj.id
-                    ? { ...p, uploadStatus: 'FAILED', uploadError: err?.message }
+                    ? { ...p, fileUrl: uploadedUrl, uploadStatus: 'UPLOADED' }
                     : p
                 )
               );
             }
-            console.warn('Background photo upload note:', err);
-            return '';
-          });
+            return uploadedUrl;
+          }
+          throw new Error('Invalid URL returned from upload');
+        })
+        .catch((err) => {
+          console.warn('Background photo upload note:', err);
+          return '';
+        });
 
-        activeUploadPromises.current.set(photoObj.id, uploadPromise);
-      } catch (err: any) {
-        showToast(
-          `Foto gagal diproses: ${
-            err?.message || 'Silakan coba ambil foto kembali.'
-          }`,
-          'error'
-        );
-      } finally {
-        if (fileInput) fileInput.value = '';
-        setIsProcessing(false);
-      }
-    };
-
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLatitude(pos.coords.latitude);
-          setLongitude(pos.coords.longitude);
-          processPhoto(pos.coords.latitude, pos.coords.longitude);
-        },
-        (err) => {
-          showToast(
-            `Gagal membaca GPS foto: ${err.message}. Menggunakan GPS terakhir.`,
-            'warning'
-          );
-          processPhoto(latitude, longitude);
-        },
-        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
-      );
-    } else {
-      processPhoto(latitude, longitude);
+      activeUploadPromises.current.set(photoObj.id, uploadPromise);
+    } catch (err: any) {
+      showToast(`Foto gagal diproses: ${err?.message || 'Silakan coba ambil foto kembali.'}`, 'error');
+    } finally {
+      if (fileInput) fileInput.value = '';
+      setIsProcessing(false);
     }
   };
 
