@@ -26,6 +26,9 @@ interface AbsensiContextType {
   deleteAbsensi: (id: string) => Promise<boolean>;
   refreshAbsensi: () => Promise<void>;
   hasCheckedInToday: boolean;
+  sudahMasuk: boolean;
+  sudahKeluar: boolean;
+  todayAbsensiRecord: Absensi | null;
   isLoading: boolean;
   hasVerifiedWithServer: boolean;
 }
@@ -907,148 +910,168 @@ export function AbsensiProvider({
    * Untuk ADM / ADMIN / SUPERADMIN:
    * tidak diwajibkan absensi.
    */
-  const hasCheckedInToday =
-    React.useMemo(() => {
-      if (
-        !user ||
-        (user.role || '')
-          .toUpperCase() !==
-          'USER'
-      ) {
-        return true;
+  /*
+   * =========================================================
+   * CHECK ABSENSI HARI INI & RECORD HARI INI
+   * =========================================================
+   *
+   * Untuk USER:
+   * - tanggal harus hari ini (WIB / Asia/Jakarta)
+   * - unitId + REGU ROW atau Petugas harus sesuai
+   *
+   * Untuk ADM / ADMIN / SUPERADMIN:
+   * tidak diwajibkan absensi.
+   */
+  const todayAbsensiRecord = React.useMemo(() => {
+    if (!user) return null;
+
+    const cleanStr = (s?: string | null) => {
+      if (!s) return '';
+      return String(s)
+        .toLowerCase()
+        .trim()
+        .replace(/^(regu|tim|petugas|kelompok|regu_row|ulp)\s+/gi, '')
+        .replace(/[^a-z0-9]/gi, '');
+    };
+
+    const extractRowNumber = (s?: string | null): number | null => {
+      if (!s) return null;
+      const str = String(s).trim();
+      const m = str.match(/(?:row|users|user|usr|tim)[-_\s]*0?(\d+)/i) || str.match(/\b0?(\d+)\b/);
+      return m ? parseInt(m[1], 10) : null;
+    };
+
+    const todayISO = getWIBDateString();
+    const todayStr = getLocalDateTimeString().slice(0, 10);
+
+    const userUnitStd = InisiasiService.getStandardUnitId(user.unitId);
+    const activeUnitName =
+      user.unitName ||
+      userUnitStd ||
+      user.unitId ||
+      localStorage.getItem('aphro_selected_unit_id') ||
+      localStorage.getItem('aphro_nama_unit_layanan') ||
+      'UL PADANG';
+
+    const resolved = resolveUserTimRowAndUlp(user, activeUnitName);
+    const userReguClean = cleanStr(resolved.reguName || user.reguName || (user as any).namaGroupWO || (user as any).groupWO || (user as any).Nama_Regu || user.name);
+    const userRowNumber = extractRowNumber(resolved.reguName) ?? extractRowNumber(user.userName) ?? extractRowNumber(user.name) ?? extractRowNumber(user.reguName);
+    const userIdentifierClean = cleanStr(user.userName || user.nip || user.id || user.name);
+
+    return absensiList.find((abs: any) => {
+      if (!abs) return false;
+
+      const rawDate = abs.tanggal ?? abs.TANGGAL ?? abs.Tanggal ?? abs.createdAt;
+      const absDate = normalizeDate(rawDate);
+      const isToday =
+        absDate === todayISO ||
+        String(rawDate || '').slice(0, 10) === todayStr ||
+        normalizeDateISO(rawDate) === todayISO ||
+        normalizeDateISO(rawDate) === todayStr;
+
+      if (!isToday) return false;
+
+      // 0. Unit Check
+      const absUnitStd = InisiasiService.getStandardUnitId(abs.unitId || abs.UnitId);
+      if (absUnitStd && userUnitStd && absUnitStd !== userUnitStd && userUnitStd !== 'ALL') {
+        return false;
       }
 
-      const cleanStr = (s?: string | null) => {
-        if (!s) return '';
-        return String(s)
-          .toLowerCase()
-          .trim()
-          .replace(/^(regu|tim|petugas|kelompok|regu_row|ulp)\s+/gi, '')
-          .replace(/[^a-z0-9]/gi, '');
-      };
+      // 1. REGU Match
+      const reguVal = abs.reguName ?? abs.NAMA_REGU ?? abs.REGU_ROW ?? abs.Nama_Regu ?? abs.Regu ?? '';
+      const absReguClean = cleanStr(reguVal);
+      const absRowNumber = extractRowNumber(reguVal);
 
-      const extractRowNumber = (s?: string | null): number | null => {
-        if (!s) return null;
-        const str = String(s).trim();
-        const m = str.match(/(?:row|users|user|usr|tim)[-_\s]*0?(\d+)/i) || str.match(/\b0?(\d+)\b/);
-        return m ? parseInt(m[1], 10) : null;
-      };
-
-      const todayISO = getWIBDateString();
-      const todayStr = getLocalDateTimeString().slice(0, 10);
-
-      const userUnitStd = InisiasiService.getStandardUnitId(user.unitId);
-      const activeUnitName =
-        user.unitName ||
-        userUnitStd ||
-        user.unitId ||
-        localStorage.getItem('aphro_selected_unit_id') ||
-        localStorage.getItem('aphro_nama_unit_layanan') ||
-        'UL PADANG';
-
-      const resolved = resolveUserTimRowAndUlp(user, activeUnitName);
-      const userReguClean = cleanStr(resolved.reguName || user.reguName || (user as any).namaGroupWO || (user as any).groupWO || (user as any).Nama_Regu || user.name);
-      const userRowNumber = extractRowNumber(resolved.reguName) ?? extractRowNumber(user.userName) ?? extractRowNumber(user.name) ?? extractRowNumber(user.reguName);
-      const userIdentifierClean = cleanStr(user.userName || user.nip || user.id || user.name);
-
-      const found = absensiList.some((abs: any) => {
-        if (!abs) return false;
-
-        const rawDate = abs.tanggal ?? abs.TANGGAL ?? abs.Tanggal ?? abs.createdAt;
-        const absDate = normalizeDate(rawDate);
-        const isToday =
-          absDate === todayISO ||
-          String(rawDate || '').slice(0, 10) === todayStr ||
-          normalizeDateISO(rawDate) === todayISO ||
-          normalizeDateISO(rawDate) === todayStr;
-
-        if (!isToday) {
-          return false;
-        }
-
-        // 0. Unit Check (if record specifies unitId)
-        const absUnitStd = InisiasiService.getStandardUnitId(abs.unitId || abs.UnitId);
-        if (absUnitStd && userUnitStd && absUnitStd !== userUnitStd && userUnitStd !== 'ALL') {
-          return false;
-        }
-
-        // 1. REGU Match
-        const reguVal = abs.reguName ?? abs.NAMA_REGU ?? abs.REGU_ROW ?? abs.Nama_Regu ?? abs.Regu ?? '';
-        const absReguClean = cleanStr(reguVal);
-        const absRowNumber = extractRowNumber(reguVal);
-
-        let isReguMatch = false;
-        if (userReguClean && absReguClean) {
-          if (
-            userReguClean === absReguClean ||
-            userReguClean.includes(absReguClean) ||
-            absReguClean.includes(userReguClean)
-          ) {
-            isReguMatch = true;
-          }
-        }
-        if (!isReguMatch && userRowNumber !== null && absRowNumber !== null && userRowNumber === absRowNumber) {
+      let isReguMatch = false;
+      if (userReguClean && absReguClean) {
+        if (
+          userReguClean === absReguClean ||
+          userReguClean.includes(absReguClean) ||
+          absReguClean.includes(userReguClean)
+        ) {
           isReguMatch = true;
         }
+      }
+      if (!isReguMatch && userRowNumber !== null && absRowNumber !== null && userRowNumber === absRowNumber) {
+        isReguMatch = true;
+      }
 
-        // 2. USER / PETUGAS Match
-        const userVal = abs.userName ?? abs.USER_NAME ?? abs.userId ?? abs.UserID ?? '';
-        const petugasVal = abs.namaPetugas ?? abs.NAMA_PETUGAS ?? abs.nama ?? '';
-        const nipVal = abs.nip ?? abs.NIP ?? '';
-        
-        let isUserMatch = false;
-        if (userIdentifierClean) {
-          const uClean = cleanStr(userVal);
-          const pClean = cleanStr(petugasVal);
-          const nClean = cleanStr(nipVal);
-          if (
-            (uClean && (uClean === userIdentifierClean || uClean.includes(userIdentifierClean) || userIdentifierClean.includes(uClean))) ||
-            (pClean && (pClean === userIdentifierClean || pClean.includes(userIdentifierClean) || userIdentifierClean.includes(pClean))) ||
-            (nClean && nClean === userIdentifierClean)
-          ) {
-            isUserMatch = true;
+      // 2. USER / PETUGAS Match
+      const userVal = abs.userName ?? abs.USER_NAME ?? abs.userId ?? abs.UserID ?? '';
+      const petugasVal = abs.namaPetugas ?? abs.NAMA_PETUGAS ?? abs.nama ?? '';
+      const nipVal = abs.nip ?? abs.NIP ?? '';
+      
+      let isUserMatch = false;
+      if (userIdentifierClean) {
+        const uClean = cleanStr(userVal);
+        const pClean = cleanStr(petugasVal);
+        const nClean = cleanStr(nipVal);
+        if (
+          (uClean && (uClean === userIdentifierClean || uClean.includes(userIdentifierClean) || userIdentifierClean.includes(uClean))) ||
+          (pClean && (pClean === userIdentifierClean || pClean.includes(userIdentifierClean) || userIdentifierClean.includes(pClean))) ||
+          (nClean && nClean === userIdentifierClean)
+        ) {
+          isUserMatch = true;
+        }
+      }
+
+      // 3. PETUGAS LIST Match
+      let isMemberMatch = false;
+      if (Array.isArray(abs.petugasList) && abs.petugasList.length > 0) {
+        isMemberMatch = abs.petugasList.some((p: any) => {
+          const pNama = cleanStr(p?.nama || p?.name);
+          return Boolean(pNama && userIdentifierClean && (pNama === userIdentifierClean || userIdentifierClean.includes(pNama) || pNama.includes(userIdentifierClean)));
+        });
+      }
+      if (!isMemberMatch) {
+        for (let i = 1; i <= 20; i++) {
+          const pField = cleanStr(abs[`PETUGAS_${i}`] || abs[`Petugas_${i}`] || abs[`petugas_${i}`]);
+          if (pField && userIdentifierClean && (pField === userIdentifierClean || userIdentifierClean.includes(pField) || pField.includes(userIdentifierClean))) {
+            isMemberMatch = true;
+            break;
           }
         }
+      }
 
-        // 3. PETUGAS LIST Match (petugasList array or PETUGAS_1..20)
-        let isMemberMatch = false;
-        if (Array.isArray(abs.petugasList) && abs.petugasList.length > 0) {
-          isMemberMatch = abs.petugasList.some((p: any) => {
-            const pNama = cleanStr(p?.nama || p?.name);
-            return Boolean(pNama && userIdentifierClean && (pNama === userIdentifierClean || userIdentifierClean.includes(pNama) || pNama.includes(userIdentifierClean)));
-          });
-        }
-        if (!isMemberMatch) {
-          for (let i = 1; i <= 20; i++) {
-            const pField = cleanStr(abs[`PETUGAS_${i}`] || abs[`Petugas_${i}`] || abs[`petugas_${i}`]);
-            if (pField && userIdentifierClean && (pField === userIdentifierClean || userIdentifierClean.includes(pField) || pField.includes(userIdentifierClean))) {
-              isMemberMatch = true;
-              break;
-            }
-          }
-        }
+      return isReguMatch || isUserMatch || isMemberMatch;
+    }) ?? null;
+  }, [absensiList, user, normalizeDate]);
 
-        const isMatched = isReguMatch || isUserMatch || isMemberMatch;
-        return isMatched;
+  const sudahMasuk = React.useMemo(() => {
+    if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
+    if (!todayAbsensiRecord) return false;
+    const fotoMasuk = todayAbsensiRecord.fotoMasuk || (todayAbsensiRecord as any).FOTO_MASUK || (todayAbsensiRecord as any).foto_masuk;
+    const tsMasuk = todayAbsensiRecord.timestampMasuk || (todayAbsensiRecord as any).TIMESTAMP_MASUK || (todayAbsensiRecord as any).timestamp_masuk;
+    return Boolean(fotoMasuk || tsMasuk);
+  }, [user, todayAbsensiRecord]);
+
+  const sudahKeluar = React.useMemo(() => {
+    if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
+    if (!todayAbsensiRecord) return false;
+    const fotoKeluar = todayAbsensiRecord.fotoKeluar || (todayAbsensiRecord as any).FOTO_KELUAR || (todayAbsensiRecord as any).foto_keluar;
+    const tsKeluar = todayAbsensiRecord.timestampKeluar || (todayAbsensiRecord as any).TIMESTAMP_KELUAR || (todayAbsensiRecord as any).timestamp_keluar;
+    return Boolean(fotoKeluar || tsKeluar);
+  }, [user, todayAbsensiRecord]);
+
+  const hasCheckedInToday = React.useMemo(() => {
+    if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
+    return sudahMasuk;
+  }, [user, sudahMasuk]);
+
+  React.useEffect(() => {
+    if (user) {
+      console.log('[ABSENSI DEBUG]', {
+        unitId: user.unitId,
+        NAMA_REGU: user.reguName || (user as any).groupWO || user.name,
+        'Tanggal WIB': getWIBDateString(),
+        'Record ditemukan': Boolean(todayAbsensiRecord),
+        'TIMESTAMP MASUK': todayAbsensiRecord?.timestampMasuk || (todayAbsensiRecord as any)?.TIMESTAMP_MASUK || '-',
+        'TIMESTAMP KELUAR': todayAbsensiRecord?.timestampKeluar || (todayAbsensiRecord as any)?.TIMESTAMP_KELUAR || '-',
+        sudahMasuk,
+        sudahKeluar,
       });
-
-      console.log(
-        '[ABSENSI TRACE] hasCheckedInToday =',
-        found,
-        {
-          todayISO,
-          userRegu: resolved.reguName,
-          userRowNumber,
-          records: absensiList.length,
-        }
-      );
-
-      return found;
-    }, [
-      absensiList,
-      user,
-      normalizeDate,
-    ]);
+    }
+  }, [user, todayAbsensiRecord, sudahMasuk, sudahKeluar]);
 
   /*
    * =========================================================
@@ -1065,6 +1088,9 @@ export function AbsensiProvider({
         deleteAbsensi,
         refreshAbsensi,
         hasCheckedInToday,
+        sudahMasuk,
+        sudahKeluar,
+        todayAbsensiRecord,
         isLoading,
         hasVerifiedWithServer,
       }}

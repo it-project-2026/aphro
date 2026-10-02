@@ -90,26 +90,18 @@ export const DashboardPage: React.FC = () => {
 
   const activeUnitId = getStandardUnitId(currentUser?.unitId || settings.namaUnitLayanan || InisiasiService.getSelectedUnitId() || 'UL1');
 
-  // 10-second active polling when Dashboard is open
-  const isFetchingPollingRef = React.useRef(false);
+  // Event-driven data update on data changes (no background polling)
   React.useEffect(() => {
-    const interval = setInterval(async () => {
-      if (isFetchingPollingRef.current || !navigator.onLine) return;
-      try {
-        isFetchingPollingRef.current = true;
-        await Promise.all([
-          refreshWorkOrders(0),
-          refreshRealisasi(true),
-          fetchDashboardRealisasi(),
-        ]);
-      } catch (err) {
-        // silent
-      } finally {
-        isFetchingPollingRef.current = false;
-      }
-    }, 10000);
+    const handleDataUpdate = () => {
+      refreshWorkOrders(0, true);
+      refreshRealisasi(true);
+      fetchDashboardRealisasi();
+    };
 
-    return () => clearInterval(interval);
+    window.addEventListener('aphro:data_updated', handleDataUpdate);
+    return () => {
+      window.removeEventListener('aphro:data_updated', handleDataUpdate);
+    };
   }, [refreshWorkOrders, refreshRealisasi, fetchDashboardRealisasi]);
 
   // Automatically reset filters when unit changes

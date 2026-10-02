@@ -13,6 +13,7 @@ import { QRCodeModal } from '../components/common/QRCodeModal';
 import { EditWorkOrderModal } from '../components/common/EditWorkOrderModal';
 import { exportWorkOrdersToExcel } from '../utils/exportUtils';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
+import { getWIBDateString } from '../utils/dateUtils';
 import {
   Search,
   Filter,
@@ -72,26 +73,20 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
     
     checkPending();
     
-    // Listen for focus and visibility change events for immediate updates
+    // Listen for focus, visibility change, and data update events for immediate updates
     window.addEventListener('focus', checkPending);
     document.addEventListener('visibilitychange', checkPending);
-    
-    // Lower frequency polling fallback (12 seconds instead of 3 seconds)
-    const interval = setInterval(checkPending, 12000);
+    window.addEventListener('aphro:data_updated', checkPending);
     
     return () => {
       window.removeEventListener('focus', checkPending);
       document.removeEventListener('visibilitychange', checkPending);
-      clearInterval(interval);
+      window.removeEventListener('aphro:data_updated', checkPending);
     };
   }, []);
 
   const getTodayDateString = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return getWIBDateString();
   };
 
   const [searchTerm, setSearchTerm] = useState('');

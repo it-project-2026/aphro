@@ -37,11 +37,18 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   const { user: currentUser, logout } = useAuth();
   const { displayedWorkOrders } = useWorkOrders();
   const { settings } = useSettings();
-  const { syncWithGAS, isSyncing } = useGASSync();
-  const { users, ulpList, reguList } = useMasterData();
-  const { hasCheckedInToday } = useAbsensi();
   const { setActiveTab } = useUI();
   const { showToast } = useToast();
+  const { syncWithGAS, isSyncing } = useGASSync();
+  const { users, ulpList, reguList } = useMasterData();
+  const { 
+    hasCheckedInToday, 
+    sudahMasuk, 
+    sudahKeluar, 
+    hasVerifiedWithServer, 
+    isLoading: isAbsensiLoading, 
+    refreshAbsensi 
+  } = useAbsensi();
 
   useEffect(() => {
     if (hasCheckedInToday) {
@@ -270,40 +277,146 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
               </div>
             </div>
 
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-2xl p-4 text-left sm:text-right w-full sm:w-auto">
-              <div className="flex items-center space-x-2 sm:justify-end text-amber-600 dark:text-amber-400 text-xs font-bold mb-1">
-                <Clock className="w-4 h-4" />
-                <span>Absensi Belum Dilakukan</span>
+            {/* Status Absensi Card & Action */}
+            {isAbsensiLoading && !hasVerifiedWithServer ? (
+              <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-left sm:text-right w-full sm:w-auto">
+                <div className="flex items-center space-x-2 sm:justify-end text-teal-600 dark:text-teal-400 text-xs font-bold mb-1">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Memeriksa Status Absensi...</span>
+                </div>
+                <p className="text-[11px] text-slate-500 max-w-[220px]">
+                  Sedang memverifikasi data kehadiran tim dengan server HyperCloud.
+                </p>
               </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-400 max-w-[220px] font-medium">
-                Anda wajib mengisi Absensi Kerja & Foto Masuk sebelum memulai penugasan hari ini.
-              </p>
-            </div>
+            ) : !hasVerifiedWithServer ? (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-2xl p-4 text-left sm:text-right w-full sm:w-auto">
+                <div className="flex items-center space-x-2 sm:justify-end text-red-600 dark:text-red-400 text-xs font-bold mb-1">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Status Belum Diverifikasi</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 max-w-[220px] font-medium mb-2">
+                  Status absensi belum dapat diverifikasi.
+                </p>
+                <button
+                  onClick={() => refreshAbsensi()}
+                  className="px-3 py-1 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 transition-colors inline-flex items-center space-x-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Coba Lagi</span>
+                </button>
+              </div>
+            ) : sudahMasuk && sudahKeluar ? (
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 rounded-2xl p-4 text-left sm:text-right w-full sm:w-auto">
+                <div className="flex items-center space-x-2 sm:justify-end text-emerald-600 dark:text-emerald-400 text-xs font-bold mb-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Absensi Hari Ini Lengkap</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 max-w-[220px] font-medium">
+                  Absensi masuk dan keluar tim Anda telah lengkap untuk hari ini.
+                </p>
+              </div>
+            ) : sudahMasuk ? (
+              <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800/30 rounded-2xl p-4 text-left sm:text-right w-full sm:w-auto">
+                <div className="flex items-center space-x-2 sm:justify-end text-teal-600 dark:text-teal-400 text-xs font-bold mb-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Absensi Masuk Selesai</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 max-w-[220px] font-medium">
+                  Absensi masuk tim Anda telah dicatat untuk hari ini.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-2xl p-4 text-left sm:text-right w-full sm:w-auto">
+                <div className="flex items-center space-x-2 sm:justify-end text-amber-600 dark:text-amber-400 text-xs font-bold mb-1">
+                  <Clock className="w-4 h-4" />
+                  <span>Absensi Belum Dilakukan</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 max-w-[220px] font-medium">
+                  Anda wajib mengisi Absensi Kerja & Foto Masuk sebelum memulai penugasan hari ini.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Call to Action Absensi Button */}
           <div className="pt-2">
-            <button
-              onClick={onStartAbsensi}
-              className="w-full group relative overflow-hidden rounded-2xl bg-teal-600 p-px font-bold shadow-sm transition-all active:scale-[0.99]"
-            >
-              <div className="flex items-center justify-between px-6 py-4 rounded-2xl bg-teal-600 text-white transition-all hover:bg-teal-700">
+            {!hasVerifiedWithServer && !isAbsensiLoading ? (
+              <button
+                onClick={() => refreshAbsensi()}
+                className="w-full group relative overflow-hidden rounded-2xl bg-slate-700 p-px font-bold shadow-sm transition-all active:scale-[0.99]"
+              >
+                <div className="flex items-center justify-between px-6 py-4 rounded-2xl bg-slate-700 text-white transition-all hover:bg-slate-800">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-xl bg-white/20">
+                      <RefreshCw className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                        Verifikasi Kehadiran Tim
+                      </div>
+                      <div className="text-base sm:text-lg font-bold tracking-wide">
+                        STATUS ABSENSI BELUM DAPAT DIVERIFIKASI — COBA LAGI
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-6 h-6 text-slate-200" />
+                </div>
+              </button>
+            ) : sudahMasuk && sudahKeluar ? (
+              <div className="w-full rounded-2xl bg-emerald-600/90 text-white px-6 py-4 flex items-center justify-between font-bold">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 rounded-xl bg-white/20">
-                    <UserCheck className="w-6 h-6 text-white" />
+                    <CheckCircle2 className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-xs font-semibold text-emerald-100 uppercase tracking-wider">
+                      Verifikasi Kehadiran Tim
+                    </div>
+                    <div className="text-base sm:text-lg font-bold tracking-wide">
+                      ABSENSI HARI INI SUDAH LENGKAP
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : sudahMasuk ? (
+              <div className="w-full rounded-2xl bg-teal-600/90 text-white px-6 py-4 flex items-center justify-between font-bold">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 rounded-xl bg-white/20">
+                    <CheckCircle2 className="w-6 h-6 text-white" />
                   </div>
                   <div className="text-left">
                     <div className="text-xs font-semibold text-teal-100 uppercase tracking-wider">
                       Verifikasi Kehadiran Tim
                     </div>
                     <div className="text-base sm:text-lg font-bold tracking-wide">
-                      LAKUKAN ABSENSI MASUK SEKARANG
+                      ABSENSI MASUK SUDAH DILAKUKAN
                     </div>
                   </div>
                 </div>
-                <ArrowRight className="w-6 h-6 text-teal-100 transition-transform group-hover:translate-x-1" />
               </div>
-            </button>
+            ) : (
+              <button
+                onClick={onStartAbsensi}
+                className="w-full group relative overflow-hidden rounded-2xl bg-teal-600 p-px font-bold shadow-sm transition-all active:scale-[0.99]"
+              >
+                <div className="flex items-center justify-between px-6 py-4 rounded-2xl bg-teal-600 text-white transition-all hover:bg-teal-700">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-xl bg-white/20">
+                      <UserCheck className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-semibold text-teal-100 uppercase tracking-wider">
+                        Verifikasi Kehadiran Tim
+                      </div>
+                      <div className="text-base sm:text-lg font-bold tracking-wide">
+                        LAKUKAN ABSENSI MASUK SEKARANG
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-6 h-6 text-teal-100 transition-transform group-hover:translate-x-1" />
+                </div>
+              </button>
+            )}
           </div>
         </div>
 

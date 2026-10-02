@@ -7,7 +7,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useGASSync } from '../context/GASSyncContext';
 import { useDraggableScroll } from '../hooks/useDraggableScroll';
 import { WorkOrder } from '../types';
-import { formatDateDisplay, getWIBDateString, getLocalDateTimeString, normalizeDateISO, parseDateFromNomorWO } from '../utils/dateUtils';
+import { formatDateDisplay, getWIBDateString, getLocalDateTimeString, normalizeDateISO, parseDateFromNomorWO, getWIBYear, getWIBMonth } from '../utils/dateUtils';
 import { getStandardUnitId, InisiasiService } from '../services/inisiasiService';
 import {
   getWOTargetKms,
@@ -45,30 +45,22 @@ export const MonitoringPage: React.FC = () => {
   const isUserRole = currentUser?.role === 'User';
   const activeUnitId = getStandardUnitId(currentUser?.unitId || settings.namaUnitLayanan || InisiasiService.getSelectedUnitId() || 'UL1');
 
-  // 10-second active polling when Monitoring is open
-  const isFetchingPollingRef = React.useRef(false);
+  // Event-driven data update on data changes (no background polling)
   useEffect(() => {
-    const interval = setInterval(async () => {
-      if (isFetchingPollingRef.current || !navigator.onLine) return;
-      try {
-        isFetchingPollingRef.current = true;
-        await Promise.all([
-          refreshWorkOrders(0),
-          refreshRealisasi(true),
-        ]);
-      } catch (err) {
-        // silent
-      } finally {
-        isFetchingPollingRef.current = false;
-      }
-    }, 10000);
+    const handleDataUpdate = () => {
+      refreshWorkOrders(0, true);
+      refreshRealisasi(true);
+    };
 
-    return () => clearInterval(interval);
+    window.addEventListener('aphro:data_updated', handleDataUpdate);
+    return () => {
+      window.removeEventListener('aphro:data_updated', handleDataUpdate);
+    };
   }, [refreshWorkOrders, refreshRealisasi]);
 
-  // Default to current year and current month
-  const currentYearStr = String(new Date().getFullYear());
-  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
+  // Default to current year and current month in WIB
+  const currentYearStr = String(getWIBYear());
+  const currentMonthStr = String(getWIBMonth()).padStart(2, '0');
 
   const [filterYear, setFilterYear] = useState<string>(currentYearStr);
   const [filterMonth, setFilterMonth] = useState<string>(currentMonthStr);

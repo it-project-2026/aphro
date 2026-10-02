@@ -16,6 +16,7 @@ import { SyncStatusBanner } from './components/common/SyncStatusBanner';
 import { VersionUpdateNotification } from './components/common/VersionUpdateNotification';
 import { NotificationListener } from './components/layout/NotificationListener';
 import { Database, Loader2 } from 'lucide-react';
+import { logWIBDebug } from './utils/dateUtils';
 
 // Pages
 import { LoginPage } from './pages/LoginPage';
@@ -71,7 +72,9 @@ const AppContent: React.FC = () => {
     triggerActivitySync,
   } = useGASSync();
 
-  const { showToast } = useToast();
+  React.useEffect(() => {
+    logWIBDebug('APHRO GLOBAL WIB INITIALIZATION');
+  }, []);
 
   const [
     isMobileSidebarOpen,

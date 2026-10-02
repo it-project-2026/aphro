@@ -197,6 +197,99 @@ export const getWIBDateString = (date = new Date()): string => {
 };
 
 /**
+ * Extracts comprehensive date and time parts strictly in WIB (Asia/Jakarta, UTC+07:00)
+ */
+export const getWIBDateParts = (dateInput = new Date()) => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(dateInput);
+
+    const map: Record<string, string> = {};
+    parts.forEach((p) => {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    });
+
+    const year = parseInt(map.year, 10);
+    const month = parseInt(map.month, 10);
+    const day = parseInt(map.day, 10);
+    const hour = map.hour === '24' ? 0 : parseInt(map.hour || '0', 10);
+    const minute = parseInt(map.minute || '0', 10);
+    const second = parseInt(map.second || '0', 10);
+    const isoDate = `${map.year}-${map.month}-${map.day}`;
+
+    return { year, month, day, hour, minute, second, isoDate };
+  } catch (e) {
+    const wibDate = new Date(dateInput.getTime() + (7 * 60 * 60 * 1000));
+    const year = wibDate.getUTCFullYear();
+    const month = wibDate.getUTCMonth() + 1;
+    const day = wibDate.getUTCDate();
+    const hour = wibDate.getUTCHours();
+    const minute = wibDate.getUTCMinutes();
+    const second = wibDate.getUTCSeconds();
+    const isoDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return { year, month, day, hour, minute, second, isoDate };
+  }
+};
+
+export const getWIBYear = (dateInput = new Date()): number => getWIBDateParts(dateInput).year;
+export const getWIBMonth = (dateInput = new Date()): number => getWIBDateParts(dateInput).month;
+export const getWIBDay = (dateInput = new Date()): number => getWIBDateParts(dateInput).day;
+export const getWIBHours = (dateInput = new Date()): number => getWIBDateParts(dateInput).hour;
+
+/**
+ * Checks if a given date value corresponds to "today" in WIB business date
+ */
+export const isTodayWIB = (dateVal: any): boolean => {
+  if (!dateVal) return false;
+  const iso = normalizeDateISO(dateVal);
+  const today = getWIBDateString();
+  return iso === today;
+};
+
+/**
+ * Formats a date/timestamp for time display in WIB (e.g., "14:30 WIB")
+ */
+export const formatWIBTime = (dateVal: any): string => {
+  if (!dateVal) return '-';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    return new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(d) + ' WIB';
+  } catch {
+    return String(dateVal);
+  }
+};
+
+/**
+ * Diagnostic logger for WIB timezone verification
+ */
+export const logWIBDebug = (contextLabel = 'APHRO TIME DEBUG'): void => {
+  const now = new Date();
+  const wibParts = getWIBDateParts(now);
+  console.log(`[${contextLabel}]`, {
+    businessTimezone: 'Asia/Jakarta',
+    browserTime: now.toString(),
+    wibTime: getLocalDateTimeString(now) + ' WIB',
+    utcTime: now.toISOString(),
+    wibDate: wibParts.isoDate,
+    timezoneOffset: 'UTC+07:00',
+  });
+};
+
+/**
  * Calculates milliseconds remaining until 00:00:00 WIB (UTC+7)
  */
 export const getMsUntilNextWIBMidnight = (): number => {

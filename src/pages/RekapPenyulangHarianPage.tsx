@@ -40,25 +40,17 @@ export const RekapPenyulangHarianPage: React.FC = () => {
   const { showToast } = useToast();
   const { syncWithGAS, isSyncing: isGASSyncing } = useGASSync();
 
-  // 10-second active polling when Rekap Penyulang Harian is open
-  const isFetchingPollingRef = useRef(false);
+  // Event-driven data update on data changes (no background polling)
   useEffect(() => {
-    const interval = setInterval(async () => {
-      if (isFetchingPollingRef.current || !navigator.onLine) return;
-      try {
-        isFetchingPollingRef.current = true;
-        await Promise.all([
-          refreshRealisasi(true),
-          refreshWorkOrders(0),
-        ]);
-      } catch (err) {
-        // silent
-      } finally {
-        isFetchingPollingRef.current = false;
-      }
-    }, 10000);
+    const handleDataUpdate = () => {
+      refreshRealisasi(true);
+      refreshWorkOrders(0, true);
+    };
 
-    return () => clearInterval(interval);
+    window.addEventListener('aphro:data_updated', handleDataUpdate);
+    return () => {
+      window.removeEventListener('aphro:data_updated', handleDataUpdate);
+    };
   }, [refreshRealisasi, refreshWorkOrders]);
 
   // ULP Filter inside selected UL
