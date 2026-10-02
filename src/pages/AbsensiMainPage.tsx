@@ -103,10 +103,14 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
   const todayStr = getLocalDateTimeString().slice(0, 10);
 
+  const userUnitStd = InisiasiService.getStandardUnitId(currentUser?.unitId);
   const activeUnitName =
+    currentUser?.unitName ||
+    userUnitStd ||
+    currentUser?.unitId ||
     settings.namaUnitLayanan ||
-    localStorage.getItem('aphro_nama_unit_layanan') ||
     localStorage.getItem('aphro_selected_unit_id') ||
+    localStorage.getItem('aphro_nama_unit_layanan') ||
     'UL PADANG';
   const primaryInfo = getPrimaryTimRowForUnit(activeUnitName);
 
@@ -133,24 +137,63 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
 
   const extractRowNumber = (s?: string | null): number | null => {
     if (!s) return null;
-    const m = String(s).match(/row\s*0?(\d+)/i);
+    const m = String(s).match(/(?:row|users|user|usr|tim)[-_\s]*0?(\d+)/i) || String(s).match(/\b0?(\d+)\b/);
     return m ? parseInt(m[1], 10) : null;
   };
 
   const userReguClean = cleanStr(reguName);
   const userRowNumber = extractRowNumber(reguName) ?? extractRowNumber(currentUser?.userName);
+  const userIdentifierClean = cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id || currentUser?.name);
 
   // Find today's existing Absensi record
   const todayISO = getWIBDateString();
   const todayAbsensi = absensiList.find((a) => {
     if (!a) return false;
-    const aDate = normalizeDateISO(a.tanggal);
-    const isToday = aDate === todayISO || String(a.tanggal || '').slice(0, 10) === todayStr;
-    const matchRegu = cleanStr(a.reguName) === userReguClean || (userRowNumber !== null && extractRowNumber(a.reguName) === userRowNumber);
+    const rawDate = a.tanggal || (a as any).TANGGAL || (a as any).Tanggal || a.createdAt;
+    const aDate = normalizeDateISO(rawDate);
+    const isToday =
+      aDate === todayISO ||
+      String(rawDate || '').slice(0, 10) === todayStr ||
+      normalizeDateISO(rawDate) === todayISO ||
+      normalizeDateISO(rawDate) === todayStr;
+    if (!isToday) return false;
+
+    const absUnitStd = InisiasiService.getStandardUnitId(a.unitId || (a as any).UnitId);
+    if (absUnitStd && userUnitStd && absUnitStd !== userUnitStd && userUnitStd !== 'ALL') return false;
+
+    const reguVal = a.reguName || (a as any).NAMA_REGU || (a as any).REGU_ROW || (a as any).Regu;
+    const aReguClean = cleanStr(reguVal);
+    const aRowNumber = extractRowNumber(reguVal);
+    const matchRegu =
+      (userReguClean && aReguClean && (aReguClean === userReguClean || aReguClean.includes(userReguClean) || userReguClean.includes(aReguClean))) ||
+      (userRowNumber !== null && aRowNumber !== null && aRowNumber === userRowNumber);
+
+    const userVal = a.userName || (a as any).USER_NAME || (a as any).userId || (a as any).UserID;
+    const petugasVal = a.namaPetugas || (a as any).NAMA_PETUGAS || (a as any).name;
+    const nipVal = a.nip || (a as any).NIP;
     const matchUser =
-      cleanStr(a.userName) === cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id) ||
-      cleanStr(a.namaPetugas) === cleanStr(currentUser?.name);
-    return isToday && (matchRegu || matchUser);
+      (userIdentifierClean && cleanStr(userVal) && (cleanStr(userVal) === userIdentifierClean || cleanStr(userVal).includes(userIdentifierClean) || userIdentifierClean.includes(cleanStr(userVal)))) ||
+      (userIdentifierClean && cleanStr(petugasVal) && (cleanStr(petugasVal) === userIdentifierClean || cleanStr(petugasVal).includes(userIdentifierClean) || userIdentifierClean.includes(cleanStr(petugasVal)))) ||
+      (userIdentifierClean && cleanStr(nipVal) && cleanStr(nipVal) === userIdentifierClean);
+
+    let matchMember = false;
+    if (Array.isArray(a.petugasList) && a.petugasList.length > 0) {
+      matchMember = a.petugasList.some((p: any) => {
+        const pNama = cleanStr(p?.nama || p?.name);
+        return Boolean(pNama && userIdentifierClean && (pNama === userIdentifierClean || userIdentifierClean.includes(pNama) || pNama.includes(userIdentifierClean)));
+      });
+    }
+    if (!matchMember) {
+      for (let i = 1; i <= 20; i++) {
+        const pField = cleanStr((a as any)[`PETUGAS_${i}`] || (a as any)[`Petugas_${i}`]);
+        if (pField && userIdentifierClean && (pField === userIdentifierClean || userIdentifierClean.includes(pField) || pField.includes(userIdentifierClean))) {
+          matchMember = true;
+          break;
+        }
+      }
+    }
+
+    return matchRegu || matchUser || matchMember;
   });
 
   // State for Foto Pulang upload

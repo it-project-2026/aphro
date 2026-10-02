@@ -27,6 +27,7 @@ import { getLocalDateTimeString, getWIBDateString, normalizeDateISO } from '../u
 import { ImagePreviewModal } from '../components/common/ImagePreviewModal';
 import { useSettings } from '../context/SettingsContext';
 import { getPrimaryTimRowForUnit, resolveUserTimRowAndUlp } from '../services/rekapHarianService';
+import { InisiasiService } from '../services/inisiasiService';
 import { GASApiService } from '../services/gasApiService';
 import { getActiveGasConfig } from '../config/gasConfig';
 
@@ -77,10 +78,14 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
   // Resolve the active user's Regu Name and ULP Name based on USERS login and active INISIASI unit
   const resolvedIdentity = useMemo(() => {
+    const userUnitStd = InisiasiService.getStandardUnitId(currentUser?.unitId);
     const activeUnitName =
+      currentUser?.unitName ||
+      userUnitStd ||
+      currentUser?.unitId ||
       settings.namaUnitLayanan ||
-      localStorage.getItem('aphro_nama_unit_layanan') ||
       localStorage.getItem('aphro_selected_unit_id') ||
+      localStorage.getItem('aphro_nama_unit_layanan') ||
       'UL PADANG';
     return resolveUserTimRowAndUlp(currentUser, activeUnitName, users, ulpList, reguList);
   }, [currentUser, settings.namaUnitLayanan, users, ulpList, reguList]);
@@ -107,16 +112,56 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
 
   // Find today's existing Absensi record for this Regu
   const todayISO = getWIBDateString();
+  const userUnitStd = InisiasiService.getStandardUnitId(currentUser?.unitId);
+  const userIdentifierClean = cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id || currentUser?.name);
+
   const todayAbsensi = absensiList.find((a) => {
     if (!a) return false;
-    const aDate = normalizeDateISO(a.tanggal || (a as any).TANGGAL);
-    const isToday = aDate === todayISO || String(a.tanggal || (a as any).TANGGAL || '').slice(0, 10) === todayStr;
-    const reguVal = a.reguName || (a as any).NAMA_REGU;
-    const matchRegu = cleanStr(reguVal) === userReguClean || (userRowNumber !== null && extractRowNumber(reguVal) === userRowNumber);
-    const userVal = a.userName || (a as any).USER_NAME;
-    const petugasVal = a.namaPetugas || (a as any).NAMA_PETUGAS;
-    const matchUser = cleanStr(userVal) === cleanStr(currentUser?.userName || currentUser?.nip || currentUser?.id) || cleanStr(petugasVal) === cleanStr(currentUser?.name);
-    return isToday && (matchRegu || matchUser);
+    const rawDate = a.tanggal || (a as any).TANGGAL || (a as any).Tanggal || a.createdAt;
+    const aDate = normalizeDateISO(rawDate);
+    const isToday =
+      aDate === todayISO ||
+      String(rawDate || '').slice(0, 10) === todayStr ||
+      normalizeDateISO(rawDate) === todayISO ||
+      normalizeDateISO(rawDate) === todayStr;
+    if (!isToday) return false;
+
+    const absUnitStd = InisiasiService.getStandardUnitId(a.unitId || (a as any).UnitId);
+    if (absUnitStd && userUnitStd && absUnitStd !== userUnitStd && userUnitStd !== 'ALL') return false;
+
+    const reguVal = a.reguName || (a as any).NAMA_REGU || (a as any).REGU_ROW || (a as any).Regu;
+    const aReguClean = cleanStr(reguVal);
+    const aRowNumber = extractRowNumber(reguVal);
+    const matchRegu =
+      (userReguClean && aReguClean && (aReguClean === userReguClean || aReguClean.includes(userReguClean) || userReguClean.includes(aReguClean))) ||
+      (userRowNumber !== null && aRowNumber !== null && aRowNumber === userRowNumber);
+
+    const userVal = a.userName || (a as any).USER_NAME || (a as any).userId || (a as any).UserID;
+    const petugasVal = a.namaPetugas || (a as any).NAMA_PETUGAS || (a as any).name;
+    const nipVal = a.nip || (a as any).NIP;
+    const matchUser =
+      (userIdentifierClean && cleanStr(userVal) && (cleanStr(userVal) === userIdentifierClean || cleanStr(userVal).includes(userIdentifierClean) || userIdentifierClean.includes(cleanStr(userVal)))) ||
+      (userIdentifierClean && cleanStr(petugasVal) && (cleanStr(petugasVal) === userIdentifierClean || cleanStr(petugasVal).includes(userIdentifierClean) || userIdentifierClean.includes(cleanStr(petugasVal)))) ||
+      (userIdentifierClean && cleanStr(nipVal) && cleanStr(nipVal) === userIdentifierClean);
+
+    let matchMember = false;
+    if (Array.isArray(a.petugasList) && a.petugasList.length > 0) {
+      matchMember = a.petugasList.some((p: any) => {
+        const pNama = cleanStr(p?.nama || p?.name);
+        return Boolean(pNama && userIdentifierClean && (pNama === userIdentifierClean || userIdentifierClean.includes(pNama) || pNama.includes(userIdentifierClean)));
+      });
+    }
+    if (!matchMember) {
+      for (let i = 1; i <= 20; i++) {
+        const pField = cleanStr((a as any)[`PETUGAS_${i}`] || (a as any)[`Petugas_${i}`]);
+        if (pField && userIdentifierClean && (pField === userIdentifierClean || userIdentifierClean.includes(pField) || pField.includes(userIdentifierClean))) {
+          matchMember = true;
+          break;
+        }
+      }
+    }
+
+    return matchRegu || matchUser || matchMember;
   });
 
   // Check if Absensi Masuk has already been done today

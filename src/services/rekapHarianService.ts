@@ -327,13 +327,13 @@ export function resolveUserTimRowAndUlp(
   ulpList?: any[],
   reguList?: any[]
 ): { name: string; reguName: string; ulpName: string } {
-  // 1. Determine active Inisiasi unit key (prioritizing active unit selection over legacy user.unitId)
+  // 1. Determine active Inisiasi unit key (prioritizing logged in user's unitId/unitName if provided)
   const activeUnitInput =
-    unitNameOrId ||
-    localStorage.getItem('aphro_nama_unit_layanan') ||
-    localStorage.getItem('aphro_selected_unit_id') ||
+    user?.unitName ||
     user?.unitId ||
-    user?.unit_id ||
+    unitNameOrId ||
+    localStorage.getItem('aphro_selected_unit_id') ||
+    localStorage.getItem('aphro_nama_unit_layanan') ||
     'UL PADANG';
 
   const unitKey = RekapHarianService.normalizeUnitKey(activeUnitInput);

@@ -22,6 +22,7 @@ export interface User {
   status?: 'Aktif' | 'Non-Aktif';
   lastLogin?: string;
   createdAt?: string;
+  token?: string;
 }
 
 export type WOStatus = 'Belum Dikerjakan' | 'Sedang Dikerjakan' | 'Selesai' | 'BELUM SELESAI' | 'SELESAI';

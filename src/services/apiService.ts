@@ -46,7 +46,7 @@ export interface FetchRealisasiParams {
 }
 
 export class ApiService {
-  private static getCleanBaseUrl(): string {
+  public static getCleanBaseUrl(): string {
     if (typeof window !== 'undefined' && window.location) {
       const hostname = window.location.hostname;
       const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
@@ -85,63 +85,103 @@ export class ApiService {
   }
 
   /**
-   * Mengambil JWT token dari localStorage berdasarkan urutan prioritas:
-   * 1. aphro_token
-   * 2. jwt_token
-   * 3. token
-   * 4. token dari aphro_user
-   * 5. token dari pln_mobile_user
+   * Helper untuk memvalidasi apakah string token merupakan JWT yang bersih dan valid
+   */
+  public static isValidToken(token: any): boolean {
+    if (!token || typeof token !== 'string') return false;
+    const trimmed = token.trim();
+    if (!trimmed || trimmed === 'undefined' || trimmed === 'null' || trimmed === '[object Object]' || trimmed === 'system-hypercloud-token') {
+      return false;
+    }
+    // Token JWT harus terdiri dari 3 segmen yang dipisahkan oleh tanda titik (.)
+    const parts = trimmed.split('.');
+    return parts.length === 3 && parts.every(p => p.length > 0);
+  }
+
+  /**
+   * Cek kedaluwarsa JWT dari klaim exp secara aman di sisi klien.
+   */
+  public static isTokenExpired(token: string): boolean {
+    if (!this.isValidToken(token)) return true;
+    try {
+      const parts = token.trim().split('.');
+      const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(payloadBase64));
+      if (!payload.exp) return false;
+      const nowInSeconds = Math.floor(Date.now() / 1000);
+      return payload.exp <= nowInSeconds;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Mengambil JWT token tunggal yang valid dari localStorage.
+   * Sumber kanonikal utama: aphro_token
+   * Sumber cadangan sinkronisasi: aphro_user atau pln_mobile_user
    */
   static getAuthToken(): string {
     if (typeof localStorage === 'undefined') return '';
 
-    // 1. aphro_token
+    // 1. Sumber Utama: aphro_token
     const aphroToken = localStorage.getItem('aphro_token');
-    if (aphroToken && aphroToken.trim() && aphroToken !== 'system-hypercloud-token') {
-      return aphroToken.trim();
+    if (this.isValidToken(aphroToken)) {
+      return aphroToken!.trim();
     }
 
-    // 2. jwt_token
-    const jwtToken = localStorage.getItem('jwt_token');
-    if (jwtToken && jwtToken.trim() && jwtToken !== 'system-hypercloud-token') {
-      return jwtToken.trim();
-    }
-
-    // 3. token
-    const token = localStorage.getItem('token');
-    if (token && token.trim() && token !== 'system-hypercloud-token') {
-      return token.trim();
-    }
-
-    // 4. aphro_user
+    // 2. Sumber Sinkronisasi: aphro_user
     const aphroUserStr = localStorage.getItem('aphro_user');
     if (aphroUserStr) {
       try {
         const u = JSON.parse(aphroUserStr);
-        const tok = u?.token || u?.jwtToken || u?.accessToken || u?.token_jwt;
-        if (tok && typeof tok === 'string' && tok.trim() && tok !== 'system-hypercloud-token') {
-          return tok.trim();
+        const tok = u?.token || u?.jwtToken || u?.accessToken;
+        if (this.isValidToken(tok)) {
+          const validTok = (tok as string).trim();
+          localStorage.setItem('aphro_token', validTok);
+          return validTok;
         }
-      } catch {
-        // Ignore
-      }
+      } catch {}
     }
 
-    // 5. pln_mobile_user
+    // 3. Sumber Sinkronisasi: pln_mobile_user
     const plnUserStr = localStorage.getItem('pln_mobile_user');
     if (plnUserStr) {
       try {
         const u = JSON.parse(plnUserStr);
-        const tok = u?.token || u?.jwtToken || u?.accessToken || u?.token_jwt;
-        if (tok && typeof tok === 'string' && tok.trim() && tok !== 'system-hypercloud-token') {
-          return tok.trim();
+        const tok = u?.token || u?.jwtToken || u?.accessToken;
+        if (this.isValidToken(tok)) {
+          const validTok = (tok as string).trim();
+          localStorage.setItem('aphro_token', validTok);
+          return validTok;
         }
-      } catch {
-        // Ignore
-      }
+      } catch {}
     }
 
     return '';
+  }
+
+  /**
+   * Mengembalikan nama sumber token untuk diagnostik aman (tanpa mencetak isi token).
+   */
+  static getAuthTokenSource(): string {
+    if (typeof localStorage === 'undefined') return 'NONE';
+    const aphroToken = localStorage.getItem('aphro_token');
+    if (this.isValidToken(aphroToken)) return 'localStorage:aphro_token';
+    const aphroUserStr = localStorage.getItem('aphro_user');
+    if (aphroUserStr) {
+      try {
+        const u = JSON.parse(aphroUserStr);
+        if (this.isValidToken(u?.token)) return 'localStorage:aphro_user.token';
+      } catch {}
+    }
+    const plnUserStr = localStorage.getItem('pln_mobile_user');
+    if (plnUserStr) {
+      try {
+        const u = JSON.parse(plnUserStr);
+        if (this.isValidToken(u?.token)) return 'localStorage:pln_mobile_user.token';
+      } catch {}
+    }
+    return 'NOT_FOUND_OR_INVALID';
   }
 
   /**
@@ -235,8 +275,11 @@ export class ApiService {
       headers.set('Accept', 'application/json');
     }
 
-    if (token) {
+    // Standarisasi Authorization Header: Hanya pasang Bearer jika token valid
+    if (this.isValidToken(token)) {
       headers.set('Authorization', `Bearer ${token}`);
+    } else {
+      headers.delete('Authorization');
     }
 
     const finalOptions: RequestInit = {
@@ -260,6 +303,19 @@ export class ApiService {
     try {
       console.log(`[ApiService] API request: ${externalUrl}`);
       const res = await fetch(externalUrl, finalOptions);
+
+      // Safe Diagnostic Log (tanpa membocorkan isi token) jika status 401
+      if (res.status === 401) {
+        console.warn('[AUTH DEBUG]', {
+          status: 401,
+          hasToken: Boolean(token),
+          tokenLength: token ? token.length : 0,
+          tokenSource: this.getAuthTokenSource(),
+          isExpired: token ? this.isTokenExpired(token) : true,
+          endpoint: apiPath,
+          authorizationHeaderPresent: headers.has('Authorization'),
+        });
+      }
       if ((res.status === 404 || res.status >= 500) && localUrl && localUrl !== externalUrl) {
         console.warn(`[ApiService] Primary endpoint status ${res.status} for ${externalUrl}. Retrying on application backend (${localUrl})...`);
         try {
@@ -1411,8 +1467,24 @@ bodyMB=${bodyMB} MB`);
     }
 
     const unitId = data.unitId ? InisiasiService.getStandardUnitId(data.unitId) : InisiasiService.getSelectedUnitId();
+    
+    // Extract individual petugas for HyperCloud database schema PETUGAS_1..5
+    const petugasArr = Array.isArray(data.petugasList) ? data.petugasList : (Array.isArray(data.PETUGAS) ? data.PETUGAS : []);
+    const p1 = data.PETUGAS_1 || data.petugas1 || petugasArr[0]?.nama || '';
+    const k1 = data.KET_1 || data.ket1 || petugasArr[0]?.keterangan || 'HADIR';
+    const p2 = data.PETUGAS_2 || data.petugas2 || petugasArr[1]?.nama || '';
+    const k2 = data.KET_2 || data.ket2 || petugasArr[1]?.keterangan || 'HADIR';
+    const p3 = data.PETUGAS_3 || data.petugas3 || petugasArr[2]?.nama || '';
+    const k3 = data.KET_3 || data.ket3 || petugasArr[2]?.keterangan || 'HADIR';
+    const p4 = data.PETUGAS_4 || data.petugas4 || petugasArr[3]?.nama || '';
+    const k4 = data.KET_4 || data.ket4 || petugasArr[3]?.keterangan || 'HADIR';
+    const p5 = data.PETUGAS_5 || data.petugas5 || petugasArr[4]?.nama || '';
+    const k5 = data.KET_5 || data.ket5 || petugasArr[4]?.keterangan || 'HADIR';
+
     const payload = {
+      ...data,
       id: data.id || `ABS-${Date.now()}`,
+      ID: data.id || data.ID || `ABS-${Date.now()}`,
       unitId: unitId,
       tanggal: data.tanggal || data.TANGGAL || getWIBDateString(),
       TANGGAL: data.TANGGAL || data.tanggal || getWIBDateString(),
@@ -1420,16 +1492,36 @@ bodyMB=${bodyMB} MB`);
       ULP: data.ULP || data.ulpName || '',
       reguName: data.reguName || data.NAMA_REGU || data.REGU_ROW || '',
       NAMA_REGU: data.NAMA_REGU || data.reguName || data.REGU_ROW || '',
-      petugasList: data.petugasList || data.PETUGAS || [],
-      PETUGAS: data.PETUGAS || data.petugasList || [],
+      penyulangName: data.penyulangName || data.PENYULANG || '',
+      PENYULANG: data.PENYULANG || data.penyulangName || '',
+      userName: data.userName || data.USER_NAME || data.userId || data.UserID || '',
+      USER_NAME: data.USER_NAME || data.userName || data.userId || data.UserID || '',
+      namaPetugas: data.namaPetugas || data.NAMA_PETUGAS || data.name || '',
+      NAMA_PETUGAS: data.NAMA_PETUGAS || data.namaPetugas || data.name || '',
+      nip: data.nip || data.NIP || '',
+      NIP: data.NIP || data.nip || '',
+      petugasList: petugasArr,
+      PETUGAS: petugasArr,
+      PETUGAS_1: p1,
+      KET_1: k1,
+      PETUGAS_2: p2,
+      KET_2: k2,
+      PETUGAS_3: p3,
+      KET_3: k3,
+      PETUGAS_4: p4,
+      KET_4: k4,
+      PETUGAS_5: p5,
+      KET_5: k5,
       fotoMasuk: data.fotoMasuk || data.FOTO_MASUK || '',
       FOTO_MASUK: data.FOTO_MASUK || data.fotoMasuk || '',
-      timestampMasuk: data.timestampMasuk || data.TIMESTAMP_MASUK || '',
-      TIMESTAMP_MASUK: data.TIMESTAMP_MASUK || data.timestampMasuk || '',
+      timestampMasuk: data.timestampMasuk || data.TIMESTAMP_MASUK || data['TIMESTAMP MASUK'] || '',
+      TIMESTAMP_MASUK: data.TIMESTAMP_MASUK || data.timestampMasuk || data['TIMESTAMP MASUK'] || '',
+      'TIMESTAMP MASUK': data['TIMESTAMP MASUK'] || data.timestampMasuk || data.TIMESTAMP_MASUK || '',
       fotoKeluar: data.fotoKeluar || data.FOTO_KELUAR || '',
       FOTO_KELUAR: data.FOTO_KELUAR || data.fotoKeluar || '',
-      timestampKeluar: data.timestampKeluar || data.TIMESTAMP_KELUAR || '',
-      TIMESTAMP_KELUAR: data.TIMESTAMP_KELUAR || data.timestampKeluar || '',
+      timestampKeluar: data.timestampKeluar || data.TIMESTAMP_KELUAR || data['TIMESTAMP KELUAR'] || '',
+      TIMESTAMP_KELUAR: data.TIMESTAMP_KELUAR || data.timestampKeluar || data['TIMESTAMP KELUAR'] || '',
+      'TIMESTAMP KELUAR': data['TIMESTAMP KELUAR'] || data.timestampKeluar || data.TIMESTAMP_KELUAR || '',
       latitude: Number(data.latitude || data.LATITUDE || 0),
       LATITUDE: Number(data.LATITUDE || data.latitude || 0),
       longitude: Number(data.longitude || data.LONGITUDE || 0),

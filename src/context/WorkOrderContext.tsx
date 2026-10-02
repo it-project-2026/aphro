@@ -126,6 +126,11 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           return;
         } else {
           console.warn(`[DB SOURCE] entity=WORK_ORDERS source=AUTH_OR_API_ERROR unitId=${unitId}`);
+          if (res.message && (res.message.includes('401') || res.message.includes('Sesi login') || res.message.includes('Token'))) {
+            setIsLoading(false);
+            isFetchingRef.current = false;
+            return;
+          }
         }
       }
 

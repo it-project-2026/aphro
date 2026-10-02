@@ -4,7 +4,7 @@ import { User, UserRole } from '../types';
 import { AuthContextData } from './contextConstants';
 import { AuthService } from '../services/authService';
 import { InisiasiService } from '../services/inisiasiService';
-import { realtimeService } from '../services/realtimeService';
+import { ApiService } from '../services/apiService';
 import { getPrimaryTimRowForUnit } from '../services/rekapHarianService';
 
 interface AuthContextType {
@@ -25,7 +25,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = React.useCallback(() => {
-    realtimeService.disconnect();
     setUser(null);
     AuthService.clearSession();
   }, [setUser]);
@@ -41,14 +40,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const currentInisiasi = InisiasiService.getActiveInisiasiUnit();
 
+    const token = userData.token || (userData as any).jwtToken || (userData as any).accessToken || ApiService.getAuthToken();
+
     console.log("[APHRO LOGIN]", {
       userUnitId,
       username: userData.userName || userData.nip,
-      authenticatedUserId: userData.id
+      authenticatedUserId: userData.id,
+      hasToken: Boolean(token),
     });
 
     const fullUser: User = {
       ...userData,
+      token: token || undefined,
       unitId: userUnitId,
       unitName: userData.unitName || currentInisiasi.namaUL,
     };
@@ -57,17 +60,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // context hooks (WorkOrders, Realisasi, MasterData, Absensi) find token immediately
     AuthService.saveLocalSession(fullUser);
     setUser(fullUser);
-    realtimeService.connect(userUnitId);
   }, [setUser]);
 
-  // Synchronize active inisiasi unit with current user unit on mount / user state update
+  // Synchronize active inisiasi unit and token with current user state
   React.useEffect(() => {
     if (user && user.unitId) {
       const stdUserUnit = InisiasiService.getStandardUnitId(user.unitId);
       InisiasiService.saveSelectedUnit(stdUserUnit);
-      realtimeService.connect(stdUserUnit);
-    } else {
-      realtimeService.disconnect();
+
+      // Ensure user.token is synchronized with aphro_token in localStorage
+      if (user.token && ApiService.isValidToken(user.token)) {
+        const storedToken = localStorage.getItem('aphro_token');
+        if (!storedToken || storedToken !== user.token) {
+          localStorage.setItem('aphro_token', user.token);
+          localStorage.setItem('jwt_token', user.token);
+        }
+      }
     }
   }, [user]);
 

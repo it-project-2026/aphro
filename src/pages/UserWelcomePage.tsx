@@ -50,7 +50,13 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   }, [hasCheckedInToday, setActiveTab]);
 
   const userIdentity = useMemo(() => {
-    const activeUnit = settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || InisiasiService.getActiveInisiasiUnit().namaUL;
+    const activeUnit =
+      currentUser?.unitName ||
+      currentUser?.unitId ||
+      settings.namaUnitLayanan ||
+      localStorage.getItem('aphro_selected_unit_id') ||
+      localStorage.getItem('aphro_nama_unit_layanan') ||
+      InisiasiService.getActiveInisiasiUnit().namaUL;
     return resolveUserTimRowAndUlp(currentUser, activeUnit, users, ulpList, reguList);
   }, [currentUser, settings.namaUnitLayanan, users, ulpList, reguList]);
 

@@ -57,7 +57,12 @@ const AppContent: React.FC = () => {
 
   const { settings } = useSettings();
 
-  const { hasCheckedInToday, isLoading: isAbsensiLoading, absensiList } = useAbsensi();
+  const {
+    hasCheckedInToday,
+    isLoading: isAbsensiLoading,
+    absensiList,
+    hasVerifiedWithServer,
+  } = useAbsensi();
 
   const {
     isSyncing,
@@ -91,6 +96,14 @@ const AppContent: React.FC = () => {
     attendanceCompleted,
     setAttendanceCompleted,
   ] = React.useState(false);
+
+  // Reset attendance state when user logs out
+  React.useEffect(() => {
+    if (!user) {
+      setAttendanceCompleted(false);
+      setShowAbsensiForm(false);
+    }
+  }, [user]);
 
   const [
     isInitialLoading,
@@ -523,7 +536,14 @@ const AppContent: React.FC = () => {
      * HANYA berlaku untuk role USER biasa.
      * Akun Admin, SuperAdmin, dan Adm TIDAK WAJIB Melakukan Absensi.
      */
-    if (isUserRole && !isAdminRole && isAbsensiLoading && absensiList.length === 0) {
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (
+      isUserRole &&
+      !isAdminRole &&
+      (isAbsensiLoading || (!hasVerifiedWithServer && isOnline)) &&
+      !hasCheckedInToday &&
+      !attendanceCompleted
+    ) {
       return <LoadingFallback />;
     }
 

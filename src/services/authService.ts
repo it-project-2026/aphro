@@ -119,10 +119,11 @@ export class AuthService {
         InisiasiService.saveSelectedUnit(user.unitId);
       }
 
-      const token = (user as any).token || (user as any).jwtToken || (user as any).accessToken;
-      if (token) {
-        localStorage.setItem('aphro_token', token);
-        localStorage.setItem('jwt_token', token);
+      const token = user.token || (user as any).jwtToken || (user as any).accessToken || ApiService.getAuthToken();
+      if (token && ApiService.isValidToken(token)) {
+        user.token = token.trim();
+        localStorage.setItem('aphro_token', token.trim());
+        localStorage.setItem('jwt_token', token.trim());
       }
 
       await dexieDb.users.put({

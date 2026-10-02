@@ -27,6 +27,7 @@ interface AbsensiContextType {
   refreshAbsensi: () => Promise<void>;
   hasCheckedInToday: boolean;
   isLoading: boolean;
+  hasVerifiedWithServer: boolean;
 }
 
 const AbsensiContext =
@@ -45,15 +46,22 @@ export function AbsensiProvider({
    * Tidak menggunakan unitId dari form ABSENSI.
    */
   const activeUnitId =
-    user?.unitId ||
+    (user?.unitId ? InisiasiService.getStandardUnitId(user.unitId) : '') ||
     InisiasiService.getSelectedUnitId() ||
     'UL2';
 
   const [absensiList, setAbsensiList] =
     React.useState<Absensi[]>([]);
 
-  const [isLoading, setIsLoading] =
+  const [hasVerifiedWithServer, setHasVerifiedWithServer] =
     React.useState(false);
+
+  const [isLoading, setIsLoading] =
+    React.useState<boolean>(() => {
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      const storedUser = typeof localStorage !== 'undefined' ? (localStorage.getItem('pln_mobile_user') || localStorage.getItem('aphro_user')) : null;
+      return Boolean(isOnline && storedUser);
+    });
 
   /*
    * =========================================================
@@ -93,12 +101,16 @@ export function AbsensiProvider({
   const refreshAbsensi = React.useCallback(async () => {
     if (!user || !user.unitId) {
       console.log('[AbsensiContext] Skipping refreshAbsensi: User not authenticated.');
+      setIsLoading(false);
+      setHasVerifiedWithServer(true);
       return;
     }
 
     const token = ApiService.getAuthToken();
     if (!token) {
       console.log('[AbsensiContext] Skipping refreshAbsensi: Token missing.');
+      setIsLoading(false);
+      setHasVerifiedWithServer(true);
       return;
     }
 
@@ -127,12 +139,14 @@ export function AbsensiProvider({
             const dateA = new Date(
               a.TANGGAL ||
                 a.tanggal ||
+                a.createdAt ||
                 0
             ).getTime();
 
             const dateB = new Date(
               b.TANGGAL ||
                 b.tanggal ||
+                b.createdAt ||
                 0
             ).getTime();
 
@@ -156,8 +170,9 @@ export function AbsensiProvider({
       );
     } finally {
       setIsLoading(false);
+      setHasVerifiedWithServer(true);
     }
-  }, [user?.unitId]);
+  }, [user]);
 
   /*
    * =========================================================
@@ -188,9 +203,15 @@ export function AbsensiProvider({
   React.useEffect(() => {
     if (!user) {
       setAbsensiList([]);
+      setIsLoading(false);
+      setHasVerifiedWithServer(false);
       return;
     }
 
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (isOnline) {
+      setIsLoading(true);
+    }
     refreshAbsensi();
   }, [
     user,
@@ -334,6 +355,22 @@ export function AbsensiProvider({
           unitId:
             absData.unitId ||
             activeUnitId,
+
+          userName:
+            absData.userName ||
+            user?.userName ||
+            user?.nip ||
+            user?.id,
+
+          namaPetugas:
+            absData.namaPetugas ||
+            user?.name ||
+            user?.userName,
+
+          nip:
+            absData.nip ||
+            user?.nip ||
+            user?.id,
 
           ...absData,
 
@@ -900,15 +937,17 @@ export function AbsensiProvider({
       const todayISO = getWIBDateString();
       const todayStr = getLocalDateTimeString().slice(0, 10);
 
+      const userUnitStd = InisiasiService.getStandardUnitId(user.unitId);
       const activeUnitName =
-        localStorage.getItem('aphro_nama_unit_layanan') ||
-        localStorage.getItem('aphro_selected_unit_id') ||
         user.unitName ||
+        userUnitStd ||
         user.unitId ||
+        localStorage.getItem('aphro_selected_unit_id') ||
+        localStorage.getItem('aphro_nama_unit_layanan') ||
         'UL PADANG';
 
       const resolved = resolveUserTimRowAndUlp(user, activeUnitName);
-      const userReguClean = cleanStr(resolved.reguName || user.reguName || user.name);
+      const userReguClean = cleanStr(resolved.reguName || user.reguName || (user as any).namaGroupWO || (user as any).groupWO || (user as any).Nama_Regu || user.name);
       const userRowNumber = extractRowNumber(resolved.reguName) ?? extractRowNumber(user.userName) ?? extractRowNumber(user.name) ?? extractRowNumber(user.reguName);
       const userIdentifierClean = cleanStr(user.userName || user.nip || user.id || user.name);
 
@@ -917,9 +956,19 @@ export function AbsensiProvider({
 
         const rawDate = abs.tanggal ?? abs.TANGGAL ?? abs.Tanggal ?? abs.createdAt;
         const absDate = normalizeDate(rawDate);
-        const isToday = absDate === todayISO || String(rawDate || '').slice(0, 10) === todayStr;
+        const isToday =
+          absDate === todayISO ||
+          String(rawDate || '').slice(0, 10) === todayStr ||
+          normalizeDateISO(rawDate) === todayISO ||
+          normalizeDateISO(rawDate) === todayStr;
 
         if (!isToday) {
+          return false;
+        }
+
+        // 0. Unit Check (if record specifies unitId)
+        const absUnitStd = InisiasiService.getStandardUnitId(abs.unitId || abs.UnitId);
+        if (absUnitStd && userUnitStd && absUnitStd !== userUnitStd && userUnitStd !== 'ALL') {
           return false;
         }
 
@@ -961,7 +1010,7 @@ export function AbsensiProvider({
           }
         }
 
-        // 3. PETUGAS LIST Match (petugasList array or PETUGAS_1..5)
+        // 3. PETUGAS LIST Match (petugasList array or PETUGAS_1..20)
         let isMemberMatch = false;
         if (Array.isArray(abs.petugasList) && abs.petugasList.length > 0) {
           isMemberMatch = abs.petugasList.some((p: any) => {
@@ -970,8 +1019,8 @@ export function AbsensiProvider({
           });
         }
         if (!isMemberMatch) {
-          for (let i = 1; i <= 5; i++) {
-            const pField = cleanStr(abs[`PETUGAS_${i}`] || abs[`petugas${i}`]);
+          for (let i = 1; i <= 20; i++) {
+            const pField = cleanStr(abs[`PETUGAS_${i}`] || abs[`Petugas_${i}`] || abs[`petugas_${i}`]);
             if (pField && userIdentifierClean && (pField === userIdentifierClean || userIdentifierClean.includes(pField) || pField.includes(userIdentifierClean))) {
               isMemberMatch = true;
               break;
@@ -1017,6 +1066,7 @@ export function AbsensiProvider({
         refreshAbsensi,
         hasCheckedInToday,
         isLoading,
+        hasVerifiedWithServer,
       }}
     >
       {children}
