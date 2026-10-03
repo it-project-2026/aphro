@@ -4,7 +4,7 @@
  * pewarnaan merah untuk Sabtu, Minggu, Hari Libur Nasional, dan rumus perhitungan total.
  */
 
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import { DayDetail } from './holidaysIndonesia';
 
 export interface RekapItemData {
@@ -34,6 +34,8 @@ export async function exportRekapHarianToExcel(
   summaryTitle: string = 'UP3 BUKITTINGGI',
   summaryKodeUnit: string = ''
 ): Promise<void> {
+  const ExcelJSModule = await import('exceljs');
+  const ExcelJS = (ExcelJSModule.default || ExcelJSModule) as typeof import('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'APHRO PLN System';
   workbook.created = new Date();

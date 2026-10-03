@@ -18,25 +18,59 @@ import { NotificationListener } from './components/layout/NotificationListener';
 import { Database, Loader2 } from 'lucide-react';
 import { logWIBDebug } from './utils/dateUtils';
 
-// Pages
-import { LoginPage } from './pages/LoginPage';
-import MaintenancePage from './pages/MaintenancePage';
-import { DashboardPage } from './pages/DashboardPage';
-import { WorkOrderMainPage } from './pages/WorkOrderMainPage';
-import { RealisasiMainPage } from './pages/RealisasiMainPage';
-import { MonitoringPage } from './pages/MonitoringPage';
-import { CetakLaporanPage } from './pages/CetakLaporanPage';
-import { MasterDataPage } from './pages/MasterDataPage';
-import { AuditLogPage } from './pages/AuditLogPage';
-import { UserWelcomePage } from './pages/UserWelcomePage';
-import { AbsensiKerjaPage } from './pages/AbsensiKerjaPage';
-import { AbsensiMainPage } from './pages/AbsensiMainPage';
-import { InisiasiPage } from './pages/InisiasiPage';
-import { RekapPekerjaanHarianPage } from './pages/RekapPekerjaanHarianPage';
-import { RekapPenyulangHarianPage } from './pages/RekapPenyulangHarianPage';
-import { SettingAplikasiPage } from './pages/SettingAplikasiPage';
-import { SinkronisasiPage } from './pages/SinkronisasiPage';
-import { MigrasiDatabasePage } from './pages/MigrasiDatabasePage';
+// Lazy Loaded Pages
+const LoginPage = React.lazy(() =>
+  import('./pages/LoginPage').then((m) => ({ default: m.LoginPage }))
+);
+const MaintenancePage = React.lazy(() => import('./pages/MaintenancePage'));
+const DashboardPage = React.lazy(() =>
+  import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage }))
+);
+const WorkOrderMainPage = React.lazy(() =>
+  import('./pages/WorkOrderMainPage').then((m) => ({ default: m.WorkOrderMainPage }))
+);
+const RealisasiMainPage = React.lazy(() =>
+  import('./pages/RealisasiMainPage').then((m) => ({ default: m.RealisasiMainPage || m.default }))
+);
+const MonitoringPage = React.lazy(() =>
+  import('./pages/MonitoringPage').then((m) => ({ default: m.MonitoringPage }))
+);
+const CetakLaporanPage = React.lazy(() =>
+  import('./pages/CetakLaporanPage').then((m) => ({ default: m.CetakLaporanPage }))
+);
+const MasterDataPage = React.lazy(() =>
+  import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage }))
+);
+const AuditLogPage = React.lazy(() =>
+  import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
+);
+const UserWelcomePage = React.lazy(() =>
+  import('./pages/UserWelcomePage').then((m) => ({ default: m.UserWelcomePage }))
+);
+const AbsensiKerjaPage = React.lazy(() =>
+  import('./pages/AbsensiKerjaPage').then((m) => ({ default: m.AbsensiKerjaPage }))
+);
+const AbsensiMainPage = React.lazy(() =>
+  import('./pages/AbsensiMainPage').then((m) => ({ default: m.AbsensiMainPage }))
+);
+const InisiasiPage = React.lazy(() =>
+  import('./pages/InisiasiPage').then((m) => ({ default: m.InisiasiPage }))
+);
+const RekapPekerjaanHarianPage = React.lazy(() =>
+  import('./pages/RekapPekerjaanHarianPage').then((m) => ({ default: m.RekapPekerjaanHarianPage }))
+);
+const RekapPenyulangHarianPage = React.lazy(() =>
+  import('./pages/RekapPenyulangHarianPage').then((m) => ({ default: m.RekapPenyulangHarianPage }))
+);
+const SettingAplikasiPage = React.lazy(() =>
+  import('./pages/SettingAplikasiPage').then((m) => ({ default: m.SettingAplikasiPage }))
+);
+const SinkronisasiPage = React.lazy(() =>
+  import('./pages/SinkronisasiPage').then((m) => ({ default: m.SinkronisasiPage }))
+);
+const MigrasiDatabasePage = React.lazy(() =>
+  import('./pages/MigrasiDatabasePage').then((m) => ({ default: m.MigrasiDatabasePage }))
+);
 
 import { useNotifications } from './hooks/useNotifications';
 
@@ -740,7 +774,13 @@ activeTab: ${activeTab}`);
     'https://aphro-plum.vercel.app/'
   ) {
     return (
-      <MaintenancePage />
+      <React.Suspense
+        fallback={
+          <LoadingFallback />
+        }
+      >
+        <MaintenancePage />
+      </React.Suspense>
     );
   }
 

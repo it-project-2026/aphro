@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState, ReactNode, forwardRef, useImperativeHandle } from 'react';
-import html2canvas from 'html2canvas';
 
 export interface MapReportCaptureRef {
   capture: () => Promise<string | null>;
@@ -46,6 +45,9 @@ export const MapReportCapture = forwardRef<MapReportCaptureRef, MapReportCapture
     try {
       // Wait for leaflet tiles to render
       await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      const html2canvasModule = await import('html2canvas');
+      const html2canvas = (html2canvasModule.default || html2canvasModule) as unknown as (element: HTMLElement, options?: any) => Promise<HTMLCanvasElement>;
 
       const canvas = await html2canvas(containerRef.current, {
         useCORS: true,

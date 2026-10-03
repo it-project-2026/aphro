@@ -1,7 +1,4 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import { WorkOrder, Realisasi, AppSettings } from '../types';
 import { formatDateTime, formatDateOnly, formatExecutionDateTime } from './dateFormatter';
 import { getWIBDateString } from './dateUtils';
@@ -180,6 +177,8 @@ export async function exportCetakPhotoToExcel(
   const areaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';
   const ulpTitle = filterUlpName && filterUlpName !== 'ALL' ? filterUlpName.toUpperCase() : 'BASO';
 
+  const ExcelJSModule = await import('exceljs');
+  const ExcelJS = (ExcelJSModule.default || ExcelJSModule) as typeof import('exceljs');
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Eviden ROW Photo');
 
@@ -458,6 +457,8 @@ export async function generateCetakPhotoPDF(
   });
   await batchPreloadImages(allPhotoUrls, 240, 180, 0.65);
 
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF('landscape', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth(); // 297mm
 
@@ -664,6 +665,8 @@ export async function exportCetakPetaToExcel(
   const allPhotoUrls = mapPoints.map((pt) => pt.photoUrl).filter(Boolean);
   await batchPreloadImages(allPhotoUrls, 320, 240, 0.70);
 
+  const ExcelJSModule = await import('exceljs');
+  const ExcelJS = (ExcelJSModule.default || ExcelJSModule) as typeof import('exceljs');
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Peta Pohon ROW');
   worksheet.views = [{ showGridLines: true }];
@@ -806,7 +809,7 @@ export async function exportCetakPetaToExcel(
 /**
  * Export Work Orders list to Excel file
  */
-export function exportWorkOrdersToExcel(workOrders: WorkOrder[], unitName: string) {
+export async function exportWorkOrdersToExcel(workOrders: WorkOrder[], unitName: string) {
   const data = workOrders.map((wo, index) => ({
     'No': index + 1,
     'Nomor WO': wo.nomorWO,
@@ -822,6 +825,7 @@ export function exportWorkOrdersToExcel(workOrders: WorkOrder[], unitName: strin
     'Deadline': wo.deadline,
   }));
 
+  const XLSX = await import('xlsx');
   const worksheet = XLSX.utils.json_to_sheet(data);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Daftar Work Order');
@@ -835,7 +839,7 @@ export function exportWorkOrdersToExcel(workOrders: WorkOrder[], unitName: strin
  * Generate PDF Summary Table & Official Diagram Laporan Peta Pekerjaan (PETA POHON ROW)
  * Strictly matching the template image attached by the user.
  */
-export function generateLaporanPetaPDF(
+export async function generateLaporanPetaPDF(
   workOrders: WorkOrder[],
   settings: AppSettings,
   filterUlpName?: string,
@@ -854,6 +858,7 @@ export function generateLaporanPetaPDF(
   }>,
   customFilename?: string
 ) {
+  const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF('landscape', 'mm', 'a4');
 
   const areaName = settings.namaUnitLayanan.replace(/^UP3\s*/i, '').toUpperCase() || 'BUKITTINGGI';

@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
 import { MapPoint, MapTile, LabelBox } from './pdfExportTypes';
 import { calculateGeographicTiles } from './pdfMapPagination';
 import { resolveLabelCollisions } from './pdfLabelPlacement';
@@ -18,7 +18,9 @@ export async function generateEnhancedLaporanPetaPDF(
   points: MapPoint[],
   routePositions: [number, number][] = [] // Added route support
 ) {
-  const doc = new jsPDF('landscape', 'mm', 'a4');
+  const jsPDFModule = await import('jspdf');
+  const jsPDFClass = (jsPDFModule.default || jsPDFModule.jsPDF || jsPDFModule) as unknown as typeof jsPDF;
+  const doc = new jsPDFClass('landscape', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
