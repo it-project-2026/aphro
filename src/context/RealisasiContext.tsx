@@ -545,6 +545,9 @@ export function RealisasiProvider({
                 dataUrl:
                   p.dataUrl || '',
 
+                photoBlob:
+                  p.photoBlob,
+
                 fileUrl:
                   p.fileUrl,
 
@@ -613,6 +616,9 @@ export function RealisasiProvider({
 
                 dataUrl:
                   p.dataUrl || '',
+
+                photoBlob:
+                  p.photoBlob,
 
                 fileUrl:
                   p.fileUrl,

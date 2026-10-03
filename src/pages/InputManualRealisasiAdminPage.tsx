@@ -461,7 +461,12 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         photoType: 'Realisasi_Sebelum',
       });
 
-      if (fotoSebelumUrl.trim() && isBase64Image(fotoSebelumUrl.trim()) && !isValidUploadedPhotoUrl(finalSebUrl)) {
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+      const isSebRemoteValid = isValidUploadedPhotoUrl(finalSebUrl);
+      const isSebLocalValid = Boolean(fotoSebelumUrl.trim() && isBase64Image(fotoSebelumUrl.trim()));
+
+      if (fotoSebelumUrl.trim() && isBase64Image(fotoSebelumUrl.trim()) && !isSebRemoteValid && (!(!isOnline && isSebLocalValid))) {
         setErrorMessage('Foto sebelum belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
         setIsSubmitting(false);
         return;
@@ -473,7 +478,10 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         photoType: 'Realisasi_Sesudah',
       });
 
-      if (fotoSesudahUrl.trim() && isBase64Image(fotoSesudahUrl.trim()) && !isValidUploadedPhotoUrl(finalSesUrl)) {
+      const isSesRemoteValid = isValidUploadedPhotoUrl(finalSesUrl);
+      const isSesLocalValid = Boolean(fotoSesudahUrl.trim() && isBase64Image(fotoSesudahUrl.trim()));
+
+      if (fotoSesudahUrl.trim() && isBase64Image(fotoSesudahUrl.trim()) && !isSesRemoteValid && (!(!isOnline && isSesLocalValid))) {
         setErrorMessage('Foto sesudah belum berhasil diunggah ke Google Drive. Silakan periksa koneksi dan coba lagi.');
         setIsSubmitting(false);
         return;
@@ -502,10 +510,10 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         lokasiKerja: lokasiKerja.trim(),
         latitude: latNum,
         longitude: lngNum,
-        Foto_Sebelum: isValidUploadedPhotoUrl(finalSebUrl) ? finalSebUrl : undefined,
-        Foto_Sesudah: isValidUploadedPhotoUrl(finalSesUrl) ? finalSesUrl : undefined,
-        fotoSebelumUrl: isValidUploadedPhotoUrl(finalSebUrl) ? finalSebUrl : '',
-        fotoSesudahUrl: isValidUploadedPhotoUrl(finalSesUrl) ? finalSesUrl : '',
+        Foto_Sebelum: isValidUploadedPhotoUrl(finalSebUrl) ? finalSebUrl : (fotoSebelumUrl.trim() || undefined),
+        Foto_Sesudah: isValidUploadedPhotoUrl(finalSesUrl) ? finalSesUrl : (fotoSesudahUrl.trim() || undefined),
+        fotoSebelumUrl: isValidUploadedPhotoUrl(finalSebUrl) ? finalSebUrl : (fotoSebelumUrl.trim() || ''),
+        fotoSesudahUrl: isValidUploadedPhotoUrl(finalSesUrl) ? finalSesUrl : (fotoSesudahUrl.trim() || ''),
         photosSebelum: fotoSebelumUrl
           ? [
               {

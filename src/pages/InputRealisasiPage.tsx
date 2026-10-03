@@ -751,8 +751,19 @@ after=${photosSesudah[0]?.uploadStatus || (isValidUploadedPhotoUrl(finalSesUrl) 
 before=${sebResult.path}
 after=${sesResult.path}`);
 
-      // Validate Foto Sebelum upload (Must be a valid remote/local url, not base64)
-      if (!isValidUploadedPhotoUrl(finalSebUrl)) {
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+      // Validate Foto Sebelum (online requires valid uploaded URL, offline allows valid local dataUrl / photoBlob)
+      const isSebRemoteValid = isValidUploadedPhotoUrl(finalSebUrl);
+      const isSebLocalValid = Boolean(
+        photosSebelum[0] &&
+        (
+          (photosSebelum[0].dataUrl && photosSebelum[0].dataUrl.startsWith('data:image')) ||
+          photosSebelum[0].photoBlob instanceof Blob
+        )
+      );
+
+      if (!isSebRemoteValid && (!(!isOnline && isSebLocalValid))) {
         console.warn('[REALISASI_PHOTO_DEBUG] BEFORE_UPLOAD_FAILED');
         setIsProcessing(false);
         setSavingStage('');
@@ -760,8 +771,17 @@ after=${sesResult.path}`);
         return;
       }
 
-      // Validate Foto Sesudah upload (Must be a valid remote/local url, not base64)
-      if (!isValidUploadedPhotoUrl(finalSesUrl)) {
+      // Validate Foto Sesudah (online requires valid uploaded URL, offline allows valid local dataUrl / photoBlob)
+      const isSesRemoteValid = isValidUploadedPhotoUrl(finalSesUrl);
+      const isSesLocalValid = Boolean(
+        photosSesudah[0] &&
+        (
+          (photosSesudah[0].dataUrl && photosSesudah[0].dataUrl.startsWith('data:image')) ||
+          photosSesudah[0].photoBlob instanceof Blob
+        )
+      );
+
+      if (!isSesRemoteValid && (!(!isOnline && isSesLocalValid))) {
         console.warn('[REALISASI_PHOTO_DEBUG] AFTER_UPLOAD_FAILED');
         setIsProcessing(false);
         setSavingStage('');
