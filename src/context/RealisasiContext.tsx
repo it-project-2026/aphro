@@ -10,7 +10,7 @@ import { GASApiService } from '../services/gasApiService';
 import { dexieDb, LocalRealisasi, LocalPhoto } from '../services/dexieDb';
 import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { getLocalDateTimeString, getWIBDateString } from '../utils/dateUtils';
-import { ensureGoogleDrivePhotoUrl, isBase64Image, isValidPhotoUrl } from '../utils/driveUtils';
+import { ensureGoogleDrivePhotoUrl, isBase64Image, isValidPhotoUrl, isValidUploadedPhotoUrl } from '../utils/driveUtils';
 import { auditRealisasiMutation } from '../utils/integrityLogger';
 
 export interface RealisasiContextType {
@@ -772,22 +772,27 @@ export function RealisasiProvider({
             const rawSebSrc = newRelUI.fotoSebelumUrl || newRelUI.photosSebelum?.[0]?.dataUrl || newRelUI.photosSebelum?.[0]?.fileUrl || '';
             const rawSesSrc = newRelUI.fotoSesudahUrl || newRelUI.photosSesudah?.[0]?.dataUrl || newRelUI.photosSesudah?.[0]?.fileUrl || '';
 
-            // Run compression on raw base64 if needed before upload
-            const { compressImage } = await import('../utils/imageCompression');
-            const compressedSeb = await compressImage(rawSebSrc);
-            const compressedSes = await compressImage(rawSesSrc);
+            let uploadedSebUrl = rawSebSrc;
+            if (!isValidUploadedPhotoUrl(rawSebSrc)) {
+              const { compressImage } = await import('../utils/imageCompression');
+              const compressedSeb = await compressImage(rawSebSrc);
+              uploadedSebUrl = await ensureGoogleDrivePhotoUrl(compressedSeb, {
+                nomorWO: resolvedNomorWo,
+                reguName: relData.reguName || 'ROW',
+                photoType: 'Realisasi_Sebelum',
+              });
+            }
 
-            const uploadedSebUrl = await ensureGoogleDrivePhotoUrl(compressedSeb, {
-              nomorWO: resolvedNomorWo,
-              reguName: relData.reguName || 'ROW',
-              photoType: 'Realisasi_Sebelum',
-            });
-
-            const uploadedSesUrl = await ensureGoogleDrivePhotoUrl(compressedSes, {
-              nomorWO: resolvedNomorWo,
-              reguName: relData.reguName || 'ROW',
-              photoType: 'Realisasi_Sesudah',
-            });
+            let uploadedSesUrl = rawSesSrc;
+            if (!isValidUploadedPhotoUrl(rawSesSrc)) {
+              const { compressImage } = await import('../utils/imageCompression');
+              const compressedSes = await compressImage(rawSesSrc);
+              uploadedSesUrl = await ensureGoogleDrivePhotoUrl(compressedSes, {
+                nomorWO: resolvedNomorWo,
+                reguName: relData.reguName || 'ROW',
+                photoType: 'Realisasi_Sesudah',
+              });
+            }
 
             const isBase64Val = (str: string) => str && (str.startsWith('data:image') || (str.length > 500 && !str.startsWith('http')));
             if (isBase64Val(uploadedSebUrl) || isBase64Val(uploadedSesUrl)) {
@@ -1283,11 +1288,11 @@ export function RealisasiProvider({
           'success'
         );
 
-        await fetchRealisasiFromApi(
+        void fetchRealisasiFromApi(
           lastFetchParams.current
-        );
+        ).catch(() => {});
 
-        await fetchDashboardRealisasi();
+        void fetchDashboardRealisasi().catch(() => {});
 
         return {
           success: true,
@@ -1502,11 +1507,11 @@ export function RealisasiProvider({
           'success'
         );
 
-        await fetchRealisasiFromApi(
+        void fetchRealisasiFromApi(
           lastFetchParams.current
-        );
+        ).catch(() => {});
 
-        await fetchDashboardRealisasi();
+        void fetchDashboardRealisasi().catch(() => {});
 
         return {
           success: true,
@@ -1591,11 +1596,11 @@ export function RealisasiProvider({
               );
             }
 
-            await fetchRealisasiFromApi(
+            void fetchRealisasiFromApi(
               lastFetchParams.current
-            );
+            ).catch(() => {});
 
-            await fetchDashboardRealisasi();
+            void fetchDashboardRealisasi().catch(() => {});
           } catch (err) {
             console.warn(
               'Delete HyperCloud Realisasi error:',
