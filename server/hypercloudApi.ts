@@ -837,7 +837,7 @@ function createJwt(payload: Record<string, any>, expiresInSeconds = 43200): stri
   const sig = crypto.createHmac('sha256', getJwtSecret()).update(data).digest('base64url');
   return `${data}.${sig}`;
 }
-function verifyJwt(token: string): Record<string, any> | null {
+export function verifyJwt(token: string): Record<string, any> | null {
   if (!token || typeof token !== 'string') return null;
   const parts = token.trim().split('.');
   if (parts.length !== 3) {

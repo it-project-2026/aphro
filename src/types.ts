@@ -83,7 +83,7 @@ export interface WatermarkedPhoto {
   type: 'sebelum' | 'sesudah';
   slotIndex: 1 | 2 | 3;
   dataUrl: string; // base64 image with watermark burned in
-  photoBlob: Blob; // Added for offline storage
+  photoBlob?: Blob; // Optional for offline storage
   fileUrl?: string; // Google Drive direct link
   uploadStatus?: 'IDLE' | 'UPLOADING' | 'UPLOADED' | 'FAILED';
   uploadError?: string;

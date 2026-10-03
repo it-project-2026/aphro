@@ -36,7 +36,7 @@ export interface LocalPhoto {
   type: 'sebelum' | 'sesudah';
   slotIndex: 1 | 2 | 3;
   dataUrl: string;
-  photoBlob: Blob; // Added
+  photoBlob?: Blob; // Optional
   fileUrl?: string;
   originalName: string;
   timestamp: string;
