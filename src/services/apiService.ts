@@ -1009,11 +1009,14 @@ bodyMB=${bodyMB} MB`);
    * Fetch Work Orders.
    */
   static async fetchWorkOrders(
-    unitId?: string
+    unitId?: string,
+    page: number = 1,
+    limit: number = 20
   ): Promise<{
     success: boolean;
     data: any[];
     message?: string;
+    pagination?: { page: number; limit: number; hasMore: boolean };
   }> {
     const token =
       this.getAuthToken();
@@ -1027,16 +1030,15 @@ bodyMB=${bodyMB} MB`);
       };
     }
 
-    const query =
-      unitId &&
-      unitId !== 'ALL'
-        ? `?unitId=${encodeURIComponent(unitId)}`
-        : '';
+    const query = new URLSearchParams();
+    if (unitId && unitId !== 'ALL') query.set('unitId', unitId);
+    query.set('page', String(page));
+    query.set('limit', String(limit));
 
     try {
       const res =
         await this.executeFetch(
-          `/api/work-orders${query}`,
+          `/api/work-orders?${query.toString()}`,
           {
             method: 'GET',
             cache: 'no-store',
@@ -1088,6 +1090,7 @@ bodyMB=${bodyMB} MB`);
       return {
         success: true,
         data: list,
+        pagination: json.pagination
       };
     } catch (err: any) {
       console.warn('[ApiService.fetchWorkOrders Network Warning]', err?.message || err);

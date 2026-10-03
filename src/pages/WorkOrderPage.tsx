@@ -43,7 +43,7 @@ interface WorkOrderPageProps {
 
 export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) => {
   const { user: currentUser } = useAuth();
-  const { displayedWorkOrders, deleteWorkOrder } = useWorkOrders();
+  const { displayedWorkOrders, deleteWorkOrder, hasMore, loadMoreWorkOrders, isLoading } = useWorkOrders();
   const { ulpList, penyulangList, reguList } = useMasterData();
   const { settings } = useSettings();
   const { setActiveTab, setSelectedWoIdForRealisasi, setIsFinalizingMode } = useUI();
@@ -676,14 +676,18 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
             </tbody>
           </table>
 
-          {filteredWOs.length > visibleCount && (
+          {hasMore && (
             <div className="p-4 text-center border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 rounded-b-2xl">
               <button
                 type="button"
-                onClick={() => setVisibleCount((prev) => prev + 15)}
+                onClick={loadMoreWorkOrders}
                 className="inline-flex items-center space-x-2 px-5 py-2.5 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 font-bold text-xs rounded-xl shadow-xs transition-colors active:scale-95"
               >
-                <span>Tampilkan Lebih Banyak ({filteredWOs.length - visibleCount} item tersisa)</span>
+                {isLoading ? (
+                  <span>Memuat...</span>
+                ) : (
+                  <span>Tampilkan Lebih Banyak</span>
+                )}
               </button>
             </div>
           )}

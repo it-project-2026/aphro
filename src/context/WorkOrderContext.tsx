@@ -16,12 +16,15 @@ interface WorkOrderContextType {
   displayedWorkOrders: WorkOrder[];
   selectedWoIdForRealisasi: string | null;
   isLoading: boolean;
+  currentPage: number;
+  hasMore: boolean;
   setSelectedWoIdForRealisasi: (id: string | null) => void;
   setWorkOrders: React.Dispatch<React.SetStateAction<WorkOrder[]>>;
   addWorkOrder: (wo: Omit<WorkOrder, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WorkOrder>;
   updateWorkOrder: (id: string, wo: Partial<WorkOrder>) => Promise<void>;
   deleteWorkOrder: (id: string, nomorWO?: string) => Promise<void>;
   refreshWorkOrders: (page?: number, force?: boolean) => Promise<void>;
+  loadMoreWorkOrders: () => Promise<void>;
 }
 
 const WorkOrderContext = React.createContext<WorkOrderContextType | undefined>(undefined);
@@ -40,8 +43,11 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
   const lastFetchTimeRef = React.useRef<number>(0);
   const lastUnitIdRef = React.useRef<string>('');
 
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [hasMore, setHasMore] = React.useState(true);
+
   // Auto-fetch Work Orders from HyperCloud / Dexie
-  const refreshWorkOrders = React.useCallback(async (page: number = 0, force: boolean = false) => {
+  const refreshWorkOrders = React.useCallback(async (page: number = 1, force: boolean = false) => {
     if (!user || !user.unitId) {
       console.log('[WorkOrderContext] Skipping refreshWorkOrders: User not authenticated.');
       return;
@@ -61,7 +67,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
 
     const now = Date.now();
     const isUnitChanged = unitId !== lastUnitIdRef.current;
-    if (!force && !isUnitChanged && now - lastFetchTimeRef.current < 15000 && page === 0) {
+    if (!force && !isUnitChanged && !page && now - lastFetchTimeRef.current < 15000 && page === 1) {
       return;
     }
 
@@ -71,25 +77,14 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     if (unitId) lastUnitIdRef.current = unitId;
 
     try {
-      if (page === 0) setIsLoading(true);
+      if (page === 1) setIsLoading(true);
 
-      const unitId =
-        user?.unitId ||
-        localStorage.getItem('aphro_active_unit_id') ||
-        InisiasiService.getSelectedUnitId() ||
-        undefined;
+      const limit = 20;
 
-      // 1. Initial Cache Load: Read from Dexie DB as initial cache if page === 0
-      const cachedLocals = await dexieDb.work_orders.toArray();
-      if (cachedLocals.length > 0 && page === 0) {
-        console.log(`[DB SOURCE] entity=WORK_ORDERS source=DEXIE_INITIAL_CACHE count=${cachedLocals.length}`);
-        setWorkOrders(cachedLocals);
-      }
-
-      // 2. ONLINE-FIRST: Fetch from HyperCloud API
+      // ONLINE-FIRST: Fetch from HyperCloud API
       const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
       if (isOnline) {
-        const res = await ApiService.fetchWorkOrders(unitId);
+        const res = await ApiService.fetchWorkOrders(unitId, page, limit);
 
         if (res.success && Array.isArray(res.data)) {
           const corrected = res.data.map((row: any) => {
@@ -107,10 +102,18 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
             return wo;
           });
 
-          console.log(`[DB SOURCE] entity=WORK_ORDERS source=HYPERCLOUD unitId=${unitId} count=${corrected.length}`);
+          console.log(`[DB SOURCE] entity=WORK_ORDERS source=HYPERCLOUD unitId=${unitId} count=${corrected.length} page=${page}`);
+          
+          setHasMore(res.pagination ? res.pagination.hasMore : corrected.length === limit);
 
-          // Update Dexie cache to prevent stale rows, clearing old local cached data
-          await dexieDb.work_orders.clear().catch(() => {});
+          // Update Dexie cache to prevent stale rows, clearing old local cached data if page 1
+          if (page === 1) {
+            await dexieDb.work_orders.clear().catch(() => {});
+            setWorkOrders(corrected);
+          } else {
+            setWorkOrders((prev) => [...prev, ...corrected]);
+          }
+          
           await dexieDb.work_orders.bulkPut(
             corrected.map((wo) => ({
               ...wo,
@@ -118,28 +121,23 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
               updatedAt: wo.updatedAt || getLocalDateTimeString(),
             }))
           ).catch(e => console.warn('Dexie cache update failed:', e));
-
-          setWorkOrders((prev) => (page === 0 ? corrected : [...prev, ...corrected]));
+          
+          setCurrentPage(page);
           lastSyncRef.current = getLocalDateTimeString();
           setIsLoading(false);
           isFetchingRef.current = false;
           return;
-        } else {
-          console.warn(`[DB SOURCE] entity=WORK_ORDERS source=AUTH_OR_API_ERROR unitId=${unitId}`);
-          if (res.message && (res.message.includes('401') || res.message.includes('Sesi login') || res.message.includes('Token'))) {
-            setIsLoading(false);
-            isFetchingRef.current = false;
-            return;
-          }
         }
       }
 
-      // 3. OFFLINE FALLBACK: Load from Dexie DB ONLY if offline or if API didn't return success
-      if (cachedLocals.length > 0) {
-        console.log(`[DB SOURCE] entity=WORK_ORDERS source=OFFLINE_DEXIE count=${cachedLocals.length}`);
-        setWorkOrders(cachedLocals);
-      } else if (page === 0) {
-        setWorkOrders([]);
+      // OFFLINE FALLBACK:
+      if (page === 1) {
+        const cachedLocals = await dexieDb.work_orders.toArray();
+        if (cachedLocals.length > 0) {
+          setWorkOrders(cachedLocals);
+        } else {
+          setWorkOrders([]);
+        }
       }
     } catch (err) {
       console.warn('Error loading Work Orders:', err);
@@ -149,11 +147,17 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  const loadMoreWorkOrders = React.useCallback(async () => {
+    if (!isLoading && hasMore) {
+      await refreshWorkOrders(currentPage + 1, false);
+    }
+  }, [isLoading, hasMore, currentPage, refreshWorkOrders]);
+
   React.useEffect(() => {
     lastSyncRef.current = undefined;
     isFetchingRef.current = false;
     if (user && (user.unitId || InisiasiService.getSelectedUnitId())) {
-      refreshWorkOrders(0);
+      refreshWorkOrders(1, true); // page 1
     } else {
       setWorkOrders([]);
     }
@@ -164,7 +168,8 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     const handleFocus = () => {
-      refreshWorkOrders(0);
+      // Use force=false to respect 15s cooldown
+      refreshWorkOrders(1, false);
     };
 
     const handleCustomUpdate = () => {
@@ -452,8 +457,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       if (!res.offline && res.status !== 'error') {
         showToast('Work Order berhasil diperbarui', 'success');
         await dexieDb.work_orders.update(id, { syncStatus: 'SYNCED' });
-        // Force refresh work orders from API after update
-        refreshWorkOrders(0, true).catch(() => {});
+        // Targeted update is handled by local state update above
       } else if (res.status === 'error') {
         showToast(`Gagal update di server: ${res.message || 'Error'}`, 'error');
         // Revert local changes from database
@@ -481,7 +485,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
           console.warn('Delete Dexie WO error:', e);
         }
         showToast('Work Order berhasil dihapus dari Database', 'success');
-        refreshWorkOrders(0, true).catch(() => {});
+        // Targeted update is handled by local state update above
         return;
       }
 
@@ -516,12 +520,15 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       displayedWorkOrders,
       selectedWoIdForRealisasi,
       isLoading,
+      currentPage,
+      hasMore,
       setSelectedWoIdForRealisasi,
       setWorkOrders,
       addWorkOrder,
       updateWorkOrder,
       deleteWorkOrder,
-      refreshWorkOrders: (page?: number, force?: boolean) => refreshWorkOrders(page, force)
+      refreshWorkOrders: (page?: number, force?: boolean) => refreshWorkOrders(page, force),
+      loadMoreWorkOrders
     }}>
       {children}
     </WorkOrderContext.Provider>

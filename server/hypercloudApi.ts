@@ -2,6 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 import { query, testConnection, getDatabaseUrl, HYPERCLOUD_API_URL, isLocalhostDbUrl, getPool, isNetworkConnectionError, isDirectPgAvailable } from './database';
 
 const router = Router();
@@ -391,34 +393,50 @@ router.get('/health', async (req: Request, res: Response) => {
  * GET /api/version
  */
 router.get('/version', async (req: Request, res: Response) => {
-  return res.json({
-    success: true,
-    service: 'APHRO API',
-    version: '2026.09.23-hypercloud',
-    status: 'ACTIVE',
-    database: 'HYPERCLOUD',
-    endpoints: [
-      '/api/health',
-      '/api/version',
-      '/api/routes-check',
-      '/api/login',
-      '/api/inisiasi',
-      '/api/users',
-      '/api/master-data',
-      '/api/ulp',
-      '/api/regu',
-      '/api/regu-row',
-      '/api/petugas',
-      '/api/penyulang',
-      '/api/work-orders',
-      '/api/absensi',
-      '/api/realisasi',
-      '/api/log-activity',
-      '/api/logs',
-      '/api/dashboard',
-      '/api/send-notification',
-    ],
-  });
+  try {
+    const versionPath = path.join(process.cwd(), 'public', 'version.json');
+    const versionData = JSON.parse(await fs.promises.readFile(versionPath, 'utf-8'));
+
+    return res.json({
+      success: true,
+      service: 'APHRO API',
+      version: versionData.version,
+      status: 'ACTIVE',
+      database: 'HYPERCLOUD',
+      build: versionData.build,
+      releaseDate: versionData.releaseDate,
+      endpoints: [
+        '/api/health',
+        '/api/version',
+        '/api/routes-check',
+        '/api/login',
+        '/api/inisiasi',
+        '/api/users',
+        '/api/master-data',
+        '/api/ulp',
+        '/api/regu',
+        '/api/regu-row',
+        '/api/petugas',
+        '/api/penyulang',
+        '/api/work-orders',
+        '/api/absensi',
+        '/api/realisasi',
+        '/api/log-activity',
+        '/api/logs',
+        '/api/dashboard',
+        '/api/send-notification',
+      ],
+    });
+  } catch (err: any) {
+    console.error('[API VERSION] Error reading version.json:', err.message);
+    return res.json({
+      success: true,
+      service: 'APHRO API',
+      version: '2026.09.23-hypercloud', // Fallback
+      status: 'ACTIVE',
+      database: 'HYPERCLOUD',
+    });
+  }
 });
 
 /**
@@ -1704,10 +1722,15 @@ router.get('/work-orders', requireAuth, async (req: Request, res: Response) => {
     .toString()
     .trim();
 
+  const page = Math.max(parseInt(String(req.query.page || '1'), 10), 1);
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit || '20'), 10), 1), 100);
+  const offset = (page - 1) * limit;
+
   try {
     let sql = `
-      SELECT *
-      FROM public."WORK_ORDER"
+      SELECT WO.*, 
+      (SELECT COUNT(*) FROM public."REALISASI" R WHERE R."WO_ID" = WO."WO_ID") as "realisasiCount"
+      FROM public."WORK_ORDER" WO
       WHERE 1=1
     `;
 
@@ -1787,8 +1810,9 @@ router.get('/work-orders', requireAuth, async (req: Request, res: Response) => {
 
     sql += `
       ORDER BY "WO_ID" DESC
-      LIMIT 1000
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
+    params.push(limit, offset);
 
     const resDb = await query(sql, params);
 
@@ -1800,6 +1824,11 @@ router.get('/work-orders', requireAuth, async (req: Request, res: Response) => {
       status: 'success',
       data: resDb.rows,
       count: resDb.rows.length,
+      pagination: {
+        page,
+        limit,
+        hasMore: resDb.rows.length === limit
+      }
     });
   } catch (err: any) {
     return res.status(500).json({
