@@ -840,8 +840,13 @@ export function RealisasiProvider({
               // Immediate UI update
               setRealisasiList((prev) => [newRelUI, ...prev]);
 
-              await refreshRealisasi(true);
-              await fetchDashboardRealisasi();
+              // Background refresh tasks (non-blocking for instant SIMPAN completion)
+              void refreshRealisasi(true).catch((error) => {
+                console.warn('[RealisasiContext] Background refresh failed:', error);
+              });
+              void fetchDashboardRealisasi().catch((error) => {
+                console.warn('[RealisasiContext] Background dashboard refresh failed:', error);
+              });
               window.dispatchEvent(new CustomEvent('aphro_data_updated'));
               return newRelUI;
             } else {
