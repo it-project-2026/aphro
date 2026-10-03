@@ -25,6 +25,7 @@ import {
   FileCheck2,
   Image as ImageIcon,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useGASSync } from '../context/GASSyncContext';
 
@@ -265,13 +266,23 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       : currentUser?.name || 'Rahmat Hidayat'
   );
 
-  const [latitude, setLatitude] = React.useState(
-    editMode && initialData ? initialData.latitude : -0.9142
+  const [latitude, setLatitude] = React.useState<number>(
+    editMode && initialData ? Number(initialData.latitude) || 0 : 0
   );
 
-  const [longitude, setLongitude] = React.useState(
-    editMode && initialData ? initialData.longitude : 100.4631
+  const [longitude, setLongitude] = React.useState<number>(
+    editMode && initialData ? Number(initialData.longitude) || 0 : 0
   );
+
+  const [gpsAccuracy, setGpsAccuracy] = React.useState<number | null>(null);
+  const [gpsStatus, setGpsStatus] = React.useState<'idle' | 'loading' | 'success' | 'error'>(
+    editMode && initialData && initialData.latitude && initialData.longitude ? 'success' : 'idle'
+  );
+  const [gpsSource, setGpsSource] = React.useState<'DEVICE' | 'EXIF' | 'WO' | 'NONE'>(
+    editMode && initialData && initialData.latitude && initialData.longitude ? 'DEVICE' : 'NONE'
+  );
+  const [gpsErrorMessage, setGpsErrorMessage] = React.useState<string>('');
+  const isFetchingGpsRef = React.useRef(false);
 
   const [keterangan, setKeterangan] = React.useState(
     editMode && initialData ? initialData.keterangan : 'TEBANG'
@@ -308,6 +319,78 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   // In-flight upload promise cache to prevent duplicate upload requests when user submits form
   const activeUploadPromises = React.useRef<Map<string, Promise<string>>>(new Map());
 
+  const handleFetchGPS = React.useCallback(
+    (silent = false) => {
+      if (isFetchingGpsRef.current) return;
+
+      if (!('geolocation' in navigator)) {
+        setGpsStatus('error');
+        setGpsErrorMessage('Perangkat tidak mendukung GPS Geolocation');
+        if (!silent) showToast('Perangkat tidak mendukung GPS', 'warning');
+        return;
+      }
+
+      isFetchingGpsRef.current = true;
+      setGpsStatus('loading');
+      setGpsErrorMessage('');
+      if (!silent) showToast('Sedang membaca koordinat GPS perangkat...', 'info');
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          isFetchingGpsRef.current = false;
+          const lat = Number(pos.coords.latitude.toFixed(6));
+          const lng = Number(pos.coords.longitude.toFixed(6));
+          const acc = pos.coords.accuracy ? Math.round(pos.coords.accuracy) : null;
+
+          setLatitude(lat);
+          setLongitude(lng);
+          setGpsAccuracy(acc);
+          setGpsStatus('success');
+          setGpsSource('DEVICE');
+          setGpsErrorMessage('');
+
+          if (!silent) {
+            showToast(
+              `Koordinat GPS berhasil diperoleh! (Akurasi: ±${acc ?? 0} m)`,
+              'success'
+            );
+          }
+        },
+        (err) => {
+          isFetchingGpsRef.current = false;
+          let errMsg = 'Gagal membaca GPS';
+          if (err.code === 1) {
+            // PERMISSION_DENIED
+            errMsg = 'Izin lokasi ditolak. Aktifkan izin lokasi pada browser/perangkat untuk mengambil koordinat otomatis.';
+          } else if (err.code === 2) {
+            // POSITION_UNAVAILABLE
+            errMsg = 'Lokasi perangkat belum tersedia. Pastikan GPS/Location aktif lalu coba lagi.';
+          } else if (err.code === 3) {
+            // TIMEOUT
+            errMsg = 'Pengambilan lokasi terlalu lama. Silakan coba Ambil GPS lagi.';
+          } else if (err.message) {
+            errMsg = err.message;
+          }
+
+          setGpsStatus('error');
+          setGpsErrorMessage(errMsg);
+          if (!silent) {
+            showToast(errMsg, 'error');
+          }
+        },
+        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+      );
+    },
+    [showToast]
+  );
+
+  // Auto GPS on form mount
+  React.useEffect(() => {
+    if (!editMode || (!initialData?.latitude && !initialData?.longitude)) {
+      handleFetchGPS(true);
+    }
+  }, [editMode, initialData, handleFetchGPS]);
+
   React.useEffect(() => {
     if (availableWorkOrders.length === 0) return;
 
@@ -317,8 +400,11 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       );
       if (wo) {
         setSelectedWoId(wo.id);
-        setLatitude(wo.latitude ?? latitude);
-        setLongitude(wo.longitude ?? longitude);
+        if (wo.latitude && wo.longitude && gpsStatus !== 'success') {
+          setLatitude(wo.latitude);
+          setLongitude(wo.longitude);
+          setGpsSource('WO');
+        }
 
         if (isFinalizingMode) {
           setSubmissionStatus('finalizing');
@@ -338,14 +424,10 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         availableWorkOrders[0];
       if (defaultWo) {
         setSelectedWoId(defaultWo.id);
-        if (defaultWo.latitude !== undefined && defaultWo.latitude !== null) {
+        if (defaultWo.latitude && defaultWo.longitude && gpsStatus !== 'success') {
           setLatitude(defaultWo.latitude);
-        }
-        if (
-          defaultWo.longitude !== undefined &&
-          defaultWo.longitude !== null
-        ) {
           setLongitude(defaultWo.longitude);
+          setGpsSource('WO');
         }
       }
     }
@@ -355,6 +437,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     editMode,
     selectedWoId,
     isFinalizingMode,
+    gpsStatus,
   ]);
 
   const isFirstMount = React.useRef(true);
@@ -363,11 +446,12 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       isFirstMount.current = false;
       return;
     }
-    if (selectedWO && !editMode) {
+    if (selectedWO && !editMode && selectedWO.latitude && selectedWO.longitude && gpsStatus !== 'success') {
       setLatitude(selectedWO.latitude);
       setLongitude(selectedWO.longitude);
+      setGpsSource('WO');
     }
-  }, [selectedWO, selectedWoId, editMode]);
+  }, [selectedWO, selectedWoId, editMode, gpsStatus]);
 
   const [previewPhoto, setPreviewPhoto] =
     React.useState<WatermarkedPhoto | null>(null);
@@ -385,31 +469,10 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   const handleWoChange = (id: string) => {
     setSelectedWoId(id);
     const wo = availableWorkOrders.find((w) => w.id === id);
-    if (wo) {
+    if (wo && wo.latitude && wo.longitude && gpsStatus !== 'success') {
       setLatitude(wo.latitude);
       setLongitude(wo.longitude);
-    }
-  };
-
-  const handleFetchGPS = () => {
-    if ('geolocation' in navigator) {
-      showToast('Sedang membaca koordinat GPS...', 'info');
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLatitude(pos.coords.latitude);
-          setLongitude(pos.coords.longitude);
-          showToast(
-            'Koordinat GPS lokasi Anda berhasil diperoleh dengan akurasi tinggi!',
-            'success'
-          );
-        },
-        (err) => {
-          showToast(`Gagal membaca GPS: ${err.message}`, 'error');
-        },
-        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
-      );
-    } else {
-      showToast('Perangkat tidak mendukung GPS', 'warning');
+      setGpsSource('WO');
     }
   };
 
@@ -456,6 +519,18 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
           source = 'DEVICE';
         } catch (err) {
           console.warn('GPS Device failed', err);
+        }
+      }
+
+      // Propagate EXIF/device GPS to form state if form currently doesn't have valid GPS
+      if (lat && lon && Number.isFinite(lat) && Number.isFinite(lon) && (lat !== 0 || lon !== 0)) {
+        if (gpsStatus !== 'success' || (latitude === 0 && longitude === 0)) {
+          setLatitude(Number(lat.toFixed(6)));
+          setLongitude(Number(lon.toFixed(6)));
+          setGpsAccuracy(accuracy ? Math.round(accuracy) : null);
+          setGpsStatus('success');
+          setGpsSource(source === 'EXIF' ? 'EXIF' : 'DEVICE');
+          setGpsErrorMessage('');
         }
       }
 
@@ -652,6 +727,28 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
     if (photosSesudah.length === 0) {
       showToast(
         'Mohon ambil minimal 1 foto kondisi Sesudah (After)',
+        'warning'
+      );
+      return;
+    }
+
+    // 6. GPS Validation (Latitude & Longitude wajib terisi dan valid)
+    const latNum = Number(latitude);
+    const lngNum = Number(longitude);
+
+    const isGpsValid =
+      Number.isFinite(latNum) &&
+      Number.isFinite(lngNum) &&
+      latNum >= -90 &&
+      latNum <= 90 &&
+      lngNum >= -180 &&
+      lngNum <= 180;
+
+    const isZeroCoordinate = latNum === 0 && lngNum === 0;
+
+    if (!isGpsValid || isZeroCoordinate) {
+      showToast(
+        'Koordinat GPS belum tersedia. Aktifkan izin lokasi atau klik Ambil GPS lalu coba lagi.',
         'warning'
       );
       return;
@@ -1429,31 +1526,78 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
                       <MapPin className="w-3.5 h-3.5 text-[#00A2B9]" />
-                      <span>LATITUDE LONGITUDE (Otomatis)</span>
+                      <span>LATITUDE LONGITUDE (Otomatis) <span className="text-rose-500">*</span></span>
                     </span>
                     <button
                       type="button"
-                      onClick={handleFetchGPS}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1 text-[10px] font-bold text-white bg-[#008396] hover:bg-[#00A2B9] rounded-lg transition-colors shadow-2xs"
+                      disabled={gpsStatus === 'loading'}
+                      onClick={() => handleFetchGPS(false)}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 text-[10px] font-bold text-white bg-[#008396] hover:bg-[#00A2B9] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors shadow-2xs"
                     >
-                      <Navigation className="w-3 h-3" />
-                      <span>Ambil GPS</span>
+                      {gpsStatus === 'loading' ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-3 h-3" />
+                      )}
+                      <span>{gpsStatus === 'loading' ? 'Membaca...' : 'Ambil GPS'}</span>
                     </button>
                   </div>
 
+                  {/* GPS Status Indicator */}
+                  <div className="mb-2 text-[11px]">
+                    {gpsStatus === 'loading' && (
+                      <div className="flex items-center space-x-1.5 text-amber-500 dark:text-amber-400 font-semibold animate-pulse">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Mengambil lokasi GPS perangkat...</span>
+                      </div>
+                    )}
+                    {gpsStatus === 'success' && (latitude !== 0 || longitude !== 0) && (
+                      <div className="flex flex-wrap items-center justify-between gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                        <span className="flex items-center space-x-1">
+                          <span>✓ Lokasi diperoleh ({gpsSource === 'EXIF' ? 'EXIF Foto' : gpsSource === 'WO' ? 'Ref WO' : 'GPS Perangkat'})</span>
+                        </span>
+                        {gpsAccuracy !== null && (
+                          <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">
+                            Akurasi ±{gpsAccuracy}m
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {gpsStatus === 'error' && (
+                      <div className="text-rose-500 dark:text-rose-400 text-[11px] font-medium flex items-center justify-between">
+                        <span>⚠ {gpsErrorMessage || 'GPS belum tersedia'}</span>
+                      </div>
+                    )}
+                    {gpsStatus === 'idle' && latitude === 0 && longitude === 0 && (
+                      <div className="text-slate-400 dark:text-slate-500 text-[11px]">
+                        <span>Menunggu pembacaan GPS lokasi Anda...</span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="number"
-                      readOnly
-                      value={latitude || 0}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono cursor-not-allowed"
-                    />
-                    <input
-                      type="number"
-                      readOnly
-                      value={longitude || 0}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono cursor-not-allowed"
-                    />
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">LATITUDE</label>
+                      <input
+                        type="number"
+                        step="any"
+                        readOnly
+                        value={latitude !== 0 ? latitude : ''}
+                        placeholder="-0.000000"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">LONGITUDE</label>
+                      <input
+                        type="number"
+                        step="any"
+                        readOnly
+                        value={longitude !== 0 ? longitude : ''}
+                        placeholder="100.000000"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
