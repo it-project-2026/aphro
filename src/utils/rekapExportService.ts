@@ -73,10 +73,10 @@ export async function exportRekapHarianToExcel(
   const headerRow3Values: any[] = ['', '', ''];
 
   days.forEach((d) => {
-    // 6 columns per day: TARGET KMS, REALISASI KMS, TEBANG, PANGKAS, TEBANG, TOTAL
-    headerRow1Values.push(d.dayName, '', '', '', '', '');
-    headerRow2Values.push(d.dayFormatted, '', '', '', '', '');
-    headerRow3Values.push('TARGET KMS', 'REALISASI KMS', 'TEBANG', 'PANGKAS', 'TEBANG', 'TOTAL');
+    // 5 columns per day: TARGET KMS, REALISASI KMS, TEBANG, PANGKAS, TOTAL
+    headerRow1Values.push(d.dayName, '', '', '', '');
+    headerRow2Values.push(d.dayFormatted, '', '', '', '');
+    headerRow3Values.push('TARGET KMS', 'REALISASI KMS', 'TEBANG', 'PANGKAS', 'TOTAL');
   });
 
   // Summary headers
@@ -120,11 +120,11 @@ export async function exportRekapHarianToExcel(
   // Format dynamic date headers
   let currentCol = 4;
   days.forEach((d) => {
-    // Merge Day Name (cols: currentCol to currentCol + 5, row: 4)
-    worksheet.mergeCells(startHeaderRowNum, currentCol, startHeaderRowNum, currentCol + 5);
-    // Merge Day Number (cols: currentCol to currentCol + 5, row: 5)
-    worksheet.mergeCells(startHeaderRowNum + 1, currentCol, startHeaderRowNum + 1, currentCol + 5);
-    currentCol += 6;
+    // Merge Day Name (cols: currentCol to currentCol + 4, row: 4)
+    worksheet.mergeCells(startHeaderRowNum, currentCol, startHeaderRowNum, currentCol + 4);
+    // Merge Day Number (cols: currentCol to currentCol + 4, row: 5)
+    worksheet.mergeCells(startHeaderRowNum + 1, currentCol, startHeaderRowNum + 1, currentCol + 4);
+    currentCol += 5;
   });
 
   // Format end headers (TOTAL, SISA, %, KET)
@@ -184,15 +184,15 @@ export async function exportRekapHarianToExcel(
 
     days.forEach((d) => {
       const val = item.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
-      const dayTotal = (val.tebang1 || 0) + (val.pangkas || 0) + (val.tebang2 || 0);
+      const tebangVal = (val.tebang1 || 0) + (val.tebang2 || 0);
+      const dayTotal = tebangVal + (val.pangkas || 0);
       rowTotal += dayTotal;
 
       rowValues.push(
         val.targetKms && val.targetKms > 0 ? val.targetKms : '',
         val.realisasiKms && val.realisasiKms > 0 ? val.realisasiKms : '',
-        val.tebang1 > 0 ? val.tebang1 : '',
+        tebangVal > 0 ? tebangVal : '',
         val.pangkas > 0 ? val.pangkas : '',
-        val.tebang2 > 0 ? val.tebang2 : '',
         dayTotal > 0 ? dayTotal : ''
       );
     });
@@ -234,15 +234,15 @@ export async function exportRekapHarianToExcel(
     let dayColStart = 4;
     days.forEach((d) => {
       if (d.isRedDay) {
-        // Red color for all 6 subcolumns of this holiday/weekend
-        for (let sub = 0; sub < 6; sub++) {
+        // Red color for all 5 subcolumns of this holiday/weekend
+        for (let sub = 0; sub < 5; sub++) {
           const cIdx = dayColStart + sub;
           const cell = dataRow.getCell(cIdx);
           cell.fill = redFill;
           cell.font = redFont;
         }
       }
-      dayColStart += 6;
+      dayColStart += 5;
     });
 
     currentRowIdx++;
@@ -278,19 +278,18 @@ export async function exportRekapHarianToExcel(
   days.forEach((d) => {
     let dayTargetKmsSum = 0;
     let dayRealisasiKmsSum = 0;
-    let dayTebang1Sum = 0;
+    let dayTebangSum = 0;
     let dayPangkasSum = 0;
-    let dayTebang2Sum = 0;
     let dayTotalSum = 0;
 
     rowsData.forEach((row) => {
       const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
       dayTargetKmsSum += v.targetKms || 0;
       dayRealisasiKmsSum += v.realisasiKms || 0;
-      dayTebang1Sum += v.tebang1 || 0;
+      const tVal = (v.tebang1 || 0) + (v.tebang2 || 0);
+      dayTebangSum += tVal;
       dayPangkasSum += v.pangkas || 0;
-      dayTebang2Sum += v.tebang2 || 0;
-      dayTotalSum += (v.tebang1 || 0) + (v.pangkas || 0) + (v.tebang2 || 0);
+      dayTotalSum += tVal + (v.pangkas || 0);
     });
 
     grandTotal += dayTotalSum;
@@ -298,10 +297,9 @@ export async function exportRekapHarianToExcel(
     summaryRowValues.push(
       dayTargetKmsSum > 0 ? dayTargetKmsSum : '',
       dayRealisasiKmsSum > 0 ? dayRealisasiKmsSum : '',
-      dayTebang1Sum,
-      dayPangkasSum,
-      dayTebang2Sum,
-      dayTotalSum
+      dayTebangSum > 0 ? dayTebangSum : '',
+      dayPangkasSum > 0 ? dayPangkasSum : '',
+      dayTotalSum > 0 ? dayTotalSum : ''
     );
   });
 
