@@ -1244,3 +1244,5 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     </div>
   );
 };
+
+export default RekapPekerjaanHarianPage;

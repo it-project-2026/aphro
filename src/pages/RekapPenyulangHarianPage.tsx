@@ -478,3 +478,5 @@ export const RekapPenyulangHarianPage: React.FC = () => {
     </div>
   );
 };
+
+export default RekapPenyulangHarianPage;

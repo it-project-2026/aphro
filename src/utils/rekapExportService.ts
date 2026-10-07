@@ -64,9 +64,9 @@ export async function exportRekapHarianToExcel(
   worksheet.addRow([]); // Blank line
 
   // 2. Table Headers (Multi-level header)
-  // Header Row 1: NO. URUT | ULP | TIM ROW | [Day Name per 4 cols] | TOTAL | SISA | % | KET
+  // Header Row 1: NO. URUT | ULP | TIM ROW | [Day Name per 5 cols] | TOTAL | SISA | % | KET
   // Header Row 2:          |     |         | [Day Number (01, 02..)] |       |      |   |
-  // Header Row 3:          |     |         | TEBANG | PANGKAS | TEBANG | TOTAL | | | |
+  // Header Row 3:          |     |         | TARGET KMS | REALISASI KMS | TEBANG | PANGKAS | TOTAL | | | |
 
   const headerRow1Values: any[] = ['NO. URUT', 'NAMA ULP', 'TIM ROW (NAMA REGU)'];
   const headerRow2Values: any[] = ['', '', ''];
@@ -329,6 +329,20 @@ export async function exportRekapHarianToExcel(
     cell.border = thinBorder;
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
   }
+
+  // Highlight red days in summary row
+  let sumDayColStart = 4;
+  days.forEach((d) => {
+    if (d.isRedDay) {
+      for (let sub = 0; sub < 5; sub++) {
+        const cIdx = sumDayColStart + sub;
+        const cell = sumRow.getCell(cIdx);
+        cell.fill = redFill;
+        cell.font = redFont;
+      }
+    }
+    sumDayColStart += 5;
+  });
 
   // Auto column widths
   worksheet.getColumn(1).width = 12; // NO. URUT

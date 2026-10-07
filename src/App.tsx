@@ -19,57 +19,57 @@ import { Database, Loader2 } from 'lucide-react';
 import { logWIBDebug } from './utils/dateUtils';
 
 // Lazy Loaded Pages
-const LoginPage = React.lazy(() =>
-  import('./pages/LoginPage').then((m) => ({ default: m.LoginPage }))
+const LoginPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/LoginPage').then((m: any) => ({ default: m.default || m.LoginPage }))
 );
-const MaintenancePage = React.lazy(() => import('./pages/MaintenancePage'));
-const DashboardPage = React.lazy(() =>
-  import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage }))
+const MaintenancePage = React.lazy<React.ComponentType<any>>(() => import('./pages/MaintenancePage'));
+const DashboardPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/DashboardPage').then((m: any) => ({ default: m.default || m.DashboardPage }))
 );
-const WorkOrderMainPage = React.lazy(() =>
-  import('./pages/WorkOrderMainPage').then((m) => ({ default: m.WorkOrderMainPage }))
+const WorkOrderMainPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/WorkOrderMainPage').then((m: any) => ({ default: m.default || m.WorkOrderMainPage }))
 );
-const RealisasiMainPage = React.lazy(() =>
-  import('./pages/RealisasiMainPage').then((m) => ({ default: m.RealisasiMainPage || m.default }))
+const RealisasiMainPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/RealisasiMainPage').then((m: any) => ({ default: m.default || m.RealisasiMainPage }))
 );
-const MonitoringPage = React.lazy(() =>
-  import('./pages/MonitoringPage').then((m) => ({ default: m.MonitoringPage }))
+const MonitoringPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/MonitoringPage').then((m: any) => ({ default: m.default || m.MonitoringPage }))
 );
-const CetakLaporanPage = React.lazy(() =>
-  import('./pages/CetakLaporanPage').then((m) => ({ default: m.CetakLaporanPage }))
+const CetakLaporanPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/CetakLaporanPage').then((m: any) => ({ default: m.default || m.CetakLaporanPage }))
 );
-const MasterDataPage = React.lazy(() =>
-  import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage }))
+const MasterDataPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/MasterDataPage').then((m: any) => ({ default: m.default || m.MasterDataPage }))
 );
-const AuditLogPage = React.lazy(() =>
-  import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage }))
+const AuditLogPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/AuditLogPage').then((m: any) => ({ default: m.default || m.AuditLogPage }))
 );
-const UserWelcomePage = React.lazy(() =>
-  import('./pages/UserWelcomePage').then((m) => ({ default: m.UserWelcomePage }))
+const UserWelcomePage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/UserWelcomePage').then((m: any) => ({ default: m.default || m.UserWelcomePage }))
 );
-const AbsensiKerjaPage = React.lazy(() =>
-  import('./pages/AbsensiKerjaPage').then((m) => ({ default: m.AbsensiKerjaPage }))
+const AbsensiKerjaPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/AbsensiKerjaPage').then((m: any) => ({ default: m.default || m.AbsensiKerjaPage }))
 );
-const AbsensiMainPage = React.lazy(() =>
-  import('./pages/AbsensiMainPage').then((m) => ({ default: m.AbsensiMainPage }))
+const AbsensiMainPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/AbsensiMainPage').then((m: any) => ({ default: m.default || m.AbsensiMainPage }))
 );
-const InisiasiPage = React.lazy(() =>
-  import('./pages/InisiasiPage').then((m) => ({ default: m.InisiasiPage }))
+const InisiasiPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/InisiasiPage').then((m: any) => ({ default: m.default || m.InisiasiPage }))
 );
-const RekapPekerjaanHarianPage = React.lazy(() =>
-  import('./pages/RekapPekerjaanHarianPage').then((m) => ({ default: m.RekapPekerjaanHarianPage }))
+const RekapPekerjaanHarianPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/RekapPekerjaanHarianPage').then((m: any) => ({ default: m.default || m.RekapPekerjaanHarianPage }))
 );
-const RekapPenyulangHarianPage = React.lazy(() =>
-  import('./pages/RekapPenyulangHarianPage').then((m) => ({ default: m.RekapPenyulangHarianPage }))
+const RekapPenyulangHarianPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/RekapPenyulangHarianPage').then((m: any) => ({ default: m.default || m.RekapPenyulangHarianPage }))
 );
-const SettingAplikasiPage = React.lazy(() =>
-  import('./pages/SettingAplikasiPage').then((m) => ({ default: m.SettingAplikasiPage }))
+const SettingAplikasiPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/SettingAplikasiPage').then((m: any) => ({ default: m.default || m.SettingAplikasiPage }))
 );
-const SinkronisasiPage = React.lazy(() =>
-  import('./pages/SinkronisasiPage').then((m) => ({ default: m.SinkronisasiPage }))
+const SinkronisasiPage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/SinkronisasiPage').then((m: any) => ({ default: m.default || m.SinkronisasiPage }))
 );
-const MigrasiDatabasePage = React.lazy(() =>
-  import('./pages/MigrasiDatabasePage').then((m) => ({ default: m.MigrasiDatabasePage }))
+const MigrasiDatabasePage = React.lazy<React.ComponentType<any>>(() =>
+  import('./pages/MigrasiDatabasePage').then((m: any) => ({ default: m.default || m.MigrasiDatabasePage }))
 );
 
 import { useNotifications } from './hooks/useNotifications';

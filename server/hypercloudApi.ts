@@ -111,7 +111,11 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
     }
 
     if (remoteRes.status >= 500) {
-      console.warn(`[HYPERCLOUD PROXY] Remote gateway returned HTTP ${remoteRes.status} for ${req.method} ${endpoint}. Falling back to local Express handler.`);
+      console.warn(`[HYPERCLOUD PROXY] Remote gateway returned HTTP ${remoteRes.status} for ${req.method} ${endpoint}.`);
+      if (!isDirectPgAvailable()) {
+        res.status(remoteRes.status).json(remoteRes.data || { status: 'error', success: false, message: `Remote gateway returned HTTP ${remoteRes.status}`, data: [] });
+        return true;
+      }
       return false;
     }
 
@@ -119,6 +123,15 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
     return true;
   } catch (err: any) {
     console.warn(`[HYPERCLOUD PROXY] Error proxying ${req.method} ${endpoint}:`, err.message);
+    if (!isDirectPgAvailable()) {
+      res.status(504).json({
+        status: 'error',
+        success: false,
+        message: `HyperCloud Gateway proxy timeout / network error: ${err.message}`,
+        data: [],
+      });
+      return true;
+    }
     return false;
   }
 }
