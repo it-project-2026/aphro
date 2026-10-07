@@ -409,6 +409,10 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
         if (isFinalizingMode) {
           setSubmissionStatus('finalizing');
           setIsFinalizingMode(false);
+          setLokasiStart(wo.lokasiStart || '');
+          setLokasiFinish(wo.lokasiFinish || '');
+          setTotalVolume(Number(wo.totalRealisasi || wo.volumePekerjaan || wo.woKms || wo.woBatang) || 0);
+          setFinalSatuan((wo.satuanTotalRealisasi as any) || (wo.satuan as any) || 'KMS');
         } else {
           setSubmissionStatus('idle');
         }
@@ -1046,16 +1050,18 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
         satuanTotalRealisasi: finalSatuan,
         lokasiStart,
         lokasiFinish,
+        isEditCompletion: true,
       });
 
       showToast(
-        `Pekerjaan ${selectedWO.nomorWO} telah dinyatakan SELESAI dengan volume ${totalVolume} ${finalSatuan}.`,
+        `Penyelesaian pekerjaan ${selectedWO.nomorWO} berhasil disimpan!`,
         'success'
       );
 
       setTimeout(() => {
-        setActiveTab('dashboard');
-      }, 1000);
+        setSubmissionStatus('idle');
+        setActiveTab('work_orders');
+      }, 800);
     } catch (err: any) {
       console.error('Finalize WO error:', err);
       showToast(
@@ -1063,8 +1069,9 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
         'success'
       );
       setTimeout(() => {
-        setActiveTab('dashboard');
-      }, 1000);
+        setSubmissionStatus('idle');
+        setActiveTab('work_orders');
+      }, 800);
     } finally {
       setIsProcessing(false);
     }

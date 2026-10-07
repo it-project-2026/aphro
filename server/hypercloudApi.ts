@@ -1994,7 +1994,7 @@ const handleUpdateWorkOrder = async (req: Request, res: Response) => {
   
   try {
     const check = await query(
-      `SELECT "WO_ID", "unitId" FROM public."WORK_ORDER" WHERE "WO_ID" = $1 OR "Nomor_WO" = $1`,
+      `SELECT * FROM public."WORK_ORDER" WHERE "WO_ID" = $1 OR "Nomor_WO" = $1`,
       [id]
     );
 
@@ -2008,10 +2008,26 @@ const handleUpdateWorkOrder = async (req: Request, res: Response) => {
       });
     }
 
-    const recordUnit = String(check.rows[0]?.unitId || '').toUpperCase();
+    const existingWo = check.rows[0];
+    const recordUnit = String(existingWo.unitId || '').toUpperCase();
     const userUnit = String((req as any).user?.unitId || req.query.unitId || req.body?.unitId || '').toUpperCase();
     const userRole = String((req as any).user?.role || (req as any).user?.Role || req.query.role || '').toUpperCase();
     const isAdmin = userRole === 'ADMIN' || userRole === 'ADM' || userRole === 'SUPERADMIN' || userUnit === 'ALL';
+
+    const w = {
+      ...(req.body || {}),
+      WO_ID: id,
+    };
+
+    if (w.isEditCompletion && !isAdmin) {
+      logApiRoute(req.method, `/api/work-orders/${id}`, 403);
+      return res.status(403).json({
+        success: false,
+        status: 'error',
+        error: 'FORBIDDEN',
+        message: 'Anda tidak memiliki hak untuk mengedit penyelesaian pekerjaan.',
+      });
+    }
 
     if (userUnit && recordUnit && !isAdmin && userUnit !== 'ALL' && recordUnit !== userUnit) {
       logApiRoute(req.method, `/api/work-orders/${id}`, 403);
@@ -2022,11 +2038,6 @@ const handleUpdateWorkOrder = async (req: Request, res: Response) => {
         message: `Akses ditolak: Work Order ini milik unit ${recordUnit}, tidak dapat diubah oleh unit ${userUnit}.`,
       });
     }
-
-    const w = {
-      ...(req.body || {}),
-      WO_ID: id,
-    };
 
     const penyulangValue =
       w.PENYULANG ??
@@ -2082,7 +2093,7 @@ const handleUpdateWorkOrder = async (req: Request, res: Response) => {
       w.VOLUME ?? w.volumePekerjaan ?? null,
       w.SATUAN ?? w.satuan ?? null,
       w.TOTAL_REALISASI ?? w.totalRealisasi ?? null,
-      w.SATUAN_TOTAL_REALISASI ?? null,
+      w.SATUAN_TOTAL_REALISASI ?? w.satuanTotalRealisasi ?? null,
       w.WO_AWAL ?? w.woAwal ?? null,
       w.WO_AKHIR ?? w.woAkhir ?? null,
       w.LOKASI_START ?? w.lokasiStart ?? null,
@@ -2091,6 +2102,66 @@ const handleUpdateWorkOrder = async (req: Request, res: Response) => {
     ];
 
     const resDb = await query(sql, params);
+
+    // Audit Log for Completion Edit
+    if (w.isEditCompletion || w.lokasiStart !== undefined || w.totalRealisasi !== undefined) {
+      const changes: string[] = [];
+      const newLocStart = w.LOKASI_START ?? w.lokasiStart;
+      const newLocFinish = w.LOKASI_FINISH ?? w.lokasiFinish;
+      const newTotRel = w.TOTAL_REALISASI ?? w.totalRealisasi;
+      const newSatuanRel = w.SATUAN_TOTAL_REALISASI ?? w.satuanTotalRealisasi;
+
+      if (newLocStart !== undefined && String(newLocStart) !== String(existingWo.LOKASI_START || '')) {
+        changes.push(`LOKASI_START: "${existingWo.LOKASI_START || ''}" -> "${newLocStart}"`);
+      }
+      if (newLocFinish !== undefined && String(newLocFinish) !== String(existingWo.LOKASI_FINISH || '')) {
+        changes.push(`LOKASI_FINISH: "${existingWo.LOKASI_FINISH || ''}" -> "${newLocFinish}"`);
+      }
+      if (newTotRel !== undefined && String(newTotRel) !== String(existingWo.TOTAL_REALISASI || '')) {
+        changes.push(`TOTAL_REALISASI: ${existingWo.TOTAL_REALISASI || 0} -> ${newTotRel}`);
+      }
+      if (newSatuanRel !== undefined && String(newSatuanRel) !== String(existingWo.SATUAN_TOTAL_REALISASI || '')) {
+        changes.push(`SATUAN: "${existingWo.SATUAN_TOTAL_REALISASI || ''}" -> "${newSatuanRel}"`);
+      }
+
+      const authUser = (req as any).user || {};
+      const relCheck = await query(
+        `SELECT "ID" FROM public."REALISASI" WHERE "WO_ID" = $1 OR "Nomor_WO" = $2 ORDER BY "Timestamp" DESC LIMIT 1`,
+        [existingWo.WO_ID, existingWo.Nomor_WO]
+      ).catch(() => ({ rows: [] }));
+      const realisasiId = relCheck.rows[0]?.ID || 'N/A';
+
+      const logId = `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const timestamp = new Date().toISOString();
+      const logUnit = existingWo.unitId || recordUnit || 'ALL';
+      const logUser = authUser.userId || authUser.id || authUser.userName || 'usr-admin';
+      const logUserName = authUser.userName || authUser.name || 'Admin';
+
+      const detailsText = `EDIT_PENYELESAIAN_PEKERJAAN
+WO_ID: ${existingWo.WO_ID}
+REALISASI_ID: ${realisasiId}
+Nomor_WO: ${existingWo.Nomor_WO || id}
+UserID: ${logUser}
+UserName: ${logUserName}
+
+Perubahan:
+${changes.length > 0 ? changes.join('\n') : 'Penyelesaian Pekerjaan diperbarui'}`;
+
+      await query(
+        `INSERT INTO public."LOG_ACTIVITY" ("ID", "unitId", "Action", "Details", "UserID", "UserName", "Timestamp", "IP_Address")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          logId,
+          logUnit,
+          'EDIT_PENYELESAIAN_PEKERJAAN',
+          detailsText,
+          logUser,
+          logUserName,
+          timestamp,
+          req.ip || req.socket.remoteAddress || '',
+        ]
+      ).catch((logErr) => console.warn('[LOG_ACTIVITY FAILED]', logErr.message));
+    }
 
     console.log('[WORK_ORDER UPDATE]', {
       id,

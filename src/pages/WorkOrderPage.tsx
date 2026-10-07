@@ -149,7 +149,7 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
 
   const role = currentUser?.role || 'User';
   const isUserRole = role.toLowerCase() === 'user';
-  const isAdminRole = true; // Ensure Hapus WO and Edit WO are available to users and admins
+  const isAdminRole = role.toLowerCase() === 'admin' || role.toLowerCase() === 'superadmin' || role.toLowerCase() === 'adm';
 
   // Helper to clean string for better matching
   const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
@@ -463,6 +463,22 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
 
                   {isAdminRole && (
                     <>
+                      {(wo.status === 'Selesai' || wo.lokasiStart || wo.totalRealisasi) && (
+                        <button
+                          onClick={() => {
+                            if (setSelectedWoIdForRealisasi) {
+                              setSelectedWoIdForRealisasi(wo.id);
+                              setIsFinalizingMode(true);
+                            }
+                            setActiveTab('input_realisasi');
+                          }}
+                          className="py-2.5 px-3 bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 active:scale-95 transition-all"
+                          title="Edit Penyelesaian Pekerjaan (Final)"
+                        >
+                          <FileCheck2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          <span>Edit Penyelesaian</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           if (onEdit) onEdit(wo);
@@ -649,6 +665,21 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
 
                         {isAdminRole && (
                           <>
+                            {(wo.status === 'Selesai' || wo.lokasiStart || wo.totalRealisasi) && (
+                              <button
+                                onClick={() => {
+                                  if (setSelectedWoIdForRealisasi) {
+                                    setSelectedWoIdForRealisasi(wo.id);
+                                    setIsFinalizingMode(true);
+                                  }
+                                  setActiveTab('input_realisasi');
+                                }}
+                                className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40 transition-colors"
+                                title="Edit Penyelesaian Pekerjaan (Admin)"
+                              >
+                                <FileCheck2 className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 if (onEdit) onEdit(wo);

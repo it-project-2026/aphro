@@ -76,6 +76,7 @@ export interface WorkOrder {
   lampiranUrl?: string;
   createdAt: string;
   updatedAt?: string;
+  isEditCompletion?: boolean;
 }
 
 export interface WatermarkedPhoto {
