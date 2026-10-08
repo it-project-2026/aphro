@@ -148,19 +148,16 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   }, [searchQuery]);
 
   // Fetch realisasi from API when subtab, pagination, date range, or filterNomorWO changes
-  // STRICT REQUIREMENT: Only fetch if a filterNomorWO has been chosen!
   React.useEffect(() => {
     if (activeSubTab === 'history') {
-      if (filterNomorWO && filterNomorWO.trim()) {
-        fetchRealisasiFromApi({
-          page,
-          limit,
-          tanggalDari,
-          tanggalSampai,
-          ULP: ulpFilter,
-          Nomor_WO: filterNomorWO.trim(),
-        });
-      }
+      fetchRealisasiFromApi({
+        page,
+        limit,
+        tanggalDari,
+        tanggalSampai,
+        ULP: ulpFilter,
+        Nomor_WO: filterNomorWO && filterNomorWO.trim() ? filterNomorWO.trim() : undefined,
+      });
     }
   }, [
     activeSubTab,
@@ -350,13 +347,9 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     return Array.from(woSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   }, [workOrders, displayedWorkOrders, localWoNumbers, realisasiList, workOrdersMap]);
 
-  // Tampilan Data hanya sesuai dengan Filter (dengan tampilan Kosong jika belum dipilih lewat Filter)
+  // Tampilan Data Riwayat Realisasi (Filter berdasarkan WO jika dipilih, atau tampilkan semua data sesuai filter aktif)
   const displayList = useMemo(() => {
-    if (!filterNomorWO || !filterNomorWO.trim()) {
-      return [];
-    }
-
-    const cleanFilter = filterNomorWO.trim().toLowerCase();
+    const cleanFilter = filterNomorWO ? filterNomorWO.trim().toLowerCase() : '';
 
     return realisasiList.filter((rel) => {
       const wo = workOrdersMap[rel.workOrderId];
@@ -364,15 +357,17 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
       const mWo = (wo?.nomorWO || '').trim().toLowerCase();
       const rWoId = (rel.workOrderId || '').trim().toLowerCase();
 
-      // Check if matches the selected Nomor WO
-      const matchesWO = 
-        rWo === cleanFilter ||
-        mWo === cleanFilter ||
-        rWoId === cleanFilter ||
-        rWo.includes(cleanFilter) ||
-        mWo.includes(cleanFilter);
+      // Check if matches the selected Nomor WO (only if filterNomorWO is active)
+      if (cleanFilter) {
+        const matchesWO = 
+          rWo === cleanFilter ||
+          mWo === cleanFilter ||
+          rWoId === cleanFilter ||
+          rWo.includes(cleanFilter) ||
+          mWo.includes(cleanFilter);
 
-      if (!matchesWO) return false;
+        if (!matchesWO) return false;
+      }
 
       // Status filter
       if (filterStatus !== 'ALL') {
@@ -825,9 +820,9 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                     </span>
                   </div>
                 ) : (
-                  <div className="mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Tabel di bawah saat ini kosong karena belum ada Nomor WO yang dipilih.</span>
+                  <div className="mt-2.5 flex items-center gap-2 text-[11px] font-bold text-teal-700 dark:text-teal-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Menampilkan seluruh Riwayat Realisasi. Gunakan filter di atas jika ingin menyaring berdasarkan Nomor WO, ULP, atau tanggal.</span>
                   </div>
                 )}
               </div>
@@ -985,21 +980,22 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                 <button
                   type="button"
                   onClick={async () => {
-                    if (filterNomorWO && filterNomorWO.trim()) {
-                      await fetchRealisasiFromApi({
-                        page,
-                        limit,
-                        tanggalDari,
-                        tanggalSampai,
-                        ULP: ulpFilter,
-                        Nomor_WO: filterNomorWO.trim(),
-                      });
-                      showToast(`Data riwayat realisasi WO ${filterNomorWO} berhasil disegarkan`, 'success');
-                    } else {
-                      showToast('Silakan pilih Nomor WO pada filter terlebih dahulu', 'info');
-                    }
+                    await fetchRealisasiFromApi({
+                      page,
+                      limit,
+                      tanggalDari,
+                      tanggalSampai,
+                      ULP: ulpFilter,
+                      Nomor_WO: filterNomorWO && filterNomorWO.trim() ? filterNomorWO.trim() : undefined,
+                    });
+                    showToast(
+                      filterNomorWO && filterNomorWO.trim()
+                        ? `Data riwayat realisasi WO ${filterNomorWO} berhasil disegarkan`
+                        : `Data riwayat realisasi berhasil disegarkan`,
+                      'success'
+                    );
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all normal-case tracking-normal"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all normal-case tracking-normal cursor-pointer"
                 >
                   <RotateCw className="w-3.5 h-3.5" />
                   <span>Segarkan Data</span>
@@ -1044,49 +1040,19 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                     {displayList.length === 0 ? (
                       <tr>
                         <td colSpan={15} className="p-12 text-slate-400 text-center text-xs">
-                          {!filterNomorWO ? (
-                            <div className="flex flex-col items-center justify-center py-8 px-4">
-                              <div className="w-14 h-14 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-3 shadow-xs">
-                                <Filter className="w-7 h-7" />
-                              </div>
-                              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-1">
-                                Filter Nomor WO Belum Dipilih
-                              </h4>
-                              <p className="text-slate-500 dark:text-slate-400 text-xs max-w-md leading-relaxed mb-4 text-center">
-                                Tampilan data riwayat realisasi saat ini kosong. Silakan pilih <strong>Nomor Work Order (WO)</strong> pada filter di atas untuk memuat dan menampilkan data.
-                              </p>
-                              {availableWONumbers.length > 0 && (
-                                <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-xl">
-                                  <span className="text-[11px] font-semibold text-slate-400 mr-1">Pilih Cepat WO:</span>
-                                  {availableWONumbers.slice(0, 6).map((num) => (
-                                    <button
-                                      key={num}
-                                      type="button"
-                                      onClick={() => {
-                                        setFilterNomorWO(num);
-                                        setPage(1);
-                                      }}
-                                      className="px-2.5 py-1 text-[11px] font-bold bg-slate-100 dark:bg-slate-700 hover:bg-teal-50 dark:hover:bg-teal-950 hover:text-teal-700 dark:hover:text-teal-300 text-slate-700 dark:text-slate-300 rounded-lg transition-colors border border-slate-200 dark:border-slate-600"
-                                    >
-                                      {num}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
+                          <div className="flex flex-col items-center justify-center py-8">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-2">
+                              <Search className="w-6 h-6" />
                             </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center py-8">
-                              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-2">
-                                <Search className="w-6 h-6" />
-                              </div>
-                              <p className="font-bold text-slate-700 dark:text-slate-300 text-xs mb-1">
-                                Tidak ada riwayat realisasi untuk Nomor WO &quot;{filterNomorWO}&quot;
-                              </p>
-                              <p className="text-slate-400 text-[11px]">
-                                Coba periksa status filter atau rentang tanggal, atau pilih Nomor WO lainnya.
-                              </p>
-                            </div>
-                          )}
+                            <p className="font-bold text-slate-700 dark:text-slate-300 text-xs mb-1">
+                              {filterNomorWO
+                                ? `Tidak ada data riwayat realisasi untuk Nomor WO "${filterNomorWO}"`
+                                : 'Tidak ada data riwayat realisasi ditemukan'}
+                            </p>
+                            <p className="text-slate-400 text-[11px]">
+                              Coba periksa status filter, rentang tanggal, atau kata kunci pencarian.
+                            </p>
+                          </div>
                         </td>
                       </tr>
                     ) : (
