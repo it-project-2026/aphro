@@ -397,6 +397,22 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     window.print();
   };
 
+  const getDayVal = (dailyValues: Record<string, any> | undefined, d: DayDetail) => {
+    if (!dailyValues) return { tebang: 0, pangkas: 0, targetKms: 0, realisasiKms: 0, total: 0 };
+    const v =
+      dailyValues[d.dayFormatted] ||
+      dailyValues[String(d.dayNumber)] ||
+      dailyValues[`day_${d.dayFormatted}`] ||
+      dailyValues[`day_${d.dayNumber}`] ||
+      {};
+    const tebang = (v.tebang1 || 0) + (v.tebang2 || 0) + (v.tebang || 0);
+    const pangkas = v.pangkas || 0;
+    const targetKms = v.targetKms || 0;
+    const realisasiKms = v.realisasiKms || 0;
+    const total = tebang + pangkas;
+    return { tebang, pangkas, targetKms, realisasiKms, total };
+  };
+
   // Compute Grand Totals across visible/filtered rows
   const grandTotalPerDay = useMemo(() => {
     const totals: Record<string, { targetKms: number; realisasiKms: number; tebang1: number; pangkas: number; tebang2: number; total: number }> = {};
@@ -405,18 +421,16 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
       let rk = 0;
       let t1 = 0;
       let p = 0;
-      let t2 = 0;
       let tot = 0;
       filteredRows.forEach((row) => {
-        const v = row.dailyValues[d.dayFormatted] || { targetKms: 0, realisasiKms: 0, tebang1: 0, pangkas: 0, tebang2: 0 };
-        tk += v.targetKms || 0;
-        rk += v.realisasiKms || 0;
-        t1 += v.tebang1 || 0;
-        p += v.pangkas || 0;
-        t2 += v.tebang2 || 0;
-        tot += (v.tebang1 || 0) + (v.pangkas || 0); // Only sum tebang1 and pangkas as per request
+        const val = getDayVal(row.dailyValues, d);
+        tk += val.targetKms;
+        rk += val.realisasiKms;
+        t1 += val.tebang;
+        p += val.pangkas;
+        tot += val.total;
       });
-      totals[d.dayFormatted] = { targetKms: tk, realisasiKms: rk, tebang1: t1, pangkas: p, tebang2: t2, total: tot };
+      totals[d.dayFormatted] = { targetKms: tk, realisasiKms: rk, tebang1: t1, pangkas: p, tebang2: 0, total: tot };
     });
     return totals;
   }, [daysInMonth, filteredRows]);
@@ -429,11 +443,10 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
     filteredRows.forEach((row) => {
       let rowTot = 0;
       daysInMonth.forEach((d) => {
-        const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, targetKms: 0, realisasiKms: 0 };
-        // TOTAL is now sum of realisasiKms
-        rowTot += (v.realisasiKms || 0);
-        grandTargetKms += v.targetKms || 0;
-        grandRealisasiKms += v.realisasiKms || 0;
+        const val = getDayVal(row.dailyValues, d);
+        rowTot += val.realisasiKms;
+        grandTargetKms += val.targetKms;
+        grandRealisasiKms += val.realisasiKms;
       });
       grandVolume += rowTot;
     });
@@ -828,8 +841,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                 // Calculate Total for this row (Sum of REALISASI KMS)
                 let rowVolumeSum = 0;
                 daysInMonth.forEach((d) => {
-                  const val = row.dailyValues[d.dayFormatted] || { realisasiKms: 0 };
-                  rowVolumeSum += (val.realisasiKms || 0);
+                  rowVolumeSum += getDayVal(row.dailyValues, d).realisasiKms;
                 });
 
                 const target = row.target || TARGET_KMS_PER_TIM_ROW;
@@ -876,8 +888,7 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
                     {/* Daily Sub-columns */}
                     {daysInMonth.map((d) => {
-                      const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
-                      const dayTotal = (val.tebang1 || 0) + (val.pangkas || 0); // User requested: TEBANG + PANGKAS
+                      const { tebang, pangkas, targetKms, realisasiKms, total: dayTotal } = getDayVal(row.dailyValues, d);
 
                       if (d.isRedDay) {
                         // MERAH Solid untuk Hari Libur & Akhir Pekan
@@ -886,24 +897,24 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                             <td
                               className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[10px]"
                             >
-                              {val.targetKms > 0 ? val.targetKms : ''}
+                              {targetKms > 0 ? targetKms : ''}
                             </td>
                             <td
                               className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[10px]"
                             >
-                              {val.realisasiKms > 0 ? val.realisasiKms : ''}
+                              {realisasiKms > 0 ? realisasiKms : ''}
                             </td>
                             <td
                               className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px]"
                               title={`${d.dayName}, ${d.dayFormatted} ${monthName}: ${d.holidayName || 'Hari Libur / Weekend'}`}
                             >
-                              {val.tebang1 > 0 ? val.tebang1 : ''}
+                              {tebang > 0 ? tebang : ''}
                             </td>
                             <td
                               className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px]"
                               title={`${d.dayName}, ${d.dayFormatted} ${monthName}: ${d.holidayName || 'Hari Libur / Weekend'}`}
                             >
-                              {val.pangkas > 0 ? val.pangkas : ''}
+                              {pangkas > 0 ? pangkas : ''}
                             </td>
                             <td
                               className="px-1 py-1.5 border-r border-red-800 bg-red-700 text-white text-center font-black text-[11px]"
@@ -921,28 +932,28 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
                           <td
                             className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-[#008396] dark:text-teal-400 font-bold text-[10px]"
                           >
-                            {val.targetKms > 0 ? val.targetKms.toFixed(2) : ''}
+                            {targetKms > 0 ? targetKms.toFixed(2) : ''}
                           </td>
                           <td
                             className={`px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-[10px] ${
-                              val.targetKms > 0 && val.realisasiKms < val.targetKms
+                              targetKms > 0 && realisasiKms < targetKms
                                 ? 'text-red-600 dark:text-red-400'
-                                : val.realisasiKms > 0 
+                                : realisasiKms > 0 
                                   ? 'text-teal-600 dark:text-teal-400'
                                   : 'text-slate-400'
                             }`}
                           >
-                            {val.realisasiKms > 0 ? val.realisasiKms.toFixed(2) : (val.targetKms > 0 ? '0.00' : '')}
+                            {realisasiKms > 0 ? realisasiKms.toFixed(2) : (targetKms > 0 ? '0.00' : '')}
                           </td>
                           <td
                             className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200"
                           >
-                            {val.tebang1 > 0 ? val.tebang1 : ''}
+                            {tebang > 0 ? tebang : ''}
                           </td>
                           <td
                             className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-800 text-center font-mono text-slate-800 dark:text-slate-200"
                           >
-                            {val.pangkas > 0 ? val.pangkas : ''}
+                            {pangkas > 0 ? pangkas : ''}
                           </td>
                           <td
                             className="px-1 py-1.5 border-r border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-center font-mono font-bold text-teal-600 dark:text-teal-400"
@@ -955,11 +966,11 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
                     {/* Summary Columns */}
                     <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-850">
-                      {daysInMonth.reduce((acc, d) => acc + (row.dailyValues[d.dayFormatted]?.tebang1 || 0), 0)}
+                      {daysInMonth.reduce((acc, d) => acc + getDayVal(row.dailyValues, d).tebang, 0)}
                     </td>
 
                     <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-bold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-850">
-                      {daysInMonth.reduce((acc, d) => acc + (row.dailyValues[d.dayFormatted]?.pangkas || 0), 0)}
+                      {daysInMonth.reduce((acc, d) => acc + getDayVal(row.dailyValues, d).pangkas, 0)}
                     </td>
 
                     <td className="px-2 py-2 border-r border-slate-200 dark:border-slate-800 text-center font-mono font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-850">
@@ -1030,10 +1041,10 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
 
                 {/* Grand Summary Columns */}
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-[10px] text-slate-900 dark:text-white bg-slate-300 dark:bg-slate-800">
-                  {filteredRows.reduce((acc, row) => acc + daysInMonth.reduce((a, d) => a + (row.dailyValues[d.dayFormatted]?.tebang1 || 0), 0), 0)}
+                  {filteredRows.reduce((acc, row) => acc + daysInMonth.reduce((a, d) => a + getDayVal(row.dailyValues, d).tebang, 0), 0)}
                 </td>
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-[10px] text-slate-900 dark:text-white bg-slate-300 dark:bg-slate-800">
-                  {filteredRows.reduce((acc, row) => acc + daysInMonth.reduce((a, d) => a + (row.dailyValues[d.dayFormatted]?.pangkas || 0), 0), 0)}
+                  {filteredRows.reduce((acc, row) => acc + daysInMonth.reduce((a, d) => a + getDayVal(row.dailyValues, d).pangkas, 0), 0)}
                 </td>
                 <td className="px-2 py-2.5 border-r border-slate-400 dark:border-slate-700 text-center font-mono font-black text-xs text-teal-700 dark:text-teal-300">
                   <div className="flex flex-col">

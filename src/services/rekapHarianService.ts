@@ -6,7 +6,7 @@
 import { RekapItemData } from '../utils/rekapExportService';
 import { Realisasi, ULP, ReguROW, WorkOrder, Penyulang } from '../types';
 import { getWOTargetKms, getWORealisasiKms, TARGET_KMS_PER_TIM_ROW } from '../utils/metricUtils';
-import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO } from '../utils/dateUtils';
+import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO, getWIBDateString } from '../utils/dateUtils';
 
 /**
  * Helper canonical key untuk pencocokan REGU
@@ -850,16 +850,22 @@ export class RekapHarianService {
     return dynamicRows.map((row) => {
       const updatedDaily = { ...row.dailyValues };
       
-      // Reset
+      // Reset all 31 days with linked key aliases ('01', '1', 'day_01') while preserving pre-existing targetKms
       for (let i = 1; i <= 31; i++) {
-        const dayKey = String(i).padStart(2, '0');
-        updatedDaily[dayKey] = {
+        const padded = String(i).padStart(2, '0');
+        const unpadded = String(i);
+        const prefixed = `day_${padded}`;
+        const existing: any = row.dailyValues?.[padded] || row.dailyValues?.[unpadded] || row.dailyValues?.[prefixed] || {};
+        const dayObj = {
           tebang1: 0,
           pangkas: 0,
           tebang2: 0,
-          targetKms: 0,
+          targetKms: existing.targetKms || 0,
           realisasiKms: 0
         };
+        updatedDaily[padded] = dayObj;
+        updatedDaily[unpadded] = dayObj;
+        updatedDaily[prefixed] = dayObj;
       }
 
       const rowPenyulangCanon = getCanonicalPenyulangKey(row.timRow);
@@ -1062,29 +1068,40 @@ export class RekapHarianService {
    */
   static parseDateParts(dateInput: any) {
     if (!dateInput) return null;
-    let dateStr = '';
+    if (dateInput instanceof Date) {
+      const iso = getWIBDateString(dateInput);
+      if (iso) {
+        const [y, m, d] = iso.split('-').map(Number);
+        return { y, m, d };
+      }
+    }
+    let dateVal: any = '';
     if (typeof dateInput === 'string' || typeof dateInput === 'number') {
-      dateStr = String(dateInput);
+      dateVal = dateInput;
     } else if (typeof dateInput === 'object') {
-      dateStr =
-        dateInput.TANGGAL ||
-        dateInput.Tanggal ||
-        dateInput.tanggal ||
+      dateVal =
         dateInput.tanggalRealisasi ||
         dateInput.TANGGAL_REALISASI ||
         dateInput.tanggal_realisasi ||
+        dateInput.TANGGAL ||
+        dateInput.Tanggal ||
+        dateInput.tanggal ||
         dateInput.TANGGAL_EKSEKUSI ||
         dateInput.tanggal_eksekusi ||
         dateInput.createdAt ||
         dateInput.Created_At ||
+        dateInput.created_at ||
+        dateInput.Timestamp ||
         dateInput.timestamp ||
+        dateInput.date ||
+        dateInput.DATE ||
         '';
-      if (!dateStr && dateInput.nomorWO) {
-        dateStr = parseDateFromNomorWO(dateInput.nomorWO) || '';
+      if (!dateVal && dateInput.nomorWO) {
+        dateVal = parseDateFromNomorWO(dateInput.nomorWO) || '';
       }
     }
 
-    const iso = normalizeDateISO(dateStr) || (typeof dateInput === 'string' ? parseDateFromNomorWO(dateInput) : null);
+    const iso = normalizeDateISO(dateVal) || normalizeDateISO(dateInput) || (typeof dateInput === 'string' ? parseDateFromNomorWO(dateInput) : null);
     if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
       const [y, m, d] = iso.split('-').map(Number);
       return { y, m, d };
@@ -1148,16 +1165,22 @@ export class RekapHarianService {
     return dynamicRows.map((row) => {
       const updatedDaily = { ...row.dailyValues };
       
-      // Reset ALL days for the current month
+      // Reset ALL days for the current month with linked key aliases ('01', '1', 'day_01') while preserving pre-existing targetKms
       for (let i = 1; i <= 31; i++) {
-        const dayKey = String(i).padStart(2, '0');
-        updatedDaily[dayKey] = {
+        const padded = String(i).padStart(2, '0');
+        const unpadded = String(i);
+        const prefixed = `day_${padded}`;
+        const existing: any = row.dailyValues?.[padded] || row.dailyValues?.[unpadded] || row.dailyValues?.[prefixed] || {};
+        const dayObj = {
           tebang1: 0,
           pangkas: 0,
           tebang2: 0,
-          targetKms: 0,
+          targetKms: existing.targetKms || 0,
           realisasiKms: 0
         };
+        updatedDaily[padded] = dayObj;
+        updatedDaily[unpadded] = dayObj;
+        updatedDaily[prefixed] = dayObj;
       }
 
       const rowUlpCanon = getCanonicalReguKey(row.namaUlp);

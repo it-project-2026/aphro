@@ -21,7 +21,8 @@ export interface RekapItemData {
     realisasiKms?: number;
     tebang1: number; 
     pangkas: number; 
-    tebang2: number 
+    tebang2?: number;
+    tebang?: number;
   }>;
 }
 
@@ -183,8 +184,13 @@ export async function exportRekapHarianToExcel(
     let rowTotal = 0;
 
     days.forEach((d) => {
-      const val = item.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
-      const tebangVal = (val.tebang1 || 0) + (val.tebang2 || 0);
+      const val =
+        item.dailyValues[d.dayFormatted] ||
+        item.dailyValues[String(d.dayNumber)] ||
+        item.dailyValues[`day_${d.dayFormatted}`] ||
+        item.dailyValues[`day_${d.dayNumber}`] ||
+        { tebang1: 0, pangkas: 0, tebang2: 0, tebang: 0, targetKms: 0, realisasiKms: 0 };
+      const tebangVal = (val.tebang1 || 0) + (val.tebang2 || 0) + (val.tebang || 0);
       const dayTotal = tebangVal + (val.pangkas || 0);
       rowTotal += dayTotal;
 
@@ -283,10 +289,15 @@ export async function exportRekapHarianToExcel(
     let dayTotalSum = 0;
 
     rowsData.forEach((row) => {
-      const v = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
+      const v =
+        row.dailyValues[d.dayFormatted] ||
+        row.dailyValues[String(d.dayNumber)] ||
+        row.dailyValues[`day_${d.dayFormatted}`] ||
+        row.dailyValues[`day_${d.dayNumber}`] ||
+        { tebang1: 0, pangkas: 0, tebang2: 0, tebang: 0, targetKms: 0, realisasiKms: 0 };
       dayTargetKmsSum += v.targetKms || 0;
       dayRealisasiKmsSum += v.realisasiKms || 0;
-      const tVal = (v.tebang1 || 0) + (v.tebang2 || 0);
+      const tVal = (v.tebang1 || 0) + (v.tebang2 || 0) + (v.tebang || 0);
       dayTebangSum += tVal;
       dayPangkasSum += v.pangkas || 0;
       dayTotalSum += tVal + (v.pangkas || 0);

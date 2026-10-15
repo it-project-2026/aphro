@@ -243,17 +243,33 @@ export const RekapPenyulangHarianPage: React.FC = () => {
     }
   };
 
+  const getDayVal = (dailyValues: Record<string, any> | undefined, d: DayDetail) => {
+    if (!dailyValues) return { tebang: 0, pangkas: 0, targetKms: 0, realisasiKms: 0, total: 0 };
+    const v =
+      dailyValues[d.dayFormatted] ||
+      dailyValues[String(d.dayNumber)] ||
+      dailyValues[`day_${d.dayFormatted}`] ||
+      dailyValues[`day_${d.dayNumber}`] ||
+      {};
+    const tebang = (v.tebang1 || 0) + (v.tebang2 || 0) + (v.tebang || 0);
+    const pangkas = v.pangkas || 0;
+    const targetKms = v.targetKms || 0;
+    const realisasiKms = v.realisasiKms || 0;
+    const total = tebang + pangkas;
+    return { tebang, pangkas, targetKms, realisasiKms, total };
+  };
+
   const grandTotalPerDay = useMemo(() => {
     const totals: Record<string, { targetKms: number; realisasiKms: number; tebang1: number; pangkas: number; total: number }> = {};
     daysInMonth.forEach((d) => {
       let tk = 0, rk = 0, t1 = 0, p = 0, tot = 0;
       filteredRows.forEach((row) => {
-        const v = row.dailyValues[d.dayFormatted] || { targetKms: 0, realisasiKms: 0, tebang1: 0, pangkas: 0 };
-        tk += v.targetKms || 0;
-        rk += v.realisasiKms || 0;
-        t1 += v.tebang1 || 0;
-        p += v.pangkas || 0;
-        tot += (v.tebang1 || 0) + (v.pangkas || 0);
+        const val = getDayVal(row.dailyValues, d);
+        tk += val.targetKms;
+        rk += val.realisasiKms;
+        t1 += val.tebang;
+        p += val.pangkas;
+        tot += val.total;
       });
       totals[d.dayFormatted] = { targetKms: tk, realisasiKms: rk, tebang1: t1, pangkas: p, total: tot };
     });
@@ -265,8 +281,8 @@ export const RekapPenyulangHarianPage: React.FC = () => {
     filteredRows.forEach((row) => {
       let rowTot = 0;
       daysInMonth.forEach((d) => {
-        const v = row.dailyValues[d.dayFormatted] || { realisasiKms: 0 };
-        rowTot += (v.realisasiKms || 0);
+        const val = getDayVal(row.dailyValues, d);
+        rowTot += val.realisasiKms;
       });
       grandVolume += rowTot;
     });
@@ -404,8 +420,7 @@ export const RekapPenyulangHarianPage: React.FC = () => {
               {filteredRows.map((row, rIdx) => {
                 let rowVolumeSum = 0;
                 daysInMonth.forEach((d) => {
-                  const val = row.dailyValues[d.dayFormatted] || { realisasiKms: 0 };
-                  rowVolumeSum += (val.realisasiKms || 0);
+                  rowVolumeSum += getDayVal(row.dailyValues, d).realisasiKms;
                 });
                 const target = row.target || TARGET_KMS_PER_TIM_ROW;
                 const sisa = target - rowVolumeSum;
@@ -417,25 +432,24 @@ export const RekapPenyulangHarianPage: React.FC = () => {
                     <td className="sticky left-[70px] z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-bold whitespace-nowrap">{row.namaUlp}</td>
                     <td className="sticky left-[240px] z-20 bg-white dark:bg-slate-900 group-hover:bg-slate-50 px-3 py-2 border-r border-slate-200 dark:border-slate-800 font-extrabold text-cyan-600 whitespace-nowrap">{row.timRow}</td>
                     {daysInMonth.map((d) => {
-                      const val = row.dailyValues[d.dayFormatted] || { tebang1: 0, pangkas: 0, targetKms: 0, realisasiKms: 0 };
-                      const dayTotal = (val.tebang1 || 0) + (val.pangkas || 0);
+                      const { tebang, pangkas, targetKms, realisasiKms, total: dayTotal } = getDayVal(row.dailyValues, d);
                       if (d.isRedDay) {
                         return (
                           <React.Fragment key={`c-${row.id}-${d.dayFormatted}`}>
-                            <td className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[10px]">{val.targetKms > 0 ? val.targetKms : ''}</td>
-                            <td className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[10px]">{val.realisasiKms > 0 ? val.realisasiKms : ''}</td>
-                            <td className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px]">{val.tebang1 > 0 ? val.tebang1 : ''}</td>
-                            <td className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px]">{val.pangkas > 0 ? val.pangkas : ''}</td>
+                            <td className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[10px]">{targetKms > 0 ? targetKms : ''}</td>
+                            <td className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[10px]">{realisasiKms > 0 ? realisasiKms : ''}</td>
+                            <td className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px]">{tebang > 0 ? tebang : ''}</td>
+                            <td className="px-1 py-1.5 border-r border-red-700 bg-red-600 text-white text-center font-bold text-[11px]">{pangkas > 0 ? pangkas : ''}</td>
                             <td className="px-1 py-1.5 border-r border-red-800 bg-red-700 text-white text-center font-black text-[11px]">{dayTotal > 0 ? dayTotal : ''}</td>
                           </React.Fragment>
                         );
                       }
                       return (
                         <React.Fragment key={`c-${row.id}-${d.dayFormatted}`}>
-                          <td className="px-1 py-1.5 border-r border-slate-200 text-center font-mono text-cyan-600 font-bold text-[10px]">{val.targetKms > 0 ? val.targetKms.toFixed(2) : ''}</td>
-                          <td className={`px-1 py-1.5 border-r border-slate-200 text-center font-mono font-bold text-[10px] ${val.targetKms > 0 && val.realisasiKms < val.targetKms ? 'text-red-600' : 'text-cyan-600'}`}>{val.realisasiKms > 0 ? val.realisasiKms.toFixed(2) : (val.targetKms > 0 ? '0.00' : '')}</td>
-                          <td className="px-1 py-1.5 border-r border-slate-200 text-center font-mono">{val.tebang1 > 0 ? val.tebang1 : ''}</td>
-                          <td className="px-1 py-1.5 border-r border-slate-200 text-center font-mono">{val.pangkas > 0 ? val.pangkas : ''}</td>
+                          <td className="px-1 py-1.5 border-r border-slate-200 text-center font-mono text-cyan-600 font-bold text-[10px]">{targetKms > 0 ? targetKms.toFixed(2) : ''}</td>
+                          <td className={`px-1 py-1.5 border-r border-slate-200 text-center font-mono font-bold text-[10px] ${targetKms > 0 && realisasiKms < targetKms ? 'text-red-600' : 'text-cyan-600'}`}>{realisasiKms > 0 ? realisasiKms.toFixed(2) : (targetKms > 0 ? '0.00' : '')}</td>
+                          <td className="px-1 py-1.5 border-r border-slate-200 text-center font-mono">{tebang > 0 ? tebang : ''}</td>
+                          <td className="px-1 py-1.5 border-r border-slate-200 text-center font-mono">{pangkas > 0 ? pangkas : ''}</td>
                           <td className="px-1 py-1.5 border-r border-slate-300 bg-slate-50 text-center font-mono font-bold text-cyan-600">{dayTotal > 0 ? dayTotal : ''}</td>
                         </React.Fragment>
                       );

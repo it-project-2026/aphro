@@ -501,6 +501,8 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         penyulangName: penyulangName.trim(),
         noTiang: noTiang.trim(),
         tanggalRealisasi: tanggalRealisasi.trim(),
+        tanggal: tanggalRealisasi.trim(),
+        TANGGAL: tanggalRealisasi.trim(),
         petugasId: (currentUser?.userName || 'Admin').trim(),
         petugasName: (petugasName || currentUser?.name || 'Admin').trim(),
         jenisTanaman: jenisTanaman.trim(),

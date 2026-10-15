@@ -2860,7 +2860,7 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       RETURNING *;
     `;
 
-    const tanggalVal = toNullableTimestamp(r.TANGGAL || r.tanggal) || new Date().toISOString().split('T')[0];
+    const tanggalVal = toNullableTimestamp(r.TANGGAL || r.tanggal || r.tanggalRealisasi || r.Tanggal) || new Date().toISOString().split('T')[0];
     const timestampVal = toNullableTimestamp(r.Timestamp || r.timestamp) || new Date().toISOString();
 
     let fotoSebVal = (r.Foto_Sebelum || r.fotoSebelum || r.fotoSebelumUrl || '').toString().trim();

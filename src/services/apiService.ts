@@ -2722,40 +2722,52 @@ bodyMB=${bodyMB} MB`);
 
     try {
       const woRes = await this.fetchWorkOrders(stdId);
+      // Fetch every page WITHOUT server-side date filters. Some deployed gateway
+      // versions treat DATE parameters as text-pattern operators (~~), causing HTTP 500.
+      // Filter the complete unit dataset locally so older records in the selected month
+      // are not silently lost after the first 1,000 rows.
       let rawRel: Realisasi[] = [];
-
       try {
-        const relRes = await this.fetchRealisasi({
-          unitId: stdId,
-          limit: 1000,
-          tanggalDari: startDate,
-          tanggalSampai: endDate,
-        });
-        rawRel = Array.isArray(relRes?.data) ? relRes.data : [];
-      } catch (filteredFetchErr: any) {
-        console.warn('fetchRealisasi with date filters failed, trying fallback without date params:', filteredFetchErr?.message || filteredFetchErr);
-        try {
-          // Fallback: fetch without date params then filter locally in memory
-          const allRelRes = await this.fetchRealisasi({
+        const pageSize = 1000;
+        let page = 1;
+        let totalPages = 1;
+        const seenIds = new Set<string>();
+        do {
+          const relRes = await this.fetchRealisasi({
             unitId: stdId,
-            limit: 1000,
+            page,
+            limit: pageSize,
           });
-          const allData = Array.isArray(allRelRes?.data) ? allRelRes.data : [];
-          rawRel = allData.filter((r) => {
-            const tgl = (r.tanggalRealisasi || (r as any).TANGGAL || (r as any).tanggal || '').slice(0, 10);
-            return !tgl || (tgl >= startDate && tgl <= endDate);
+          const pageRows = Array.isArray(relRes?.data) ? relRes.data : [];
+          for (const row of pageRows) {
+            const rowId = String((row as any).id || (row as any).ID || (row as any).id_unik || '');
+            if (!rowId || !seenIds.has(rowId)) {
+              rawRel.push(row);
+              if (rowId) seenIds.add(rowId);
+            }
+          }
+          totalPages = Math.max(1, Number(relRes?.pagination?.totalPages || 1));
+          if (pageRows.length === 0) break;
+          page += 1;
+        } while (page <= totalPages && page <= 1000);
+
+        rawRel = rawRel
+          .map((row: any) => normalizeRealisasiRow(row))
+          .filter((r: any) => {
+            const rawDate = r.tanggalRealisasi || r.TANGGAL || r.tanggal || r.Tanggal || '';
+            const tgl = String(rawDate).slice(0, 10);
+            return Boolean(tgl) && tgl >= startDate && tgl <= endDate;
           });
-        } catch (unfilteredErr: any) {
-          console.warn('Fallback fetchRealisasi without date params also failed, checking Dexie cache:', unfilteredErr?.message || unfilteredErr);
-          const { dexieDb } = await import('./dexieDb');
-          const localRecords = await dexieDb.realisasi.toArray();
-          rawRel = localRecords
-            .map(item => normalizeRealisasiRow(item))
-            .filter((r) => {
-              const tgl = (r.tanggalRealisasi || (r as any).TANGGAL || (r as any).tanggal || '').slice(0, 10);
-              return !tgl || (tgl >= startDate && tgl <= endDate);
-            });
-        }
+      } catch (fetchErr: any) {
+        console.warn('Paginated Realisasi fetch failed, checking Dexie cache:', fetchErr?.message || fetchErr);
+        const { dexieDb } = await import('./dexieDb');
+        rawRel = (await dexieDb.realisasi.toArray())
+          .map(item => normalizeRealisasiRow(item))
+          .filter((r: any) => {
+            const rawDate = r.tanggalRealisasi || r.TANGGAL || r.tanggal || r.Tanggal || '';
+            const tgl = String(rawDate).slice(0, 10);
+            return Boolean(tgl) && tgl >= startDate && tgl <= endDate;
+          });
       }
 
       const rawWo = woRes.success && Array.isArray(woRes.data) ? woRes.data : [];
