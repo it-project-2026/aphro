@@ -336,6 +336,8 @@ export const EditRealisasiModal: React.FC<EditRealisasiModalProps> = ({
       const updatePayload = {
         tanggal: tanggal.trim(),
         tanggalRealisasi: tanggal.trim(),
+        TANGGAL: tanggal.trim(),
+        Tanggal: tanggal.trim(),
         latitude: latNum,
         longitude: lngNum,
         Latitude_Longitude: `${latNum}, ${lngNum}`,

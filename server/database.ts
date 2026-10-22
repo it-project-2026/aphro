@@ -3,6 +3,10 @@ import axios from 'axios';
 
 const { Pool } = pg;
 
+// Prevent node-postgres from converting PostgreSQL DATE (OID 1082) into JS Date object
+// that shifts to previous day when serialized to JSON in UTC.
+pg.types.setTypeParser(1082, (val: string) => val);
+
 export const HYPERCLOUD_API_URL = (
   process.env.HYPERCLOUD_API_URL ||
   process.env.VITE_API_URL ||

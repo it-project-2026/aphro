@@ -4,7 +4,7 @@ import { normalizeWorkOrderRow } from '../utils/workOrderNormalizer';
 import { normalizeUser, normalizeAbsensi, normalizeULP, normalizePenyulang, normalizeRegu, normalizePetugas } from './syncService';
 import { InisiasiService, DEFAULT_UL_OPTIONS } from './inisiasiService';
 import { dexieDb } from './dexieDb';
-import { getWIBDateString, getLocalDateTimeString } from '../utils/dateUtils';
+import { getWIBDateString, getLocalDateTimeString, normalizeDateISO } from '../utils/dateUtils';
 import { isValidPhotoUrl } from '../utils/driveUtils';
 
 export const API_BASE_URL =
@@ -696,6 +696,17 @@ export class ApiService {
       throw new Error('REALISASI_BLOCKED_BASE64: Foto belum berhasil di-upload ke Google Drive');
     }
 
+    const cleanTanggal = normalizeDateISO(data.tanggalRealisasi || data.tanggal || data.TANGGAL || data.Tanggal) || getWIBDateString();
+    let resolvedTimestamp = data.Timestamp || data.timestamp;
+    if (!resolvedTimestamp) {
+      resolvedTimestamp = `${cleanTanggal} 12:00:00`;
+    } else if (cleanTanggal && !resolvedTimestamp.startsWith(cleanTanggal)) {
+      const timePart = resolvedTimestamp.includes(' ')
+        ? resolvedTimestamp.split(' ')[1]
+        : (resolvedTimestamp.includes('T') ? resolvedTimestamp.split('T')[1].replace('Z', '') : '12:00:00');
+      resolvedTimestamp = `${cleanTanggal} ${timePart.slice(0, 8)}`;
+    }
+
     // CONCEPT C/D: Whitelisted minimal final payload structure with ZERO duplicate photo fields
     const payload = {
       id: data.id || data.ID || data.realisasiId,
@@ -708,7 +719,10 @@ export class ApiService {
       REGU_ROW: data.reguName || data.regu || data.REGU_ROW || '',
       PENYULANG: data.penyulangName || data.penyulang || data.PENYULANG || '',
       NO_TIANG: data.noTiang || data.NO_TIANG || '',
-      TANGGAL: data.tanggalRealisasi || data.tanggal || data.TANGGAL || getWIBDateString(),
+      TANGGAL: cleanTanggal,
+      tanggal: cleanTanggal,
+      tanggalRealisasi: cleanTanggal,
+      Tanggal: cleanTanggal,
       Foto_Sebelum: fotoSebelumClean,
       Foto_Sesudah: fotoSesudahClean,
       Jenis_Tanaman: data.jenisTanaman || '',
@@ -717,9 +731,11 @@ export class ApiService {
       Kendala: data.kendala || '',
       Latitude_Longitude: latLngStr,
       Lokasi_kerja: lokasiStr,
-      Timestamp: data.Timestamp || data.timestamp || getLocalDateTimeString(),
+      Timestamp: resolvedTimestamp,
       petugas: data.petugasName || data.petugas || '',
       status: 'Selesai',
+      isManualAdmin: Boolean(data.isManualAdmin),
+      bypassPhotoValidation: Boolean(data.bypassPhotoValidation),
     };
 
     console.log('[REALISASI_PHOTO_DEBUG] create whitelisted payload:', {
@@ -858,9 +874,13 @@ bodyMB=${bodyMB} MB`);
       : (data.Latitude_Longitude || data.latitudeLongitude || undefined);
     const lokasiStr = data.lokasiKerja || data.Lokasi_kerja || data.lokasi_kerja || data.lokasi;
 
+    const rawTanggalCandidate = data.tanggalRealisasi || data.TANGGAL || data.tanggal || data.Tanggal;
+    const cleanTanggal = rawTanggalCandidate ? normalizeDateISO(rawTanggalCandidate) : undefined;
+
     const payload = {
       ...data,
       unitId,
+      ...(cleanTanggal ? { TANGGAL: cleanTanggal, tanggal: cleanTanggal, tanggalRealisasi: cleanTanggal, Tanggal: cleanTanggal } : {}),
       ...(woId ? { WO_ID: woId, woId: woId, workOrderId: woId } : {}),
       ...(nomorWo ? { Nomor_WO: nomorWo, nomorWO: nomorWo, nomor_wo: nomorWo } : {}),
       ...(fotoSebClean !== undefined ? { Foto_Sebelum: fotoSebClean, fotoSebelum: fotoSebClean, fotoSebelumUrl: fotoSebClean } : {}),
@@ -2755,7 +2775,7 @@ bodyMB=${bodyMB} MB`);
           .map((row: any) => normalizeRealisasiRow(row))
           .filter((r: any) => {
             const rawDate = r.tanggalRealisasi || r.TANGGAL || r.tanggal || r.Tanggal || '';
-            const tgl = String(rawDate).slice(0, 10);
+            const tgl = normalizeDateISO(rawDate);
             return Boolean(tgl) && tgl >= startDate && tgl <= endDate;
           });
       } catch (fetchErr: any) {
@@ -2765,7 +2785,7 @@ bodyMB=${bodyMB} MB`);
           .map(item => normalizeRealisasiRow(item))
           .filter((r: any) => {
             const rawDate = r.tanggalRealisasi || r.TANGGAL || r.tanggal || r.Tanggal || '';
-            const tgl = String(rawDate).slice(0, 10);
+            const tgl = normalizeDateISO(rawDate);
             return Boolean(tgl) && tgl >= startDate && tgl <= endDate;
           });
       }

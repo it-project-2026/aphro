@@ -665,9 +665,13 @@ export function RealisasiProvider({
           relData.unitId ||
           InisiasiService.getSelectedUnitId() || 'UL2';
 
+        const cleanTanggal = ((relData as any).tanggalRealisasi || (relData as any).TANGGAL || (relData as any).tanggal || (relData as any).Tanggal || '').trim() || getWIBDateString();
+        const defaultTime = new Date().toTimeString().split(' ')[0] || '12:00:00';
+        const resolvedTimestamp = (relData as any).Timestamp || (relData as any).timestamp || `${cleanTanggal} ${defaultTime}`;
+
         const localRecord: LocalRealisasi =
           {
-            ...relData,
+            ...(relData as any),
 
             unitId:
               targetUnitId,
@@ -686,6 +690,27 @@ export function RealisasiProvider({
 
             Nomor_WO:
               resolvedNomorWo,
+
+            tanggalRealisasi:
+              cleanTanggal,
+
+            TANGGAL:
+              cleanTanggal,
+
+            tanggal:
+              cleanTanggal,
+
+            Tanggal:
+              cleanTanggal,
+
+            Timestamp:
+              resolvedTimestamp,
+
+            isManualAdmin:
+              true,
+
+            bypassPhotoValidation:
+              true,
 
             localId,
 
@@ -715,7 +740,7 @@ export function RealisasiProvider({
 
         const newRelUI: Realisasi =
           {
-            ...relData,
+            ...(relData as any),
 
             unitId:
               targetUnitId,
@@ -734,6 +759,27 @@ export function RealisasiProvider({
 
             Nomor_WO:
               resolvedNomorWo,
+
+            tanggalRealisasi:
+              cleanTanggal,
+
+            TANGGAL:
+              cleanTanggal,
+
+            tanggal:
+              cleanTanggal,
+
+            Tanggal:
+              cleanTanggal,
+
+            Timestamp:
+              resolvedTimestamp,
+
+            isManualAdmin:
+              true,
+
+            bypassPhotoValidation:
+              true,
 
             id:
               localId,

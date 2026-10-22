@@ -49,12 +49,10 @@ export function isSpecificReguMatch(
   rowUlpRaw?: string,
   relUlpRaw?: string
 ): boolean {
-  if (!rowTimRaw || !relReguRaw) return false;
-
   const rowUlpKey = getCanonicalUlpKey(rowUlpRaw);
   const relUlpKey = getCanonicalUlpKey(relUlpRaw);
 
-  // 1. First verify ULP: if both ULP names exist and conflict, return false immediately
+  // 1. First verify ULP: if both Ulp names exist and conflict, return false immediately
   if (
     rowUlpKey &&
     relUlpKey &&
@@ -64,6 +62,16 @@ export function isSpecificReguMatch(
   ) {
     return false;
   }
+
+  // If relReguRaw is empty or missing, fallback to matching by ULP or allow matching
+  if (!relReguRaw || relReguRaw === '-' || relReguRaw === 'null' || relReguRaw === 'undefined') {
+    if (rowUlpKey && relUlpKey) {
+      return rowUlpKey === relUlpKey || rowUlpKey.includes(relUlpKey) || relUlpKey.includes(rowUlpKey);
+    }
+    return true; // Fallback when regu and ulp are unconstrained
+  }
+
+  if (!rowTimRaw || !relReguRaw) return false;
 
   const rowTimCanon = getCanonicalReguKey(rowTimRaw);
   const relReguCanon = getCanonicalReguKey(relReguRaw);

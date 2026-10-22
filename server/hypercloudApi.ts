@@ -73,7 +73,7 @@ async function proxyToHypercloudGateway(req: Request, res: Response, targetPath?
       const tanggalSampaiStr = String(req.query.tanggalSampai || '').trim();
 
       const filteredRows = rawRows.filter((item: any) => {
-        const rawTgl = String(item.TANGGAL || item.tanggal || item.Tanggal || '').slice(0, 10);
+        const rawTgl = getWIBDateFromAny(item.TANGGAL || item.tanggal || item.Tanggal || item.tanggalRealisasi);
         if (!rawTgl) return true;
         if (tanggalDariStr && rawTgl < tanggalDariStr) return false;
         if (tanggalSampaiStr && rawTgl > tanggalSampaiStr) return false;
@@ -255,6 +255,49 @@ function toNullableTimestamp(val: any): string | null {
   }
 
   return null;
+}
+
+/**
+ * Accurately extracts YYYY-MM-DD in Asia/Jakarta (WIB) from any date representation,
+ * avoiding 1-day UTC rollbacks (e.g. 2026-10-14T17:00:00.000Z -> 2026-10-15).
+ */
+export function getWIBDateFromAny(val: any): string | null {
+  if (val === undefined || val === null) return null;
+  const str = String(val).trim();
+  if (!str || str === 'null' || str === 'undefined' || str === '""' || str === "''") return null;
+
+  // 1. If ISO string with T or ending with Z
+  if (str.includes('T') || str.endsWith('Z')) {
+    const dt = new Date(str);
+    if (!isNaN(dt.getTime())) {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jakarta',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(dt);
+    }
+  }
+
+  // 2. Pure YYYY-MM-DD
+  const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (ymdMatch) {
+    const y = ymdMatch[1];
+    const m = ymdMatch[2].padStart(2, '0');
+    const d = ymdMatch[3].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // 3. DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (dmyMatch) {
+    const d = dmyMatch[1].padStart(2, '0');
+    const m = dmyMatch[2].padStart(2, '0');
+    const y = dmyMatch[3];
+    return `${y}-${m}-${d}`;
+  }
+
+  return str.slice(0, 10);
 }
 
 /**
@@ -2422,28 +2465,7 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
         whereClause += ` AND UPPER(COALESCE("unitId", '')) = UPPER($${params.length})`;
       }
 
-      // Group WO filter for Role USER
-      let userRegu = String(authUser?.reguName || authUser?.groupWO || '').trim();
-      if (!userRegu) {
-        try {
-          const uRes = await query(
-            `SELECT "Nama_Regu" FROM public."USERS" WHERE "Id" = $1 OR "UserID" = $2 OR "Username" = $2 LIMIT 1`,
-            [authUser?.userId, authUser?.username]
-          );
-          if (uRes.rowCount && uRes.rows[0]?.Nama_Regu) {
-            userRegu = String(uRes.rows[0].Nama_Regu).trim();
-          }
-        } catch {}
-      }
-
-      if (userRegu) {
-        const cleanRegu = userRegu.replace(/^(regu|tim|petugas)\s+/gi, '').trim();
-        params.push(`%${userRegu}%`);
-        const p1 = params.length;
-        params.push(`%${cleanRegu}%`);
-        const p2 = params.length;
-        whereClause += ` AND ("REGU_ROW" ILIKE $${p1} OR "REGU_ROW" ILIKE $${p2})`;
-      }
+      // Unit filter only without strict regu restriction to ensure all unit realisasi data appears in Riwayat Realisasi
     } else if (!isAll && unitId) {
       params.push(unitId);
 
@@ -2527,12 +2549,17 @@ const handleGetRealisasiList = async (req: Request, res: Response) => {
       dataParams
     );
 
+    const sanitizedRows = (dataRes.rows || []).map((row: any) => ({
+      ...row,
+      TANGGAL: getWIBDateFromAny(row.TANGGAL) || row.TANGGAL,
+    }));
+
     res.setHeader('X-Data-Source', 'DIRECT_POSTGRESQL');
     console.log(`[DATA SOURCE] endpoint=/api/realisasi source=DIRECT_POSTGRESQL`);
 
     return res.json({
       status: 'success',
-      data: dataRes.rows,
+      data: sanitizedRows,
 
       pagination: {
         page,
@@ -2729,6 +2756,7 @@ router.get(
         };
         return {
           ...row,
+          TANGGAL: getWIBDateFromAny(row.TANGGAL) || row.TANGGAL,
           Foto_Sebelum: cleanFoto(row.Foto_Sebelum),
           Foto_Sesudah: cleanFoto(row.Foto_Sesudah),
         };
@@ -2860,8 +2888,14 @@ const handleUpsertRealisasi = async (req: Request, res: Response) => {
       RETURNING *;
     `;
 
-    const tanggalVal = toNullableTimestamp(r.TANGGAL || r.tanggal || r.tanggalRealisasi || r.Tanggal) || new Date().toISOString().split('T')[0];
-    const timestampVal = toNullableTimestamp(r.Timestamp || r.timestamp) || new Date().toISOString();
+    const tanggalVal = getWIBDateFromAny(r.TANGGAL || r.tanggal || r.tanggalRealisasi || r.Tanggal) || new Date().toISOString().split('T')[0];
+    let timestampVal = toNullableTimestamp(r.Timestamp || r.timestamp) || new Date().toISOString();
+    if (tanggalVal && !timestampVal.startsWith(tanggalVal)) {
+      const timePart = timestampVal.includes(' ')
+        ? timestampVal.split(' ')[1]
+        : (timestampVal.includes('T') ? timestampVal.split('T')[1].replace('Z', '') : '12:00:00');
+      timestampVal = `${tanggalVal} ${timePart.slice(0, 8)}`;
+    }
 
     let fotoSebVal = (r.Foto_Sebelum || r.fotoSebelum || r.fotoSebelumUrl || '').toString().trim();
     let fotoSesVal = (r.Foto_Sesudah || r.fotoSesudah || r.fotoSesudahUrl || '').toString().trim();
@@ -3039,8 +3073,8 @@ const handleUpdateRealisasi = async (req: Request, res: Response) => {
     const updatedPenyulang = r.PENYULANG || r.penyulangName || existingRecord.PENYULANG || '';
     const updatedNoTiang = r.NO_TIANG || r.noTiang || existingRecord.NO_TIANG || '';
 
-    const rawTanggal = r.TANGGAL || r.tanggal || r.tanggalRealisasi;
-    const updatedTanggal = rawTanggal ? toNullableTimestamp(rawTanggal) : existingRecord.TANGGAL;
+    const rawTanggal = r.TANGGAL || r.tanggal || r.tanggalRealisasi || r.Tanggal;
+    const updatedTanggal = rawTanggal ? getWIBDateFromAny(rawTanggal) : existingRecord.TANGGAL;
 
     const rawFotoSeb = r.Foto_Sebelum !== undefined ? r.Foto_Sebelum : (r.fotoSebelum !== undefined ? r.fotoSebelum : r.fotoSebelumUrl);
     const updatedFotoSeb = rawFotoSeb ? String(rawFotoSeb).trim() : (existingRecord.Foto_Sebelum || '');
@@ -3061,7 +3095,13 @@ const handleUpdateRealisasi = async (req: Request, res: Response) => {
     }
 
     const updatedLokasi = r.Lokasi_kerja !== undefined ? r.Lokasi_kerja : (r.lokasiKerja !== undefined ? r.lokasiKerja : existingRecord.Lokasi_kerja);
-    const updatedTimestamp = toNullableTimestamp(r.Timestamp || r.timestamp) || existingRecord.Timestamp || new Date().toISOString();
+    let updatedTimestamp = toNullableTimestamp(r.Timestamp || r.timestamp) || existingRecord.Timestamp || new Date().toISOString();
+    if (updatedTanggal && !updatedTimestamp.startsWith(updatedTanggal)) {
+      const timePart = updatedTimestamp.includes(' ')
+        ? updatedTimestamp.split(' ')[1]
+        : (updatedTimestamp.includes('T') ? updatedTimestamp.split('T')[1].replace('Z', '') : '12:00:00');
+      updatedTimestamp = `${updatedTanggal} ${timePart.slice(0, 8)}`;
+    }
 
     const updateSql = `
       UPDATE public."REALISASI"

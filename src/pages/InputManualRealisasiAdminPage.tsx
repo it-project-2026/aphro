@@ -179,6 +179,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
   // 3. Pekerjaan & Vegetasi
   const [noTiang, setNoTiang] = useState<string>('');
   const [tanggalRealisasi, setTanggalRealisasi] = useState<string>(getWIBDateString());
+  const [isTanggalManuallySet, setIsTanggalManuallySet] = useState<boolean>(false);
   const [petugasName, setPetugasName] = useState<string>(
     currentUser?.name || currentUser?.userName || 'Petugas Lapangan'
   );
@@ -323,7 +324,8 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
       }
 
       // 2. Auto-detect and suggest values into form without locking
-      if (exifResult.dateDetected && exifResult.dateISO) {
+      // Crucial: Only suggest EXIF date if user has not manually set a specific date
+      if (!isTanggalManuallySet && exifResult.dateDetected && exifResult.dateISO) {
         setTanggalRealisasi(exifResult.dateISO);
       }
 
@@ -342,9 +344,10 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
           ? exifResult.longitude
           : parseFloat(longitude) || 100.4631;
 
-      const timestampStr = exifResult.dateISO
-        ? `${exifResult.dateISO} ${exifResult.timeStr || '12:00:00'}`
-        : getLocalDateTimeString();
+      // Crucial: Watermark must use the explicitly chosen tanggalRealisasi
+      const effectiveDate = tanggalRealisasi.trim() || exifResult.dateISO || getWIBDateString();
+      const effectiveTime = exifResult.timeStr || new Date().toTimeString().split(' ')[0] || '12:00:00';
+      const timestampStr = `${effectiveDate} ${effectiveTime}`;
 
       // 4. Burn watermark into image
       const watermarkedBase64 = await generateWatermarkedImage({
@@ -487,6 +490,10 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         return;
       }
 
+      const cleanTanggal = tanggalRealisasi.trim() || getWIBDateString();
+      const defaultTime = new Date().toTimeString().split(' ')[0] || '12:00:00';
+      const resolvedTimestamp = `${cleanTanggal} ${exifSebelum?.timeStr || exifSesudah?.timeStr || defaultTime}`;
+
       const payload = {
         id: generatedId,
         ID: generatedId,
@@ -500,9 +507,13 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
         reguName: reguName.trim(),
         penyulangName: penyulangName.trim(),
         noTiang: noTiang.trim(),
-        tanggalRealisasi: tanggalRealisasi.trim(),
-        tanggal: tanggalRealisasi.trim(),
-        TANGGAL: tanggalRealisasi.trim(),
+        tanggalRealisasi: cleanTanggal,
+        tanggal: cleanTanggal,
+        TANGGAL: cleanTanggal,
+        Tanggal: cleanTanggal,
+        Timestamp: resolvedTimestamp,
+        isManualAdmin: true,
+        bypassPhotoValidation: true,
         petugasId: (currentUser?.userName || 'Admin').trim(),
         petugasName: (petugasName || currentUser?.name || 'Admin').trim(),
         jenisTanaman: jenisTanaman.trim(),
@@ -525,7 +536,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
                 dataUrl: fotoSebelumUrl,
                 fileUrl: fotoSebelumUrl.startsWith('http') ? fotoSebelumUrl : undefined,
                 originalName: `Foto_Sebelum_${nomorWO}.jpg`,
-                timestamp: getLocalDateTimeString(),
+                timestamp: `${cleanTanggal} ${exifSebelum?.timeStr || '10:00:00'}`,
                 latitude: latNum,
                 longitude: lngNum,
                 userName: petugasName,
@@ -542,7 +553,7 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
                 dataUrl: fotoSesudahUrl,
                 fileUrl: fotoSesudahUrl.startsWith('http') ? fotoSesudahUrl : undefined,
                 originalName: `Foto_Sesudah_${nomorWO}.jpg`,
-                timestamp: getLocalDateTimeString(),
+                timestamp: `${cleanTanggal} ${exifSesudah?.timeStr || '11:00:00'}`,
                 latitude: latNum,
                 longitude: lngNum,
                 userName: petugasName,
@@ -916,7 +927,10 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
                     type="date"
                     required
                     value={tanggalRealisasi}
-                    onChange={(e) => setTanggalRealisasi(e.target.value)}
+                    onChange={(e) => {
+                      setTanggalRealisasi(e.target.value);
+                      setIsTanggalManuallySet(true);
+                    }}
                     className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                   />
                   <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -1129,21 +1143,36 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
                     <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono">
                       📍 GPS: {exifSebelum.formattedGps || 'Tidak tersedia'}
                     </p>
-                    {exifSebelum.gpsDetected && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (exifSebelum.latitude && exifSebelum.longitude) {
-                            setLatitude(String(exifSebelum.latitude));
-                            setLongitude(String(exifSebelum.longitude));
-                            showToast('Titik GPS Foto Sebelum diterapkan.', 'info');
-                          }
-                        }}
-                        className="mt-1 px-2.5 py-1 bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg text-[10px] font-bold hover:bg-rose-100"
-                      >
-                        Gunakan GPS Foto Sebelum
-                      </button>
-                    )}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {exifSebelum.dateDetected && exifSebelum.dateISO && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTanggalRealisasi(exifSebelum.dateISO!);
+                            setIsTanggalManuallySet(true);
+                            showToast(`Tanggal Foto Sebelum diterapkan: ${exifSebelum.dateISO}`, 'info');
+                          }}
+                          className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-[10px] font-bold hover:bg-amber-100"
+                        >
+                          Gunakan Tgl Foto Sebelum
+                        </button>
+                      )}
+                      {exifSebelum.gpsDetected && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (exifSebelum.latitude && exifSebelum.longitude) {
+                              setLatitude(String(exifSebelum.latitude));
+                              setLongitude(String(exifSebelum.longitude));
+                              showToast('Titik GPS Foto Sebelum diterapkan.', 'info');
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg text-[10px] font-bold hover:bg-rose-100"
+                        >
+                          Gunakan GPS Foto Sebelum
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Metadata Sesudah */}
@@ -1157,21 +1186,36 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
                     <p className="text-[11px] text-slate-600 dark:text-slate-300 font-mono">
                       📍 GPS: {exifSesudah.formattedGps || 'Tidak tersedia'}
                     </p>
-                    {exifSesudah.gpsDetected && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (exifSesudah.latitude && exifSesudah.longitude) {
-                            setLatitude(String(exifSesudah.latitude));
-                            setLongitude(String(exifSesudah.longitude));
-                            showToast('Titik GPS Foto Sesudah diterapkan.', 'info');
-                          }
-                        }}
-                        className="mt-1 px-2.5 py-1 bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-lg text-[10px] font-bold hover:bg-teal-100"
-                      >
-                        Gunakan GPS Foto Sesudah
-                      </button>
-                    )}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {exifSesudah.dateDetected && exifSesudah.dateISO && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTanggalRealisasi(exifSesudah.dateISO!);
+                            setIsTanggalManuallySet(true);
+                            showToast(`Tanggal Foto Sesudah diterapkan: ${exifSesudah.dateISO}`, 'info');
+                          }}
+                          className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-[10px] font-bold hover:bg-amber-100"
+                        >
+                          Gunakan Tgl Foto Sesudah
+                        </button>
+                      )}
+                      {exifSesudah.gpsDetected && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (exifSesudah.latitude && exifSesudah.longitude) {
+                              setLatitude(String(exifSesudah.latitude));
+                              setLongitude(String(exifSesudah.longitude));
+                              showToast('Titik GPS Foto Sesudah diterapkan.', 'info');
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-lg text-[10px] font-bold hover:bg-teal-100"
+                        >
+                          Gunakan GPS Foto Sesudah
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                 </div>
@@ -1240,10 +1284,23 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
                 {/* EXIF Feedback Badge for Foto Sebelum */}
                 {exifSebelum && (
                   <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] space-y-1">
-                    {exifSebelum.dateDetected ? (
-                      <p className="text-teal-700 dark:text-teal-300 font-medium flex items-center space-x-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
-                        <span>Tanggal terdeteksi EXIF: <b>{exifSebelum.formattedDate || exifSebelum.dateISO}</b></span>
+                    {exifSebelum.dateDetected && exifSebelum.dateISO ? (
+                      <p className="text-teal-700 dark:text-teal-300 font-medium flex items-center justify-between">
+                        <span className="flex items-center space-x-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                          <span>Tanggal EXIF: <b>{exifSebelum.formattedDate || exifSebelum.dateISO}</b></span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTanggalRealisasi(exifSebelum.dateISO!);
+                            setIsTanggalManuallySet(true);
+                            showToast(`Tanggal Foto Sebelum diterapkan: ${exifSebelum.dateISO}`, 'info');
+                          }}
+                          className="px-2 py-0.5 bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 text-[10px] font-bold rounded-md hover:bg-teal-200"
+                        >
+                          Gunakan
+                        </button>
                       </p>
                     ) : (
                       <p className="text-slate-400 flex items-center space-x-1.5">
@@ -1390,10 +1447,23 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
                 {/* EXIF Feedback Badge for Foto Sesudah */}
                 {exifSesudah && (
                   <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] space-y-1">
-                    {exifSesudah.dateDetected ? (
-                      <p className="text-teal-700 dark:text-teal-300 font-medium flex items-center space-x-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
-                        <span>Tanggal terdeteksi EXIF: <b>{exifSesudah.formattedDate || exifSesudah.dateISO}</b></span>
+                    {exifSesudah.dateDetected && exifSesudah.dateISO ? (
+                      <p className="text-teal-700 dark:text-teal-300 font-medium flex items-center justify-between">
+                        <span className="flex items-center space-x-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                          <span>Tanggal EXIF: <b>{exifSesudah.formattedDate || exifSesudah.dateISO}</b></span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTanggalRealisasi(exifSesudah.dateISO!);
+                            setIsTanggalManuallySet(true);
+                            showToast(`Tanggal Foto Sesudah diterapkan: ${exifSesudah.dateISO}`, 'info');
+                          }}
+                          className="px-2 py-0.5 bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 text-[10px] font-bold rounded-md hover:bg-teal-200"
+                        >
+                          Gunakan
+                        </button>
                       </p>
                     ) : (
                       <p className="text-slate-400 flex items-center space-x-1.5">
