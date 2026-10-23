@@ -265,13 +265,27 @@ export function RealisasiProvider({
             const res = await ApiService.fetchRealisasi(newParams);
 
             if (res.status === 'success' || res.data) {
-              const list = Array.isArray(res.data) ? res.data : [];
+              let list = Array.isArray(res.data) ? res.data : [];
+              try {
+                const localRecords = await dexieDb.realisasi.toArray();
+                if (localRecords.length > 0) {
+                  const localMapped = mapLocalToUI(localRecords);
+                  const existingIds = new Set(list.map((r: any) => String(r.id || r.syncId)));
+                  localMapped.forEach((r: any) => {
+                    if (!existingIds.has(String(r.id || r.syncId))) {
+                      list.push(r);
+                    }
+                  });
+                }
+              } catch (dexErr) {
+                console.warn('[RealisasiContext] Dexie merge warning:', dexErr);
+              }
               setRealisasiList(list);
 
               if (res.pagination) {
                 setPagination(res.pagination);
               }
-              console.log(`[DB SOURCE] entity=REALISASI source=HYPERCLOUD unitId=${unitId} count=${list.length}`);
+              console.log(`[DB SOURCE] entity=REALISASI source=HYPERCLOUD+DEXIE unitId=${unitId} count=${list.length}`);
             } else {
               setError(res.message || 'Gagal mengambil data Realisasi');
               console.warn(`[DB SOURCE] entity=REALISASI source=AUTH_OR_API_ERROR unitId=${unitId}`);
@@ -1583,7 +1597,11 @@ export function RealisasiProvider({
             prev.filter(
               (rel) =>
                 rel.id !== id &&
-                rel.syncId !== id
+                rel.syncId !== id &&
+                (rel as any).ID !== id &&
+                (rel as any).localId !== id &&
+                (rel as any).serverId !== id &&
+                (rel as any).idempotencyKey !== id
             )
         );
 

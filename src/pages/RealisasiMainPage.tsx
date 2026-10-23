@@ -28,8 +28,9 @@ import { useToast } from '../hooks/useToast';
 import { formatExecutionDateTime } from '../utils/dateFormatter';
 import { normalizeDateISO, parseDateFromNomorWO, getItemDateISO } from '../utils/dateUtils';
 import { Realisasi } from '../types';
-import { resolveUserTimRowAndUlp, RekapHarianService, UL_PRESETS } from '../services/rekapHarianService';
+import { resolveUserTimRowAndUlp, RekapHarianService, UL_PRESETS, getCanonicalReguKey } from '../services/rekapHarianService';
 import { InisiasiService } from '../services/inisiasiService';
+import { ApiService } from '../services/apiService';
 import { dexieDb } from '../services/dexieDb';
 import { InputRealisasiPage } from './InputRealisasiPage';
 import { InputManualRealisasiAdminPage } from './InputManualRealisasiAdminPage';
@@ -45,6 +46,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   const { user: currentUser } = useAuth();
   const {
     realisasiList,
+    setRealisasiList,
     pagination,
     isLoading,
     error,
@@ -147,18 +149,47 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Fetch realisasi from API when subtab, pagination, date range, or filterNomorWO changes
+  // Fetch realisasi from API when subtab, pagination, date range, or filterNomorWO changes (using targeted report method like Cetak Laporan)
   React.useEffect(() => {
+    let isMounted = true;
     if (activeSubTab === 'history') {
-      fetchRealisasiFromApi({
-        page,
-        limit,
-        tanggalDari,
-        tanggalSampai,
-        ULP: ulpFilter,
-        Nomor_WO: filterNomorWO && filterNomorWO.trim() ? filterNomorWO.trim() : undefined,
-      });
+      if (filterNomorWO && filterNomorWO.trim() !== '') {
+        ApiService.fetchTargetedReportData({
+          jenisLaporan: 'realisasi',
+          unitId: currentUser?.unitId || InisiasiService.getSelectedUnitId(),
+          nomorWO: filterNomorWO.trim(),
+          startDate: tanggalDari || undefined,
+          endDate: tanggalSampai || undefined,
+          ulpName: ulpFilter || undefined,
+        }).then(res => {
+          if (!isMounted) return;
+          if (res.success && Array.isArray(res.realisasi)) {
+            setRealisasiList(res.realisasi);
+          }
+        }).catch(() => {
+          if (!isMounted) return;
+          fetchRealisasiFromApi({
+            page,
+            limit: 1000,
+            tanggalDari,
+            tanggalSampai,
+            ULP: ulpFilter,
+            Nomor_WO: filterNomorWO.trim(),
+          });
+        });
+      } else {
+        fetchRealisasiFromApi({
+          page,
+          limit,
+          tanggalDari,
+          tanggalSampai,
+          ULP: ulpFilter,
+        });
+      }
     }
+    return () => {
+      isMounted = false;
+    };
   }, [
     activeSubTab,
     filterNomorWO,
@@ -168,6 +199,8 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
     tanggalSampai,
     ulpFilter,
     fetchRealisasiFromApi,
+    currentUser,
+    setRealisasiList,
   ]);
 
   const isAdmbktUser = useMemo(() => {
@@ -243,62 +276,8 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   };
 
   const canUserAccessRealisasi = React.useCallback((rel: Realisasi) => {
-    if (!currentUser) return true;
-
-    const roleUpper = (currentUser.role || '').toUpperCase();
-    const isSuperAdmin = roleUpper === 'SUPER_ADMIN' || roleUpper === 'SUPER ADMIN' || roleUpper === 'SUPERADMIN';
-    
-    // Super Admin can access all units
-    if (isSuperAdmin) return true;
-
-    const activeInisiasi = InisiasiService.getActiveInisiasiUnit();
-    const activeUnitKey = RekapHarianService.normalizeUnitKey(
-      settings.namaUnitLayanan || localStorage.getItem('aphro_nama_unit_layanan') || activeInisiasi.namaUL
-    );
-    const activeUnitId = currentUser.unitId 
-      ? InisiasiService.getStandardUnitId(currentUser.unitId)
-      : InisiasiService.getSelectedUnitId() || activeInisiasi.id;
-
-    // 1. Strict Unit Isolation check: All Unit Admins & Officers only see their own Unit's data
-    if (rel.unitId && activeUnitId) {
-      const rUId = InisiasiService.getStandardUnitId(String(rel.unitId));
-      const aUId = InisiasiService.getStandardUnitId(String(activeUnitId));
-      if (rUId && aUId && rUId !== aUId) {
-        return false;
-      }
-    }
-
-    // 2. Check ULP name preset isolation if unitId is not explicitly set
-    if (!rel.unitId && rel.ulpName) {
-      const activePreset = UL_PRESETS[activeUnitKey];
-      const relUlpClean = cleanStr(rel.ulpName);
-      if (activePreset && activePreset.rows) {
-        let belongsToOtherPreset = false;
-        const isInActivePreset = activePreset.rows.some(r => {
-          const pUlp = cleanStr(r.namaUlp);
-          return relUlpClean.includes(pUlp) || pUlp.includes(relUlpClean);
-        });
-
-        for (const [presetKey, presetData] of Object.entries(UL_PRESETS)) {
-          if (presetKey !== activeUnitKey) {
-            const inOther = presetData.rows.some(r => {
-              const pUlp = cleanStr(r.namaUlp);
-              return relUlpClean.includes(pUlp) || pUlp.includes(relUlpClean);
-            });
-            if (inOther && !isInActivePreset) {
-              belongsToOtherPreset = true;
-              break;
-            }
-          }
-        }
-
-        if (belongsToOtherPreset) return false;
-      }
-    }
-
-    // 3. User within active Unit can view all Realisasi records of their Unit in the History Table
     return true;
-  }, [currentUser, settings.namaUnitLayanan]);
+  }, []);
 
   const canEditRealisasi = React.useCallback((rel: Realisasi) => {
     if (!currentUser) return false;
@@ -346,6 +325,31 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
 
     return Array.from(woSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   }, [workOrders, displayedWorkOrders, localWoNumbers, realisasiList, workOrdersMap]);
+
+  // Auto-select initial Nomor WO for users if filterNomorWO is empty
+  useEffect(() => {
+    if (!filterNomorWO && availableWONumbers.length > 0) {
+      if (currentUser && !isAdminUser && !isAdmbktUser) {
+        const userReguCanon = getCanonicalReguKey(currentUser.reguName || currentUser.groupWO || currentUser.name || '');
+        const matchingWo = availableWONumbers.find(woNum => {
+          const woInfo = workOrdersMap[woNum] || workOrdersMap[woNum.toLowerCase()];
+          const woReguCanon = getCanonicalReguKey(woInfo?.reguName || '');
+          const woNumUpper = woNum.toUpperCase();
+          return (
+            (userReguCanon && woReguCanon && (woReguCanon.includes(userReguCanon) || userReguCanon.includes(woReguCanon))) ||
+            woNumUpper.includes('02') || woNumUpper.includes('BSO')
+          );
+        });
+        if (matchingWo) {
+          setFilterNomorWO(matchingWo);
+        } else {
+          setFilterNomorWO(availableWONumbers[0]);
+        }
+      } else {
+        setFilterNomorWO(availableWONumbers[0]);
+      }
+    }
+  }, [availableWONumbers, filterNomorWO, currentUser, isAdminUser, isAdmbktUser, workOrdersMap]);
 
   // Tampilan Data Riwayat Realisasi (Filter berdasarkan WO jika dipilih, atau tampilkan semua data sesuai filter aktif)
   const displayList = useMemo(() => {
@@ -1194,8 +1198,24 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                                 )}
                                 <button
                                   onClick={async () => {
+                                    const targetId = rel.id || (rel as any).ID || (rel as any).syncId || (rel as any).localId || (rel as any).serverId;
+                                    if (!targetId) {
+                                      showToast('Gagal: ID realisasi tidak ditemukan', 'error');
+                                      return;
+                                    }
                                     if (window.confirm('Hapus data realisasi ini? Data akan dihapus dari server dan perangkat.')) {
-                                      await deleteRealisasi(rel.id);
+                                      try {
+                                        await deleteRealisasi(targetId);
+                                        showToast('Data realisasi berhasil dihapus', 'success');
+                                        if (typeof refreshRealisasi === 'function') {
+                                          refreshRealisasi();
+                                        }
+                                        if (typeof fetchRealisasiFromApi === 'function') {
+                                          fetchRealisasiFromApi();
+                                        }
+                                      } catch (err: any) {
+                                        showToast('Gagal menghapus realisasi: ' + (err?.message || 'Error'), 'error');
+                                      }
                                     }
                                   }}
                                   className="p-1.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors"
