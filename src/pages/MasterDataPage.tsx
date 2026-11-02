@@ -1681,3 +1681,5 @@ export const MasterDataPage: React.FC = () => {
     </div>
   );
 };
+
+export default MasterDataPage;

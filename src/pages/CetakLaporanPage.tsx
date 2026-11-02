@@ -1666,3 +1666,5 @@ export const CetakLaporanPage: React.FC = () => {
     </div>
   );
 };
+
+export default CetakLaporanPage;

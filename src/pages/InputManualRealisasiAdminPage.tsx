@@ -1614,3 +1614,5 @@ export const InputManualRealisasiAdminPage: React.FC<InputManualRealisasiAdminPa
     </div>
   );
 };
+
+export default InputManualRealisasiAdminPage;

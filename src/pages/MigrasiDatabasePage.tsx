@@ -1502,3 +1502,5 @@ export const MigrasiDatabasePage: React.FC = () => {
     </div>
   );
 };
+
+export default MigrasiDatabasePage;

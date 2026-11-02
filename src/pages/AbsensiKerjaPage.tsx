@@ -1113,3 +1113,5 @@ export const AbsensiKerjaPage: React.FC<AbsensiKerjaPageProps> = ({ onSuccess })
   </div>
 );
 };
+
+export default AbsensiKerjaPage;

@@ -551,3 +551,5 @@ export const UserWelcomePage: React.FC<UserWelcomePageProps> = ({ onStartAbsensi
   );
 };
 
+export default UserWelcomePage;
+

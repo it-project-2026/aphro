@@ -379,3 +379,5 @@ export const InisiasiPage: React.FC<InisiasiPageProps> = ({
     </div>
   );
 };
+
+export default InisiasiPage;

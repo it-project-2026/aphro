@@ -373,3 +373,5 @@ export const SinkronisasiPage: React.FC = () => {
     </div>
   );
 };
+
+export default SinkronisasiPage;

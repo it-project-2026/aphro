@@ -104,3 +104,5 @@ export const WorkOrderMainPage: React.FC<WorkOrderMainPageProps> = ({ initialSub
     </div>
   );
 };
+
+export default WorkOrderMainPage;

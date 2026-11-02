@@ -928,3 +928,5 @@ export const SettingAplikasiPage: React.FC = () => {
     </div>
   );
 };
+
+export default SettingAplikasiPage;

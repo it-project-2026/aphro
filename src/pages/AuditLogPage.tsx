@@ -121,3 +121,5 @@ export const AuditLogPage: React.FC = () => {
     </div>
   );
 };
+
+export default AuditLogPage;

@@ -931,3 +931,6 @@ export const WorkOrderPage: React.FC<WorkOrderPageProps> = ({ onAdd, onEdit }) =
     </div>
   );
 };
+
+export default WorkOrderPage;
+

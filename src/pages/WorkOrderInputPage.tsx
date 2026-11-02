@@ -739,3 +739,5 @@ export const WorkOrderInputPage: React.FC<WorkOrderInputPageProps> = ({
     </div>
   );
 };
+
+export default WorkOrderInputPage;

@@ -600,12 +600,19 @@ user.unitId: ${user?.unitId}
 user.reguName: ${user?.reguName || (user as any)?.groupWO}
 activeTab: ${activeTab}`);
 
-    if (
+    const shouldBlockForInitialAbsensiVerification =
       isUserRole &&
       !isAdminRole &&
-      (absensiVerificationStatus === 'loading')
-    ) {
+      !hasVerifiedWithServer &&
+      absensiVerificationStatus === 'loading';
+
+    if (shouldBlockForInitialAbsensiVerification) {
+      console.log('[APP ABSENSI GATE - BLOCKING INITIAL VERIFICATION]');
       return <LoadingFallback />;
+    }
+
+    if (isUserRole && !isAdminRole && hasVerifiedWithServer) {
+      console.log('[APP ABSENSI GATE - BACKGROUND REFRESH, UI REMAINS ACTIVE]');
     }
 
     if (

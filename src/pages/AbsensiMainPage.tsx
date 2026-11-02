@@ -98,8 +98,8 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
   }, [initialSubTab, isAdmRole]);
 
   useEffect(() => {
-    refreshAbsensi();
-  }, [activeSubTab, refreshAbsensi]);
+    refreshAbsensi({ silent: true });
+  }, [activeSubTab]);
 
   const todayStr = getLocalDateTimeString().slice(0, 10);
 
@@ -1676,3 +1676,5 @@ export const AbsensiMainPage: React.FC<AbsensiMainPageProps> = ({ initialSubTab 
     </div>
   );
 };
+
+export default AbsensiMainPage;

@@ -1883,3 +1883,5 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
     </div>
   );
 };
+
+export default InputRealisasiPage;

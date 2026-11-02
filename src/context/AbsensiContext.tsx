@@ -28,6 +28,11 @@ export function getCanonicalReguId(input?: string | null): string {
   return s.replace(/[^A-Z0-9]/g, '');
 }
 
+export interface RefreshAbsensiOptions {
+  initial?: boolean;
+  silent?: boolean;
+}
+
 interface AbsensiContextType {
   absensiList: Absensi[];
   setAbsensiList: React.Dispatch<React.SetStateAction<Absensi[]>>;
@@ -39,12 +44,14 @@ interface AbsensiContextType {
     absData: Partial<Absensi>
   ) => Promise<boolean>;
   deleteAbsensi: (id: string) => Promise<boolean>;
-  refreshAbsensi: () => Promise<void>;
+  refreshAbsensi: (options?: RefreshAbsensiOptions) => Promise<void>;
   hasCheckedInToday: boolean;
   sudahMasuk: boolean;
   sudahKeluar: boolean;
   todayAbsensiRecord: Absensi | null;
   isLoading: boolean;
+  isInitialVerificationLoading: boolean;
+  isRefreshingAbsensi: boolean;
   hasVerifiedWithServer: boolean;
   absensiVerificationStatus: 'loading' | 'verified' | 'error';
 }
@@ -78,12 +85,22 @@ export function AbsensiProvider({
   const [apiError, setApiError] =
     React.useState<string | null>(null);
 
-  const [isLoading, setIsLoading] =
+  const [isInitialVerificationLoading, setIsInitialVerificationLoading] =
     React.useState<boolean>(() => {
       const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
       const storedUser = typeof localStorage !== 'undefined' ? (localStorage.getItem('pln_mobile_user') || localStorage.getItem('aphro_user')) : null;
       return Boolean(isOnline && storedUser);
     });
+
+  const [isRefreshingAbsensi, setIsRefreshingAbsensi] =
+    React.useState<boolean>(false);
+
+  // In-flight refresh promise lock to prevent duplicate parallel requests
+  const inFlightRefreshRef = React.useRef<Promise<void> | null>(null);
+
+  const isLoading = React.useMemo(() => {
+    return isInitialVerificationLoading || isRefreshingAbsensi;
+  }, [isInitialVerificationLoading, isRefreshingAbsensi]);
 
   /*
    * =========================================================
@@ -120,10 +137,17 @@ export function AbsensiProvider({
    *
    * HyperCloud PostgreSQL adalah sumber data utama.
    */
-  const refreshAbsensi = React.useCallback(async () => {
+  const refreshAbsensi = React.useCallback(async (options?: RefreshAbsensiOptions) => {
+    // If a request is already in-flight, attach to it instead of making duplicate API calls
+    if (inFlightRefreshRef.current) {
+      console.log('[ABSENSI REFRESH SKIPPED - ALREADY IN FLIGHT]');
+      return inFlightRefreshRef.current;
+    }
+
     if (!user || !user.unitId) {
       console.log('[AbsensiContext] Skipping refreshAbsensi: User not authenticated.');
-      setIsLoading(false);
+      setIsInitialVerificationLoading(false);
+      setIsRefreshingAbsensi(false);
       setHasVerifiedWithServer(true);
       return;
     }
@@ -131,9 +155,20 @@ export function AbsensiProvider({
     const token = ApiService.getAuthToken();
     if (!token) {
       console.log('[AbsensiContext] Skipping refreshAbsensi: Token missing.');
-      setIsLoading(false);
+      setIsInitialVerificationLoading(false);
+      setIsRefreshingAbsensi(false);
       setHasVerifiedWithServer(true);
       return;
+    }
+
+    const isInitial = options?.initial || !hasVerifiedWithServer;
+
+    if (isInitial) {
+      console.log('[ABSENSI INITIAL VERIFICATION] Starting initial server verification...');
+      setIsInitialVerificationLoading(true);
+    } else {
+      console.log('[ABSENSI BACKGROUND REFRESH] Refreshing absensi data in background...');
+      setIsRefreshingAbsensi(true);
     }
 
     const unitId = user.unitId ? InisiasiService.getStandardUnitId(user.unitId) : InisiasiService.getSelectedUnitId();
@@ -142,60 +177,65 @@ export function AbsensiProvider({
       `[ABSENSI TRACE] refreshAbsensi triggered. UnitId: ${unitId}`
     );
 
-    try {
-      setIsLoading(true);
-      setApiError(null);
+    const fetchPromise = (async () => {
+      try {
+        setApiError(null);
 
-      const res =
-        await ApiService.fetchAbsensi(unitId);
+        const res = await ApiService.fetchAbsensi(unitId);
 
-      if (res.success) {
-        const rawData = Array.isArray(res.data) ? res.data : [];
-        console.log(
-          `[ABSENSI TRACE] fetchAbsensi SUCCESS. Received ${rawData.length} records.`
+        if (res.success) {
+          const rawData = Array.isArray(res.data) ? res.data : [];
+          console.log(
+            `[ABSENSI TRACE] fetchAbsensi SUCCESS. Received ${rawData.length} records.`
+          );
+
+          const sortedData = [...rawData].sort(
+            (a: any, b: any) => {
+              const dateA = new Date(
+                a.TANGGAL ||
+                  a.tanggal ||
+                  a.createdAt ||
+                  0
+              ).getTime();
+
+              const dateB = new Date(
+                b.TANGGAL ||
+                  b.tanggal ||
+                  b.createdAt ||
+                  0
+              ).getTime();
+
+              return dateB - dateA;
+            }
+          );
+
+          setAbsensiList(sortedData);
+          // Persist fresh server state to IndexedDB cache
+          idbService.saveTable('ABSENSI', sortedData).catch((e) => console.warn('Failed to cache ABSENSI to idb:', e));
+        } else {
+          console.warn(
+            '[ABSENSI TRACE] fetchAbsensi FAILED:',
+            res.message
+          );
+          setApiError(res.message || 'Gagal mengambil data dari server');
+        }
+      } catch (err: any) {
+        console.error(
+          '[ABSENSI TRACE] refreshAbsensi EXCEPTION:',
+          err
         );
-
-        const sortedData = [...rawData].sort(
-          (a: any, b: any) => {
-            const dateA = new Date(
-              a.TANGGAL ||
-                a.tanggal ||
-                a.createdAt ||
-                0
-            ).getTime();
-
-            const dateB = new Date(
-              b.TANGGAL ||
-                b.tanggal ||
-                b.createdAt ||
-                0
-            ).getTime();
-
-            return dateB - dateA;
-          }
-        );
-
-        setAbsensiList(sortedData);
-        // Persist fresh server state to IndexedDB cache so GASSyncProvider doesn't restore stale data
-        idbService.saveTable('ABSENSI', sortedData).catch((e) => console.warn('Failed to cache ABSENSI to idb:', e));
-      } else {
-        console.warn(
-          '[ABSENSI TRACE] fetchAbsensi FAILED:',
-          res.message
-        );
-        setApiError(res.message || 'Gagal mengambil data dari server');
+        setApiError(err?.message || 'Gagal mengambil data dari server');
+      } finally {
+        setIsInitialVerificationLoading(false);
+        setIsRefreshingAbsensi(false);
+        setHasVerifiedWithServer(true);
+        inFlightRefreshRef.current = null;
       }
-    } catch (err: any) {
-      console.error(
-        '[ABSENSI TRACE] refreshAbsensi EXCEPTION:',
-        err
-      );
-      setApiError(err?.message || 'Gagal mengambil data dari server');
-    } finally {
-      setIsLoading(false);
-      setHasVerifiedWithServer(true);
-    }
-  }, [user]);
+    })();
+
+    inFlightRefreshRef.current = fetchPromise;
+    return fetchPromise;
+  }, [user, hasVerifiedWithServer]);
 
   /*
    * =========================================================
@@ -223,24 +263,20 @@ export function AbsensiProvider({
     };
   }, []);
 
+  const userIdKey = user?.id || user?.userName || user?.nip || '';
+
   React.useEffect(() => {
     if (!user) {
       setAbsensiList([]);
-      setIsLoading(false);
+      setIsInitialVerificationLoading(false);
+      setIsRefreshingAbsensi(false);
       setHasVerifiedWithServer(false);
+      setApiError(null);
       return;
     }
 
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    if (isOnline) {
-      setIsLoading(true);
-    }
-    refreshAbsensi();
-  }, [
-    user,
-    activeUnitId,
-    refreshAbsensi,
-  ]);
+    refreshAbsensi({ initial: true });
+  }, [userIdKey, activeUnitId, refreshAbsensi]);
 
   /*
    * =========================================================
@@ -1102,11 +1138,10 @@ hasCheckedInToday: ${isRecordMatch}`);
    * =========================================================
    */
   const absensiVerificationStatus = React.useMemo(() => {
-    if (apiError) return 'error';
-    if (isLoading) return 'loading';
-    if (!hasVerifiedWithServer) return 'loading';
+    if (!hasVerifiedWithServer && isInitialVerificationLoading) return 'loading';
+    if (apiError && !hasVerifiedWithServer) return 'error';
     return 'verified';
-  }, [isLoading, hasVerifiedWithServer, apiError]);
+  }, [isInitialVerificationLoading, hasVerifiedWithServer, apiError]);
 
   // Logging sementara [ABSENSI FINAL STATE] sesuai petunjuk audit
   React.useEffect(() => {
@@ -1134,6 +1169,8 @@ hasCheckedInToday: ${isRecordMatch}`);
         sudahKeluar,
         todayAbsensiRecord,
         isLoading,
+        isInitialVerificationLoading,
+        isRefreshingAbsensi,
         hasVerifiedWithServer,
         absensiVerificationStatus,
       }}
