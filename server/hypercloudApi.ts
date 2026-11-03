@@ -2022,6 +2022,22 @@ router.post('/work-orders', requireAuth, async (req: Request, res: Response) => 
       STATUS: w.STATUS || w.status || 'BELUM SELESAI'
     };
 
+    // Non-blocking Push Notification dispatch for new Work Order
+    setImmediate(() => {
+      dispatchWorkOrderPushNotification({
+        woId,
+        nomorWO: w.Nomor_WO || w.nomorWO || woId,
+        reguName: w.Regu_ROW || w.REGU_ROW || w.reguName || w.Regu || '',
+        ulpName: w.ULP || w.ulpName || '',
+        unitId: unitId || w.unitId || 'UL2',
+        penyulang: w.PENYULANG || w.penyulangName || w.Penyulang || '',
+        lokasi: w.LOKASI_START || w.lokasiStart || '',
+        targetKms: parseFloat(w.VOLUME || w.volumePekerjaan || '0') || 0
+      }).catch((fcmErr) => {
+        console.warn('[FCM PUSH] Async notification error:', fcmErr?.message || fcmErr);
+      });
+    });
+
     return res.status(201).json({
       status: 'success',
       success: true,
@@ -3882,14 +3898,144 @@ router.delete(
 );
 
 /**
+ * Helper to fetch FCM tokens from Firestore and send Push Notifications for a Work Order
+ */
+async function dispatchWorkOrderPushNotification(params: {
+  woId: string;
+  nomorWO: string;
+  reguName?: string;
+  ulpName?: string;
+  unitId?: string;
+  penyulang?: string;
+  lokasi?: string;
+  targetKms?: number;
+}) {
+  const { woId, nomorWO, reguName = '', ulpName = '', unitId = '', penyulang = '', lokasi = '' } = params;
+  const safeRegu = String(reguName).trim();
+  const safeUlp = String(ulpName).trim();
+  const safeUnit = String(unitId).trim().toUpperCase();
+
+  console.log(`[FCM PUSH DISPATCH] Starting push notification for WO: ${nomorWO} (${woId}), target regu: '${safeRegu}', unit: '${safeUnit}'`);
+
+  try {
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/conductive-catcher-w9v0l/databases/ai-studio-aphroassetprotec-d28001e8-66ea-4678-abc8-62d11d5e3a61/documents/fcm_tokens?key=AIzaSyD2bYctI1AigY7wDbFpJr2oPjx5L2H4rRk`;
+    
+    const fsRes = await axios.get(firestoreUrl, { timeout: 10000 }).catch((err) => {
+      console.warn('[FCM PUSH DISPATCH] Could not query Firestore tokens via REST API:', err.message);
+      return null;
+    });
+
+    const documents = fsRes?.data?.documents || [];
+    const targetTokens = new Set<string>();
+
+    for (const doc of documents) {
+      const fields = doc.fields || {};
+      const token = fields.token?.stringValue;
+      if (!token) continue;
+
+      const docRegu = String(fields.reguName?.stringValue || '').trim();
+      const docUlp = String(fields.ulpName?.stringValue || '').trim();
+      const docUnit = String(fields.unitId?.stringValue || '').trim().toUpperCase();
+      const docRole = String(fields.role?.stringValue || '').trim().toUpperCase();
+      const active = fields.active?.booleanValue !== false;
+
+      if (!active) continue;
+
+      const isReguMatch = safeRegu && docRegu.toUpperCase() === safeRegu.toUpperCase();
+      const isAdminMatch = docRole === 'SUPERADMIN' || docRole === 'ADMIN' || docRole === 'ADM' || docUnit === 'ALL';
+      const isUlpMatch = safeUlp && docUlp.toUpperCase() === safeUlp.toUpperCase();
+      const isUnitMatch = !safeUnit || docUnit === 'ALL' || docUnit === safeUnit;
+
+      if ((isReguMatch || isAdminMatch || isUlpMatch) && isUnitMatch) {
+        targetTokens.add(token);
+      }
+    }
+
+    console.log(`[FCM PUSH DISPATCH] Found ${targetTokens.size} target FCM device token(s) for WO ${nomorWO}.`);
+
+    if (targetTokens.size === 0) {
+      return { success: true, targetCount: 0, sentCount: 0 };
+    }
+
+    const title = `📋 WORK ORDER BARU DISERAHKAN`;
+    const body = `WO: ${nomorWO}${safeRegu ? ` | Regu: ${safeRegu}` : ''}${penyulang ? ` (${penyulang})` : ''}`;
+    const clickUrl = `/?tab=work_orders`;
+
+    let sentCount = 0;
+    const sendPromises = Array.from(targetTokens).map(async (token) => {
+      try {
+        const payload = {
+          to: token,
+          priority: 'high',
+          notification: {
+            title,
+            body,
+            icon: '/favicon.ico',
+            click_action: clickUrl,
+          },
+          data: {
+            type: 'WORK_ORDER_BARU',
+            woId,
+            nomorWO,
+            reguName: safeRegu,
+            ulpName: safeUlp,
+            url: clickUrl,
+            title,
+            body
+          }
+        };
+
+        const fcmRes = await axios.post('https://fcm.googleapis.com/fcm/send', payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'key=AIzaSyD2bYctI1AigY7wDbFpJr2oPjx5L2H4rRk',
+          },
+          timeout: 8000,
+          validateStatus: () => true
+        });
+
+        if (fcmRes.status === 200) {
+          sentCount++;
+        } else {
+          console.warn(`[FCM PUSH DISPATCH] FCM response ${fcmRes.status} for token: ${token.substring(0, 12)}...`);
+        }
+      } catch (fcmErr: any) {
+        console.warn(`[FCM PUSH DISPATCH] Failed sending to token: ${fcmErr.message}`);
+      }
+    });
+
+    await Promise.allSettled(sendPromises);
+    console.log(`[FCM PUSH DISPATCH] Finished sending push notifications. ${sentCount}/${targetTokens.size} delivered.`);
+
+    return { success: true, targetCount: targetTokens.size, sentCount };
+  } catch (err: any) {
+    console.error('[FCM PUSH DISPATCH] Global error in push dispatch:', err.message);
+    return { success: false, error: err.message, targetCount: 0, sentCount: 0 };
+  }
+}
+
+/**
  * POST /api/send-notification
  * Auxiliary push notification endpoint - never blocks primary transactional flow
  */
 router.post('/send-notification', async (req: Request, res: Response) => {
   logApiCall('POST', '/api/send-notification', req.body);
-  const { reguName, woData } = req.body || {};
+  const { reguName, woData, unitId, ulpName } = req.body || {};
 
   console.log(`[NOTIFICATION API] action=SEND reguName='${reguName || ''}' woId='${woData?.id || ''}'`);
+
+  const dispatchResult = await dispatchWorkOrderPushNotification({
+    woId: woData?.id || woData?.woId || `WO-NOTIF-${Date.now()}`,
+    nomorWO: woData?.nomorWO || woData?.Nomor_WO || 'WO/NOTIF/001',
+    reguName: reguName || woData?.reguName || woData?.REGU_ROW,
+    ulpName: ulpName || woData?.ulpName || woData?.ULP,
+    unitId: unitId || woData?.unitId || 'UL2',
+    penyulang: woData?.penyulangName || woData?.PENYULANG || '',
+    lokasi: woData?.lokasiStart || woData?.LOKASI_START || ''
+  }).catch((err) => {
+    console.warn('[NOTIFICATION API] Error in push dispatch:', err.message);
+    return { success: false, targetCount: 0, sentCount: 0 };
+  });
 
   return res.status(200).json({
     success: true,
@@ -3897,6 +4043,8 @@ router.post('/send-notification', async (req: Request, res: Response) => {
     message: 'Notifikasi berhasil diproses',
     reguName: reguName || '',
     woId: woData?.id || '',
+    targetCount: dispatchResult.targetCount || 0,
+    deliveredCount: dispatchResult.sentCount || 0,
     delivered: true,
   });
 });

@@ -31,7 +31,7 @@ export const getMessagingSafe = async (): Promise<Messaging | null> => {
   return null;
 };
 
-export const requestForToken = async () => {
+export const requestForToken = async (): Promise<string | null> => {
   try {
     if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
       return null;
@@ -48,8 +48,16 @@ export const requestForToken = async () => {
     if (!messaging) return null;
 
     try {
+      let swRegistration: ServiceWorkerRegistration | undefined;
+      try {
+        swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+      } catch {
+        swRegistration = await navigator.serviceWorker.ready;
+      }
+
       const currentToken = await getToken(messaging, {
-        vapidKey: 'BGrmudCVGIDGatsIOlDYs254nhyO32Jgo7siAccQOjQo_Mx_Gn7ctZ_bQDAdrOpe-iil33gB8zxt4vdC0s6kJO4'
+        vapidKey: 'BGrmudCVGIDGatsIOlDYs254nhyO32Jgo7siAccQOjQo_Mx_Gn7ctZ_bQDAdrOpe-iil33gB8zxt4vdC0s6kJO4',
+        serviceWorkerRegistration: swRegistration
       });
       return currentToken || null;
     } catch (fcmErr: any) {

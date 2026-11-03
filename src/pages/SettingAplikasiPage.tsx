@@ -13,6 +13,7 @@ import { GASApiService } from '../services/gasApiService';
 import { AutoSpreadsheetWizardModal } from '../components/common/AutoSpreadsheetWizardModal';
 import { saveAndEmbedGasConfig } from '../config/gasConfig';
 import { ApiService, API_BASE_URL } from '../services/apiService';
+import { useNotifications as useNotificationHook } from '../hooks/useNotifications';
 import {
   Settings,
   Save,
@@ -36,6 +37,9 @@ import {
   UploadCloud,
   CheckCircle,
   Download,
+  Bell,
+  Send,
+  Smartphone,
 } from 'lucide-react';
 
 export const SettingAplikasiPage: React.FC = () => {
@@ -47,6 +51,17 @@ export const SettingAplikasiPage: React.FC = () => {
   const { workOrders } = useWorkOrders();
   const { realisasiList } = useRealisasi();
   const { absensiList } = useAbsensi();
+
+  // Notification FCM Hook
+  const {
+    permissionStatus,
+    fcmToken,
+    isRegistering,
+    requestPermission,
+    sendTestNotification,
+    deviceId,
+    platform,
+  } = useNotificationHook();
 
   // HyperCloudHost API & Database State
   const [isTestingApi, setIsTestingApi] = useState(false);
@@ -312,6 +327,90 @@ export const SettingAplikasiPage: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Push Notification (FCM) Management Card */}
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-teal-200 dark:border-teal-800 shadow-sm space-y-5">
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3 gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 flex items-center justify-center text-teal-600 dark:text-teal-400 font-bold">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Pusat Notifikasi Push Perangkat (Firebase Cloud Messaging)
+                  </h3>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      permissionStatus === 'granted'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300'
+                        : permissionStatus === 'denied'
+                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300'
+                    }`}
+                  >
+                    {permissionStatus === 'granted'
+                      ? 'IZIN: PERANGKAT AKTIF'
+                      : permissionStatus === 'denied'
+                      ? 'IZIN: DITOLAK BROWSER'
+                      : 'IZIN: BELUM DIAKTIFKAN'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Kirim pemberitahuan Work Order baru secara real-time ke HP Android / Desktop milik Regu dan Admin.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {permissionStatus !== 'granted' && (
+                <button
+                  type="button"
+                  onClick={requestPermission}
+                  disabled={isRegistering}
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-black text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <Bell className="w-4 h-4" />
+                  <span>{isRegistering ? 'Memproses...' : 'AKTIFKAN NOTIFIKASI'}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={sendTestNotification}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-bold text-teal-800 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/60 dark:hover:bg-teal-800 rounded-xl transition-colors cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Uji Coba Push Notifikasi</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status Perangkat & Izin</span>
+              <p
+                className={`font-mono font-bold text-xs ${
+                  permissionStatus === 'granted' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'
+                }`}
+              >
+                {permissionStatus === 'granted' ? '✅ Permintaan Notifikasi Diizinkan' : '⚠️ Belum Mengaktifkan Izin Browser'}
+              </p>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Platform & ID Perangkat</span>
+              <p className="font-mono font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
+                {platform} ({deviceId.substring(0, 16)}...)
+              </p>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">FCM Token Registered</span>
+              <p className="font-mono font-bold text-xs text-cyan-600 dark:text-cyan-400 truncate">
+                {fcmToken ? `${fcmToken.substring(0, 20)}...` : permissionStatus === 'granted' ? 'Mendaftarkan token...' : 'Belum Terdaftar'}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* HyperCloudHost Database Diagnostics Card */}

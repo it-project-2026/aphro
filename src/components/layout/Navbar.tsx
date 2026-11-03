@@ -376,7 +376,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
                     notifications.map((n, idx) => (
                       <div
                         key={`${n.id}-${idx}`}
-                        onClick={() => markNotificationAsRead(n.id)}
+                        onClick={() => {
+                          markNotificationAsRead(n.id);
+                          setShowNotifications(false);
+                          if (
+                            (n.title && n.title.toLowerCase().includes('work order')) ||
+                            (n.message && n.message.toLowerCase().includes('work order'))
+                          ) {
+                            setActiveTab('work_orders');
+                          }
+                        }}
                         className={`p-3 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${
                           !n.read ? 'bg-teal-50/40 dark:bg-teal-950/20 font-medium' : 'opacity-75'
                         }`}
