@@ -123,6 +123,86 @@ export function getCanonicalPenyulangKey(s?: string): string {
 }
 
 /**
+ * Deduplicate Work Orders before aggregation to prevent double counting.
+ */
+export function deduplicateWorkOrders(workOrders: WorkOrder[]): WorkOrder[] {
+  if (!Array.isArray(workOrders) || workOrders.length === 0) {
+    return [];
+  }
+
+  const seenKeys = new Set<string>();
+  const result: WorkOrder[] = [];
+
+  for (const rawWo of workOrders) {
+    if (!rawWo) continue;
+    const idVal = String(rawWo.id || rawWo.WO_ID || (rawWo as any).woId || '').trim().toLowerCase();
+    const nomorWoVal = String(rawWo.nomorWO || rawWo.Nomor_WO || (rawWo as any).nomor_wo || '').trim().toUpperCase();
+
+    let primaryKey = '';
+    if (idVal && idVal !== 'null' && idVal !== 'undefined' && idVal !== '-') {
+      primaryKey = `ID:${idVal}`;
+    } else if (nomorWoVal && nomorWoVal !== 'NULL' && nomorWoVal !== 'UNDEFINED' && nomorWoVal !== '-') {
+      primaryKey = `NO:${nomorWoVal}`;
+    } else {
+      const tgl = rawWo.tanggal || (rawWo as any).Tanggal || '';
+      const ulp = getCanonicalUlpKey(rawWo.ulpName || (rawWo as any).ULP);
+      const regu = getCanonicalReguKey(rawWo.reguName || (rawWo as any).REGU_ROW);
+      const peny = getCanonicalPenyulangKey(rawWo.penyulangName || (rawWo as any).PENYULANG);
+      const vol = rawWo.volumePekerjaan || (rawWo as any).VOLUME || 0;
+      primaryKey = `FB:${tgl}_${ulp}_${regu}_${peny}_${vol}`;
+    }
+
+    if (!seenKeys.has(primaryKey)) {
+      seenKeys.add(primaryKey);
+      result.push(rawWo);
+    }
+  }
+
+  console.log('[REKAP WORK ORDER DEDUPLICATED]', {
+    totalInput: workOrders.length,
+    deduplicatedCount: result.length,
+  });
+
+  return result;
+}
+
+/**
+ * Deduplicate Realisasi records before aggregation.
+ */
+export function deduplicateRealisasi(realisasiList: Realisasi[]): Realisasi[] {
+  if (!Array.isArray(realisasiList) || realisasiList.length === 0) {
+    return [];
+  }
+
+  const seenKeys = new Set<string>();
+  const result: Realisasi[] = [];
+
+  for (const rawRel of realisasiList) {
+    if (!rawRel) continue;
+    const idVal = String(rawRel.id || (rawRel as any).ID || (rawRel as any).id_unik || '').trim().toLowerCase();
+
+    let key = '';
+    if (idVal && idVal !== 'null' && idVal !== 'undefined' && idVal !== '-') {
+      key = `ID:${idVal}`;
+    } else {
+      const tgl = rawRel.tanggalRealisasi || (rawRel as any).TANGGAL || '';
+      const tiang = (rawRel.noTiang || (rawRel as any).NO_TIANG || '').trim().toLowerCase();
+      const wo = (rawRel.nomorWO || rawRel.workOrderId || (rawRel as any).WO_ID || '').trim().toLowerCase();
+      const ket = (rawRel.keterangan || (rawRel as any).Keterangan || '').trim().toLowerCase();
+      key = `FB:${tgl}_${wo}_${tiang}_${ket}`;
+    }
+
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      result.push(rawRel);
+    }
+  }
+
+  return result;
+}
+
+
+/**
  * Robust Tree Count extractor from Realisasi record
  */
 export function getRealisasiPohonCount(rel: any): number {
@@ -813,18 +893,22 @@ export class RekapHarianService {
     realisasiList: Realisasi[],
     workOrders: WorkOrder[]
   ): RekapItemData[] {
+    console.log('[REKAP TARGET RESET]');
+
+    // Deduplicate Work Orders & Realisasi
+    const cleanWorkOrders = deduplicateWorkOrders(workOrders);
+    const cleanRealisasi = deduplicateRealisasi(realisasiList);
+
     const existingPenyulang = new Set(currentRows.map(r => getCanonicalPenyulangKey(r.timRow)));
     const dynamicRows = [...currentRows];
 
     // Build Work Order maps for fallback penyulang resolution
     const woMapById: Record<string, WorkOrder> = {};
     const woMapByNo: Record<string, WorkOrder> = {};
-    if (Array.isArray(workOrders)) {
-      workOrders.forEach((w) => {
-        if (w.id) woMapById[String(w.id).trim()] = w;
-        if (w.nomorWO) woMapByNo[String(w.nomorWO).trim().toUpperCase()] = w;
-      });
-    }
+    cleanWorkOrders.forEach((w) => {
+      if (w.id) woMapById[String(w.id).trim()] = w;
+      if (w.nomorWO) woMapByNo[String(w.nomorWO).trim().toUpperCase()] = w;
+    });
 
     const addMissingPenyulang = (ulp?: string, penyulang?: string) => {
       if (!penyulang) return;
@@ -845,7 +929,7 @@ export class RekapHarianService {
       }
     };
 
-    realisasiList?.forEach(r => {
+    cleanRealisasi.forEach(r => {
       let peny = r.penyulangName || (r as any).Penyulang || (r as any).PENYULANG || (r as any).Nama_Penyulang || '';
       if (!peny || peny === '-' || peny === 'null') {
         const matchedWo = (r.workOrderId && woMapById[r.workOrderId]) || (r.nomorWO && woMapByNo[String(r.nomorWO).trim().toUpperCase()]);
@@ -853,22 +937,21 @@ export class RekapHarianService {
       }
       addMissingPenyulang(r.ulpName, peny);
     });
-    workOrders?.forEach(w => addMissingPenyulang(w.ulpName, w.penyulangName));
+    cleanWorkOrders.forEach(w => addMissingPenyulang(w.ulpName, w.penyulangName));
 
-    return dynamicRows.map((row) => {
-      const updatedDaily = { ...row.dailyValues };
-      
-      // Reset all 31 days with linked key aliases ('01', '1', 'day_01') while preserving pre-existing targetKms
+    const result = dynamicRows.map((row) => {
+      const updatedDaily: Record<string, any> = {};
+
+      // Reset ALL days for the current month with targetKms = 0 and realisasiKms = 0 (RECALCULATE, NOT ACCUMULATE)
       for (let i = 1; i <= 31; i++) {
         const padded = String(i).padStart(2, '0');
         const unpadded = String(i);
         const prefixed = `day_${padded}`;
-        const existing: any = row.dailyValues?.[padded] || row.dailyValues?.[unpadded] || row.dailyValues?.[prefixed] || {};
         const dayObj = {
           tebang1: 0,
           pangkas: 0,
           tebang2: 0,
-          targetKms: existing.targetKms || 0,
+          targetKms: 0, // RECALCULATED FROM SCRATCH
           realisasiKms: 0
         };
         updatedDaily[padded] = dayObj;
@@ -877,88 +960,121 @@ export class RekapHarianService {
       }
 
       const rowPenyulangCanon = getCanonicalPenyulangKey(row.timRow);
+      const rowUlpCanon = getCanonicalUlpKey(row.namaUlp);
 
-      // 1. Data Pohon
-      if (Array.isArray(realisasiList)) {
-        realisasiList.forEach((rel) => {
-          if (!rel) return;
-          const parts = this.parseDateParts(rel);
-          if (!parts) return;
+      // 1. Data Pohon from Realisasi
+      cleanRealisasi.forEach((rel) => {
+        if (!rel) return;
+        const parts = this.parseDateParts(rel);
+        if (!parts) return;
 
-          if (parts.y === year && parts.m === monthIndex + 1) {
-            let relPenyulangRaw =
-              rel.penyulangName ||
-              (rel as any).PENYULANG ||
-              (rel as any).Penyulang ||
-              (rel as any).penyulang ||
-              (rel as any).Nama_Penyulang ||
-              (rel as any).feeder ||
-              (rel as any).FEEDER ||
-              '';
-            if (!relPenyulangRaw || relPenyulangRaw === '-' || relPenyulangRaw === 'null') {
-              const matchedWo = (rel.workOrderId && woMapById[rel.workOrderId]) || (rel.nomorWO && woMapByNo[String(rel.nomorWO).trim().toUpperCase()]);
-              if (matchedWo?.penyulangName) relPenyulangRaw = matchedWo.penyulangName;
-            }
-            const relPenyulangCanon = getCanonicalPenyulangKey(relPenyulangRaw);
-            
-            let matchPenyulang = false;
-            if (relPenyulangCanon && rowPenyulangCanon) {
-              matchPenyulang =
-                relPenyulangCanon === rowPenyulangCanon ||
-                relPenyulangCanon.includes(rowPenyulangCanon) ||
-                rowPenyulangCanon.includes(relPenyulangCanon);
-            }
+        if (parts.y === year && parts.m === monthIndex + 1) {
+          let relPenyulangRaw =
+            rel.penyulangName ||
+            (rel as any).PENYULANG ||
+            (rel as any).Penyulang ||
+            (rel as any).penyulang ||
+            (rel as any).Nama_Penyulang ||
+            (rel as any).feeder ||
+            (rel as any).FEEDER ||
+            '';
+          let relUlpRaw = rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || '';
 
-            if (matchPenyulang) {
-              const dayKey = String(parts.d).padStart(2, '0');
-              if (!updatedDaily[dayKey]) {
-                updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
-              }
+          if (!relPenyulangRaw || relPenyulangRaw === '-' || relPenyulangRaw === 'null') {
+            const matchedWo = (rel.workOrderId && woMapById[rel.workOrderId]) || (rel.nomorWO && woMapByNo[String(rel.nomorWO).trim().toUpperCase()]);
+            if (matchedWo?.penyulangName) relPenyulangRaw = matchedWo.penyulangName;
+            if (!relUlpRaw && matchedWo?.ulpName) relUlpRaw = matchedWo.ulpName;
+          }
 
-              const treeCount = getRealisasiPohonCount(rel);
-              const action = classifyRealisasiAction(rel);
-              if (action === 'TEBANG') {
-                updatedDaily[dayKey].tebang1 += treeCount;
-              } else {
-                updatedDaily[dayKey].pangkas += treeCount;
-              }
+          const relPenyulangCanon = getCanonicalPenyulangKey(relPenyulangRaw);
+          const relUlpCanon = getCanonicalUlpKey(relUlpRaw);
+
+          let matchPenyulang = false;
+          const ulpMatch = !rowUlpCanon || !relUlpCanon || rowUlpCanon === relUlpCanon || rowUlpCanon.includes(relUlpCanon) || relUlpCanon.includes(rowUlpCanon);
+
+          if (relPenyulangCanon && rowPenyulangCanon && ulpMatch) {
+            matchPenyulang =
+              relPenyulangCanon === rowPenyulangCanon ||
+              relPenyulangCanon.includes(rowPenyulangCanon) ||
+              rowPenyulangCanon.includes(relPenyulangCanon);
+          }
+
+          if (matchPenyulang) {
+            const dayKey = String(parts.d).padStart(2, '0');
+            const treeCount = getRealisasiPohonCount(rel);
+            const action = classifyRealisasiAction(rel);
+            if (action === 'TEBANG') {
+              updatedDaily[dayKey].tebang1 += treeCount;
+            } else {
+              updatedDaily[dayKey].pangkas += treeCount;
             }
           }
-        });
-      }
+        }
+      });
 
-      // 2. Data KMS
-      if (Array.isArray(workOrders)) {
-        workOrders.forEach((wo) => {
-          if (!wo) return;
-          const parts = this.parseDateParts(wo.tanggal || wo);
-          if (!parts) return;
+      // 2. Data KMS from Work Order
+      const woMatchesByDay: Record<string, number> = {};
 
-          if (parts.y === year && parts.m === monthIndex + 1) {
-            const woPenyulangCanon = getCanonicalPenyulangKey(wo.penyulangName || (wo as any).Penyulang || (wo as any).PENYULANG || '');
-            
-            if (woPenyulangCanon && rowPenyulangCanon && (
-              woPenyulangCanon === rowPenyulangCanon ||
-              woPenyulangCanon.includes(rowPenyulangCanon) ||
-              rowPenyulangCanon.includes(woPenyulangCanon)
-            )) {
-              const dayKey = String(parts.d).padStart(2, '0');
-              if (!updatedDaily[dayKey]) {
-                updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
-              }
+      cleanWorkOrders.forEach((wo) => {
+        if (!wo) return;
+        const parts = this.parseDateParts(wo.tanggal || wo);
+        if (!parts) return;
 
-              const targetKms = getWOTargetKms(wo);
-              const realisasiKms = getWORealisasiKms(wo);
+        if (parts.y === year && parts.m === monthIndex + 1) {
+          const woPenyulangRaw = wo.penyulangName || (wo as any).Penyulang || (wo as any).PENYULANG || '';
+          const woUlpRaw = wo.ulpName || (wo as any).ULP || '';
 
-              updatedDaily[dayKey].targetKms += targetKms;
-              updatedDaily[dayKey].realisasiKms += realisasiKms;
-            }
+          const woPenyulangCanon = getCanonicalPenyulangKey(woPenyulangRaw);
+          const woUlpCanon = getCanonicalUlpKey(woUlpRaw);
+
+          const ulpMatch = !rowUlpCanon || !woUlpCanon || rowUlpCanon === woUlpCanon || rowUlpCanon.includes(woUlpCanon) || woUlpCanon.includes(rowUlpCanon);
+
+          if (woPenyulangCanon && rowPenyulangCanon && ulpMatch && (
+            woPenyulangCanon === rowPenyulangCanon ||
+            woPenyulangCanon.includes(rowPenyulangCanon) ||
+            rowPenyulangCanon.includes(woPenyulangCanon)
+          )) {
+            const targetDayKey = String(parts.d).padStart(2, '0');
+
+            const targetKms = getWOTargetKms(wo);
+            const realisasiKms = getWORealisasiKms(wo);
+
+            updatedDaily[targetDayKey].targetKms += targetKms;
+            updatedDaily[targetDayKey].realisasiKms += realisasiKms;
+
+            woMatchesByDay[targetDayKey] = (woMatchesByDay[targetDayKey] || 0) + 1;
+
+            console.log('[REKAP TARGET DEBUG]', {
+              source: 'HYPERCLOUD',
+              nomorWO: wo.nomorWO || wo.Nomor_WO,
+              tanggal: wo.tanggal,
+              ulp: wo.ulpName,
+              regu: wo.reguName,
+              penyulang: wo.penyulangName,
+              volumePekerjaan: wo.volumePekerjaan,
+              satuan: wo.satuan,
+              targetKms
+            });
           }
+        }
+      });
+
+      Object.keys(woMatchesByDay).forEach((dKey) => {
+        console.log('[REKAP TARGET AGGREGATION]', {
+          page: 'REKAP_PENYULANG_HARIAN',
+          date: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${dKey}`,
+          penyulang: row.timRow,
+          ulp: row.namaUlp,
+          workOrderCount: woMatchesByDay[dKey],
+          totalTargetKms: Number(updatedDaily[dKey].targetKms.toFixed(2))
         });
-      }
+      });
 
       return { ...row, dailyValues: updatedDaily };
     });
+
+    console.log('[REKAP TARGET RECALCULATED]');
+    return result;
   }
 
   /**
@@ -970,6 +1086,7 @@ export class RekapHarianService {
     const key = `aphro_rekap_penyulang_${unitKey}_${year}_${monthPadded}`;
     try {
       localStorage.setItem(key, JSON.stringify(data));
+      console.log('[REKAP CACHE UPDATED]', { type: 'PENYULANG', unitKey, year, monthPadded });
     } catch {
       // Ignore localStorage write error
     }
@@ -1050,7 +1167,6 @@ export class RekapHarianService {
     }
 
     // SELALU jalankan sync otomatis jika ada data referensi (realisasiList/workOrders)
-    // agar data selalu mutakhir dengan entri lapangan
     if ((realisasiList && realisasiList.length > 0) || (workOrders && workOrders.length > 0)) {
       rows = this.syncFromData(year, monthIndex, rows, realisasiList || [], workOrders || []);
     }
@@ -1065,6 +1181,7 @@ export class RekapHarianService {
     const key = this.getStorageKey(unitName, year, monthIndex);
     try {
       localStorage.setItem(key, JSON.stringify(data));
+      console.log('[REKAP CACHE UPDATED]', { type: 'PEKERJAAN', unitName, year, monthIndex });
     } catch {
       // Ignore localStorage write error
     }
@@ -1127,15 +1244,19 @@ export class RekapHarianService {
     realisasiList: Realisasi[],
     workOrders: WorkOrder[]
   ): RekapItemData[] {
+    console.log('[REKAP TARGET RESET]');
+
+    // Deduplicate Work Orders & Realisasi
+    const cleanWorkOrders = deduplicateWorkOrders(workOrders);
+    const cleanRealisasi = deduplicateRealisasi(realisasiList);
+
     // Build Work Order maps for fallback regu/ulp resolution
     const woMapById: Record<string, WorkOrder> = {};
     const woMapByNo: Record<string, WorkOrder> = {};
-    if (Array.isArray(workOrders)) {
-      workOrders.forEach((w) => {
-        if (w.id) woMapById[String(w.id).trim()] = w;
-        if (w.nomorWO) woMapByNo[String(w.nomorWO).trim().toUpperCase()] = w;
-      });
-    }
+    cleanWorkOrders.forEach((w) => {
+      if (w.id) woMapById[String(w.id).trim()] = w;
+      if (w.nomorWO) woMapByNo[String(w.nomorWO).trim().toUpperCase()] = w;
+    });
 
     // Dynamically include any teams from realisasi or workOrders that are not in currentRows
     const existingTeams = new Set(currentRows.map(r => getCanonicalReguKey(r.timRow)));
@@ -1160,7 +1281,7 @@ export class RekapHarianService {
       }
     };
 
-    realisasiList?.forEach(r => {
+    cleanRealisasi.forEach(r => {
       let regu = r.reguName || (r as any).REGU_ROW || (r as any).Regu || (r as any).petugasName || '';
       if (!regu || regu === '-' || regu === 'null') {
         const matchedWo = (r.workOrderId && woMapById[r.workOrderId]) || (r.nomorWO && woMapByNo[String(r.nomorWO).trim().toUpperCase()]);
@@ -1168,22 +1289,21 @@ export class RekapHarianService {
       }
       addMissingTeam(r.ulpName, regu);
     });
-    workOrders?.forEach(w => addMissingTeam(w.ulpName, w.reguName));
+    cleanWorkOrders.forEach(w => addMissingTeam(w.ulpName, w.reguName));
 
-    return dynamicRows.map((row) => {
-      const updatedDaily = { ...row.dailyValues };
-      
-      // Reset ALL days for the current month with linked key aliases ('01', '1', 'day_01') while preserving pre-existing targetKms
+    const result = dynamicRows.map((row) => {
+      const updatedDaily: Record<string, any> = {};
+
+      // Reset ALL days for the current month with targetKms = 0 and realisasiKms = 0 (RECALCULATE, NOT ACCUMULATE)
       for (let i = 1; i <= 31; i++) {
         const padded = String(i).padStart(2, '0');
         const unpadded = String(i);
         const prefixed = `day_${padded}`;
-        const existing: any = row.dailyValues?.[padded] || row.dailyValues?.[unpadded] || row.dailyValues?.[prefixed] || {};
         const dayObj = {
           tebang1: 0,
           pangkas: 0,
           tebang2: 0,
-          targetKms: existing.targetKms || 0,
+          targetKms: 0, // RECALCULATED FROM SCRATCH
           realisasiKms: 0
         };
         updatedDaily[padded] = dayObj;
@@ -1191,86 +1311,93 @@ export class RekapHarianService {
         updatedDaily[prefixed] = dayObj;
       }
 
-      const rowUlpCanon = getCanonicalReguKey(row.namaUlp);
-      const rowTimCanon = getCanonicalReguKey(row.timRow);
+      // 1. Data Pohon from Realisasi
+      cleanRealisasi.forEach((rel) => {
+        if (!rel) return;
+        const parts = this.parseDateParts(rel);
+        if (!parts) return;
 
-      // 1. Data Pohon from Realisasi (Process this first to get dates of activity)
-      const activityDatesByPenyulang: Record<string, Set<string>> = {};
+        if (parts.y === year && parts.m === monthIndex + 1) {
+          let relUlpRaw = rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || '';
+          let relReguRaw = rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || '';
 
-      if (Array.isArray(realisasiList)) {
-        realisasiList.forEach((rel) => {
-          if (!rel) return;
-          const parts = this.parseDateParts(rel);
-          if (!parts) return;
+          // Fallback resolution from Work Order
+          if (!relReguRaw || relReguRaw === '-' || relReguRaw === 'null') {
+            const matchedWo = (rel.workOrderId && woMapById[rel.workOrderId]) || (rel.nomorWO && woMapByNo[String(rel.nomorWO).trim().toUpperCase()]);
+            if (matchedWo?.reguName) relReguRaw = matchedWo.reguName;
+            if (!relUlpRaw && matchedWo?.ulpName) relUlpRaw = matchedWo.ulpName;
+          }
 
-          if (parts.y === year && parts.m === monthIndex + 1) {
-            let relUlpRaw = rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || '';
-            let relReguRaw = rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || '';
+          const matchTim = isSpecificReguMatch(row.timRow, relReguRaw, row.namaUlp, relUlpRaw);
 
-            // Fallback resolution from Work Order
-            if (!relReguRaw || relReguRaw === '-' || relReguRaw === 'null') {
-              const matchedWo = (rel.workOrderId && woMapById[rel.workOrderId]) || (rel.nomorWO && woMapByNo[String(rel.nomorWO).trim().toUpperCase()]);
-              if (matchedWo?.reguName) relReguRaw = matchedWo.reguName;
-              if (!relUlpRaw && matchedWo?.ulpName) relUlpRaw = matchedWo.ulpName;
-            }
-
-            const matchTim = isSpecificReguMatch(row.timRow, relReguRaw, row.namaUlp, relUlpRaw);
-
-            if (matchTim) {
-              const dayKey = String(parts.d).padStart(2, '0');
-              if (!updatedDaily[dayKey]) {
-                updatedDaily[dayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
-              }
-
-              const treeCount = getRealisasiPohonCount(rel);
-              const action = classifyRealisasiAction(rel);
-              if (action === 'TEBANG') {
-                updatedDaily[dayKey].tebang1 += treeCount;
-              } else {
-                updatedDaily[dayKey].pangkas += treeCount;
-              }
-
-              // Track dates of activity for each Penyulang to help align KMS
-              const penyClean = getCanonicalPenyulangKey(rel.penyulangName || (rel as any).Penyulang || 'GENERAL');
-              if (!activityDatesByPenyulang[penyClean]) activityDatesByPenyulang[penyClean] = new Set();
-              activityDatesByPenyulang[penyClean].add(dayKey);
+          if (matchTim) {
+            const dayKey = String(parts.d).padStart(2, '0');
+            const treeCount = getRealisasiPohonCount(rel);
+            const action = classifyRealisasiAction(rel);
+            if (action === 'TEBANG') {
+              updatedDaily[dayKey].tebang1 += treeCount;
+            } else {
+              updatedDaily[dayKey].pangkas += treeCount;
             }
           }
-        });
-      }
+        }
+      });
 
       // 2. Data KMS from Work Order
-      if (Array.isArray(workOrders)) {
-        workOrders.forEach((wo) => {
-          if (!wo) return;
-          const parts = this.parseDateParts(wo.tanggal || wo);
-          if (!parts) return;
+      const woMatchesByDay: Record<string, number> = {};
 
-          if (parts.y === year && parts.m === monthIndex + 1) {
-            const woReguRaw = wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || '';
-            const woUlpRaw = wo.ulpName || (wo as any).ULP || '';
+      cleanWorkOrders.forEach((wo) => {
+        if (!wo) return;
+        const parts = this.parseDateParts(wo.tanggal || wo);
+        if (!parts) return;
 
-            const matchTim = isSpecificReguMatch(row.timRow, woReguRaw, row.namaUlp, woUlpRaw);
+        if (parts.y === year && parts.m === monthIndex + 1) {
+          const woReguRaw = wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || '';
+          const woUlpRaw = wo.ulpName || (wo as any).ULP || '';
 
-            if (matchTim) {
-              let targetDayKey = String(parts.d).padStart(2, '0');
+          const matchTim = isSpecificReguMatch(row.timRow, woReguRaw, row.namaUlp, woUlpRaw);
 
-              if (!updatedDaily[targetDayKey]) {
-                updatedDaily[targetDayKey] = { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 };
-              }
+          if (matchTim) {
+            const targetDayKey = String(parts.d).padStart(2, '0');
 
-              const targetKms = getWOTargetKms(wo);
-              const realisasiKms = getWORealisasiKms(wo);
+            const targetKms = getWOTargetKms(wo);
+            const realisasiKms = getWORealisasiKms(wo);
 
-              updatedDaily[targetDayKey].targetKms += targetKms;
-              updatedDaily[targetDayKey].realisasiKms += realisasiKms;
-            }
+            updatedDaily[targetDayKey].targetKms += targetKms;
+            updatedDaily[targetDayKey].realisasiKms += realisasiKms;
+
+            woMatchesByDay[targetDayKey] = (woMatchesByDay[targetDayKey] || 0) + 1;
+
+            console.log('[REKAP TARGET DEBUG]', {
+              source: 'HYPERCLOUD',
+              nomorWO: wo.nomorWO || wo.Nomor_WO,
+              tanggal: wo.tanggal,
+              ulp: wo.ulpName,
+              regu: wo.reguName,
+              penyulang: wo.penyulangName,
+              volumePekerjaan: wo.volumePekerjaan,
+              satuan: wo.satuan,
+              targetKms
+            });
           }
+        }
+      });
+
+      Object.keys(woMatchesByDay).forEach((dKey) => {
+        console.log('[REKAP TARGET AGGREGATION]', {
+          page: 'REKAP_PEKERJAAN_HARIAN',
+          date: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${dKey}`,
+          team: row.timRow,
+          workOrderCount: woMatchesByDay[dKey],
+          totalTargetKms: Number(updatedDaily[dKey].targetKms.toFixed(2))
         });
-      }
+      });
 
       return { ...row, dailyValues: updatedDaily };
     });
+
+    console.log('[REKAP TARGET RECALCULATED]');
+    return result;
   }
 
   /**
@@ -1285,4 +1412,5 @@ export class RekapHarianService {
     return this.syncFromData(year, monthIndex, currentRows, realisasiList, []);
   }
 }
+
 

@@ -47,14 +47,31 @@ export function isWOInProgress(status?: string): boolean {
 export function getWOTargetKms(wo: {
   volumePekerjaan?: any;
   woKms?: any;
+  woBatang?: any;
   satuan?: string;
+  VOLUME?: any;
+  SATUAN?: string;
+  targetKms?: any;
+  TARGET_KMS?: any;
 }): number {
-  let val = parseNumeric(wo.volumePekerjaan ?? wo.woKms, 0);
-  if (String(wo.satuan || '').toUpperCase().trim() === 'GAWANG') {
+  if (!wo) return 0;
+  let val = parseNumeric(
+    (wo as any).volumePekerjaan ??
+    (wo as any).VOLUME ??
+    (wo as any).volume ??
+    (wo as any).woKms ??
+    (wo as any).woBatang ??
+    (wo as any).targetKms ??
+    (wo as any).TARGET_KMS,
+    0
+  );
+  const unitStr = String((wo as any).satuan || (wo as any).SATUAN || '').toUpperCase().trim();
+  if (unitStr === 'GAWANG') {
     val = val / 20;
   }
   return Number(val.toFixed(2));
 }
+
 
 /**
  * Calculates realized KMS of a Work Order accurately:
