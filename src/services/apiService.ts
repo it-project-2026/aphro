@@ -47,13 +47,6 @@ export interface FetchRealisasiParams {
 
 export class ApiService {
   public static getCleanBaseUrl(): string {
-    if (typeof window !== 'undefined' && window.location) {
-      const hostname = window.location.hostname;
-      const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
-      if (!isAphroProduction) {
-        return window.location.origin;
-      }
-    }
     const rawUrl =
       (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL?.trim()) ||
       API_BASE_URL ||
@@ -68,8 +61,8 @@ export class ApiService {
   public static initBackgroundValidation(): void {
     if (typeof window === 'undefined' || !window.location) return;
     const hostname = window.location.hostname;
-    const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
-    if (!isAphroProduction) {
+    const isLocalDevHost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('run.app');
+    if (isLocalDevHost) {
       fetch(`${window.location.origin}/api/health`, { method: 'GET' })
         .then(res => {
           if (res.ok) {
@@ -81,6 +74,8 @@ export class ApiService {
         .catch(() => {
           sessionStorage.setItem('aphro_local_backend_validated', 'false');
         });
+    } else {
+      sessionStorage.setItem('aphro_local_backend_validated', 'false');
     }
   }
 
@@ -370,12 +365,10 @@ export class ApiService {
     const externalBase = this.getCleanBaseUrl(); // "https://api.aphro-row.my.id"
     const externalUrl = `${externalBase}${apiPath}`;
 
-    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-    const isAphroProduction = hostname === 'www.aphro-row.my.id' || hostname === 'aphro-row.my.id';
-
-    // In preview / dev mode with fullstack Express server: fallback to local server if network fetch fails or returns 404
+    // Local fallback is ONLY attempted if session storage confirmed a local Express server exists
+    const isLocalBackendValidated = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('aphro_local_backend_validated') === 'true';
     const host = typeof window !== 'undefined' && window.location ? window.location.origin : '';
-    const localUrl = !isAphroProduction && host ? `${host}${apiPath}` : '';
+    const localUrl = isLocalBackendValidated && host ? `${host}${apiPath}` : '';
 
     try {
       console.log(`[ApiService] API request: ${externalUrl}`);

@@ -590,7 +590,8 @@ export class SyncManager {
 
     if (isOnline) {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/health`, { method: 'GET' });
+        const baseUrl = ApiService.getCleanBaseUrl();
+        const res = await fetch(`${baseUrl}/api/health`, { method: 'GET' });
         dbStatus = res.ok ? 'ONLINE' : 'ONLINE';
       } catch {
         dbStatus = 'ONLINE';
