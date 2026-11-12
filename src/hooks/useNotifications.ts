@@ -153,8 +153,11 @@ export const useNotifications = () => {
             if (token) {
               await registerTokenInFirestore(token);
             }
-          } catch {
-            // Graceful handling
+          } catch (err: any) {
+            // Suppress 401 / unconfigured FCM project key warnings gracefully
+            if (!String(err?.message || '').includes('401')) {
+              console.warn('[Notifications] setup note:', err?.message || err);
+            }
           }
         }
       };
