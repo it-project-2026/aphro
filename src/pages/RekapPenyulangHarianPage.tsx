@@ -153,18 +153,17 @@ export const RekapPenyulangHarianPage: React.FC = () => {
   // Load Data
   useEffect(() => {
     setIsLoading(true);
-    // 1. Render data awal dari cache lokal / context yang ada
+    // 1. Render data awal dari cache lokal
     const initialData = RekapHarianService.loadRekapPenyulangData(
       selectedULKey,
       selectedYear,
       selectedMonthIdx,
-      realisasiList,
+      [],
       ulpList,
       penyulangList,
-      workOrders
+      []
     );
     setRekapRows(initialData);
-    setIsLoading(false);
 
     // 2. Ambil data periode targeted secara spesifik dari database untuk memastikan seluruh TEBANG/PANGKAS termuat
     let isCancelled = false;
@@ -190,17 +189,17 @@ export const RekapPenyulangHarianPage: React.FC = () => {
         }
       } catch (err) {
         console.warn('Rekap penyulang period fetch error:', err);
+      } finally {
+        if (!isCancelled) setIsLoading(false);
       }
     };
 
-    if (navigator.onLine) {
-      loadTargetedPeriodData();
-    }
+    loadTargetedPeriodData();
 
     return () => {
       isCancelled = true;
     };
-  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, penyulangList, realisasiList, workOrders]);
+  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, penyulangList]);
 
   const availableUlps = useMemo(() => {
     const set = new Set<string>();

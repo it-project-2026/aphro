@@ -43,50 +43,56 @@ export function getCanonicalUlpKey(s?: string): string {
  * Robust & precise team matcher for Regu within ULP
  * Ensures teams within the same ULP get UNIQUE, SPECIFIC counts based on Regu Name / Number
  */
+/**
+ * Robust & precise team matcher for Regu within ULP
+ * Ensures teams within the same ULP get UNIQUE, SPECIFIC counts based on Regu Name / Number
+ */
 export function isSpecificReguMatch(
   rowTimRaw: string,
   relReguRaw: string,
   rowUlpRaw?: string,
   relUlpRaw?: string
 ): boolean {
+  if (!rowTimRaw) return false;
+
+  const rowTimCanon = getCanonicalReguKey(rowTimRaw);
+  const relReguCanon = getCanonicalReguKey(relReguRaw);
+
   const rowUlpKey = getCanonicalUlpKey(rowUlpRaw);
   const relUlpKey = getCanonicalUlpKey(relUlpRaw);
-
-  // 1. First verify ULP: if both Ulp names exist and conflict, return false immediately
-  if (
-    rowUlpKey &&
-    relUlpKey &&
-    rowUlpKey !== relUlpKey &&
-    !rowUlpKey.includes(relUlpKey) &&
-    !relUlpKey.includes(rowUlpKey)
-  ) {
-    return false;
-  }
 
   // If relReguRaw is empty or missing, fallback to matching by ULP or allow matching
   if (!relReguRaw || relReguRaw === '-' || relReguRaw === 'null' || relReguRaw === 'undefined') {
     if (rowUlpKey && relUlpKey) {
+      const isUnitLevel = relUlpKey.includes('bukittinggi') || relUlpKey.includes('padang') || relUlpKey.includes('solok') || relUlpKey.includes('payakumbuh') || relUlpKey.startsWith('ul');
+      if (isUnitLevel) return true;
       return rowUlpKey === relUlpKey || rowUlpKey.includes(relUlpKey) || relUlpKey.includes(rowUlpKey);
     }
     return true; // Fallback when regu and ulp are unconstrained
   }
 
-  if (!rowTimRaw || !relReguRaw) return false;
-
-  const rowTimCanon = getCanonicalReguKey(rowTimRaw);
-  const relReguCanon = getCanonicalReguKey(relReguRaw);
-
   if (!rowTimCanon || !relReguCanon) return false;
 
-  // 2. Extract Regu number (e.g. 'Tim 01' -> 1, 'Regu 2' -> 2)
+  // 1. Extract Regu number (e.g. 'Tim 01' -> 1, 'Regu 01 Koto Tuo' -> 1)
   const rowNumMatch = rowTimCanon.match(/\b0*(\d+)\b/);
   const relNumMatch = relReguCanon.match(/\b0*(\d+)\b/);
 
   if (rowNumMatch && relNumMatch) {
     const rowNum = parseInt(rowNumMatch[1], 10);
     const relNum = parseInt(relNumMatch[1], 10);
-    // When regu numbers are present on both sides, they MUST match exactly
-    return rowNum === relNum;
+    if (rowNum === relNum) {
+      return true; // Numbers match! (e.g., Tim 01 = Regu 01)
+    }
+    return false; // Different regu numbers (e.g. Regu 1 vs Regu 2) -> don't match
+  }
+
+  // 2. Direct string comparison on regu names
+  if (
+    rowTimCanon === relReguCanon ||
+    rowTimCanon.includes(relReguCanon) ||
+    relReguCanon.includes(rowTimCanon)
+  ) {
+    return true;
   }
 
   // 3. Fallback: string matching on regu names with ULP stripped out
@@ -95,16 +101,15 @@ export function isSpecificReguMatch(
   if (rowUlpKey) cleanRow = cleanRow.replace(rowUlpKey, '').trim();
   if (relUlpKey) cleanRel = cleanRel.replace(relUlpKey, '').trim();
 
-  if (!cleanRow || !cleanRel) {
-    return rowTimCanon === relReguCanon;
+  if (cleanRow && cleanRel) {
+    if (cleanRow === cleanRel || cleanRow.includes(cleanRel) || cleanRel.includes(cleanRow)) {
+      return true;
+    }
   }
 
-  return (
-    cleanRow === cleanRel ||
-    cleanRow.includes(cleanRel) ||
-    cleanRel.includes(cleanRow)
-  );
+  return false;
 }
+
 
 /**
  * Helper canonical key untuk pencocokan PENYULANG
@@ -942,25 +947,67 @@ export class RekapHarianService {
     const result = dynamicRows.map((row) => {
       const updatedDaily: Record<string, any> = {};
 
-      // Reset ALL days for the current month with targetKms = 0 and realisasiKms = 0 (RECALCULATE, NOT ACCUMULATE)
+      // Identify days present in incoming realisasi/workOrders for this row
+      const rowPenyulangCanon = getCanonicalPenyulangKey(row.timRow);
+      const rowUlpCanon = getCanonicalUlpKey(row.namaUlp);
+      const daysWithData = new Set<number>();
+
+      cleanRealisasi.forEach((rel) => {
+        if (!rel) return;
+        const parts = this.parseDateParts(rel);
+        if (parts && parts.y === year && parts.m === monthIndex + 1) {
+          let relPenyulangRaw = rel.penyulangName || (rel as any).PENYULANG || (rel as any).Penyulang || (rel as any).penyulang || (rel as any).Nama_Penyulang || (rel as any).feeder || (rel as any).FEEDER || '';
+          let relUlpRaw = rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || '';
+          if (!relPenyulangRaw || relPenyulangRaw === '-' || relPenyulangRaw === 'null') {
+            const matchedWo = (rel.workOrderId && woMapById[rel.workOrderId]) || (rel.nomorWO && woMapByNo[String(rel.nomorWO).trim().toUpperCase()]);
+            if (matchedWo?.penyulangName) relPenyulangRaw = matchedWo.penyulangName;
+            if (!relUlpRaw && matchedWo?.ulpName) relUlpRaw = matchedWo.ulpName;
+          }
+          const relPenyulangCanon = getCanonicalPenyulangKey(relPenyulangRaw);
+          const relUlpCanon = getCanonicalUlpKey(relUlpRaw);
+          const ulpMatch = !rowUlpCanon || !relUlpCanon || rowUlpCanon === relUlpCanon || rowUlpCanon.includes(relUlpCanon) || relUlpCanon.includes(rowUlpCanon);
+          if (relPenyulangCanon && rowPenyulangCanon && ulpMatch && (relPenyulangCanon === rowPenyulangCanon || relPenyulangCanon.includes(rowPenyulangCanon) || rowPenyulangCanon.includes(relPenyulangCanon))) {
+            daysWithData.add(parts.d);
+          }
+        }
+      });
+
+      cleanWorkOrders.forEach((wo) => {
+        if (!wo) return;
+        const parts = this.parseDateParts(wo.tanggal || wo);
+        if (parts && parts.y === year && parts.m === monthIndex + 1) {
+          const woPenyulangRaw = wo.penyulangName || (wo as any).Penyulang || (wo as any).PENYULANG || '';
+          const woUlpRaw = wo.ulpName || (wo as any).ULP || '';
+          const woPenyulangCanon = getCanonicalPenyulangKey(woPenyulangRaw);
+          const woUlpCanon = getCanonicalUlpKey(woUlpRaw);
+          const ulpMatch = !rowUlpCanon || !woUlpCanon || rowUlpCanon === woUlpCanon || rowUlpCanon.includes(woUlpCanon) || woUlpCanon.includes(rowUlpCanon);
+          if (woPenyulangCanon && rowPenyulangCanon && ulpMatch && (woPenyulangCanon === rowPenyulangCanon || woPenyulangCanon.includes(rowPenyulangCanon) || rowPenyulangCanon.includes(woPenyulangCanon))) {
+            daysWithData.add(parts.d);
+          }
+        }
+      });
+
+      // Initialize days for current month: start clean for days with fresh input, preserve prior values for days without batch input
       for (let i = 1; i <= 31; i++) {
         const padded = String(i).padStart(2, '0');
         const unpadded = String(i);
         const prefixed = `day_${padded}`;
-        const dayObj = {
-          tebang1: 0,
-          pangkas: 0,
-          tebang2: 0,
-          targetKms: 0, // RECALCULATED FROM SCRATCH
-          realisasiKms: 0
-        };
+        const existingDay = row.dailyValues?.[padded] || row.dailyValues?.[unpadded] || row.dailyValues?.[prefixed];
+
+        const dayObj = (daysWithData.has(i) || !existingDay)
+          ? { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 }
+          : {
+              tebang1: Number(existingDay.tebang1 || existingDay.tebang || 0),
+              pangkas: Number(existingDay.pangkas || 0),
+              tebang2: Number(existingDay.tebang2 || 0),
+              targetKms: Number(existingDay.targetKms || 0),
+              realisasiKms: Number(existingDay.realisasiKms || 0),
+            };
+
         updatedDaily[padded] = dayObj;
         updatedDaily[unpadded] = dayObj;
         updatedDaily[prefixed] = dayObj;
       }
-
-      const rowPenyulangCanon = getCanonicalPenyulangKey(row.timRow);
-      const rowUlpCanon = getCanonicalUlpKey(row.namaUlp);
 
       // 1. Data Pohon from Realisasi
       cleanRealisasi.forEach((rel) => {
@@ -1000,13 +1047,16 @@ export class RekapHarianService {
           }
 
           if (matchPenyulang) {
-            const dayKey = String(parts.d).padStart(2, '0');
-            const treeCount = getRealisasiPohonCount(rel);
-            const action = classifyRealisasiAction(rel);
-            if (action === 'TEBANG') {
-              updatedDaily[dayKey].tebang1 += treeCount;
-            } else {
-              updatedDaily[dayKey].pangkas += treeCount;
+            const dayPadded = String(parts.d).padStart(2, '0');
+            const targetDay = updatedDaily[dayPadded];
+            if (targetDay) {
+              const treeCount = getRealisasiPohonCount(rel);
+              const action = classifyRealisasiAction(rel);
+              if (action === 'TEBANG') {
+                targetDay.tebang1 += treeCount;
+              } else {
+                targetDay.pangkas += treeCount;
+              }
             }
           }
         }
@@ -1294,18 +1344,55 @@ export class RekapHarianService {
     const result = dynamicRows.map((row) => {
       const updatedDaily: Record<string, any> = {};
 
-      // Reset ALL days for the current month with targetKms = 0 and realisasiKms = 0 (RECALCULATE, NOT ACCUMULATE)
+      // Identify days present in incoming realisasi/workOrders for this row
+      const daysWithData = new Set<number>();
+
+      cleanRealisasi.forEach((rel) => {
+        if (!rel) return;
+        const parts = this.parseDateParts(rel);
+        if (parts && parts.y === year && parts.m === monthIndex + 1) {
+          let relUlpRaw = rel.ulpName || (rel as any).ULP || (rel as any).Nama_ULP || '';
+          let relReguRaw = rel.reguName || (rel as any).REGU_ROW || (rel as any).Regu || (rel as any).petugasName || '';
+          if (!relReguRaw || relReguRaw === '-' || relReguRaw === 'null') {
+            const matchedWo = (rel.workOrderId && woMapById[rel.workOrderId]) || (rel.nomorWO && woMapByNo[String(rel.nomorWO).trim().toUpperCase()]);
+            if (matchedWo?.reguName) relReguRaw = matchedWo.reguName;
+            if (!relUlpRaw && matchedWo?.ulpName) relUlpRaw = matchedWo.ulpName;
+          }
+          if (isSpecificReguMatch(row.timRow, relReguRaw, row.namaUlp, relUlpRaw)) {
+            daysWithData.add(parts.d);
+          }
+        }
+      });
+
+      cleanWorkOrders.forEach((wo) => {
+        if (!wo) return;
+        const parts = this.parseDateParts(wo.tanggal || wo);
+        if (parts && parts.y === year && parts.m === monthIndex + 1) {
+          const woReguRaw = wo.reguName || (wo as any).REGU_ROW || (wo as any).Regu || '';
+          const woUlpRaw = wo.ulpName || (wo as any).ULP || '';
+          if (isSpecificReguMatch(row.timRow, woReguRaw, row.namaUlp, woUlpRaw)) {
+            daysWithData.add(parts.d);
+          }
+        }
+      });
+
+      // Initialize days for current month: start clean for days with fresh input, preserve prior values for days without batch input
       for (let i = 1; i <= 31; i++) {
         const padded = String(i).padStart(2, '0');
         const unpadded = String(i);
         const prefixed = `day_${padded}`;
-        const dayObj = {
-          tebang1: 0,
-          pangkas: 0,
-          tebang2: 0,
-          targetKms: 0, // RECALCULATED FROM SCRATCH
-          realisasiKms: 0
-        };
+        const existingDay = row.dailyValues?.[padded] || row.dailyValues?.[unpadded] || row.dailyValues?.[prefixed];
+
+        const dayObj = (daysWithData.has(i) || !existingDay)
+          ? { tebang1: 0, pangkas: 0, tebang2: 0, targetKms: 0, realisasiKms: 0 }
+          : {
+              tebang1: Number(existingDay.tebang1 || existingDay.tebang || 0),
+              pangkas: Number(existingDay.pangkas || 0),
+              tebang2: Number(existingDay.tebang2 || 0),
+              targetKms: Number(existingDay.targetKms || 0),
+              realisasiKms: Number(existingDay.realisasiKms || 0),
+            };
+
         updatedDaily[padded] = dayObj;
         updatedDaily[unpadded] = dayObj;
         updatedDaily[prefixed] = dayObj;
@@ -1331,13 +1418,16 @@ export class RekapHarianService {
           const matchTim = isSpecificReguMatch(row.timRow, relReguRaw, row.namaUlp, relUlpRaw);
 
           if (matchTim) {
-            const dayKey = String(parts.d).padStart(2, '0');
-            const treeCount = getRealisasiPohonCount(rel);
-            const action = classifyRealisasiAction(rel);
-            if (action === 'TEBANG') {
-              updatedDaily[dayKey].tebang1 += treeCount;
-            } else {
-              updatedDaily[dayKey].pangkas += treeCount;
+            const dayPadded = String(parts.d).padStart(2, '0');
+            const targetDay = updatedDaily[dayPadded];
+            if (targetDay) {
+              const treeCount = getRealisasiPohonCount(rel);
+              const action = classifyRealisasiAction(rel);
+              if (action === 'TEBANG') {
+                targetDay.tebang1 += treeCount;
+              } else {
+                targetDay.pangkas += treeCount;
+              }
             }
           }
         }

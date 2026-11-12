@@ -198,18 +198,17 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
   // Load Data when UL, Year, or Month changes
   useEffect(() => {
     setIsLoading(true);
-    // 1. Render data awal dari cache lokal / context yang ada
+    // 1. Render data awal dari cache lokal
     const initialData = RekapHarianService.loadRekapData(
       selectedULKey,
       selectedYear,
       selectedMonthIdx,
-      realisasiList,
+      [],
       ulpList,
       reguList,
-      workOrders
+      []
     );
     setRekapRows(initialData);
-    setIsLoading(false);
 
     // 2. Ambil data periode targeted secara spesifik dari database untuk memastikan seluruh TEBANG/PANGKAS termuat
     let isCancelled = false;
@@ -235,17 +234,17 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
         }
       } catch (err) {
         console.warn('Rekap period fetch error:', err);
+      } finally {
+        if (!isCancelled) setIsLoading(false);
       }
     };
 
-    if (navigator.onLine) {
-      loadTargetedPeriodData();
-    }
+    loadTargetedPeriodData();
 
     return () => {
       isCancelled = true;
     };
-  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, reguList, realisasiList, workOrders]);
+  }, [selectedULKey, selectedYear, selectedMonthIdx, ulpList, reguList]);
 
   // Save changes to localStorage
   const handleSaveData = (updated: RekapItemData[]) => {

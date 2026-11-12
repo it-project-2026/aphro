@@ -545,6 +545,12 @@ class OfflineSyncQueueEngine {
 
           // Remove queue item after confirmed database save
           await dexieDb.sync_queue.delete(item.idempotencyKey);
+
+          // Dispatch event to trigger instant table & context refresh
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('aphro:data_updated', { detail: { type: 'REALISASI', id: finalServerId } }));
+          }
+
           return true;
         } else {
           throw new Error(serverResult.message || 'Server database menolak transaksi Realisasi.');

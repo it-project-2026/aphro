@@ -2801,6 +2801,29 @@ bodyMB=${bodyMB} MB`);
             const tgl = normalizeDateISO(rawDate);
             return Boolean(tgl) && tgl >= startDate && tgl <= endDate;
           });
+
+        // Always merge local Dexie realisasies so pending/offline items for the month appear immediately
+        try {
+          const { dexieDb } = await import('./dexieDb');
+          const localRecords = await dexieDb.realisasi.toArray();
+          if (localRecords.length > 0) {
+            const localNormalized = localRecords.map(item => normalizeRealisasiRow(item));
+            const existingIds = new Set(rawRel.map(r => String(r.id || r.syncId)));
+            for (const loc of localNormalized) {
+              const locId = String(loc.id || loc.syncId);
+              if (!existingIds.has(locId)) {
+                const rawDate = loc.tanggalRealisasi || (loc as any).TANGGAL || (loc as any).tanggal || (loc as any).Tanggal || '';
+                const tgl = normalizeDateISO(rawDate);
+                if (Boolean(tgl) && tgl >= startDate && tgl <= endDate) {
+                  rawRel.push(loc);
+                  existingIds.add(locId);
+                }
+              }
+            }
+          }
+        } catch (dexErr) {
+          console.warn('Dexie merge in fetchRekapPeriodData warning:', dexErr);
+        }
       } catch (fetchErr: any) {
         console.warn('Paginated Realisasi fetch failed, checking Dexie cache:', fetchErr?.message || fetchErr);
         const { dexieDb } = await import('./dexieDb');
