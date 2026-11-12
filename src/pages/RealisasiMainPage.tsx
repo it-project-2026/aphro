@@ -157,6 +157,15 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   React.useEffect(() => {
     let isMounted = true;
     if (activeSubTab === 'history') {
+      fetchRealisasiFromApi({
+        page: 1,
+        limit: 1000,
+        tanggalDari,
+        tanggalSampai,
+        ULP: ulpFilter,
+        Nomor_WO: filterNomorWO && filterNomorWO.trim() ? filterNomorWO.trim() : undefined,
+      });
+
       if (filterNomorWO && filterNomorWO.trim() !== '') {
         ApiService.fetchTargetedReportData({
           jenisLaporan: 'realisasi',
@@ -167,28 +176,19 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
           ulpName: ulpFilter || undefined,
         }).then(res => {
           if (!isMounted) return;
-          if (res.success && Array.isArray(res.realisasi)) {
-            setRealisasiList(res.realisasi);
+          if (res.success && Array.isArray(res.realisasi) && res.realisasi.length > 0) {
+            setRealisasiList(prev => {
+              const existingMap = new Map(prev.map(item => [item.id || (item as any).syncId || (item as any).localId, item]));
+              res.realisasi.forEach((item: any) => {
+                const id = item.id || item.syncId || item.localId;
+                if (id) {
+                  existingMap.set(id, { ...existingMap.get(id), ...item });
+                }
+              });
+              return Array.from(existingMap.values());
+            });
           }
-        }).catch(() => {
-          if (!isMounted) return;
-          fetchRealisasiFromApi({
-            page,
-            limit: 1000,
-            tanggalDari,
-            tanggalSampai,
-            ULP: ulpFilter,
-            Nomor_WO: filterNomorWO.trim(),
-          });
-        });
-      } else {
-        fetchRealisasiFromApi({
-          page,
-          limit,
-          tanggalDari,
-          tanggalSampai,
-          ULP: ulpFilter,
-        });
+        }).catch(() => {});
       }
     }
     return () => {
@@ -197,8 +197,6 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   }, [
     activeSubTab,
     filterNomorWO,
-    page,
-    limit,
     tanggalDari,
     tanggalSampai,
     ulpFilter,
@@ -310,24 +308,54 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
 
   // Available WO Numbers list for dropdown filter
   const availableWONumbers = useMemo(() => {
-    const woSet = new Set<string>();
+    const woMap = new Map<string, number>();
+
+    const extractTime = (item: any): number => {
+      if (!item) return 0;
+      const rawDate = item.tanggal || item.TANGGAL || item.tanggalRealisasi || item.createdAt || item.updatedAt;
+      if (rawDate) {
+        const t = new Date(rawDate).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      return 0;
+    };
 
     workOrders.forEach((wo) => {
-      if (wo.nomorWO && wo.nomorWO.trim()) woSet.add(wo.nomorWO.trim());
+      if (wo.nomorWO && wo.nomorWO.trim()) {
+        const key = wo.nomorWO.trim();
+        woMap.set(key, Math.max(woMap.get(key) || 0, extractTime(wo)));
+      }
     });
     displayedWorkOrders.forEach((wo) => {
-      if (wo.nomorWO && wo.nomorWO.trim()) woSet.add(wo.nomorWO.trim());
+      if (wo.nomorWO && wo.nomorWO.trim()) {
+        const key = wo.nomorWO.trim();
+        woMap.set(key, Math.max(woMap.get(key) || 0, extractTime(wo)));
+      }
     });
     localWoNumbers.forEach((no) => {
-      if (no && no.trim()) woSet.add(no.trim());
+      if (no && no.trim()) {
+        const key = no.trim();
+        if (!woMap.has(key)) woMap.set(key, 0);
+      }
     });
     realisasiList.forEach((rel) => {
-      if (rel.nomorWO && rel.nomorWO.trim()) woSet.add(rel.nomorWO.trim());
+      const rKey = rel.nomorWO && rel.nomorWO.trim() ? rel.nomorWO.trim() : '';
+      if (rKey) {
+        woMap.set(rKey, Math.max(woMap.get(rKey) || 0, extractTime(rel)));
+      }
       const wo = workOrdersMap[rel.workOrderId];
-      if (wo?.nomorWO && wo.nomorWO.trim()) woSet.add(wo.nomorWO.trim());
+      if (wo?.nomorWO && wo.nomorWO.trim()) {
+        const wKey = wo.nomorWO.trim();
+        woMap.set(wKey, Math.max(woMap.get(wKey) || 0, extractTime(rel), extractTime(wo)));
+      }
     });
 
-    return Array.from(woSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    return Array.from(woMap.keys()).sort((a, b) => {
+      const timeA = woMap.get(a) || 0;
+      const timeB = woMap.get(b) || 0;
+      if (timeA !== timeB) return timeB - timeA;
+      return b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' });
+    });
   }, [workOrders, displayedWorkOrders, localWoNumbers, realisasiList, workOrdersMap]);
 
   // Auto-select initial Nomor WO for users if filterNomorWO is empty
@@ -361,18 +389,23 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
 
     return realisasiList.filter((rel) => {
       const wo = workOrdersMap[rel.workOrderId];
-      const rWo = (rel.nomorWO || '').trim().toLowerCase();
-      const mWo = (wo?.nomorWO || '').trim().toLowerCase();
-      const rWoId = (rel.workOrderId || '').trim().toLowerCase();
+      const woStatus = resolveRealisasiWoStatus(rel, workOrdersMap);
 
-      // Check if matches the selected Nomor WO (only if filterNomorWO is active)
       if (cleanFilter) {
+        const rWo = (rel.nomorWO || (rel as any).Nomor_WO || '').trim().toLowerCase();
+        const mWo = (wo?.nomorWO || (wo as any)?.Nomor_WO || '').trim().toLowerCase();
+        const rWoId = (rel.workOrderId || (rel as any).WO_ID || '').trim().toLowerCase();
+        const statusWO = (woStatus.displayNomorWO || '').trim().toLowerCase();
+
         const matchesWO = 
           rWo === cleanFilter ||
           mWo === cleanFilter ||
           rWoId === cleanFilter ||
-          rWo.includes(cleanFilter) ||
-          mWo.includes(cleanFilter);
+          statusWO === cleanFilter ||
+          (rWo !== '' && (rWo.includes(cleanFilter) || cleanFilter.includes(rWo))) ||
+          (mWo !== '' && (mWo.includes(cleanFilter) || cleanFilter.includes(mWo))) ||
+          (rWoId !== '' && (rWoId.includes(cleanFilter) || cleanFilter.includes(rWoId))) ||
+          (statusWO !== '' && (statusWO.includes(cleanFilter) || cleanFilter.includes(statusWO)));
 
         if (!matchesWO) return false;
       }
@@ -1043,29 +1076,40 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                 <div>
                   EVIDEN ROW AREA {selectedAreaName} — ULP {selectedUlpName} {filterNomorWO ? `— WO: ${filterNomorWO}` : ''} ({displayList.length} Data)
                 </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await fetchRealisasiFromApi({
-                      page,
-                      limit,
-                      tanggalDari,
-                      tanggalSampai,
-                      ULP: ulpFilter,
-                      Nomor_WO: filterNomorWO && filterNomorWO.trim() ? filterNomorWO.trim() : undefined,
-                    });
-                    showToast(
-                      filterNomorWO && filterNomorWO.trim()
-                        ? `Data riwayat realisasi WO ${filterNomorWO} berhasil disegarkan`
-                        : `Data riwayat realisasi berhasil disegarkan`,
-                      'success'
-                    );
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all normal-case tracking-normal cursor-pointer"
-                >
-                  <RotateCw className="w-3.5 h-3.5" />
-                  <span>Segarkan Data</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    disabled={displayList.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all normal-case tracking-normal cursor-pointer disabled:opacity-50"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>{isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua (Multi-Delete)'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await fetchRealisasiFromApi({
+                        page,
+                        limit,
+                        tanggalDari,
+                        tanggalSampai,
+                        ULP: ulpFilter,
+                        Nomor_WO: filterNomorWO && filterNomorWO.trim() ? filterNomorWO.trim() : undefined,
+                      });
+                      showToast(
+                        filterNomorWO && filterNomorWO.trim()
+                          ? `Data riwayat realisasi WO ${filterNomorWO} berhasil disegarkan`
+                          : `Data riwayat realisasi berhasil disegarkan`,
+                        'success'
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all normal-case tracking-normal cursor-pointer"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    <span>Segarkan Data</span>
+                  </button>
+                </div>
               </div>
 
               {/* Bulk Selection Action Bar */}

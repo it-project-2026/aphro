@@ -1029,14 +1029,24 @@ export function AbsensiProvider({
       if (!abs) return;
 
       // 1. Direct Business Date Match (TANGGAL)
-      const recordDateStr = normalizeDate(abs.TANGGAL ?? abs.tanggal ?? abs.Tanggal);
-      const tanggalValid = recordDateStr === todayISO;
+      const rawDate = abs.TANGGAL ?? abs.tanggal ?? abs.Tanggal ?? abs.createdAt ?? abs.timestampMasuk ?? abs['TIMESTAMP MASUK'];
+      const recordDateStr = normalizeDate(rawDate);
+      const todayISO = getWIBDateString();
+      const todayLocal = getLocalDateTimeString().slice(0, 10);
+      const rawSlice = String(rawDate || '').slice(0, 10);
+
+      const tanggalValid =
+        recordDateStr === todayISO ||
+        recordDateStr === todayLocal ||
+        rawSlice === todayISO ||
+        rawSlice === todayLocal ||
+        (recordDateStr && (todayISO.includes(recordDateStr) || recordDateStr.includes(todayISO)));
 
       // 2. Unit Check
       const absUnitStd = InisiasiService.getStandardUnitId(abs.unitId || abs.UnitId || abs.UNIT_ID);
       const unitValid = !absUnitStd || !userUnitStd || userUnitStd === 'ALL' || absUnitStd === userUnitStd;
 
-      // 3. Canonical REGU Match (NAMA_REGU) - absolutely NO REGU_ROW referenced here
+      // 3. Canonical REGU Match (NAMA_REGU)
       const reguVal = abs.NAMA_REGU ?? abs.reguName ?? abs.Nama_Regu ?? abs.Regu ?? '';
       const canonicalRecordRegu = getCanonicalReguId(reguVal);
 
@@ -1059,35 +1069,56 @@ export function AbsensiProvider({
         }
       }
 
-      // 4. Check photoMasuk or timestampMasuk
-      const fotoMasukVal = String(abs.fotoMasuk || abs.FOTO_MASUK || abs.FotoMasuk || '').trim();
-      const timestampMasukVal = String(abs.timestampMasuk || abs['TIMESTAMP MASUK'] || abs.TIMESTAMP_MASUK || abs.TIMESTAMP || '').trim();
-      const masukValid = (fotoMasukVal !== '' && fotoMasukVal !== '-') || (timestampMasukVal !== '' && timestampMasukVal !== '-');
+      // 4. Direct Personal User / Petugas Match
+      const absUserClean = cleanStr(abs.userName || abs.username || abs.NIP || abs.nip || abs.userId || abs.user_id);
+      const absNameClean = cleanStr(abs.namaPetugas || abs.NAMA_PETUGAS || abs.nama_petugas || abs.name || abs.nama);
+      const absNipClean = cleanStr(abs.nip || abs.NIP);
+      const userNipClean = cleanStr(user.nip);
+      const userNameClean = cleanStr(user.name || user.userName);
 
-      const isRecordMatch = tanggalValid && unitValid && reguValid && masukValid;
+      let userMatch = false;
+      if (userIdentifierClean && absUserClean && (userIdentifierClean === absUserClean || userIdentifierClean.includes(absUserClean) || absUserClean.includes(userIdentifierClean))) {
+        userMatch = true;
+      }
+      if (!userMatch && userNipClean && absNipClean && userNipClean === absNipClean) {
+        userMatch = true;
+      }
+      if (!userMatch && userNameClean && absNameClean && (userNameClean === absNameClean || userNameClean.includes(absNameClean) || absNameClean.includes(userNameClean))) {
+        userMatch = true;
+      }
+
+      let memberMatch = false;
+      if (Array.isArray(abs.petugasList) && abs.petugasList.length > 0) {
+        memberMatch = abs.petugasList.some((p: any) => {
+          const pNama = cleanStr(p?.nama || p?.name);
+          return Boolean(pNama && userIdentifierClean && (pNama === userIdentifierClean || userIdentifierClean.includes(pNama) || pNama.includes(userIdentifierClean)));
+        });
+      }
+      if (!memberMatch) {
+        for (let i = 1; i <= 20; i++) {
+          const pField = cleanStr(abs[`PETUGAS_${i}`] || abs[`Petugas_${i}`]);
+          if (pField && userIdentifierClean && (pField === userIdentifierClean || userIdentifierClean.includes(pField) || pField.includes(userIdentifierClean))) {
+            memberMatch = true;
+            break;
+          }
+        }
+      }
+
+      const identityValid = reguValid || userMatch || memberMatch;
+
+      // 5. Check photoMasuk or timestampMasuk
+      const fotoMasukVal = String(abs.fotoMasuk || abs.FOTO_MASUK || abs.FotoMasuk || '').trim();
+      const timestampMasukVal = String(abs.timestampMasuk || abs['TIMESTAMP MASUK'] || abs.TIMESTAMP_MASUK || abs.TIMESTAMP || abs.createdAt || '').trim();
+      const hasPetugasList = Array.isArray(abs.petugasList) && abs.petugasList.length > 0;
+      const hasPetugas1 = Boolean(abs.PETUGAS_1 || abs.Petugas_1);
+
+      const masukValid = (fotoMasukVal !== '' && fotoMasukVal !== '-') || (timestampMasukVal !== '' && timestampMasukVal !== '-') || hasPetugasList || hasPetugas1;
+
+      const isRecordMatch = tanggalValid && unitValid && identityValid && masukValid;
 
       if (isRecordMatch && !matched) {
         matched = abs;
       }
-
-      // Print debug logs as required
-      console.log(`[ABSENSI CHECK]
-todayWIB: ${todayISO}
-user.unitId: ${user.unitId}
-user.reguName: ${resolved.reguName || user.reguName}
-user.ulpName: ${resolved.ulpName || user.ulpName}
-absensiList.length: ${absensiList.length}
-record.ID: ${abs.ID || abs.id}
-record.TANGGAL: ${abs.TANGGAL || abs.tanggal}
-record.unitId: ${abs.unitId}
-record.NAMA_REGU: ${abs.NAMA_REGU || abs.reguName}
-canonicalUserRegu: ${canonicalUserRegu}
-canonicalRecordRegu: ${canonicalRecordRegu}
-tanggalValid: ${tanggalValid}
-unitValid: ${unitValid}
-reguValid: ${reguValid}
-masukValid: ${masukValid}
-hasCheckedInToday: ${isRecordMatch}`);
     });
 
     return matched;
@@ -1106,7 +1137,9 @@ hasCheckedInToday: ${isRecordMatch}`);
       todayAbsensiRecord.createdAt ||
       (todayAbsensiRecord as any).CREATED_AT ||
       (todayAbsensiRecord as any).Created_At;
-    return Boolean(fotoMasuk || tsMasuk);
+    const hasPetugas = Array.isArray(todayAbsensiRecord.petugasList) && todayAbsensiRecord.petugasList.length > 0;
+    const hasPetugas1 = Boolean((todayAbsensiRecord as any).PETUGAS_1 || (todayAbsensiRecord as any).Petugas_1);
+    return Boolean(fotoMasuk || tsMasuk || hasPetugas || hasPetugas1);
   }, [user, todayAbsensiRecord]);
 
   const sudahKeluar = React.useMemo(() => {
@@ -1123,7 +1156,14 @@ hasCheckedInToday: ${isRecordMatch}`);
 
   const hasCheckedInToday = React.useMemo(() => {
     if (!user || (user.role || '').toUpperCase() !== 'USER') return true;
-    return sudahMasuk;
+    const todayISO = getWIBDateString();
+    const userId = user.id || user.userName || user.nip || 'user';
+    const storageKey = `aphro_absensi_done_${todayISO}_${userId}`;
+    const wasMarkedDone = typeof window !== 'undefined' && localStorage.getItem(storageKey) === 'true';
+    if (sudahMasuk && typeof window !== 'undefined') {
+      try { localStorage.setItem(storageKey, 'true'); } catch {}
+    }
+    return sudahMasuk || wasMarkedDone;
   }, [user, sudahMasuk]);
 
   React.useEffect(() => {
