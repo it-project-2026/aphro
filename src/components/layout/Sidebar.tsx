@@ -102,6 +102,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
     },
     {
+      id: 'absensi_masuk',
+      label: 'Absensi Masuk',
+      icon: UserCheck,
+      roles: ['User'],
+    },
+    {
       id: 'absensi_pulang',
       label: 'Absensi Pulang',
       icon: LogOut,

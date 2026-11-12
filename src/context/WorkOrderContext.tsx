@@ -79,7 +79,7 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     try {
       if (page === 1) setIsLoading(true);
 
-      const limit = 20;
+      const limit = 100;
 
       // ONLINE-FIRST: Fetch from HyperCloud API
       const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
@@ -285,21 +285,14 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
       return inisiasiWorkOrders;
     }
 
-    // Regular officers / users ONLY see Work Orders assigned to them or their team
+    // Regular officers / users ONLY see Work Orders assigned to them or their exact active team
     const userTimInfo = resolveUserTimRowAndUlp(user, activeUnitName);
-    const userCandidates = [
-      cleanStr(userTimInfo.reguName),
-      cleanStr(user.reguName),
-      cleanStr(user.userName),
-      cleanStr(user.name),
-      cleanStr(user.nip),
-      cleanStr(user.id),
-      (user.reguName || '').match(/\d+/)?.[0],
-      (userTimInfo.reguName || '').match(/\d+/)?.[0]
-    ].filter(Boolean);
+    const userReguExact = cleanStr(user.reguName || userTimInfo.reguName);
+    const userReguNum = (user.reguName || userTimInfo.reguName || '').match(/\d+/)?.[0];
+    const userNameClean = cleanStr(user.userName || user.name);
 
     return inisiasiWorkOrders.filter((wo) => {
-      // Direct petugasId match (ID, NIP, Username)
+      // 1. Direct ID / NIP / Username match
       if (
         user.id && wo.petugasId &&
         (String(user.id) === String(wo.petugasId) ||
@@ -309,37 +302,31 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
 
-      // Direct reguId match
+      // 2. Direct reguId match
       if (user.reguId && wo.reguId && String(user.reguId) === String(wo.reguId)) {
         return true;
       }
 
-      // Match petugasName against user candidates
-      const woPetugasClean = cleanStr(wo.petugasName);
-      if (woPetugasClean) {
-        for (const uCand of userCandidates) {
-          if (
-            woPetugasClean === uCand ||
-            (woPetugasClean.length >= 2 && uCand.length >= 2 && (woPetugasClean.includes(uCand) || uCand.includes(woPetugasClean)))
-          ) {
-            return true;
-          }
+      // 3. Exact or precise Regu / Team match (preventing cross-team leak like Regu 1 matching Regu 10)
+      const woReguStr = String(wo.reguName || (wo as any).regu || '');
+      const woReguClean = cleanStr(woReguStr);
+      const woReguNum = woReguStr.match(/\d+/)?.[0];
+
+      if (userReguNum && woReguNum) {
+        if (userReguNum === woReguNum) {
+          return true;
+        }
+      } else if (userReguExact && woReguClean) {
+        if (userReguExact === woReguClean || woReguClean.includes(userReguExact) || userReguExact.includes(woReguClean)) {
+          return true;
         }
       }
 
-      // Match reguName against user candidates
-      const woReguClean = cleanStr(wo.reguName);
-      const woReguNum = (wo.reguName || '').match(/\d+/)?.[0];
-
-      if (woReguClean) {
-        for (const uCand of userCandidates) {
-          if (
-            woReguClean === uCand ||
-            (woReguNum && uCand === woReguNum) ||
-            (woReguClean.length >= 2 && uCand.length >= 2 && (woReguClean.includes(uCand) || uCand.includes(woReguClean)))
-          ) {
-            return true;
-          }
+      // 4. Petugas Name match
+      const woPetugasClean = cleanStr(wo.petugasName);
+      if (userNameClean && woPetugasClean) {
+        if (woPetugasClean === userNameClean || woPetugasClean.includes(userNameClean) || userNameClean.includes(woPetugasClean)) {
+          return true;
         }
       }
 

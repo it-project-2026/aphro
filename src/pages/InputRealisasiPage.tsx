@@ -11,7 +11,7 @@ import { generateWatermarkedImage } from '../utils/watermark';
 import { GASApiService } from '../services/gasApiService';
 import { InisiasiService } from '../services/inisiasiService';
 import { ensureGoogleDrivePhotoUrl, isValidPhotoUrl, isValidUploadedPhotoUrl } from '../utils/driveUtils';
-import { getWIBDateString } from '../utils/dateUtils';
+import { getWIBDateString, normalizeDateISO } from '../utils/dateUtils';
 import {
   Camera,
   Upload,
@@ -26,6 +26,9 @@ import {
   Image as ImageIcon,
   RefreshCw,
   Loader2,
+  AlertCircle,
+  WifiOff,
+  RotateCw,
 } from 'lucide-react';
 import { useGASSync } from '../context/GASSyncContext';
 
@@ -43,9 +46,11 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   onCancel,
 }) => {
   const { user: currentUser } = useAuth();
-  const { workOrders, displayedWorkOrders, updateWorkOrder } = useWorkOrders();
+  const { workOrders, displayedWorkOrders, updateWorkOrder, refreshWorkOrders } = useWorkOrders();
   const { addRealisasi, updateRealisasi } = useRealisasi();
   const { settings } = useSettings();
+
+  const [isRefreshingWo, setIsRefreshingWo] = React.useState(false);
 
   const {
     setActiveTab,
@@ -60,6 +65,31 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
 
   const role = (currentUser?.role || 'User').toLowerCase();
   const isUserRole = role === 'user';
+
+  // Otomatis refresh Work Order hari ini saat Role USER membuka Halaman Input Realisasi
+  React.useEffect(() => {
+    if (isUserRole && currentUser?.unitId && refreshWorkOrders) {
+      refreshWorkOrders(1, false).catch(() => {});
+    }
+  }, [isUserRole, currentUser?.unitId, refreshWorkOrders]);
+
+  const handleManualRefreshWo = async () => {
+    setIsRefreshingWo(true);
+    showToast('Memuat ulang data Work Order hari ini...', 'info');
+    try {
+      if (refreshWorkOrders) {
+        await refreshWorkOrders(1, true);
+      }
+      if (syncWithGAS) {
+        await syncWithGAS();
+      }
+      showToast('Data Work Order berhasil diperbarui', 'success');
+    } catch (err: any) {
+      showToast('Gagal memuat ulang Work Order: ' + (err?.message || 'Periksa koneksi internet'), 'error');
+    } finally {
+      setIsRefreshingWo(false);
+    }
+  };
 
   // Helper membersihkan string
   const cleanStr = (s: any) =>
@@ -184,6 +214,7 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
   const availableWorkOrders = React.useMemo(() => {
     // For non-admin user, strictly use displayedWorkOrders filtered by Group WO
     const sourceList = isUserRole ? displayedWorkOrders : (displayedWorkOrders.length > 0 ? displayedWorkOrders : workOrders);
+    const todayWIB = getWIBDateString();
 
     const result = sourceList.filter((wo) => {
       if (editMode && initialData && wo.id === initialData.workOrderId) {
@@ -198,6 +229,17 @@ export const InputRealisasiPage: React.FC<InputRealisasiPageProps> = ({
       }
       if (isFinishedWO(wo)) return false;
       if (!isAssignedToUser(wo)) return false;
+
+      // KETENTUAN KHUSUS ROLE USER:
+      // Hanya tampilkan Work Order dengan tanggal pekerjaan yang sama dengan tanggal hari ini.
+      if (isUserRole && !editMode) {
+        const woRawDate = (wo as any).tanggal || (wo as any).tanggalPekerjaan || (wo as any).createdAt || '';
+        const woNormalized = normalizeDateISO(woRawDate) || (typeof woRawDate === 'string' ? woRawDate.slice(0, 10) : '');
+        if (woNormalized && woNormalized !== todayWIB) {
+          return false;
+        }
+      }
+
       return true;
     });
 
@@ -1275,11 +1317,12 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
               </label>
               <button
                 type="button"
-                onClick={() => syncWithGAS && syncWithGAS()}
-                className="text-[10px] font-bold text-[#00A2B9] hover:underline flex items-center gap-1"
+                onClick={handleManualRefreshWo}
+                disabled={isRefreshingWo}
+                className="text-[10px] font-bold text-[#00A2B9] hover:underline flex items-center gap-1.5 disabled:opacity-50"
               >
-                <RefreshCw className="w-3 h-3" />
-                REFRESH DATA
+                <RotateCw className={`w-3 h-3 ${isRefreshingWo ? 'animate-spin' : ''}`} />
+                {isRefreshingWo ? 'MEMUAT...' : 'MUAT ULANG DATA'}
               </button>
             </div>
 
@@ -1287,7 +1330,7 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
               <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">
                 Menampilkan Work Order{' '}
                 <span className="font-bold text-teal-600 dark:text-teal-400">
-                  BELUM SELESAI
+                  HARI INI & BELUM SELESAI
                 </span>{' '}
                 untuk:{' '}
                 <span className="font-bold text-teal-600 dark:text-teal-400">
@@ -1298,10 +1341,45 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
               </p>
             )}
 
+            {/* Banner Khusus jika Role USER belum memiliki Work Order Hari Ini */}
+            {isUserRole && !editMode && availableWorkOrders.length === 0 && (
+              <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 space-y-2">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-xs sm:text-sm font-black">
+                      Nomor Work Order hari Ini belum Ada
+                    </p>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      Belum ditemukan Work Order aktif untuk tanggal hari ini ({getWIBDateString()}) pada unit kerja dan regu Anda.
+                    </p>
+                    {typeof navigator !== 'undefined' && !navigator.onLine && (
+                      <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1 pt-0.5">
+                        <WifiOff className="w-3.5 h-3.5 shrink-0" />
+                        Perangkat sedang offline. Sambungkan koneksi internet untuk memuat data Work Order terbaru dari server HyperCloud.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="pt-1 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleManualRefreshWo}
+                    disabled={isRefreshingWo}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-sm disabled:opacity-50"
+                  >
+                    <RotateCw className={`w-3.5 h-3.5 ${isRefreshingWo ? 'animate-spin' : ''}`} />
+                    <span>Muat Ulang</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             <select
               value={selectedWoId || ''}
               onChange={(e) => handleWoChange(e.target.value)}
-              className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-[#00A2B9]"
+              disabled={availableWorkOrders.length === 0}
+              className="w-full px-3.5 py-3 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-[#00A2B9] disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed"
             >
               {workOrders.length === 0 ? (
                 <option value="">
@@ -1309,15 +1387,16 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
                 </option>
               ) : availableWorkOrders.length === 0 ? (
                 <option value="">
-                  -- Tidak Ada Work Order BELUM SELESAI yang dapat
-                  direalisasikan --
+                  {isUserRole
+                    ? '-- Nomor Work Order hari Ini belum Ada --'
+                    : '-- Tidak Ada Work Order BELUM SELESAI yang dapat direalisasikan --'}
                 </option>
               ) : (
                 <>
                   {(!selectedWoId ||
                     !availableWorkOrders.find((w) => w.id === selectedWoId)) && (
                     <option value="">
-                      -- Pilih Work Order Belum Selesai --
+                      -- Pilih Work Order Hari Ini --
                     </option>
                   )}
                   {availableWorkOrders.map((wo, wIdx) => (
@@ -1827,8 +1906,8 @@ TOTAL=${totalDuration.toFixed(2)}ms`);
                 )}
                 <button
                   type="submit"
-                  disabled={isProcessing}
-                  className="w-full sm:w-auto inline-flex items-center justify-center space-x-3 px-8 py-4 text-sm font-black text-white bg-gradient-to-r from-black via-slate-900 to-red-600 hover:from-slate-900 hover:to-red-700 disabled:opacity-85 disabled:cursor-not-allowed rounded-2xl shadow-xl shadow-black/25 transition-all active:scale-95"
+                  disabled={isProcessing || !selectedWO}
+                  className="w-full sm:w-auto inline-flex items-center justify-center space-x-3 px-8 py-4 text-sm font-black text-white bg-gradient-to-r from-black via-slate-900 to-red-600 hover:from-slate-900 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl shadow-xl shadow-black/25 transition-all active:scale-95"
                 >
                   {isProcessing ? (
                     <div className="flex items-center space-x-2.5">

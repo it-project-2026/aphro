@@ -17,6 +17,7 @@ import {
   History,
   Building2,
   FilePlus2,
+  UserCheck,
 } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
@@ -91,6 +92,11 @@ export const MobileBottomNav: React.FC = () => {
           id: 'inisiasi',
           label: 'Inisiasi',
           icon: Building2,
+        },
+        {
+          id: 'absensi_masuk',
+          label: 'Absen Masuk',
+          icon: UserCheck,
         },
         {
           id: 'absensi_pulang',

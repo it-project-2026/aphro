@@ -223,14 +223,13 @@ const AppContent: React.FC = () => {
   React.useEffect(() => {
     if (
       isUserRole &&
-      !isAdminRole &&
-      (hasCheckedInToday || attendanceCompleted)
+      !isAdminRole
     ) {
-      if (activeTab === 'dashboard' || activeTab === 'absensi' || activeTab === 'welcome') {
-        console.log('[APP ABSENSI REDIRECT]', {
+      if (!activeTab || activeTab === 'dashboard' || activeTab === 'welcome') {
+        console.log('[APP USER REDIRECT]', {
           from: activeTab,
           to: 'input_realisasi',
-          reason: 'hasCheckedInToday=true'
+          reason: 'Role USER lands directly on Input Realisasi'
         });
         setActiveTab('input_realisasi');
       }
@@ -238,8 +237,6 @@ const AppContent: React.FC = () => {
   }, [
     isUserRole,
     isAdminRole,
-    hasCheckedInToday,
-    attendanceCompleted,
     activeTab,
     setActiveTab,
   ]);
@@ -392,6 +389,15 @@ const AppContent: React.FC = () => {
         return (
           <RealisasiMainPage
             initialSubTab="manual_admin"
+          />
+        );
+
+      case 'absensi_masuk':
+        return (
+          <AbsensiKerjaPage
+            onSuccess={() => {
+              setActiveTab('input_realisasi');
+            }}
           />
         );
 
@@ -591,106 +597,12 @@ const AppContent: React.FC = () => {
      * HANYA berlaku untuk role USER biasa.
      * Akun Admin, SuperAdmin, dan Adm TIDAK WAJIB Melakukan Absensi.
      */
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-
-    console.log(`[APP ABSENSI GATE]
-hasCheckedInToday: ${hasCheckedInToday}
-absensiVerificationStatus: ${absensiVerificationStatus}
-user.unitId: ${user?.unitId}
-user.reguName: ${user?.reguName || (user as any)?.groupWO}
-activeTab: ${activeTab}`);
-
-    const shouldBlockForInitialAbsensiVerification =
-      isUserRole &&
-      !isAdminRole &&
-      !hasVerifiedWithServer &&
-      absensiVerificationStatus === 'loading';
-
-    if (shouldBlockForInitialAbsensiVerification) {
-      console.log('[APP ABSENSI GATE - BLOCKING INITIAL VERIFICATION]');
-      return <LoadingFallback />;
-    }
-
-    if (isUserRole && !isAdminRole && hasVerifiedWithServer) {
-      console.log('[APP ABSENSI GATE - BACKGROUND REFRESH, UI REMAINS ACTIVE]');
-    }
-
-    if (
-      isUserRole &&
-      !isAdminRole &&
-      !hasCheckedInToday &&
-      !attendanceCompleted
-    ) {
-      console.log('[APP ABSENSI GATE] REDIRECT -> VERIFIKASI ABSENSI');
-      return (
-        <React.Suspense
-          fallback={
-            <LoadingFallback />
-          }
-        >
-
-          <NotificationListener />
-
-          <SyncStatusBanner />
-
-          {showAbsensiForm ? (
-
-            <AbsensiKerjaPage
-              onSuccess={() => {
-                console.log(
-                  '[ABSENSI TRACE APP] Absensi berhasil. Membuka INPUT REALISASI.'
-                );
-
-                /*
-                 * =================================================
-                 * FIX UTAMA
-                 * =================================================
-                 *
-                 * Tandai bahwa ABSENSI sudah selesai
-                 * pada sesi login ini.
-                 */
-                setAttendanceCompleted(
-                  true
-                );
-
-                /*
-                 * Tutup form ABSENSI.
-                 */
-                setShowAbsensiForm(
-                  false
-                );
-
-                /*
-                 * Langsung arahkan ke INPUT REALISASI.
-                 */
-                setActiveTab(
-                  'input_realisasi'
-                );
-              }}
-            />
-
-          ) : (
-
-            <UserWelcomePage
-              onStartAbsensi={() =>
-                setShowAbsensiForm(
-                  true
-                )
-              }
-            />
-
-          )}
-
-          <ToastContainer />
-
-        </React.Suspense>
-      );
-    }
-
     /*
      * =======================================================
-     * USER SUDAH ABSENSI / ATTENDANCE COMPLETED
+     * LAYOUT UTAMA APHRO
      * =======================================================
+     * Role USER langsung masuk ke layout utama dengan tab aktif input_realisasi.
+     * Absensi Masuk tetap dapat diakses melalui Menu Utama.
      */
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 pb-20 lg:pb-0">
