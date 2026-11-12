@@ -330,27 +330,42 @@ export const CetakLaporanPage: React.FC = () => {
     return () => { isMounted = false; };
   }, [activeUnitId, scopedUlpList]);
 
-  // Available WO Numbers list for dropdown
+  // Available WO Numbers list for dropdown (Berurutan dari yang terbaru sampai terlama)
   const availableWONumbers = useMemo(() => {
     const woSet = new Set<string>();
+    const woDateMap: Record<string, number> = {};
 
-    workOrders.forEach((wo) => {
-      if (wo.nomorWO) woSet.add(wo.nomorWO);
-    });
-    unitWorkOrders.forEach((wo) => {
-      if (wo.nomorWO) woSet.add(wo.nomorWO);
-    });
-    targetedWorkOrders.forEach((wo) => {
-      if (wo.nomorWO) woSet.add(wo.nomorWO);
-    });
-    realisasiList.forEach((rel) => {
-      if (rel.nomorWO) woSet.add(rel.nomorWO);
-    });
-    targetedRealisasi.forEach((rel) => {
-      if (rel.nomorWO) woSet.add(rel.nomorWO);
+    const registerWo = (nomorWO?: string, dateVal?: any) => {
+      if (!nomorWO) return;
+      const cleanNo = nomorWO.trim();
+      if (!cleanNo) return;
+      woSet.add(cleanNo);
+
+      if (dateVal) {
+        const time = new Date(dateVal).getTime();
+        if (!isNaN(time) && time > 0) {
+          if (!woDateMap[cleanNo] || time > woDateMap[cleanNo]) {
+            woDateMap[cleanNo] = time;
+          }
+        }
+      }
+    };
+
+    workOrders.forEach((wo) => registerWo(wo.nomorWO, wo.tanggal || wo.createdAt));
+    unitWorkOrders.forEach((wo) => registerWo(wo.nomorWO, wo.tanggal || wo.createdAt));
+    targetedWorkOrders.forEach((wo) => registerWo(wo.nomorWO, wo.tanggal || wo.createdAt));
+    realisasiList.forEach((rel) => registerWo(rel.nomorWO, rel.tanggalRealisasi || rel.createdAt));
+    targetedRealisasi.forEach((rel) => registerWo(rel.nomorWO, rel.tanggalRealisasi || rel.createdAt));
+
+    let list = Array.from(woSet).sort((a, b) => {
+      const timeA = woDateMap[a] || 0;
+      const timeB = woDateMap[b] || 0;
+      if (timeA !== timeB) {
+        return timeB - timeA; // Newest date first
+      }
+      return b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }); // Descending alphanumeric fallback
     });
 
-    let list = Array.from(woSet).sort();
     if (searchTermWO.trim() !== '') {
       const q = searchTermWO.toLowerCase().trim();
       list = list.filter((num) => num.toLowerCase().includes(q));

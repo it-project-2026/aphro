@@ -18,9 +18,12 @@ export const VersionUpdateNotification: React.FC = () => {
   const lastCheckTimeRef = useRef<number>(0);
 
   const runVersionCheck = async () => {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      return; // Skip version check when tab is hidden in background
+    }
     const now = Date.now();
-    // Throttle: don't check more frequently than once every 20 seconds
-    if (now - lastCheckTimeRef.current < 20000) {
+    // Throttle: don't check more frequently than once every 15 seconds
+    if (now - lastCheckTimeRef.current < 15000) {
       return;
     }
     lastCheckTimeRef.current = now;
@@ -37,7 +40,7 @@ export const VersionUpdateNotification: React.FC = () => {
     // 1. Immediate startup check
     runVersionCheck();
 
-    // 2. Window focus & visibility change check (when returning from background/screen-off)
+    // 2. Window focus & visibility change check
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         runVersionCheck();
@@ -48,7 +51,7 @@ export const VersionUpdateNotification: React.FC = () => {
       runVersionCheck();
     };
 
-    // 3. Online event check (e.g. signal recovered in the field)
+    // 3. Online event check (signal recovered in field)
     const handleOnline = () => {
       runVersionCheck();
     };
@@ -57,15 +60,31 @@ export const VersionUpdateNotification: React.FC = () => {
     window.addEventListener('focus', handleFocus);
     window.addEventListener('online', handleOnline);
 
-    // 4. Periodic polling every 3 minutes
+    // 4. Multi-tab BroadcastChannel listener
+    let channel: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        channel = new BroadcastChannel('aphro_version_channel');
+        channel.onmessage = (e) => {
+          if (e.data?.type === 'APHRO_NEW_VERSION_DETECTED') {
+            runVersionCheck();
+          }
+        };
+      } catch {
+        // Ignore BroadcastChannel errors
+      }
+    }
+
+    // 5. Periodic polling every 60 seconds when active
     const interval = setInterval(() => {
       runVersionCheck();
-    }, 3 * 60 * 1000);
+    }, 60 * 1000);
 
     return () => {
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('online', handleOnline);
+      if (channel) channel.close();
       clearInterval(interval);
     };
   }, []);

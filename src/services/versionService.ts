@@ -169,9 +169,21 @@ export function isUserBusyWithForm(): boolean {
       }
     }
 
-    // 3. Check for specific form indicators or open dialogs
+    // 3. Check for specific form indicators, active modals, or dialogs
     const activeModal = document.querySelector('[role="dialog"], .modal-active, .edit-modal');
     if (activeModal) return true;
+
+    // 4. Check for active camera preview, video recording, or canvas watermark processing
+    const activeMedia = document.querySelector('video, canvas, .camera-active, .watermark-processing');
+    if (activeMedia) return true;
+
+    // 5. Check global submission and sync flags
+    if (typeof window !== 'undefined') {
+      const w = window as any;
+      if (w.aphro_is_submitting_form || w.aphro_is_syncing || w.aphro_is_uploading) {
+        return true;
+      }
+    }
   } catch {
     // Graceful fallback
   }

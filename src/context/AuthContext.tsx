@@ -57,10 +57,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Tangani event kedaluwarsa sesi (HTTP 401 atau token expired dari executeFetch)
   React.useEffect(() => {
-    const handleAuthExpired = () => {
-      console.warn('[AuthContext] Session expired or unauthorized (401). Resetting auth state.');
-      setUser(null);
-      AuthService.clearSession();
+    const handleAuthExpired = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      console.warn('[AuthContext] Session expired event received:', detail);
+      if (detail && detail.isExpired === true) {
+        setUser(null);
+        AuthService.clearSession();
+      }
     };
 
     window.addEventListener('aphro:auth_expired', handleAuthExpired);

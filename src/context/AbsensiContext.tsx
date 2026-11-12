@@ -290,6 +290,10 @@ export function AbsensiProvider({
         'id' | 'createdAt'
       >
     ) => {
+      if (typeof window !== 'undefined') {
+        (window as any).aphro_is_submitting_form = true;
+      }
+      try {
       console.log(
         '[ABSENSI TRACE 4] addAbsensi called.',
         {
@@ -643,6 +647,11 @@ export function AbsensiProvider({
       }
 
       return finalAbs;
+      } finally {
+        if (typeof window !== 'undefined') {
+          (window as any).aphro_is_submitting_form = false;
+        }
+      }
     },
     [
       absensiList,

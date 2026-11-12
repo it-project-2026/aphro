@@ -72,6 +72,7 @@ export interface RealisasiContextType {
   }>;
 
   deleteRealisasi: (id: string) => void;
+  deleteMultipleRealisasi: (ids: string[]) => Promise<{ success: boolean; deletedCount: number }>;
 
   refreshRealisasi: (
     force?: boolean
@@ -503,6 +504,10 @@ export function RealisasiProvider({
           | 'syncId'
         >
       ) => {
+        if (typeof window !== 'undefined') {
+          (window as any).aphro_is_submitting_form = true;
+        }
+        try {
         const timestamp =
           getLocalDateTimeString();
 
@@ -941,6 +946,11 @@ export function RealisasiProvider({
           showToast('⚠ Server belum mengonfirmasi. Data disimpan sementara di perangkat dan menunggu sinkronisasi.', 'warning');
         }
         return newRelUI;
+        } finally {
+          if (typeof window !== 'undefined') {
+            (window as any).aphro_is_submitting_form = false;
+          }
+        }
       },
       [
         setRealisasiList,
@@ -1708,6 +1718,75 @@ export function RealisasiProvider({
       ]
     );
 
+    const deleteMultipleRealisasi = React.useCallback(
+    async (ids: string[]): Promise<{ success: boolean; deletedCount: number }> => {
+      if (!ids || ids.length === 0) return { success: false, deletedCount: 0 };
+      const idSet = new Set(ids);
+
+      // 1. Optimistic UI update
+      setRealisasiList((prev) =>
+        prev.filter((rel) => {
+          const targetId = rel.id || (rel as any).ID || (rel as any).syncId || (rel as any).localId || (rel as any).serverId || (rel as any).idempotencyKey;
+          return !idSet.has(rel.id) && !idSet.has(rel.syncId || '') && !idSet.has(targetId || '');
+        })
+      );
+
+      // 2. Clear Dexie IndexedDB records
+      try {
+        for (const id of ids) {
+          await dexieDb.realisasi
+            .where('localId')
+            .equals(id)
+            .or('id')
+            .equals(id)
+            .or('ID')
+            .equals(id)
+            .or('serverId')
+            .equals(id)
+            .or('idempotencyKey')
+            .equals(id)
+            .delete()
+            .catch(() => {});
+
+          await dexieDb.realisasi.delete(id).catch(() => {});
+          await dexieDb.photos.where('realisasiId').equals(id).delete().catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Delete Dexie Realisasi batch error:', e);
+      }
+
+      // 3. Online deletion via HyperCloud API
+      let deletedCount = 0;
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        for (const id of ids) {
+          try {
+            const res = await ApiService.deleteRealisasi(id);
+            if (res.success) {
+              deletedCount++;
+            }
+          } catch (e) {
+            console.warn(`Failed online delete for realisasi ID ${id}:`, e);
+          }
+        }
+      } else {
+        // Enqueue offline deletes
+        for (const id of ids) {
+          try {
+            await offlineSyncQueue.enqueueDeleteRealisasi(id);
+          } catch {
+            // Ignore
+          }
+        }
+      }
+
+      void fetchRealisasiFromApi(lastFetchParams.current).catch(() => {});
+      void fetchDashboardRealisasi().catch(() => {});
+
+      return { success: true, deletedCount: deletedCount || ids.length };
+    },
+    [setRealisasiList, fetchRealisasiFromApi, fetchDashboardRealisasi]
+  );
+
   // ============================================================
   // PROVIDER
   // ============================================================
@@ -1731,6 +1810,7 @@ export function RealisasiProvider({
         updateRealisasi,
         updateRealisasiAdmin,
         deleteRealisasi,
+        deleteMultipleRealisasi,
         refreshRealisasi,
       }}
     >

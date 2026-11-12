@@ -121,17 +121,24 @@ export class ApiService {
    * Mengembalikan true jika token tidak valid, format rusak, atau masa berlakunya telah habis.
    */
   public static isTokenExpired(token: string, bufferSeconds = 5): boolean {
-    if (!this.isValidToken(token)) return true;
-    try {
-      const parts = token.trim().split('.');
-      const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(atob(payloadBase64));
-      if (!payload.exp) return false;
-      const nowInSeconds = Math.floor(Date.now() / 1000);
-      return payload.exp <= (nowInSeconds + bufferSeconds);
-    } catch {
-      return true;
+    if (!token || typeof token !== 'string') return true;
+    const trimmed = token.trim();
+    if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return true;
+
+    const parts = trimmed.split('.');
+    if (parts.length === 3) {
+      try {
+        const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(payloadBase64));
+        if (!payload.exp) return false;
+        const nowInSeconds = Math.floor(Date.now() / 1000);
+        return payload.exp <= (nowInSeconds + bufferSeconds);
+      } catch {
+        return false;
+      }
     }
+
+    return false;
   }
 
   /**
@@ -374,9 +381,9 @@ export class ApiService {
       console.log(`[ApiService] API request: ${externalUrl}`);
       const res = await fetch(externalUrl, finalOptions);
 
-      // Safe Diagnostic Log (tanpa membocorkan isi token) jika status 401
+      // Safe Diagnostic Log jika status 401
       if (res.status === 401) {
-        const isExpired = token ? this.isTokenExpired(token) : true;
+        const isExpired = token ? this.isTokenExpired(token) : false;
         console.warn('[AUTH DEBUG]', {
           status: 401,
           hasToken: Boolean(token),
@@ -387,27 +394,27 @@ export class ApiService {
           authorizationHeaderPresent: headers.has('Authorization'),
         });
 
-        // Bersihkan token expired dari canonical localStorage agar tidak dipakai kembali
-        if (typeof localStorage !== 'undefined') {
-          localStorage.removeItem('aphro_token');
-          localStorage.removeItem('jwt_token');
-          localStorage.removeItem('token');
+        // HANYA dipicu jika token yang ada benar-benar expired JWT
+        if (token && isExpired) {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('aphro_token');
+            localStorage.removeItem('jwt_token');
+            localStorage.removeItem('token');
+          }
+
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('aphro:auth_expired', {
+                detail: {
+                  endpoint: apiPath,
+                  status: 401,
+                  isExpired: true,
+                },
+              })
+            );
+          }
         }
 
-        // Tandai authentication state sebagai expired dan beri tahu AuthContext
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('aphro:auth_expired', {
-              detail: {
-                endpoint: apiPath,
-                status: 401,
-                isExpired,
-              },
-            })
-          );
-        }
-
-        // HTTP 401 tidak boleh di-retry ke endpoint lokal atau diulang tanpa kredensial baru
         return res;
       }
 
