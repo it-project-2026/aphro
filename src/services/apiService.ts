@@ -90,10 +90,9 @@ export class ApiService {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
-      const res = await fetch(`${baseUrl}/api/health`, {
+      const res = await fetch(`${baseUrl}/api/health?t=${Date.now()}`, {
         method: 'GET',
         signal: controller.signal,
-        headers: { 'Cache-Control': 'no-cache' },
       });
       clearTimeout(timeoutId);
       return res.ok || res.status === 200 || res.status === 204;
