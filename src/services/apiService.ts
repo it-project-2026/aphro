@@ -85,6 +85,29 @@ export class ApiService {
   }
 
   /**
+   * Ping HyperCloud API /api/health with 4s timeout to verify active connection
+   */
+  public static async checkApiConnection(): Promise<boolean> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return false;
+    }
+    const baseUrl = this.getCleanBaseUrl();
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`${baseUrl}/api/health`, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      clearTimeout(timeoutId);
+      return res.ok || res.status === 200 || res.status === 204;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Helper untuk memvalidasi apakah string token merupakan JWT yang bersih dan valid
    */
   public static isValidToken(token: any): boolean {

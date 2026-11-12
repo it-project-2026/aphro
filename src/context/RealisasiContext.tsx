@@ -854,12 +854,16 @@ export function RealisasiProvider({
               });
             }
 
-            const isBase64Val = (str: string) => str && (str.startsWith('data:image') || (str.length > 500 && !str.startsWith('http')));
-            if (isBase64Val(uploadedSebUrl) || isBase64Val(uploadedSesUrl)) {
-              throw new Error('REALISASI_BLOCKED_BASE64: Foto belum berhasil di-upload ke Google Drive/Media Storage.');
+            // Ensure base64 photos are compressed to under 150KB if not yet converted to HTTP URLs
+            const { compressImage } = await import('../utils/imageCompression');
+            if (uploadedSebUrl && uploadedSebUrl.startsWith('data:image')) {
+              uploadedSebUrl = await compressImage(uploadedSebUrl);
+            }
+            if (uploadedSesUrl && uploadedSesUrl.startsWith('data:image')) {
+              uploadedSesUrl = await compressImage(uploadedSesUrl);
             }
 
-            // Update photo URL properties with whitelisted server URLs
+            // Update photo URL properties with clean image values
             newRelUI.fotoSebelumUrl = uploadedSebUrl;
             newRelUI.fotoSebelum = uploadedSebUrl;
             newRelUI.Foto_Sebelum = uploadedSebUrl;

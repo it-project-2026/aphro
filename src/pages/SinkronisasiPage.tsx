@@ -51,20 +51,26 @@ export const SinkronisasiPage: React.FC = () => {
 
   const loadStats = async () => {
     try {
-      const summary = await offlineSyncQueue.getQueueSummary();
+      const queueItems = await dexieDb.sync_queue.toArray();
+      const pendingCount = queueItems.filter((op) => op.status === 'PENDING').length;
+      const syncingCount = queueItems.filter((op) => op.status === 'SYNCING').length;
+      const failedCount = queueItems.filter((op) => op.status === 'FAILED' || op.status === 'FAILED_ENDPOINT_NOT_FOUND' || op.status === 'FAILED_NON_RETRYABLE').length;
+      
+      const syncedCount = await dexieDb.realisasi.where('syncStatus').equals('SYNCED').count();
       const totalWoCount = await dexieDb.work_orders.count();
       const totalPhotoCount = await dexieDb.photos.count();
       
-      const pendingOps = await idbService.getPendingOperations();
-      const absensiPending = pendingOps.filter(op => op.tableName === 'ABSENSI').length;
-      const otherPending = pendingOps.filter(op => op.tableName !== 'ABSENSI').length;
+      const lastSyncRecord = await dexieDb.metadata.get('lastSyncAt');
 
       setStats({
-        ...summary,
-        pendingCount: summary.pendingCount + otherPending + absensiPending,
+        pendingCount,
+        syncingCount,
+        syncedCount,
+        failedCount,
+        lastSyncAt: lastSyncRecord ? lastSyncRecord.value : null,
         totalWoCount,
         totalPhotoCount,
-        absensiPending,
+        absensiPending: queueItems.filter((op) => op.tableName === 'ABSENSI').length,
       });
     } catch (err) {
       console.warn('Error loading sync stats:', err);
@@ -93,7 +99,7 @@ export const SinkronisasiPage: React.FC = () => {
 
     const interval = setInterval(() => {
       loadStats();
-    }, 5000);
+    }, 4000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -122,19 +128,13 @@ export const SinkronisasiPage: React.FC = () => {
       // Reset any previously failed status before syncing
       await offlineSyncQueue.resetFailedItems();
 
-      // 1. Process Realisasi & WO Delete Queue
-      const relResult = await offlineSyncQueue.processQueue();
+      // Process offline queue (Realisasi, WO, Absensi)
+      const res = await offlineSyncQueue.processQueue();
       
-      // 2. Process General Operations (Absensi, WO Create, etc.)
-      const genResult = await syncManager.processPendingOperations();
-      
-      const totalSynced = relResult.synced + genResult.successCount;
-      const totalFailed = relResult.failed + genResult.failCount;
-
-      if (totalFailed === 0) {
-        showToast(`✓ Sinkronisasi selesai! ${totalSynced} item berhasil terkirim.`, 'success');
+      if (res.failed === 0) {
+        showToast(`✓ Sinkronisasi selesai! ${res.synced} item berhasil terkirim.`, 'success');
       } else {
-        showToast(`Sinkronisasi selesai: ${totalSynced} berhasil, ${totalFailed} gagal.`, 'info');
+        showToast(`Sinkronisasi selesai: ${res.synced} berhasil, ${res.failed} gagal.`, 'info');
       }
     } catch (err: any) {
       showToast(err?.message || 'Terjadi kesalahan saat sinkronisasi.', 'error');

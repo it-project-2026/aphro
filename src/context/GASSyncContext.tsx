@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { syncManager, HealthCheckResult } from '../services/syncManager';
 import { idbService } from '../services/indexedDbService';
+import { offlineSyncQueue } from '../services/offlineSyncQueue';
 import { useSettings } from './SettingsContext';
 import { useMasterData } from './MasterDataContext';
 import { useWorkOrders } from './WorkOrderContext';
@@ -132,8 +133,32 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     init();
 
+    // Subscribe to offlineSyncQueue events
+    const unsubscribeQueue = offlineSyncQueue.subscribe((event) => {
+      if (!isMounted) return;
+
+      if (event.status === 'SYNCING') {
+        setIsSyncing(true);
+        setSyncStage('syncing');
+        setShowSyncBanner(true);
+        if (event.message) setSyncMessage(event.message);
+        if (event.progress) setSyncProgress(event.progress);
+      } else if (event.status === 'COMPLETED' || event.status === 'ERROR') {
+        setIsSyncing(false);
+        setSyncStage(event.status === 'COMPLETED' ? 'success' : 'error');
+        if (event.message) setSyncMessage(event.message);
+        setLastSyncStats({
+          successCount: event.completed,
+          failCount: event.failed,
+          totalCount: event.total,
+          timestamp: getLocalDateTimeString(),
+        });
+        refreshPendingCount();
+      }
+    });
+
     // Subscribe to SyncManager updates
-    const unsubscribe = syncManager.subscribe((event) => {
+    const unsubscribeManager = syncManager.subscribe((event) => {
       if (!isMounted) return;
 
       if (event.lastUpdatedText) {
@@ -170,9 +195,11 @@ export function GASSyncProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
-      unsubscribe();
+      unsubscribeQueue();
+      unsubscribeManager();
     };
-  }, [setMasterData, refreshWorkOrders, setRealisasiList, setAbsensiList]);
+  }, [setMasterData, refreshWorkOrders, setRealisasiList, setAbsensiList, refreshPendingCount]);
+
 
   // Process offline pending queue
   const processPendingQueue = React.useCallback(async (

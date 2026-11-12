@@ -20,6 +20,12 @@ export type SyncListener = (event: {
   completed: number;
   failed: number;
   message?: string;
+  progress?: {
+    current: number;
+    total: number;
+    percent: number;
+    currentItemDescription?: string;
+  };
 }) => void;
 
 class OfflineSyncQueueEngine {
@@ -59,6 +65,12 @@ class OfflineSyncQueueEngine {
     completed: number;
     failed: number;
     message?: string;
+    progress?: {
+      current: number;
+      total: number;
+      percent: number;
+      currentItemDescription?: string;
+    };
   }) {
     this.listeners.forEach((fn) => fn(event));
   }
@@ -72,7 +84,7 @@ class OfflineSyncQueueEngine {
     const resolvedWoId = String(realisasiData.WO_ID || realisasiData.workOrderId || (realisasiData as any).woId || '').trim();
     const resolvedNomorWo = String(realisasiData.Nomor_WO || realisasiData.nomorWO || (realisasiData as any).nomor_wo || '').trim();
 
-    const enrichedRealisasi: LocalRealisasi = {
+    let enrichedRealisasi: LocalRealisasi = {
       ...realisasiData,
       WO_ID: resolvedWoId,
       workOrderId: resolvedWoId,
@@ -82,6 +94,30 @@ class OfflineSyncQueueEngine {
       syncStatus: 'PENDING',
       updatedAt: timestamp,
     };
+
+    // Compress base64 photos to stay under ~150KB before enqueuing to local DB
+    let fotoSeb = enrichedRealisasi.fotoSebelumUrl || enrichedRealisasi.fotoSebelum || enrichedRealisasi.Foto_Sebelum || '';
+    let fotoSes = enrichedRealisasi.fotoSesudahUrl || enrichedRealisasi.fotoSesudah || enrichedRealisasi.Foto_Sesudah || '';
+
+    if (fotoSeb && fotoSeb.startsWith('data:image')) {
+      try {
+        const { compressImage } = await import('../utils/imageCompression');
+        fotoSeb = await compressImage(fotoSeb);
+        enrichedRealisasi.fotoSebelumUrl = fotoSeb;
+        enrichedRealisasi.fotoSebelum = fotoSeb;
+        enrichedRealisasi.Foto_Sebelum = fotoSeb;
+      } catch (e) {}
+    }
+
+    if (fotoSes && fotoSes.startsWith('data:image')) {
+      try {
+        const { compressImage } = await import('../utils/imageCompression');
+        fotoSes = await compressImage(fotoSes);
+        enrichedRealisasi.fotoSesudahUrl = fotoSes;
+        enrichedRealisasi.fotoSesudah = fotoSes;
+        enrichedRealisasi.Foto_Sesudah = fotoSes;
+      } catch (e) {}
+    }
 
     // 1. Save Realisasi record locally in Dexie with status PENDING
     await dexieDb.realisasi.put(enrichedRealisasi);
@@ -112,7 +148,7 @@ class OfflineSyncQueueEngine {
 
     await dexieDb.sync_queue.put(queueItem);
 
-    // 4. Try processing immediately if online
+    // 4. Try processing immediately if online and API is available
     if (navigator.onLine) {
       this.processQueue();
     }
@@ -159,6 +195,8 @@ class OfflineSyncQueueEngine {
         .equals('FAILED')
         .or('status')
         .equals('FAILED_ENDPOINT_NOT_FOUND')
+        .or('status')
+        .equals('FAILED_NON_RETRYABLE')
         .toArray();
 
       let resetCount = 0;
@@ -179,7 +217,7 @@ class OfflineSyncQueueEngine {
   }
 
   /**
-   * Main Queue Processor with concurrency limit & backoff
+   * Main Queue Processor with connectivity check, progress tracking & resume safety
    */
   public async processQueue(): Promise<{ success: boolean; total: number; synced: number; failed: number }> {
     if (this.isProcessing) {
@@ -192,15 +230,29 @@ class OfflineSyncQueueEngine {
       return { success: false, total: 0, synced: 0, failed: 0 };
     }
 
+    // 0. Verify real API health before attempting sync
+    const isApiReachable = await ApiService.checkApiConnection();
+    if (!isApiReachable) {
+      console.log('[SyncQueueEngine] API health check failed. Keeping items intact in local Dexie queue.');
+      this.notify({
+        status: 'IDLE',
+        total: 0,
+        completed: 0,
+        failed: 0,
+        message: 'Server HyperCloud belum dapat dijangkau. Data tetap tersimpan aman di antrean lokal HP.',
+      });
+      return { success: false, total: 0, synced: 0, failed: 0 };
+    }
+
     const token = ApiService.getAuthToken();
     if (!token) {
-      console.log('[SyncQueueEngine] JWT token missing. Cannot sync to server.');
+      console.log('[SyncQueueEngine] JWT token missing or expired. Cannot sync to server.');
       this.notify({
         status: 'ERROR',
         total: 0,
         completed: 0,
         failed: 1,
-        message: 'Otentikasi dibutuhkan. Silakan login kembali untuk menyinkronkan data tertahan.',
+        message: 'Sesi otentikasi telah berakhir. Silakan login kembali untuk menyinkronkan data tertahan.',
       });
       return { success: false, total: 0, synced: 0, failed: 1 };
     }
@@ -208,7 +260,7 @@ class OfflineSyncQueueEngine {
     this.isProcessing = true;
 
     try {
-      // 0. Recovery: Reset any orphaned 'SYNCING' items and FAILED items back to 'PENDING'
+      // 0. Recovery: Reset any orphaned 'SYNCING' items back to 'PENDING'
       const orphaned = await dexieDb.sync_queue.where('status').equals('SYNCING').toArray();
       if (orphaned.length > 0) {
         for (const item of orphaned) {
@@ -217,7 +269,7 @@ class OfflineSyncQueueEngine {
         }
       }
 
-      // Auto-reset failed items with high retry count so manual/auto sync always attempts them
+      // Auto-reset failed items so sync attempts them
       await this.resetFailedItems();
 
       const pendingItems = await dexieDb.sync_queue
@@ -227,6 +279,8 @@ class OfflineSyncQueueEngine {
         .equals('FAILED')
         .or('status')
         .equals('FAILED_ENDPOINT_NOT_FOUND')
+        .or('status')
+        .equals('FAILED_NON_RETRYABLE')
         .toArray();
 
       if (pendingItems.length === 0) {
@@ -240,39 +294,56 @@ class OfflineSyncQueueEngine {
         total: pendingItems.length,
         completed: 0,
         failed: 0,
-        message: `Memulai sinkronisasi ${pendingItems.length} item...`,
+        message: `Memulai sinkronisasi ${pendingItems.length} item ke HyperCloud...`,
       });
 
       let completedCount = 0;
       let failedCount = 0;
-      const activeUnitId = InisiasiService.getSelectedUnitId() || 'UL2';
-      for (let i = 0; i < pendingItems.length; i += this.maxConcurrency) {
-        const batch = pendingItems.slice(i, i + this.maxConcurrency);
 
-        await Promise.all(
-          batch.map(async (item) => {
-            const success = await this.processSingleItem(item);
-            if (success) {
-              completedCount++;
-            } else {
-              failedCount++;
-            }
+      for (let i = 0; i < pendingItems.length; i++) {
+        // Check internet connection mid-way. If connection dropped, pause gracefully
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          console.log('[SyncQueueEngine] Connection dropped mid-sync. Pausing queue processing.');
+          this.notify({
+            status: 'ERROR',
+            total: pendingItems.length,
+            completed: completedCount,
+            failed: failedCount,
+            message: 'Koneksi terputus saat sinkronisasi. Sisa antrean tersimpan di HP dan akan dilanjutkan saat sinyal kembali.',
+          });
+          break;
+        }
 
-            this.notify({
-              status: 'SYNCING',
-              total: pendingItems.length,
-              completed: completedCount,
-              failed: failedCount,
-              message: `Menyinkronkan: ${completedCount}/${pendingItems.length}`,
-            });
-          })
-        );
+        const item = pendingItems[i];
+        const percent = Math.round(((i + 1) / pendingItems.length) * 100);
+        const itemDesc = `Menyinkronkan ${i + 1}/${pendingItems.length}: ${item.tableName} (${item.type})`;
+
+        const success = await this.processSingleItem(item);
+        if (success) {
+          completedCount++;
+        } else {
+          failedCount++;
+        }
+
+        this.notify({
+          status: 'SYNCING',
+          total: pendingItems.length,
+          completed: completedCount,
+          failed: failedCount,
+          message: `Menyinkronkan: ${completedCount + failedCount}/${pendingItems.length}`,
+          progress: {
+            current: i + 1,
+            total: pendingItems.length,
+            percent,
+            currentItemDescription: itemDesc,
+          },
+        });
       }
 
       const finalStatus = failedCount === 0 ? 'COMPLETED' : 'ERROR';
       const finalMsg = failedCount === 0 
-        ? 'Sinkronisasi berhasil seluruhnya!' 
-        : `${completedCount} berhasil, ${failedCount} gagal. Akan dicoba ulang otomatis.`;
+        ? `Sinkronisasi selesai! ${completedCount} item berhasil terkirim ke HyperCloud.` 
+        : `Sinkronisasi selesai: ${completedCount} berhasil, ${failedCount} gagal (Akan dicoba ulang otomatis).`;
 
       this.notify({
         status: finalStatus,
@@ -309,6 +380,7 @@ class OfflineSyncQueueEngine {
       this.isProcessing = false;
     }
   }
+
 
   /**
    * Process a single queue item with retry backoff
