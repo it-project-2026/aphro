@@ -461,18 +461,37 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   ]);
 
   // Multi-select / Bulk selection helper functions
+  const isUserRole = useMemo(() => {
+    if (!currentUser) return false;
+    const roleUpper = (currentUser.role || '').toUpperCase();
+    return roleUpper === 'USER';
+  }, [currentUser]);
+
+  const canBulkDelete = useMemo(() => {
+    if (!currentUser || isUserRole) return false;
+    return isAdminUser || isAdmbktUser;
+  }, [currentUser, isUserRole, isAdminUser, isAdmbktUser]);
+
+  useEffect(() => {
+    if (!canBulkDelete && selectedRealisasiIds.length > 0) {
+      setSelectedRealisasiIds([]);
+    }
+  }, [canBulkDelete, selectedRealisasiIds.length]);
+
   const allDisplayedIds = useMemo(() => {
+    if (!canBulkDelete) return [];
     return displayList
       .map((rel) => rel.id || (rel as any).ID || (rel as any).syncId || (rel as any).localId || (rel as any).serverId)
       .filter((id): id is string => Boolean(id));
-  }, [displayList]);
+  }, [displayList, canBulkDelete]);
 
   const isAllSelected = useMemo(() => {
-    if (allDisplayedIds.length === 0) return false;
+    if (!canBulkDelete || allDisplayedIds.length === 0) return false;
     return allDisplayedIds.every((id) => selectedRealisasiIds.includes(id));
-  }, [allDisplayedIds, selectedRealisasiIds]);
+  }, [allDisplayedIds, selectedRealisasiIds, canBulkDelete]);
 
   const toggleSelectAll = () => {
+    if (!canBulkDelete) return;
     if (isAllSelected) {
       setSelectedRealisasiIds([]);
     } else {
@@ -481,13 +500,17 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
   };
 
   const toggleSelectRow = (id: string) => {
-    if (!id) return;
+    if (!canBulkDelete || !id) return;
     setSelectedRealisasiIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
   const handleBulkDelete = async () => {
+    if (!canBulkDelete) {
+      showToast('Akses ditolak: Fitur hapus multi hanya dapat digunakan oleh Admin.', 'error');
+      return;
+    }
     if (selectedRealisasiIds.length === 0) return;
     const count = selectedRealisasiIds.length;
     if (
@@ -1077,15 +1100,17 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                   EVIDEN ROW AREA {selectedAreaName} — ULP {selectedUlpName} {filterNomorWO ? `— WO: ${filterNomorWO}` : ''} ({displayList.length} Data)
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={toggleSelectAll}
-                    disabled={displayList.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all normal-case tracking-normal cursor-pointer disabled:opacity-50"
-                  >
-                    <CheckSquare className="w-3.5 h-3.5" />
-                    <span>{isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua (Multi-Delete)'}</span>
-                  </button>
+                  {canBulkDelete && (
+                    <button
+                      type="button"
+                      onClick={toggleSelectAll}
+                      disabled={displayList.length === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all normal-case tracking-normal cursor-pointer disabled:opacity-50"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      <span>{isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua (Multi-Delete)'}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={async () => {
@@ -1113,7 +1138,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
               </div>
 
               {/* Bulk Selection Action Bar */}
-              {selectedRealisasiIds.length > 0 && (
+              {canBulkDelete && selectedRealisasiIds.length > 0 && (
                 <div className="flex items-center justify-between p-3.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/80 rounded-2xl animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
@@ -1151,23 +1176,25 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                 className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl"
                 style={draggable.style}
               >
-                <table className="w-full text-center text-[10px] border-collapse min-w-[1240px]">
+                <table className={`w-full text-center text-[10px] border-collapse ${canBulkDelete ? 'min-w-[1240px]' : 'min-w-[1200px]'}`}>
                   <thead>
                     <tr className="bg-[#00A2B9] text-white font-extrabold text-xs uppercase">
-                      <th colSpan={16} className="p-2 text-center border-b border-[#008396]">
+                      <th colSpan={canBulkDelete ? 16 : 15} className="p-2 text-center border-b border-[#008396]">
                         REKAP HASIL ROW (RIWAYAT REALISASI) {filterNomorWO ? `— WO: ${filterNomorWO}` : ''}
                       </th>
                     </tr>
                     <tr className="bg-[#008396] text-white font-bold text-[10px] uppercase">
-                      <th className="p-2 border border-[#008396] w-10 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isAllSelected}
-                          onChange={toggleSelectAll}
-                          className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
-                          title="Pilih Semua Realisasi"
-                        />
-                      </th>
+                      {canBulkDelete && (
+                        <th className="p-2 border border-[#008396] w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isAllSelected}
+                            onChange={toggleSelectAll}
+                            className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
+                            title="Pilih Semua Realisasi"
+                          />
+                        </th>
+                      )}
                       <th className="p-2 border border-[#008396] min-w-[120px]">NO WO</th>
                       <th className="p-2 border border-[#008396]">AREA</th>
                       <th className="p-2 border border-[#008396]">ULP</th>
@@ -1188,7 +1215,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                     {displayList.length === 0 ? (
                       <tr>
-                        <td colSpan={16} className="p-12 text-slate-400 text-center text-xs">
+                        <td colSpan={canBulkDelete ? 16 : 15} className="p-12 text-slate-400 text-center text-xs">
                           <div className="flex flex-col items-center justify-center py-8">
                             <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-2">
                               <Search className="w-6 h-6" />
@@ -1218,19 +1245,21 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                           <tr
                             key={`rel-history-${rel.id}-${idx}`}
                             className={`transition-colors ${
-                              isSelected
+                              canBulkDelete && isSelected
                                 ? 'bg-teal-50/80 dark:bg-teal-950/40'
                                 : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
                             }`}
                           >
-                            <td className="p-2 border border-slate-100 dark:border-slate-800 text-center">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleSelectRow(relTargetId)}
-                                className="w-4 h-4 accent-teal-600 rounded cursor-pointer"
-                              />
-                            </td>
+                            {canBulkDelete && (
+                              <td className="p-2 border border-slate-100 dark:border-slate-800 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelectRow(relTargetId)}
+                                  className="w-4 h-4 accent-teal-600 rounded cursor-pointer"
+                                />
+                              </td>
+                            )}
                             <td className="p-2 border border-slate-100 dark:border-slate-800">
                               {woStatus.statusType === 'LINKED' ? (
                                 <span className="font-bold text-teal-700 dark:text-teal-400">
@@ -1394,7 +1423,7 @@ export const RealisasiMainPage: React.FC<RealisasiMainPageProps> = ({ initialSub
                   </tbody>
                   <tfoot>
                     <tr className="bg-teal-50 dark:bg-slate-800 font-extrabold text-xs text-teal-900 dark:text-teal-200 uppercase border-t-2 border-teal-600">
-                      <td colSpan={16} className="p-3 text-right">
+                      <td colSpan={canBulkDelete ? 16 : 15} className="p-3 text-right">
                         TOTAL DATA DITEMUKAN: <span className="text-teal-700 dark:text-teal-400 font-black text-sm ml-2">{displayList.length} DATA</span>
                       </td>
                     </tr>
