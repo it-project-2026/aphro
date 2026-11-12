@@ -393,6 +393,57 @@ export const UL_PRESETS: Record<string, ULConfigPreset> = {
   },
 };
 
+export interface PenyulangPreset {
+  namaUlp: string;
+  namaPenyulang: string;
+  kodePenyulang?: string;
+}
+
+export const PENYULANG_PRESETS: Record<string, PenyulangPreset[]> = {
+  BUKITTINGGI: [
+    { namaUlp: 'ULP KOTO TUO', namaPenyulang: 'F. CINGKARIANG', kodePenyulang: 'PYL-BKT-01' },
+    { namaUlp: 'ULP KOTO TUO', namaPenyulang: 'F. MATUR', kodePenyulang: 'PYL-BKT-02' },
+    { namaUlp: 'ULP KOTO TUO', namaPenyulang: 'F. KOTO TUO', kodePenyulang: 'PYL-BKT-03' },
+    { namaUlp: 'ULP BASO', namaPenyulang: 'F. BASO', kodePenyulang: 'PYL-BKT-04' },
+    { namaUlp: 'ULP BASO', namaPenyulang: 'F. CANDUANG', kodePenyulang: 'PYL-BKT-05' },
+    { namaUlp: 'ULP BUKITTINGGI', namaPenyulang: 'F. GADUT', kodePenyulang: 'PYL-BKT-06' },
+    { namaUlp: 'ULP BUKITTINGGI', namaPenyulang: 'F. KOTA BUKITTINGGI', kodePenyulang: 'PYL-BKT-07' },
+    { namaUlp: 'ULP PADANG PANJANG', namaPenyulang: 'F. PADANG PANJANG', kodePenyulang: 'PYL-BKT-08' },
+    { namaUlp: 'ULP LUBUK BASUNG', namaPenyulang: 'F. LUBUK BASUNG', kodePenyulang: 'PYL-BKT-09' },
+    { namaUlp: 'ULP LUBUK BASUNG', namaPenyulang: 'F. MANINJAU', kodePenyulang: 'PYL-BKT-10' },
+    { namaUlp: 'ULP LUBUK SIKAPING', namaPenyulang: 'F. LUBUK SIKAPING', kodePenyulang: 'PYL-BKT-11' },
+    { namaUlp: 'ULP LUBUK SIKAPING', namaPenyulang: 'F. RAO', kodePenyulang: 'PYL-BKT-12' },
+    { namaUlp: 'ULP SIMPANG EMPAT', namaPenyulang: 'F. SIMPANG EMPAT', kodePenyulang: 'PYL-BKT-13' },
+    { namaUlp: 'ULP SIMPANG EMPAT', namaPenyulang: 'F. KINALI', kodePenyulang: 'PYL-BKT-14' },
+  ],
+  PADANG: [
+    { namaUlp: 'ULP BELANTI', namaPenyulang: 'F. BELANTI', kodePenyulang: 'PYL-PDG-01' },
+    { namaUlp: 'ULP BELANTI', namaPenyulang: 'F. KHATIB', kodePenyulang: 'PYL-PDG-02' },
+    { namaUlp: 'ULP PADANG BARAT', namaPenyulang: 'F. PADANG BARAT', kodePenyulang: 'PYL-PDG-03' },
+    { namaUlp: 'ULP INDARUNG', namaPenyulang: 'F. INDARUNG', kodePenyulang: 'PYL-PDG-04' },
+    { namaUlp: 'ULP KURANJI', namaPenyulang: 'F. KURANJI', kodePenyulang: 'PYL-PDG-05' },
+    { namaUlp: 'ULP TABING', namaPenyulang: 'F. TABING', kodePenyulang: 'PYL-PDG-06' },
+    { namaUlp: 'ULP LUBUK BEGALUNG', namaPenyulang: 'F. LUBUK BEGALUNG', kodePenyulang: 'PYL-PDG-07' },
+    { namaUlp: 'ULP PARIAMAN', namaPenyulang: 'F. PARIAMAN', kodePenyulang: 'PYL-PDG-08' },
+    { namaUlp: 'ULP SICINCIN', namaPenyulang: 'F. SICINCIN', kodePenyulang: 'PYL-PDG-09' },
+    { namaUlp: 'ULP LUBUK ALUNG', namaPenyulang: 'F. LUBUK ALUNG', kodePenyulang: 'PYL-PDG-10' },
+    { namaUlp: 'ULP PAINAN', namaPenyulang: 'F. PAINAN', kodePenyulang: 'PYL-PDG-11' },
+    { namaUlp: 'ULP BALAI SELASA', namaPenyulang: 'F. BALAI SELASA', kodePenyulang: 'PYL-PDG-12' },
+    { namaUlp: 'ULP MENTAWAI', namaPenyulang: 'F. MENTAWAI', kodePenyulang: 'PYL-PDG-13' },
+  ],
+  PAYAKUMBUH: [
+    { namaUlp: 'ULP PAYAKUMBUH KOTA', namaPenyulang: 'F. PAYAKUMBUH', kodePenyulang: 'PYL-PYK-01' },
+    { namaUlp: 'ULP LIMA PULUH KOTA', namaPenyulang: 'F. SARILAMAK', kodePenyulang: 'PYL-PYK-02' },
+    { namaUlp: 'ULP SULIKI', namaPenyulang: 'F. SULIKI', kodePenyulang: 'PYL-PYK-03' },
+  ],
+  SOLOK: [
+    { namaUlp: 'ULP SOLOK KOTA', namaPenyulang: 'F. SOLOK KOTA', kodePenyulang: 'PYL-SLK-01' },
+    { namaUlp: 'ULP SAWAHLUNTO', namaPenyulang: 'F. SAWAHLUNTO', kodePenyulang: 'PYL-SLK-02' },
+    { namaUlp: 'ULP SIJUNJUNG', namaPenyulang: 'F. SIJUNJUNG', kodePenyulang: 'PYL-SLK-03' },
+    { namaUlp: 'ULP MUARA LABUH', namaPenyulang: 'F. MUARA LABUH', kodePenyulang: 'PYL-SLK-04' },
+  ],
+};
+
 export const DEFAULT_REKAP_ROWS = UL_PRESETS.BUKITTINGGI.rows.map((r, idx) => ({
   id: `row-${idx + 1}`,
   noUrut: idx + 1,
@@ -774,7 +825,6 @@ export class RekapHarianService {
     }
 
     // 4. Fallback bawaan
-    return DEFAULT_REKAP_ROWS;
   }
 
   /**
@@ -835,7 +885,17 @@ export class RekapHarianService {
       if (rows.length > 0) return rows;
     }
 
-    return [];
+    // Fallback ke PENYULANG_PRESETS untuk Unit Layanan terkait agar tabel tidak pernah kosong di Vercel
+    const unitKey = this.normalizeUnitKey(unitName);
+    const presets = PENYULANG_PRESETS[unitKey] || PENYULANG_PRESETS.BUKITTINGGI;
+    return presets.map((p, idx) => ({
+      id: `row-penyulang-preset-${unitKey.toLowerCase()}-${idx + 1}`,
+      noUrut: idx + 1,
+      kodeUnit: p.kodePenyulang || `PYL-${unitKey.slice(0, 3)}-${idx + 1}`,
+      namaUlp: p.namaUlp,
+      timRow: p.namaPenyulang,
+      target: TARGET_KMS_PER_TIM_ROW,
+    }));
   }
 
   /**

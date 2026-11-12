@@ -174,18 +174,20 @@ export const RekapPenyulangHarianPage: React.FC = () => {
           selectedYear,
           selectedMonthIdx
         );
-        if (!isCancelled && periodRes.success && (periodRes.realisasiList.length > 0 || periodRes.workOrders.length > 0)) {
+        if (!isCancelled && periodRes.success) {
           const freshData = RekapHarianService.loadRekapPenyulangData(
             selectedULKey,
             selectedYear,
             selectedMonthIdx,
-            periodRes.realisasiList,
+            periodRes.realisasiList || [],
             ulpList,
             penyulangList,
-            periodRes.workOrders
+            periodRes.workOrders || []
           );
-          setRekapRows(freshData);
-          RekapHarianService.saveRekapPenyulangData(selectedULKey, selectedYear, selectedMonthIdx, freshData);
+          if (freshData && freshData.length > 0) {
+            setRekapRows(freshData);
+            RekapHarianService.saveRekapPenyulangData(selectedULKey, selectedYear, selectedMonthIdx, freshData);
+          }
         }
       } catch (err) {
         console.warn('Rekap penyulang period fetch error:', err);

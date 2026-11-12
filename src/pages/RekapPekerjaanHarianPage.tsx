@@ -219,18 +219,20 @@ export const RekapPekerjaanHarianPage: React.FC = () => {
           selectedYear,
           selectedMonthIdx
         );
-        if (!isCancelled && periodRes.success && (periodRes.realisasiList.length > 0 || periodRes.workOrders.length > 0)) {
+        if (!isCancelled && periodRes.success) {
           const freshData = RekapHarianService.loadRekapData(
             selectedULKey,
             selectedYear,
             selectedMonthIdx,
-            periodRes.realisasiList,
+            periodRes.realisasiList || [],
             ulpList,
             reguList,
-            periodRes.workOrders
+            periodRes.workOrders || []
           );
-          setRekapRows(freshData);
-          RekapHarianService.saveRekapData(selectedULKey, selectedYear, selectedMonthIdx, freshData);
+          if (freshData && freshData.length > 0) {
+            setRekapRows(freshData);
+            RekapHarianService.saveRekapData(selectedULKey, selectedYear, selectedMonthIdx, freshData);
+          }
         }
       } catch (err) {
         console.warn('Rekap period fetch error:', err);
