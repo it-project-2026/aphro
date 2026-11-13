@@ -21,6 +21,23 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
+    const msg = String(error?.message || error || '').toLowerCase();
+    const isChunkError =
+      msg.includes('failed to fetch dynamically imported module') ||
+      msg.includes('importing a module script failed') ||
+      msg.includes('loading chunk');
+
+    if (isChunkError && typeof window !== 'undefined') {
+      try {
+        const lastReload = Number(sessionStorage.getItem('aphro_eb_chunk_reload_ts') || '0');
+        if (Date.now() - lastReload > 15000) {
+          sessionStorage.setItem('aphro_eb_chunk_reload_ts', String(Date.now()));
+          this.handleReset();
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    }
   }
 
   public handleReset = () => {
