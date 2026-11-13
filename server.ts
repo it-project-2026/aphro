@@ -735,12 +735,33 @@ ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
   const distPath = path.join(process.cwd(), "dist");
 
   if (process.env.NODE_ENV !== "production") {
+    app.use((req, res, next) => {
+      if (
+        req.path === "/version.json" ||
+        req.path === "/sw.js" ||
+        req.path === "/src/config/version.ts" ||
+        req.path === "/public/version.json"
+      ) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      }
+      next();
+    });
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "custom",
     });
     app.use(vite.middlewares);
-    app.use(express.static(path.join(process.cwd(), "public")));
+    app.use(express.static(path.join(process.cwd(), "public"), {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("version.json") || filePath.endsWith("sw.js")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        }
+      }
+    }));
 
     app.use("*", async (req, res, next) => {
       const url = req.originalUrl;
@@ -756,7 +777,12 @@ ALTER TABLE public."PENYULANG" ADD COLUMN IF NOT EXISTS "Status" TEXT;
       try {
         let template = fs.readFileSync(path.join(process.cwd(), "index.html"), "utf-8");
         template = await vite.transformIndexHtml(url, template);
-        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+        res.status(200).set({
+          "Content-Type": "text/html",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        }).end(template);
       } catch (e: any) {
         vite.ssrFixStacktrace(e);
         next(e);

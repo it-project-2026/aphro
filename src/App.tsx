@@ -8,6 +8,7 @@ import { useToast } from './hooks/useToast';
 import { useGASSync } from './hooks/useGASSync';
 import { APP_LOGO_URL } from './data/initialData';
 import { Navbar } from './components/layout/Navbar';
+import { UserTodaySubHeader } from './components/layout/UserTodaySubHeader';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileBottomNav } from './components/layout/MobileBottomNav';
 import { Footer } from './components/layout/Footer';
@@ -80,6 +81,7 @@ const RekapPenyulangHarianPage = lazyWithRetry(() => import('./pages/RekapPenyul
 const SettingAplikasiPage = lazyWithRetry(() => import('./pages/SettingAplikasiPage'), 'SettingAplikasiPage');
 const SinkronisasiPage = lazyWithRetry(() => import('./pages/SinkronisasiPage'), 'SinkronisasiPage');
 const MigrasiDatabasePage = lazyWithRetry(() => import('./pages/MigrasiDatabasePage'), 'MigrasiDatabasePage');
+const KinerjaPage = lazyWithRetry(() => import('./pages/KinerjaPage'), 'KinerjaPage');
 
 import { useNotifications } from './hooks/useNotifications';
 
@@ -430,6 +432,16 @@ const AppContent: React.FC = () => {
           <MonitoringPage />
         );
 
+      case 'kinerja':
+        if (!isUserRole || isAdminRole) {
+          return (
+            <DashboardPage />
+          );
+        }
+        return (
+          <KinerjaPage />
+        );
+
       case 'cetak_laporan':
         return (
           <CetakLaporanPage />
@@ -618,13 +630,17 @@ const AppContent: React.FC = () => {
 
         <NotificationListener />
 
-        <Navbar
-          onToggleSidebar={() =>
-            setIsMobileSidebarOpen(
-              !isMobileSidebarOpen
-            )
-          }
-        />
+        <div className="sticky top-0 z-40">
+          <Navbar
+            onToggleSidebar={() =>
+              setIsMobileSidebarOpen(
+                !isMobileSidebarOpen
+              )
+            }
+          />
+
+          {isUserRole && !isAdminRole && <UserTodaySubHeader />}
+        </div>
 
         <SyncStatusBanner />
 

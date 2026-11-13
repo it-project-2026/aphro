@@ -50,7 +50,9 @@ export const requestForToken = async (): Promise<string | null> => {
     try {
       let swRegistration: ServiceWorkerRegistration | undefined;
       try {
-        swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+          scope: '/firebase-cloud-messaging-push-scope',
+        });
       } catch {
         swRegistration = await navigator.serviceWorker.ready;
       }

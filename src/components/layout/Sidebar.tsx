@@ -31,6 +31,7 @@ import {
   CalendarRange,
   BarChart3,
   ArrowRightLeft,
+  Award,
 } from 'lucide-react';
 
 import { APP_VERSION } from '../../config/version';
@@ -94,6 +95,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       label: 'Manajemen Realisasi',
       icon: CheckSquare,
       roles: ['SuperAdmin', 'Admin', 'Adm', 'User'],
+    },
+    {
+      id: 'kinerja',
+      label: 'Kinerja',
+      icon: Award,
+      roles: ['User'],
     },
     {
       id: 'sinkronisasi',

@@ -286,13 +286,36 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Regular officers / users ONLY see Work Orders assigned to them or their exact active team
-    const userTimInfo = resolveUserTimRowAndUlp(user, activeUnitName);
-    const userReguExact = cleanStr(user.reguName || userTimInfo.reguName);
-    const userReguNum = (user.reguName || userTimInfo.reguName || '').match(/\d+/)?.[0];
+    const directUserRegu =
+      user.reguName ||
+      user.Nama_Regu ||
+      user.groupWO ||
+      user.namaGroupWO ||
+      '';
+    const userTimInfo = directUserRegu ? { reguName: directUserRegu } : resolveUserTimRowAndUlp(user, activeUnitName);
+    const activeReguName = directUserRegu || userTimInfo.reguName || '';
+    const userReguExact = cleanStr(activeReguName);
+    const userReguNumRaw = activeReguName.match(/\d+/)?.[0];
+    const userReguNum = userReguNumRaw ? String(parseInt(userReguNumRaw, 10)) : null;
     const userNameClean = cleanStr(user.userName || user.name);
 
     return inisiasiWorkOrders.filter((wo) => {
-      // 1. Direct ID / NIP / Username match
+      const woReguStr = String(wo.reguName || (wo as any).regu || '');
+      const woReguClean = cleanStr(woReguStr);
+      const woReguNumRaw = woReguStr.match(/\d+/)?.[0];
+      const woReguNum = woReguNumRaw ? String(parseInt(woReguNumRaw, 10)) : null;
+
+      // 1. If both user and WO carry a team number, enforce strict equality (prevents cross-team bleed)
+      if (userReguNum && woReguNum) {
+        return userReguNum === woReguNum;
+      }
+
+      // 2. If both carry non-numeric team names, compare exact canonical team name
+      if (userReguExact && woReguClean) {
+        return userReguExact === woReguClean;
+      }
+
+      // 3. Direct ID / NIP / Username match
       if (
         user.id && wo.petugasId &&
         (String(user.id) === String(wo.petugasId) ||
@@ -302,32 +325,15 @@ export function WorkOrderProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
 
-      // 2. Direct reguId match
+      // 4. Direct reguId match
       if (user.reguId && wo.reguId && String(user.reguId) === String(wo.reguId)) {
         return true;
       }
 
-      // 3. Exact or precise Regu / Team match (preventing cross-team leak like Regu 1 matching Regu 10)
-      const woReguStr = String(wo.reguName || (wo as any).regu || '');
-      const woReguClean = cleanStr(woReguStr);
-      const woReguNum = woReguStr.match(/\d+/)?.[0];
-
-      if (userReguNum && woReguNum) {
-        if (userReguNum === woReguNum) {
-          return true;
-        }
-      } else if (userReguExact && woReguClean) {
-        if (userReguExact === woReguClean || woReguClean.includes(userReguExact) || userReguExact.includes(woReguClean)) {
-          return true;
-        }
-      }
-
-      // 4. Petugas Name match
+      // 5. Exact Petugas Name match
       const woPetugasClean = cleanStr(wo.petugasName);
       if (userNameClean && woPetugasClean) {
-        if (woPetugasClean === userNameClean || woPetugasClean.includes(userNameClean) || userNameClean.includes(woPetugasClean)) {
-          return true;
-        }
+        return woPetugasClean === userNameClean;
       }
 
       return false;

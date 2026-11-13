@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { APP_VERSION } from '../../config/version';
 import {
   checkApplicationVersion,
@@ -14,16 +14,15 @@ export const VersionUpdateNotification: React.FC = () => {
   const [dismissed, setDismissed] = useState<boolean>(false);
   const [confirmFormBusy, setConfirmFormBusy] = useState<boolean>(false);
 
-  // Throttle timestamp to avoid rapid duplicate checks on tab switching
   const lastCheckTimeRef = useRef<number>(0);
+  const autoTriggeredKeyRef = useRef<string | null>(null);
 
-  const runVersionCheck = async () => {
+  const runVersionCheck = useCallback(async (forceCheck = false) => {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
-      return; // Skip version check when tab is hidden in background
+      return;
     }
     const now = Date.now();
-    // Throttle: don't check more frequently than once every 15 seconds
-    if (now - lastCheckTimeRef.current < 15000) {
+    if (!forceCheck && now - lastCheckTimeRef.current < 10000) {
       return;
     }
     lastCheckTimeRef.current = now;
@@ -34,13 +33,11 @@ export const VersionUpdateNotification: React.FC = () => {
     } catch (err) {
       console.warn('[APP VERSION CHECK ERROR]', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // 1. Immediate startup check
-    runVersionCheck();
+    runVersionCheck(true);
 
-    // 2. Window focus & visibility change check
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         runVersionCheck();
@@ -51,23 +48,32 @@ export const VersionUpdateNotification: React.FC = () => {
       runVersionCheck();
     };
 
-    // 3. Online event check (signal recovered in field)
     const handleOnline = () => {
-      runVersionCheck();
+      runVersionCheck(true);
+    };
+
+    const handleSwUpdated = () => {
+      runVersionCheck(true);
+    };
+
+    const handleManualCheck = () => {
+      setDismissed(false);
+      runVersionCheck(true);
     };
 
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
     window.addEventListener('online', handleOnline);
+    window.addEventListener('aphro:sw_updated', handleSwUpdated);
+    window.addEventListener('aphro:manual_version_check', handleManualCheck);
 
-    // 4. Multi-tab BroadcastChannel listener
     let channel: BroadcastChannel | null = null;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         channel = new BroadcastChannel('aphro_version_channel');
         channel.onmessage = (e) => {
           if (e.data?.type === 'APHRO_NEW_VERSION_DETECTED') {
-            runVersionCheck();
+            runVersionCheck(true);
           }
         };
       } catch {
@@ -75,50 +81,107 @@ export const VersionUpdateNotification: React.FC = () => {
       }
     }
 
-    // 5. Periodic polling every 60 seconds when active
     const interval = setInterval(() => {
       runVersionCheck();
-    }, 60 * 1000);
+    }, 30 * 1000);
 
     return () => {
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('online', handleOnline);
+      window.removeEventListener('aphro:sw_updated', handleSwUpdated);
+      window.removeEventListener('aphro:manual_version_check', handleManualCheck);
       if (channel) channel.close();
       clearInterval(interval);
     };
-  }, []);
+  }, [runVersionCheck]);
 
-  const handleTriggerUpdate = async (ignoreFormBusy = false) => {
-    if (!checkResult?.latestVersion) return;
-
-    // Rule 10: Check if user is actively filling a form (Realisasi, Absensi, WO)
-    if (!ignoreFormBusy && isUserBusyWithForm()) {
-      setConfirmFormBusy(true);
-      return;
-    }
-
+  const executeUpdate = useCallback(async (result: VersionCheckResult, isManual = false) => {
+    const targetKey = result.latestBuildId || result.latestVersion;
     setConfirmFormBusy(false);
     setIsUpdating(true);
-
     try {
-      await performAppUpdate(checkResult.latestVersion);
+      await performAppUpdate(targetKey, isManual);
     } catch (e) {
       console.error('[APP VERSION] Update execution error:', e);
       setIsUpdating(false);
     }
+  }, []);
+
+  // Automatically apply update to active client when not actively editing/recording/submitting
+  useEffect(() => {
+    if (!checkResult) return;
+    const needsUpdate = checkResult.updateAvailable || checkResult.forceUpdateRequired;
+    if (!needsUpdate || checkResult.loopDetected || isUpdating) return;
+
+    const targetKey = checkResult.latestBuildId || checkResult.latestVersion;
+    if (autoTriggeredKeyRef.current === targetKey) return;
+
+    const tryAutoApply = () => {
+      if (isUserBusyWithForm()) {
+        return false;
+      }
+      autoTriggeredKeyRef.current = targetKey;
+      setTimeout(() => {
+        executeUpdate(checkResult, false);
+      }, 400);
+      return true;
+    };
+
+    if (tryAutoApply()) return;
+
+    const waitInterval = setInterval(() => {
+      if (tryAutoApply()) {
+        clearInterval(waitInterval);
+      }
+    }, 2500);
+
+    return () => clearInterval(waitInterval);
+  }, [checkResult, isUpdating, executeUpdate]);
+
+  const handleTriggerUpdate = async (forceNow = false) => {
+    if (!checkResult?.latestVersion) return;
+
+    // Manual button click ("UPDATE SEKARANG" / "PERBARUI APLIKASI SEKARANG") bypasses loop guard and only warns if actually submitting/capturing
+    const isActivelySubmitting =
+      typeof window !== 'undefined' &&
+      Boolean((window as any).aphro_is_submitting_form || (window as any).aphro_is_uploading);
+
+    if (!forceNow && isActivelySubmitting) {
+      setConfirmFormBusy(true);
+      return;
+    }
+
+    const targetKey = checkResult.latestBuildId || checkResult.latestVersion;
+    autoTriggeredKeyRef.current = targetKey;
+    await executeUpdate(checkResult, true);
   };
 
-  // If no update is available or not checked yet, render nothing
   if (!checkResult || (!checkResult.updateAvailable && !checkResult.forceUpdateRequired)) {
     return null;
   }
 
-  // =========================================================================
-  // SCENARIO 1: FORCE UPDATE REQUIRED (currentVersion < minimumVersion)
-  // Blocking modal overlay to prevent data incompatibility
-  // =========================================================================
-  if (checkResult.forceUpdateRequired) {
+  if (isUpdating) {
+    return (
+      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:max-w-sm z-[99999] animate-in fade-in duration-200">
+        <div className="bg-slate-900/95 border border-teal-400/50 text-white rounded-2xl p-4 shadow-2xl backdrop-blur-md flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-teal-500/20 text-teal-300 shrink-0">
+            <RefreshCw className="w-5 h-5 animate-spin" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white">
+              Menerapkan Pembaruan v{checkResult.latestVersion}
+            </h4>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Menyegarkan sistem ke versi terbaru...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (checkResult.forceUpdateRequired && !checkResult.loopDetected) {
     return (
       <div className="fixed inset-0 z-[99999] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
         <div className="bg-slate-900 border-2 border-red-500/50 rounded-2xl max-w-md w-full p-6 shadow-2xl text-white animate-in fade-in zoom-in duration-200">
@@ -131,7 +194,7 @@ export const VersionUpdateNotification: React.FC = () => {
                 Pembaruan Aplikasi Wajib
               </h3>
               <p className="text-xs text-red-300 font-medium">
-                Versi aplikasi Anda sudah tidak didukung
+                Versi terbaru tersedia dan siap diterapkan
               </p>
             </div>
           </div>
@@ -162,17 +225,17 @@ export const VersionUpdateNotification: React.FC = () => {
             <div className="mt-4 p-3 bg-amber-950/60 border border-amber-500/40 rounded-xl text-xs text-amber-200">
               <div className="flex items-center gap-2 font-semibold text-amber-300 mb-1">
                 <AlertTriangle className="w-4 h-4" />
-                Peringatan Form Sedang Aktif
+                Proses Pengiriman Sedang Berjalan
               </div>
               <p>
-                Anda terdeteksi sedang mengisi data. Mohon pastikan data telah disimpan agar tidak hilang sebelum aplikasi dimuat ulang.
+                Sistem sedang mengirim data/foto. Tunggu sebentar hingga selesai atau klik tetap perbarui.
               </p>
               <div className="flex items-center justify-end gap-2 mt-3">
                 <button
                   onClick={() => setConfirmFormBusy(false)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-medium"
                 >
-                  Batal / Simpan Dulu
+                  Tunggu Sebentar
                 </button>
                 <button
                   onClick={() => handleTriggerUpdate(true)}
@@ -196,7 +259,7 @@ export const VersionUpdateNotification: React.FC = () => {
               </button>
               {checkResult.loopDetected && (
                 <p className="text-[11px] text-amber-300 text-center mt-1">
-                  Pembaruan telah dicoba. Jika versi belum berganti, silakan lakukan refresh browser manual (Ctrl+F5) atau bersihkan cache browser.
+                  Klik tombol di atas untuk memaksa muat ulang cache terbaru dari server.
                 </p>
               )}
             </div>
@@ -206,10 +269,6 @@ export const VersionUpdateNotification: React.FC = () => {
     );
   }
 
-  // =========================================================================
-  // SCENARIO 2: OPTIONAL UPDATE AVAILABLE (latest > current, current >= minimum)
-  // Non-blocking toast notification banner
-  // =========================================================================
   if (dismissed) {
     return null;
   }
@@ -246,17 +305,17 @@ export const VersionUpdateNotification: React.FC = () => {
           <div className="p-2.5 bg-amber-950/60 border border-amber-500/40 rounded-xl text-xs text-amber-200">
             <div className="flex items-center gap-1.5 font-semibold text-amber-300 mb-1">
               <AlertTriangle className="w-3.5 h-3.5" />
-              Anda sedang membuka form
+              Proses Pengiriman Berjalan
             </div>
             <p className="text-[11px] leading-relaxed">
-              Pastikan input Anda sudah disimpan terlebih dahulu agar tidak hilang saat reload.
+              Sistem sedang mengirim data/foto. Tunggu sebentar atau tetap perbarui.
             </p>
             <div className="flex items-center justify-end gap-2 mt-2">
               <button
                 onClick={() => setConfirmFormBusy(false)}
                 className="px-2.5 py-1 bg-slate-800 text-white rounded text-xs"
               >
-                Simpan Dulu
+                Tunggu
               </button>
               <button
                 onClick={() => handleTriggerUpdate(true)}
@@ -270,11 +329,6 @@ export const VersionUpdateNotification: React.FC = () => {
 
         {!confirmFormBusy && (
           <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
-            {checkResult.loopDetected ? (
-              <span className="text-[11px] text-amber-400 mr-auto">
-                Cache perangkat menahan versi lama. Lakukan hard refresh browser.
-              </span>
-            ) : null}
             <button
               onClick={() => setDismissed(true)}
               className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white transition"

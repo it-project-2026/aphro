@@ -78,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200">
+    <header className="relative z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200">
       <div className="flex items-center justify-between px-2.5 sm:px-6 py-2 sm:py-3">
         {/* Left Section: Mobile Menu + Branding */}
         <div className="flex items-center space-x-1.5 sm:space-x-3 min-w-0">

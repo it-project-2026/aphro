@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aphro-v2026.09.30.01';
+const CACHE_NAME = 'aphro-2026.11.13.08-build-20261113-0818-r8';
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/favicon.ico',
@@ -10,17 +10,19 @@ const ASSETS_TO_CACHE = [
   '/apple-touch-icon.png'
 ];
 
-// Install Event: Precache static app shell assets (Excluding index.html & version.json)
+// Install Event: Precache static app shell assets safely (never abort on single missing icon)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+      return Promise.allSettled(
+        ASSETS_TO_CACHE.map((asset) => cache.add(asset).catch(() => {}))
+      );
     })
   );
   self.skipWaiting();
 });
 
-// Activate Event: Cleanup old caches
+// Activate Event: Cleanup old caches and notify active clients immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -31,9 +33,14 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
+    }).then(() => self.clients.claim()).then(() => {
+      return self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'APHRO_SW_ACTIVATED', cacheName: CACHE_NAME });
+        });
+      });
     })
   );
-  self.clients.claim();
 });
 
 // Listen for SKIP_WAITING message from client
@@ -65,7 +72,7 @@ self.addEventListener('fetch', (event) => {
   // 2. Network-First for HTML navigation / index.html (Always get fresh bundle pointers when online)
   if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(
-      fetch(event.request, { cache: 'no-cache' })
+      fetch(event.request, { cache: 'no-store' })
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const contentType = networkResponse.headers.get('content-type') || '';
